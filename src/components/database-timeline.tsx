@@ -8,7 +8,7 @@ import { columnCalc, databaseRows, inView, isEmptyValue, isReadOnly, propertyOf,
 import { dayWidth, daysBetween, draggedBar, endAt, linkPath, snapMinutes, startAt, timelineBars, timelineUnits, timelineWeeks, viewDateEnd, type BarPart, type BarWrite, type TimelineBar, type TimelineUnit } from '../domain/timeline.ts'
 import { taskIdOfRow } from '../domain/todos-source'
 import type { LocalDate, Page, WeekStart, Workspace } from '../domain/types'
-import { rowTint, SubItemParent, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { rowTint, SubItemLead, SubItemParent, subFoldKey, subItemTree, treeUpTo, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { addDays, fromIso, todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
@@ -168,17 +168,22 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
   const commit = useCommitCell()
   const width = dayWidth[unit]
   // The table beside the scale: pinned, so it and the bars scroll as one and stay in line.
-  // It takes at most 60% of the width, so the bars keep theirs; columns past that are named in its head, and Properties reaches them.
+  // It takes at most 60% of the width, so the bars keep theirs; past that its columns scroll on their own, under Name.
   const [full, setFull] = useState(836)
-  const allColumns = viewColumns(db.database, view)
-  const columns = allColumns.slice(0, Math.max(0, Math.floor((full * 0.6 - nameWidth) / columnWidth)))
-  const hiddenColumns = allColumns.length - columns.length
+  const columns = viewColumns(db.database, view)
   const paneOn = Boolean(view.timelineTable)
-  const pane = paneOn ? nameWidth + columns.length * columnWidth : 0
+  const columnsWidth = columns.length * columnWidth
+  const pane = paneOn ? nameWidth + Math.min(columnsWidth, Math.max(columns.length ? columnWidth : 0, Math.floor(full * 0.6) - nameWidth)) : 0
+  const paneOver = paneOn && nameWidth + columnsWidth > pane
   const groups: ViewGroups | null = viewGroups(db.database, view, withPendingMoves(rows), shownRaw, weekStart)
   const { limitOf, showMore } = useGroupLimits(`${blockId}|${view.id}`, cap)
   const { folded, toggle } = useFolds(blockId, view.id)
   const moveRow = useMoveRow(db, view, context, groups)
+  // Nested, the rows draw as a tree. The scale still runs over every bar, so opening a toggle doesn't move it. A row with no date stays on the No date line, unless it's in the tree: a sub-item under its parent, or a parent its sub-items need (sub-items design §2).
+  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded)
+  const treeOf = new Map(tree?.map(e => [e.row.id, e]))
+  const undatedElsewhere = tree ? undated.filter(r => { const e = treeOf.get(r.id); return e && !e.depth && !e.hasChildren }) : undated
+  const toggleLead = (row: Page) => { const entry = treeOf.get(row.id); return entry ? <SubItemLead entry={entry} label={row.title || 'Untitled'} onToggle={() => toggle(subFoldKey(row.id))} /> : null }
   // The scale runs over the rows and today, as far as a page can.
   const days = bars.flatMap(b => [day(b.start), day(b.end)])
   const span = Math.floor(widest / width / 2)
@@ -212,6 +217,36 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
     shownFrom.current = origin
   })
   useLayoutEffect(() => { const w = scroller.current?.clientWidth; if (w && w !== full) setFull(w) })
+  // The table's columns scroll by one bar in its head. Where they've got to goes straight onto the page, so a scroll doesn't redraw every row.
+  const paneBar = useRef<HTMLDivElement>(null)
+  const paneScrolled = () => {
+    const el = scroller.current, bar = paneBar.current
+    if (!el) return
+    el.style.setProperty('--pane-x', `${bar?.scrollLeft ?? 0}px`)
+    el.classList.toggle('has-pane-more', Boolean(bar && bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 1))
+  }
+  useLayoutEffect(paneScrolled)
+  // A sideways scroll over the table moves its columns, not the bars.
+  useEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      const bar = paneBar.current, across = e.deltaX || (e.shiftKey ? e.deltaY : 0)
+      if (!bar || !across || Math.abs(across) < Math.abs(e.shiftKey ? 0 : e.deltaY) || !(e.target as Element).closest('.database-pane')) return
+      e.preventDefault()
+      bar.scrollLeft += across
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+  /** A cell reached by a tab or a key comes into sight. */
+  const revealCell = (cell: HTMLElement) => {
+    const bar = paneBar.current, box = cell.closest<HTMLElement>('.database-pane-columns')
+    if (!bar || !box) return
+    const left = cell.getBoundingClientRect().left - box.getBoundingClientRect().left, right = left + cell.offsetWidth
+    if (left < 0) bar.scrollLeft += left
+    else if (right > box.clientWidth) bar.scrollLeft += right - box.clientWidth
+  }
   const frame = useRef(0)
   const onScroll = () => {
     cancelAnimationFrame(frame.current)
@@ -302,10 +337,16 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
       {!isEmptyValue(value) && <PropertyCell property={property} value={value} today={today} />}
     </button>
   }
+  const canReorder = !view.sort.length && !db.database.fixed
+  const handle = (row: Page, group?: string) => <span className="database-pane-handle" role="button" aria-label={`Drag ${row.title || 'Untitled'}`} onPointerDown={e => startReorder(e, row.id, group ?? null)}>⋮⋮</span>
+  /** With the table closed its handle has nowhere to live, so it stays at the left of the line, over the bars. */
+  const closedHandle = (row: Page, group?: string) => !paneOn && canReorder && <span className="database-lane-grip">{handle(row, group)}</span>
+  const paneColumns = (content: ReactNode) => <div className="database-pane-columns" style={{ width: pane - nameWidth - 1 }}><div className="database-pane-track" style={{ width: columnsWidth }}>{content}</div></div>
   const paneRow = (row: Page, group?: string) => <div className="database-pane" style={{ width: pane }}>
-    {!view.sort.length && !db.database.fixed && <span className="database-pane-handle" role="button" aria-label={`Drag ${row.title || 'Untitled'}`} onPointerDown={e => startReorder(e, row.id, group ?? null)}>⋮⋮</span>}
-    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth }} onClick={() => openRow(row.id)}>{row.icon && <span className="database-row-icon" aria-hidden="true">{row.icon}</span>}{row.title || 'Untitled'}{groups && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
-    {columns.map(c => cell(row, c.property, group))}
+    {canReorder && !treeOf.get(row.id)?.depth && handle(row, group)}
+    {toggleLead(row)}
+    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth - (treeOf.has(row.id) ? 28 + Math.min(treeOf.get(row.id)!.depth, 4) * 16 : 0) }} onClick={() => openRow(row.id)}>{row.icon && <span className="database-row-icon" aria-hidden="true">{row.icon}</span>}{row.title || 'Untitled'}{groups && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
+    {columns.length > 0 && <div onFocusCapture={e => revealCell(e.target as HTMLElement)}>{paneColumns(columns.map(c => cell(row, c.property, group)))}</div>}
   </div>
 
   // A row up or down, by its table's handle, when the view isn't sorted: the same move as a list's.
@@ -389,17 +430,19 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
   }
 
   const calculations = viewCalculations(db.database, view)
-  const footColumns = [propertyOf(db.database, titleId)!, ...columns.map(c => c.property)]
+  const nameProperty = propertyOf(db.database, titleId)!, footColumns = [nameProperty, ...columns.map(c => c.property)]
   const hasFoot = paneOn && footColumns.some(p => calculations[p.id])
   const readShown = (row: Page, columnId: string) => shownValue(db.database, row, columnId)
+  const footCell = (p: Property, over: readonly Page[], cellWidth: number) => {
+    const kind = calculations[p.id]
+    const text = kind ? calcText(kind, columnCalc(db.database, over, p.id, kind, readShown), p.format, today, p.prefix) : null
+    return <button key={p.id} type="button" className="database-pane-cell database-calc-cell" style={{ width: cellWidth }} aria-label={text ? `${p.name}: ${text.label} ${text.value}` : `Calculate ${p.name}`} onClick={() => openDatabaseMenu(blockId, databaseId, 'calculate')}>
+      {text ? <span className="database-calc-text">{text.label && <span className="database-calc-label">{text.label}</span>}<span>{text.value}</span></span> : <span className="database-calc-empty">Calculate</span>}
+    </button>
+  }
   const foot = (over: readonly Page[]) => <div className="database-bar-lane is-foot" style={{ height: rowHeight }}><div className="database-pane" style={{ width: pane }}>
-    {footColumns.map((p, i) => {
-      const kind = calculations[p.id]
-      const text = kind ? calcText(kind, columnCalc(db.database, over, p.id, kind, readShown), p.format, today, p.prefix) : null
-      return <button key={p.id} type="button" className="database-pane-cell database-calc-cell" style={{ width: i === 0 ? nameWidth : columnWidth }} aria-label={text ? `${p.name}: ${text.label} ${text.value}` : `Calculate ${p.name}`} onClick={() => openDatabaseMenu(blockId, databaseId, 'calculate')}>
-        {text ? <span className="database-calc-text">{text.label && <span className="database-calc-label">{text.label}</span>}<span>{text.value}</span></span> : <span className="database-calc-empty">Calculate</span>}
-      </button>
-    })}
+    {footCell(nameProperty, over, nameWidth)}
+    {columns.length > 0 && <div onFocusCapture={e => revealCell(e.target as HTMLElement)}>{paneColumns(columns.map(c => footCell(c.property, over, columnWidth)))}</div>}
   </div></div>
 
   /** A line of the scale that isn't a row. With the table open it sits in the table, so the grid doesn't run under its words. */
@@ -413,8 +456,9 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
     const drawnHere = left + barWidth > seen.left - pad && left < seen.left + seen.width + pad
     const title = bar.row.title || 'Untitled'
     const tint = rowTint(db.database, view, bar.row, context)
-    return <div key={`${group ?? ''}:${bar.row.id}`} className={`database-bar-lane${returned === bar.row.id ? ' is-returned' : ''}${reorder?.before === bar.row.id ? ' is-drop-before' : ''}${reorder?.rowId === bar.row.id ? ' is-dragging' : ''}`} data-row={bar.row.id} {...(group !== undefined ? { 'data-group': group } : {})} style={{ height: rowHeight }}>
-      {paneOn && paneRow(bar.row, group)}
+    return <div key={`${group ?? ''}:${bar.row.id}`} className={`database-bar-lane${treeOf.get(bar.row.id)?.context ? ' is-context' : ''}${returned === bar.row.id ? ' is-returned' : ''}${reorder?.before === bar.row.id ? ' is-drop-before' : ''}${reorder?.rowId === bar.row.id ? ' is-dragging' : ''}`} data-row={bar.row.id} {...(group !== undefined ? { 'data-group': group } : {})} style={{ height: rowHeight }}>
+      {paneOn ? paneRow(bar.row, group) : treeOf.get(bar.row.id)?.hasChildren && <span className="database-lane-lead">{toggleLead(bar.row)}</span>}
+      {!treeOf.get(bar.row.id)?.depth && closedHandle(bar.row, group)}
       {drawnHere && <button type="button" className={`database-bar is-${at.shape}${tint?.className ?? ''}${bar.readOnly ? ' is-read-only' : ''}${live ? ' is-dragging' : ''}${linking?.over === bar.row.id ? ' is-link-target' : ''}`} style={{ ...tint?.style, left: left + pane, width: barWidth }}
         {...(deps ? { onPointerEnter: () => showLinks(bar.row.id, true), onPointerLeave: () => showLinks(bar.row.id, false) } : {})}
         data-nav={index === 0 ? '0:0' : undefined} data-cell={cellKey({ blockId, databaseId, rowId: bar.row.id, columnId: titleId })} aria-label={`${title}, ${datesOf(at)}`}
@@ -431,7 +475,7 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
         {live && <span className="database-bar-tip">{datesOf(at)}</span>}
       </button>}
       {/* Its bar is off this way: a jump to it, with its name, so the row isn't a blank line. */}
-      {off && <button type="button" className={`database-bar-off is-${off}${tint?.className ?? ''}`} style={{ ...tint?.style, ...(off === 'before' ? { left: pane + 4 } : {}) }} aria-label={`Go to ${title}, ${datesOf(at)}`} onClick={() => centre(day(at.start), 'smooth')}>{off === 'before' ? '‹ ' : ''}{paneOn ? '' : title}{off === 'after' ? ' ›' : ''}</button>}
+      {off && <button type="button" className={`database-bar-off is-${off}${tint?.className ?? ''}`} style={{ ...tint?.style, ...(off === 'before' ? { left: pane + (!paneOn && canReorder ? 18 : 4) + (!paneOn && treeOf.get(bar.row.id)?.hasChildren ? 24 : 0) } : {}) }} aria-label={`Go to ${title}, ${datesOf(at)}`} onClick={() => centre(day(at.start), 'smooth')}>{off === 'before' ? '‹ ' : ''}{paneOn ? '' : title}{off === 'after' ? ' ›' : ''}</button>}
     </div>
   }
   const undatedLane = (row: Page) => {
@@ -442,10 +486,12 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
       if (endProperty && first !== last) write(row, [{ id: startProperty.id, value: { start: first } as unknown as Json }, { id: endProperty.id, value: { start: last } as unknown as Json }], `Set to ${short(first)} – ${short(last)}`)
       else write(row, [{ id: startProperty.id, value: (first === last ? { start: first } : { start: first, end: last }) as unknown as Json }], first === last ? `Set to ${short(first)}` : `Set to ${short(first)} – ${short(last)}`)
     }
-    return <div key={row.id} className="database-bar-lane is-undated" data-row={row.id} style={{ height: rowHeight }}
+    return <div key={row.id} className={`database-bar-lane is-undated${treeOf.get(row.id)?.context ? ' is-context' : ''}`} data-row={row.id} style={{ height: rowHeight }}
       onPointerMove={e => { if (canSet && e.pointerType === 'mouse') setHover(dayAtX(e.clientX)) }} onPointerLeave={() => setHover(null)}
       onPointerDown={e => { if (canSet && e.button === 0 && !(e.target as Element).closest('.database-bar-off, .database-pane')) pressed.current = dayAtX(e.clientX) }}
       onPointerUp={e => { if (pressed.current) { const from = pressed.current; pressed.current = null; set(from, dayAtX(e.clientX)) } }}>
+      {!paneOn && treeOf.get(row.id)?.hasChildren && <span className="database-lane-lead">{toggleLead(row)}</span>}
+      {!treeOf.get(row.id)?.depth && closedHandle(row)}
       {paneOn ? paneRow(row) : <button type="button" {...(rowTint(db.database, view, row, context) ? { style: rowTint(db.database, view, row, context)!.style } : {})} className={`database-bar-off is-before is-name${rowTint(db.database, view, row, context)?.className ?? ''}${row.title ? '' : ' is-placeholder'}`} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}</button>}
       {hover && canSet && <span className="database-bar is-ghost" aria-hidden="true" style={{ left: pane + daysBetween(origin, hover) * width, width: Math.max(width, 10) }} />}
     </div>
@@ -463,7 +509,11 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
     <div className="database-timeline" ref={scroller} onScroll={onScroll} onKeyDown={onKeyDown} role="group" aria-label="Timeline">
       <div className="database-timeline-body" ref={body} style={{ width: scaleWidth }}>
         <div className="database-scale" onPointerMove={e => { if (canSet && e.pointerType === 'mouse') setHover(dayAtX(e.clientX)) }} onPointerLeave={() => setHover(null)}>
-          {paneOn && <div className="database-pane database-pane-head" style={{ width: pane, height: 44 }}><span style={{ width: nameWidth }}>Name{hiddenColumns > 0 && <button type="button" className="app-link database-pane-more" onClick={() => openDatabaseMenu(blockId, databaseId, 'properties')}> · {hiddenColumns} more</button>}</span>{columns.map(c => <span key={c.property.id} style={{ width: columnWidth }}>{c.property.name}</span>)}</div>}
+          {paneOn && <div className="database-pane database-pane-head" style={{ width: pane, height: 44 }}>
+            <span style={{ width: nameWidth }}>Name</span>
+            {paneColumns(columns.map(c => <span key={c.property.id} style={{ width: columnWidth }}>{c.property.name}</span>))}
+            {paneOver && <div ref={paneBar} className="database-pane-bar" style={{ left: nameWidth }} onScroll={paneScrolled} aria-hidden="true"><div style={{ width: columnsWidth, height: 1 }} /></div>}
+          </div>}
           <div className="database-scale-upper">{upper.map((t, i) => <span key={t.at} className="database-scale-label" style={{ left: pane + Math.max(0, t.at) * width, width: ((upper[i + 1]?.at ?? total) - Math.max(0, t.at)) * width }}><span>{t.label}</span></span>)}</div>
           <div className="database-scale-lower">{lower.map(t => <span key={t.at} className="database-scale-tick" style={{ left: pane + t.at * width }}>{t.label}</span>)}</div>
           {hover && canSet && <button type="button" className="database-scale-add" aria-label={`New on ${short(hover)}`} style={{ left: pane + daysBetween(origin, hover) * width + width / 2 }} onClick={() => addOn(hover)}>+</button>}
@@ -499,11 +549,15 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
               {hasFoot && foot(group.rows)}
             </>}
           </Fragment>
-        }) : drawn.map((b, i) => barLine(b, i))}
-        {!groups && bars.length > limit && lineLane(<button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>)}
+        }) : tree ? (() => {
+          // Its own bars, as what only sits above a match isn't among the view's rows.
+          const shown = treeUpTo(tree, limit), own = new Map(timelineBars(db.database, view, shown.map(e => e.row), shownRaw).bars.map(b => [b.row.id, b]))
+          return shown.filter(e => own.has(e.row.id) || e.depth || e.hasChildren).map((e, i) => { const bar = own.get(e.row.id); return bar ? barLine(bar, i) : undatedLane(e.row) })
+        })() : drawn.map((b, i) => barLine(b, i))}
+        {!groups && (tree ? tree.filter(e => !e.depth).length : bars.length) > limit && lineLane(<button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>)}
         {!groups && hasFoot && foot(rows)}
-        {undated.length > 0 && lineLane(<button type="button" className="database-undated-head" aria-expanded={undatedOpen} onClick={() => setUndatedOpen(!undatedOpen)}>No date · {undated.length} ›</button>)}
-        {undatedOpen && undated.map(undatedLane)}
+        {undatedElsewhere.length > 0 && lineLane(<button type="button" className="database-undated-head" aria-expanded={undatedOpen} onClick={() => setUndatedOpen(!undatedOpen)}>No date · {undatedElsewhere.length} ›</button>)}
+        {undatedOpen && undatedElsewhere.map(undatedLane)}
       </div>
     </div>
   </>

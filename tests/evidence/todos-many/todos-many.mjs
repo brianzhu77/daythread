@@ -44,6 +44,24 @@ seed('')
   check(errors.length === 0, 'no page errors', errors)
   await c.close() }
 
+// A change that takes a while says so in the bar (Planned on 500 is about 6 s on the deployed Worker), and a quick one doesn't flash.
+seed('')
+{ const { c, p, errors, wait, bar, row } = await open({ width: 1280, height: 900 })
+  for (const t of ['Book the flights', 'Water the plants', 'Call the bank']) { await row(t).hover(); await row(t).locator('.database-row-pick').click(); await wait(100) }
+  let release; const held = new Promise(r => { release = r })
+  await p.route('**/_serverFn/**', async route => { if ((route.request().postData() ?? '').includes('edit-todos')) await held; await route.continue().catch(() => {}) })
+  await bar.getByRole('button', { name: /Edit property/ }).click(); await wait(200)
+  await bar.getByRole('menuitem', { name: 'Planned' }).click(); await wait(400)
+  await p.locator('.property-popover .property-row, .property-popover button', { hasText: 'Tomorrow' }).first().click(); await wait(150)
+  check(!/Changing/.test(await bar.innerText()), 'not in the first moment, so a quick change doesn\'t flash', await bar.innerText())
+  await wait(500)
+  check(/Changing 3 to-dos…/.test(await bar.innerText()), 'then it says so while it\'s held', await bar.innerText())
+  release(); await wait(1200)
+  check((await bar.innerText()).startsWith('3 to-dos'), 'and goes back to the count when it\'s done', await bar.innerText())
+  check(/3 to-dos changed/.test(await notice(p)), 'with the usual notice', await notice(p))
+  check(errors.length === 0, 'no page errors', errors)
+  await c.close() }
+
 // A Board at 1280: ⌘-click, then drag them together.
 seed('')
 { const { c, p, errors, wait, bar } = await open({ width: 1280, height: 900 })
