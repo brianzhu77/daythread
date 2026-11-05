@@ -67,6 +67,8 @@ No editing from a chart, as Notion.
 | State | He sees |
 | --- | --- |
 | No rows, or none after the filter | The axes and "No rows", with the filter chips |
+| Rows, but all zero or blank | "Nothing to show" (Jazz, #162) |
+| A negative on a donut | No slice. It stays in the legend with its value and no swatch, and the centre has no total when anything isn't drawn (Jazz, #162) |
 | Its property deleted or changed to one it can't use | "Choose what to show", as a board's "Group by" link. Undo or changing the type back restores it |
 | A Measure with blanks | Blanks don't count as zero, except in Count |
 | Rows beyond the cap | Counted in full: a chart shows the whole result, not the first 25 |
