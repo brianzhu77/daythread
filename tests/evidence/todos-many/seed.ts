@@ -12,7 +12,7 @@ const run = async (action: Action) => { ws = (await repo.execute({ operationId: 
 const today = new Date().toLocaleDateString('en-CA')
 await run({ type: 'ensure-day', date: today })
 const day = ws.pages.find(p => p.date === today)!
-const titles = process.argv[3] === 'many' ? Array.from({ length: 205 }, (_, i) => `To-do ${i + 1}`) : ['Book the flights', 'Water the plants', 'Call the bank', 'Pay the rent', 'Read the lease', 'Paused one', 'Cancelled one']
+const titles = process.argv[3] === 'many' ? Array.from({ length: 505 }, (_, i) => `To-do ${i + 1}`) : ['Book the flights', 'Water the plants', 'Call the bank', 'Pay the rent', 'Read the lease', 'Paused one', 'Cancelled one']
 for (const title of titles) await run({ type: 'add-task', pageId: day.id, title, plannedOn: today })
 const id = (title: string) => ws.tasks.find(t => t.title === title)?.id
 if (id('Paused one')) await run({ type: 'not-today', taskId: id('Paused one')!, date: today })

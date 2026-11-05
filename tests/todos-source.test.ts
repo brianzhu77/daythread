@@ -1,7 +1,7 @@
 // To-dos as a source (design §11, R2-8, R2-9, R2-11): his tasks read as a database's rows, and an edit is the task's own command.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cellValue, databaseRows, newRowValues, viewRows } from '../src/domain/database.ts'
+import { cellValue, databaseRows, limits, newRowValues, viewRows } from '../src/domain/database.ts'
 import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import { listedPages } from '../src/domain/page-tree.ts'
@@ -220,6 +220,14 @@ test('edit-todos: only the bar\'s columns, each task once, up to the limit, and 
   assert.ok(parse([{ taskId: 'a', changes: [{ columnId: 'status', value: 'done' }] }]))
   assert.ok(parse([{ taskId: 'a', changes: [{ columnId: 'deadline', value: null }] }]))
   assert.equal(parse([]), false)
-  assert.equal(parse(Array.from({ length: 201 }, (_, n) => ({ taskId: `t${n}`, changes: [{ columnId: 'status', value: 'done' }] }))), false)
+  // The limit is To-dos' own, not rows': the schema and the command agree on it, at the boundary.
+  const items = (length: number, first = 't') => Array.from({ length }, (_, n) => ({ taskId: n === 0 ? first : `t${n}`, changes: [{ columnId: 'status', value: 'done' }] }))
+  assert.equal(limits.todosAtOnce, 500)
+  assert.ok(limits.todosAtOnce < limits.rowsAtOnce)
+  assert.ok(parse(items(limits.todosAtOnce)))
+  assert.equal(parse(items(limits.todosAtOnce + 1)), false)
+  assert.throws(() => s.edit(items(limits.todosAtOnce + 1, 'a')), /Invalid to-dos/)
+  s.edit(items(limits.todosAtOnce, 'a'))
+  assert.equal(s.task('a').status, 'done', 'at the limit it goes through, and the ones that are gone just couldn\'t')
 })
 
