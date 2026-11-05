@@ -33,6 +33,7 @@ function settled(span: Span, by: number, avoidWeekends: boolean | undefined): Sp
 }
 
 /** Whether what this row blocks leads back to it. */
+export const loopRefusal = "That would make a loop: a row can't end up blocking itself"
 export function hasDependencyLoop(rows: readonly Page[], deps: Dependencies, rowId: string): boolean {
   const byId = new Map(rows.map(r => [r.id, r])), seen = new Set<string>()
   // Its own two-way sync skips a link to itself, so that one only shows on the side that was set.
