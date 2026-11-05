@@ -1,0 +1,33 @@
+# Independent next-design review
+
+Reviewed Feed, Dashboard and Forms in that order at main 9178337d. Design/source review only: none of these features was implemented or tested by this review. Current source and floor 9417eea2 were read where noted. Recommendations below are contracts to settle before implementation, not observed deployed defects.
+
+## Feed — proceed after making the read-only boundary explicit
+
+The editor-free body is the right boundary. Define an allowlist renderer, rather than mounting the editor disabled or treating export HTML as a runtime component. Text, headings/lists/quotes, safe links/chips and owner-visible images/files can render; a database is a link. Explicitly settle now-live Button blocks, synced blocks, nested page cards and comment marks (the draft still says the app has no comments). I recommend Button and unsupported content link to the row rather than execute, synced content reads the current record without creating a second writer, and comments use the existing pane/count rather than embedding editors.
+
+A to-do checkbox is the only body mutation expressly approved here. It must act on the canonical task ID through the existing task command, not save a truncated card document. Stop the card/open-row event so ticking doesn't also navigate or focus an editor. Every occurrence of that task updates, including the row's full page and other cards, and one Undo reverses the same command. A failure keeps the card in sync with persisted state and says so; no stale document save follows it. Test a tick in synced content, a task shown twice, failure, another tab and the row entering/leaving a filter after the tick.
+
+Clipping 12 visual lines must not clip half a checkbox/link or hide keyboard focus; Show more must retain the row's identity and expansion on an ordinary update. Lazy images resolving after the clip should not move the scroll anchor to another card. These are acceptance details, not reasons to increase the feature's scope. Existing floor falls back to Table for unknown layouts, which agrees with Feed's stated floor behavior; preservation still needs the real rollback test.
+
+## Dashboard — the main unresolved contract is filter meaning
+
+Keep widget storage as dashboard-owned linked-view settings with stable widget IDs, distinct from source view IDs. Copy the selected view settings when adding a widget; don't keep a live reference that makes editing the widget edit the source. Layout and widget-filter saves need field-scoped expected values (or equivalent conflict refusal), so tab A moving widgets cannot overwrite tab B's filter update. Removing a widget must not delete source views, properties or rows. Duplicate must allocate a new widget ID. Undo must refuse stale widget changes rather than restore an old full dashboard over another tab's work.
+
+The current floor serializes database JSON and has an unknown-layout fallback to DatabaseTable; it cannot show the proposed unsupported-dashboard message. That exact experience requires a floor-support change/raise, or an explicitly accepted Table fallback. Do not promise the message from unchanged 9417eea2. Unknown nested settings preservation is plausible from JSON storage, but was not executed here. The rollback fixture must include widths/heights, widget filters and an older tab's unrelated view/property edit, not merely opening the page.
+
+Name and type matching alone is insufficient for global filters. Two Status properties can both say Done with different option IDs; copying a filter's IDs silently matches nothing in one source. Relation properties can have the same name/type but different target databases. Define value translation and compatibility: map enum values by unambiguous label to each source's IDs, and refuse/mark incompatible relation targets rather than forwarding an unrelated row ID. Keep stable property bindings once a rule is saved; a rename/delete/type change must not silently retarget a different property.
+
+Define partially applicable Boolean groups. With global (Status=Done OR Distance>5), a Books widget may have Status but no Distance. Dropping Distance changes the meaning; silently applying none shows extra rows. Recommended first contract: apply a complete compatible global rule tree, otherwise show that widget as Not filtered with the incompatible rule identifiable. Combine the global tree with the widget's complete local tree using parenthesized AND. Do not flatten ANY groups or persist the combined rules back into the widget. +New uses the same combined predicate/default inference, and refuses/asks when it cannot satisfy it; the global rule is not allowed to overwrite a widget's contradictory condition.
+
+## Forms — Only me can advance; public enablement remains separate
+
+§5 now records the accepted narrow boundary and narrowed privacy promise from the first review. No new public feature or endpoint is present in this review. With Row added automation now live, the future public-origin bypass must be enforced on the trusted command path, not a client flag: a public submit adds only its allowlisted row and never inherits a default template, row rule, Button step or scheduled action. The signed-in Only-me path may retain ordinary authorized Add row behavior.
+
+The accepted-answer quota bounds successful storage, not the cost of unlimited GETs, invalid POSTs or unique retry keys. Before public enablement, choose enforceable read/attempt budgets and replay retention limits ahead of workspace loading; do not treat 200 accepted answers as a CPU-abuse limit. Publication/reset/schema/quota/replay checks remain atomic and minimal receipts must expose no workspace state. The prior last-slot, held-reset/type-change and origin tests remain required on Worker/real Postgres before asking Brian. Public links remain off and Brian's explicit permission is still required.
+
+For Only me, clarify retry lifecycle now: snapshot the answers and request key for a send; a lost answer retries that same payload, while typing during a send stays as an unsent draft. Send another gets a fresh submission key. Test a late successful response after typing more answers, rather than clearing those new words on success. Questions renamed/removed and newly required fields must use a defined schema check without losing the user's answers.
+
+## Handoff
+
+Feed needs the renderer/action allowlist; Dashboard needs filter compatibility/Boolean semantics and the floor experience decision; Forms can proceed Only me with the request/draft identity contract. This review grants no public enablement or release approval. Implementation and real operating evidence remain with their owners.
