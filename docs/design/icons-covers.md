@@ -80,7 +80,7 @@ From the top: **cover, then the line with the breadcrumb and `⋯`, then the ico
 
 ### 7.2 A day
 
-The cover goes above the head and the icon above "Today" and the date, at the title's left edge, with the arrows where they are. **A day has its `⋯` only once it holds something** (`dayMenuGroups`), so an empty day needs one for these. Added to the Day template, every new day has them (P1-6). At 390 with a cover, the day's first section starts about 120 px lower. That's his choice, and worth stating in the budget.
+The cover goes above the head and the icon above "Today" and the date, at the title's left edge, with the arrows where they are. **A day has its `⋯` only once it holds something** (`dayMenuGroups`). Added to the Day template, every new day has them (P1-6). At 390 with a cover, the day's first section starts about 120 px lower. That's his choice, and worth stating in the budget.
 
 **Decided (Lead c2262558, with Bumblebee, Jazz and Roadbuster): an empty day doesn't get a `⋯` for this.** A `⋯` on an empty day would change that screen for everyone, against P1-1's "exactly as today", to offer something nobody has asked for there. A day made from the template holds something, so it has its `⋯` already, and the template itself takes them. The cost: a day with nothing written can't take a cover until it has a line.
 
