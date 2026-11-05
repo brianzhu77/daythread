@@ -870,6 +870,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* B19: done rows grey out so open ones stand out. The strikethrough is one value, pending Brian's pick (2ea283a3). */
 :root { --done-decoration: line-through; }
 .continuous-editor .editor-task-title.task-done, .continuous-editor .editor-task-title.task-done * { color:var(--ink-3); text-decoration:var(--done-decoration); }
+/* A button block (docs/design/buttons.md): quiet, as nothing can make one or run it yet. */
+.editor-button-line { display: flex; min-height: 28px; align-items: center; }
+.editor-button { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); color: var(--ink-2); font-size: var(--text-ui); }
 /* B19: a nested line's text starts one step (24px) right of its parent's text. */
 .continuous-editor .bn-block-group .bn-block-group { margin-left:45px; }
 /* A synced block (states §3): its own row takes no line, and an outline in the margin holds room above and below it, so nothing
@@ -2079,8 +2082,6 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-rule button:not(.database-rule-remove) { min-height: 0; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
 .database-rule-remove { display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; margin-left: auto; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 @media (hover: hover) { .database-rule-remove:hover, .database-menu-back:hover { background: var(--hover-dim); color: var(--ink); } }
-.editor-button-line { display: flex; min-height: 28px; align-items: center; }
-.editor-button { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); color: var(--ink-2); font-size: var(--text-ui); }
 .database-rule-deleted, .database-filter-chip.is-deleted { text-decoration: line-through; color: var(--ink-3); }
 /* Properties (design §7.5): a switch, the name with its type, and a move. */
 .database-property-line { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 6px 0 10px; color: var(--ink); }
