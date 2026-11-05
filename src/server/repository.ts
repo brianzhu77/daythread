@@ -15,6 +15,8 @@ export interface ServerRepository extends WorkspaceRepository {
   execute(command: Command): Promise<CommandResult & { changes: WorkspaceChanges }>;
   /** A server-only command applied to the workspace as it is now (the link preview): not refused because he typed meanwhile. */
   executeOnLatest(operationId: string, action: Command["action"]): Promise<CommandResult>;
+  /** Everything stored for this workspace that could hold a file's id, including what Undo can bring back (R3-11's sweep). */
+  heldText(): Promise<string>;
 }
 
 /** The day a store converts an older workspace against, in the app's time zone. */

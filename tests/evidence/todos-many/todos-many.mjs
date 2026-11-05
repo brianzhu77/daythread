@@ -83,9 +83,17 @@ seed('many')
   await p.locator('.database-more-button').first().click(); await wait(300); await menu.getByRole('menuitem', { name: 'Select rows' }).click(); await wait(400)
   await bar.getByRole('button', { name: 'All' }).click(); await wait(1500)
   const text = await bar.innerText()
-  check(/200 to-dos · 200 at most/.test(text) && await bar.getByRole('button', { name: 'All' }).count() === 0, 'with 205, All takes 200 and says so', text)
+  check(/500 to-dos · 500 at most/.test(text) && await bar.getByRole('button', { name: 'All' }).count() === 0, 'with 505, All takes 500 and says so', text)
   check(await bar.getByRole('button', { name: /Edit property/ }).count() === 1, 'and those can still be edited')
   if (shots) await p.screenshot({ path: `${shots}/${engine}-limit.png` })
+  // The most the bar lets through goes through, and comes back with one Undo.
+  await bar.getByRole('button', { name: /Edit property/ }).click(); await wait(300)
+  await bar.getByRole('menuitem', { name: 'Status' }).click(); await wait(300)
+  await p.locator('#property-options [role=option]', { hasText: 'Done' }).click(); await wait(6000)
+  const done = () => tasks().filter(t => /^To-do /.test(t.title) && t.status === 'done').length
+  check(done() === 500 && /500 to-dos changed/.test(await notice(p)), '500 change in one go, with the notice', [done(), await notice(p)])
+  await p.getByRole('button', { name: 'Undo' }).first().click(); await wait(6000)
+  check(done() === 0, 'and one Undo puts all 500 back', done())
   check(errors.length === 0, 'limit: no page errors', errors)
   await c.close() }
 console.log(fails ? `${fails} FAILED` : 'ALL PASS')

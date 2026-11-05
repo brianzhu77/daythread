@@ -416,6 +416,7 @@ export function DatabaseCellEditor() {
       const sent = typeof raw === 'string' ? raw : ''
       commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice, keeps ? () => dropDraft(row.id, cell.columnId, sent) : undefined)
     }}
+    onKeep={raw => commit(db, row, cell.columnId, raw)}
     onCancel={() => { setOpenCell(null); if (keeps) dropDraft(row.id, cell.columnId) }}
     onCreateOption={db.database.fixed ? undefined : property.target === todosSourceId ? namedTodo : name => createOption(run, db, property, name)}
     onRestoreTarget={property.target ? () => void run({ type: 'restore-page', pageId: property.target! }) : undefined} />
@@ -1245,7 +1246,7 @@ export function useRowPicking(blockId: string, db: Page & { database: Database }
     lastPicked.current = rowId
   }
   const deletePicked = () => {
-    const ids = picked.filter(id => rows.some(r => r.id === id))
+    const here = new Set(rows.map(r => r.id)), ids = picked.filter(id => here.has(id))
     stopPicking()
     if (ids.length) void run({ type: 'delete-pages', pageIds: ids, at: new Date().toISOString() }, r => ({ text: ids.length === 1 ? 'Row deleted' : `${ids.length} rows deleted`, undoOperationId: r.operationId }))
   }
@@ -1259,8 +1260,8 @@ type RowPicking = ReturnType<typeof useRowPicking>
 /** A press on the bar doesn't reach the editor: focus there can redraw the block under the press, so the click never lands, and brings up its toolbar over the bar on a phone. */
 const keepEditorFocus = (e: ReactMouseEvent) => e.preventDefault()
 
-/** To-dos go in one command, one Undo, and it takes so many at once. Here and nowhere else: past it the bar says so, rather than the command refusing. */
-const todosAtOnce = databaseLimits.rowsAtOnce
+/** To-dos go in one command, one Undo, and it takes so many at once. Past it the bar says so, before the command would refuse. */
+const todosAtOnce = databaseLimits.todosAtOnce
 
 export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, deletePicked, pickable, editing, setEditing }, db, floating }: { picks: RowPicking; db: Page & { database: Database }; floating?: boolean }) {
   if (!picked.length && !picking) return null
@@ -1333,7 +1334,8 @@ function EditPickedButton({ db, rowIds, editing, setEditing }: { db: Page & { da
   const [open, setOpen] = useState(false)
   const property = editing ? db.database.properties.find(p => p.id === editing) ?? null : null
   const anchor = useRef<HTMLButtonElement>(null)
-  const rows = (workspace?.pages ?? []).filter(p => rowIds.includes(p.id) && !p.trashedAt)
+  const picked = new Set(rowIds)
+  const rows = (workspace?.pages ?? []).filter(p => picked.has(p.id) && !p.trashedAt)
   const todos = Boolean(db.database.fixed)
   const apply = (raw: Json | undefined) => {
     const p = property!
@@ -1395,7 +1397,7 @@ function defaultWidth(property: Property): number {
     case 'number': return 90
     case 'date': return 110
     case 'select': case 'multiSelect': case 'status': return 140
-    case 'relation': return 180
+    case 'relation': case 'files': return 180
     case 'rollup':
     case 'formula': return 120
     case 'text': case 'url': case 'email': case 'phone': return 180

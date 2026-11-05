@@ -4,7 +4,7 @@ import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
 import { clockIn } from './formula.ts'
 import { withLinks } from './relations.ts'
-import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, valueText, type Database } from './database.ts'
+import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, valueText, type Database, type FileValue } from './database.ts'
 
 /**
  * Export: his words out of the app, readable without its code. A folder of Markdown (a day page per date, a document
@@ -24,7 +24,7 @@ export function exportFiles(stored: Workspace, now: Date): ExportFile[] {
   const templates = live.filter(isTemplate)
   const documents = live.filter(p => !(p.type === 'daily' && p.date) && !isTemplate(p) && !isDraft(p)).sort((a, b) => names.get(a.id)!.localeCompare(names.get(b.id)!))
   return [
-    { path: `${root}/README.md`, text: readme(day, ws.timezone) },
+    { path: `${root}/README.md`, text: readme(day, ws.timezone, filesLeftOut(ws)) },
     ...days.map(p => ({ path: `${root}/days/${names.get(p.id)}.md`, text: pageMarkdown(p, ws, names) })),
     ...documents.map(p => ({ path: `${root}/pages/${names.get(p.id)}.md`, text: pageMarkdown(p, ws, names) })),
     // His templates are his setup, kept with the rest (Bumblebee 981cfd3f), in their own folder rather than as pages.
@@ -197,7 +197,15 @@ export function exportJson(ws: Workspace, now: Date, names = fileNames(ws)) {
   return { format: 'daythread-export', formatVersion: exportFormatVersion, exportedAt: now.toISOString(), schemaVersion: ws.schemaVersion, revision: ws.revision, timezone: ws.timezone, pages, tasks: ws.tasks }
 }
 
-function readme(day: string, timezone: string): string {
+/** Files aren't in the zip, which is built in memory: each is named, so what's missing is plain. */
+function filesLeftOut(ws: Workspace): string[] {
+  return ws.pages.flatMap(row => {
+    const db = !row.trashedAt ? databaseOfRow(ws, row) : null
+    if (!db) return []
+    return db.database.properties.filter(p => p.type === 'files').flatMap(p => ((cellValue(db.database, row, p.id) ?? []) as FileValue[]).map(f => `- ${row.title.trim() || 'Untitled'}: ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`))
+  })
+}
+function readme(day: string, timezone: string, leftOut: string[]): string {
   return `# Daythread export · ${day}
 
 - \`days/\`: one Markdown file per day page, named by its date (${timezone}).
@@ -206,5 +214,11 @@ function readme(day: string, timezone: string): string {
 - \`workspace.json\`: every fact behind the pages (pages with their documents, tasks, trashed pages), format \`daythread-export\` version ${exportFormatVersion}. A page's \`document\` is BlockNote JSON; \`markdownFile\` names its Markdown file.
 
 To-dos are \`- [ ]\` open, \`- [x]\` done, \`- [-]\` cancelled. Nested lines are indented one tab per level.
-`
+${leftOut.length ? `
+## Files are not in this export
+
+This export isn't a backup of your files. Each row names its files, and these are still only in Daythread:
+
+${leftOut.join('\n')}
+` : ''}`
 }
