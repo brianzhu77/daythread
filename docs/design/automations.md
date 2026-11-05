@@ -1,6 +1,6 @@
 # Automations: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **approved to build, in §9's order, after Buttons (Lead 9d5b3c33, 2026-11-05); Roadbuster builds.** Not built.
 - Asked by the Lead (3f046122). Nothing is cut for lack of evidence, and his use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's help page on [database automations](https://www.notion.com/help/database-automations), which I read but haven't used. **Where I depart from Notion, I say so and why.** His use: no databases at the last read (Nov 2), so the examples are illustrations.
 - Shares its steps with `buttons.md` §2.
@@ -14,6 +14,23 @@ An automation is a rule on a database: **when** something happens to a row, **do
 - **Database `⋯` → Automations**, a list of his rules at both widths, as a popover at 1280 and a sheet at 390. Each line reads: name, a switch for Active, and "Last ran Nov 3, 09:14". `+ New automation`.
 - **A rule is on the database,** so every view and linked view shares it, and it's deleted, trashed and restored with the database. Undo works on adding, changing and deleting a rule.
 - **Editor:** "When" with triggers, "In", then "Do" with steps. As in Buttons, Done is off until every part is complete.
+
+**Jazz's read (96c42328, from the doc and Buttons' rules, no sketch; approved by the Lead 9d5b3c33):**
+
+- **The list.** Two lines per rule, the name with its switch and a status line below. A tap opens the editor, and Delete lives there. With no rules, "No automations" and `+ New automation`. Rules reorder by ↑↓, as they run in list order (§5, point 6). The status line:
+
+| State | Second line | Switch |
+| --- | --- | --- |
+| On, has run | Last ran Nov 3, 09:14 | on |
+| On, never run | Not run yet | on |
+| Off by hand | Off · Last ran Nov 3, 09:14 | off |
+| Broken: a target deleted or changed type | Paused · Status was deleted · Edit | off, and a tap opens Edit |
+| Stopped by a limit | Paused · Not run · command limit reached | off, and it can be turned on again |
+
+- **Fixing a broken rule** turns it back on when the edit is finished, with a notice and Undo. A rule switched off by hand stays off after an edit. Reasons wrap, with red only on the words of a broken or stopped rule.
+- **A pause stays findable.** The menu's own row reads "Automations · 1 paused", and costs nothing when all is well. A failure found on opening shows once then.
+- **The failure notice keeps Undo:** "Moved to Done · Log finish paused · Edit · Undo", with a long rule name taking the ellipsis and several rules reading "2 paused". A failed scheduled run has no edit, so it shows Edit alone.
+- **The editor** is Buttons' shell: Done in the head, the same leaving rule, one row per step, and Buttons' step pages shared. When, In and Do are three sections on the first page, and "All" or "any" only appears with a second trigger. Choosing "Every…" with an Edit property step marks that step incomplete and says why, rather than dropping it, and likewise for a second trigger added to Every. A blank name falls back to its first step's words, as a placeholder that saves if left alone.
 
 ## 3. Triggers
 
@@ -38,7 +55,7 @@ Notion runs these some time after the edit. **I'd run row and property triggers 
 
 - **One Undo for both:** "Moved to Done · Undo" undoes the move and what it set off, with no leftovers to chase.
 - **Same from anywhere:** old tabs, the phone and other tabs all set it off, because it's on the server.
-- **No queue and no running cost.**
+- **No queue and no new service.** It isn't free of CPU or latency, which §5.3 measures (Ratchet 2dcbd199).
 - **What he sees:** the usual notice, plus the rule's name when it did something: "Moved to Done · Log finish · Undo".
 
 **Rules that protect his data:**
@@ -46,22 +63,29 @@ Notion runs these some time after the edit. **I'd run row and property triggers 
 1. **His own edit always stands.** If a rule fails, his edit is kept, the rule's steps are dropped whole, and the rule pauses. The notice says "Log finish paused · Status was deleted · Edit", and the rule's line shows the same. Notion pauses too, but doesn't always say. We always do.
 2. **Limits:** "Edit rows in" stops at a stated number of rows (for Roadbuster to set from what a Worker request can do), and refuses rather than doing part of it. The refusal pauses the rule as in point 1.
 3. **Typing speed:** a property edit isn't slowed noticeably. A database with no rules pays nothing, which is R1-18's bar. Measure with rules on.
-4. **A rename or delete of something a rule uses** shows the rule as broken at once, not on its next run.
+4. **A rename of something a rule uses** keeps working, as targets are held by id, and updates its label. **A delete or an incompatible type change** shows the rule as broken at once, not on its next run (corrected, Ratchet 2dcbd199).
+
+**Contracts before building (Ratchet 2dcbd199, a read of the code, nothing built or run):**
+
+5. **Save his edit, stage each rule separately.** Apply his action first, and run each rule on a disposable copy of that state, accepting the copy only if all its steps succeed. His edit, the successful rules and the failed rules' pauses commit in one transaction with one Undo. `execute` mutates its cloned workspace today, so catching an exception without a fresh copy per rule could leave partial steps. **"His edit always stands" covers a rule's failure, not a failed database:** an outage fails the whole commit.
+6. **Freeze what fired, then run in order.** Matches come from his action's before and after rows, ahead of any rule's writes, and matched rules run in their saved list order. "All" needs at least one watched property to have changed, with all its conditions true afterwards, so an unrelated edit doesn't repeat a Done rule. A rule can read what an earlier rule wrote, but those writes never add matches.
+7. **No chains by provenance.** A rule's own steps are marked as coming from an automation, and Undo, restore, import and repeat-made rows are excluded by name. A button's direct changes can fire rules once, and those rules' changes can't. Bulk edits and property conversions are covered explicitly. A retry of the original operation doesn't evaluate rules again, and keeps its generated ids and date.
+8. **Bound the whole command.** Limits count across all rules and steps, rather than each rule getting a fresh allowance, and it's stated what hitting the limit does. **Decided (Lead 9d5b3c33):** the remaining matched rules pause, each showing "Not run · command limit reached", while earlier successful rules stay applied, his edit is kept, and rules that weren't triggered stay active.
 
 ## 6. Scheduled rules
 
-**Decided (Lead f5362d4f): A, catch-up on open, for scheduled rules and repeating templates.** A paid cron is looked at only if being on time matters in use, and then the Lead checks our plan and tells Brian. The comparison stays below as the reason.
+**Decided (Lead f5362d4f): A, catch-up on open, for scheduled rules and repeating templates.** **Corrected 2026-11-05 (Ratchet 2dcbd199, Lead 7b6bbb77's question):** since B60 the Worker's cron runs every minute on Workers Paid, so price and "nothing runs without a request" are no longer the reason. **Catch-up stays for the first scheduled release, because of Undo and unattended writes:** repeating rows wait for a visible, idle tab, as `run-repeats` clears Undo, and a cron would run past that protection every minute. The cron also only walks workspaces with a push subscription today, so scheduled rules can't simply join that loop. Cron gets its own decision if a scheduled step ever has to reach outside the app (Lead 9d5b3c33). **Either way:** a rule and period's key, its effects and its progress marker commit together under the workspace lock, and cron and open share them. Time zone and period rules are fixed, and the schedule has a version, changed on an edit or a resume, so a late tick can't run an old schedule. Reaching outside the app needs its own delivery design, as the push lease isn't exactly-once.
 
-Today nothing runs on the server unless a request comes in: days are made by his open tab at midnight (`ensure-day`). So **"Every Monday" and repeating templates (R4-6) need a way to wake up.**
+Days are made by an open tab at midnight (`ensure-day`), and **"Every Monday" and repeating templates (R4-6) need a way to wake up.**
 
 | | A. Catch up when he opens the app | B. A Worker cron |
 | --- | --- | --- |
 | On time? | Only if a tab is open at that time; otherwise at his next open | Yes, within the minute |
-| Running cost | None | Cloudflare's limits page gives 5 crons on the free plan at 10 ms of CPU, which is unlikely to be enough for this, so I'd expect the paid plan. I haven't checked our plan or current price. |
+| Running cost | None | Workers Paid, already ours, with the cron already running (B60): about 0.7 M CPU-ms a month of the 30 M included, by the Lead's arithmetic, before any rule work |
 | Mail, webhook or Slack at a set time | Not honest: it would send late | Works |
-| New failure mode | None beyond today's | A run with nobody watching, needing its own logging and alert |
+| New failure mode | None beyond today's | A run with nobody watching, needing its own logging and alert, that can clear the Undo of someone working |
 
-**Why A:** it uses the path his days already use, and it's enough for rows in his own databases, since he only sees them when he opens the app anyway. Move to B when a scheduled step reaches outside the app.
+**Why A:** it uses the path Brian's days already use, and it's enough for rows in a person's own databases, since they're only seen when the app is opened. Look at B again when a scheduled step reaches outside the app.
 
 **With A:**
 

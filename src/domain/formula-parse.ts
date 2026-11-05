@@ -329,6 +329,18 @@ export function parseFormula(text: string, names: FormulaNames): Parsed {
   return { tree: parser.parse(), refs: parser.refs }
 }
 
+/** The references up to where the text stops making sense, as it does mid-typing, so what's already written still reads as written. */
+export function partialRefs(text: string, names: FormulaNames): Parsed {
+  let parser: Parser | null = null
+  try {
+    parser = new Parser(text, names)
+    return { tree: parser.parse(), refs: parser.refs }
+  } catch (error) {
+    if (error instanceof FormulaSyntaxError) return { tree: null, refs: parser?.refs ?? [] }
+    throw error
+  }
+}
+
 /** The same text with each reference to a property rewritten, leaving the rest as written, spacing and all. */
 export function rewriteRefs(text: string, refs: readonly PropRef[], write: (id: string) => string): string {
   let out = '', last = 0

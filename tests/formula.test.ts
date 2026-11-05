@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { functionList, format, FormulaRich, type Value } from '../src/domain/formula-functions.ts'
-import { clockIn, formulaProblem, shownFormula, storedFormula, WorkedCells, type FormulaWorld } from '../src/domain/formula.ts'
+import { clockIn, formulaProblem, propertyTokens, shownFormula, storedFormula, WorkedCells, type FormulaWorld } from '../src/domain/formula.ts'
 import { LinearRegex, RegexError } from '../src/domain/formula-regex.ts'
 import type { Database, Property } from '../src/domain/database.ts'
 import type { Page } from '../src/domain/types.ts'
@@ -141,6 +141,24 @@ test('a row that breaks a formula reads Error on that row only, and an empty dat
   assert.match(String(shown(run('test("aa", "(a)\\\\1")'))), /aren't supported/)
 })
 
+test('tokens: where a property sits as typed, never an error, and what is stored is untouched by them (G2-7)', () => {
+  const read = (typed: string, w = world) => propertyTokens(typed, w, 'db').map(t => typed.slice(t.from, t.to))
+  assert.deepEqual(read('Number + 1'), ['Number'])
+  assert.deepEqual(read('prop("Number") + Number'), ['prop("Number")', 'Number'])
+  assert.deepEqual(read('length("Number")'), [], 'a word in quotes is a word')
+  assert.deepEqual(read('Numbr + 1'), [], 'a misspelling is no token')
+  assert.deepEqual(read('Number +'), ['Number'], 'text that stops still shows what it has')
+  assert.deepEqual(read('let(Number, 2, Number + 1)'), [], 'a let takes the name for its own')
+  assert.deepEqual(read(''), [])
+  assert.deepEqual(read('((('), [])
+  const two = worldWith(properties.map(p => (p.id === 'n' ? { ...p, name: 'Two words' } : p)))
+  assert.deepEqual(read('Two words * 2', two), ['Two words'], 'a name with a space is one token')
+  const chinese = worldWith(properties.map(p => (p.id === 'n' ? { ...p, name: '价格' } : p)))
+  assert.deepEqual(read('价格 * 2', chinese), ['价格'])
+  const before = storedFormula('Number + 1', world, 'db')
+  read('Number + 1')
+  assert.equal(storedFormula('Number + 1', world, 'db'), before)
+})
 test('shown as he writes it: a bare name, unless it would read back as something else', () => {
   const named = (name: string) => worldWith(properties.map(p => (p.id === 'n' ? { ...p, name } : p)))
   const stored = storedFormula('Number + 1', world, 'db')

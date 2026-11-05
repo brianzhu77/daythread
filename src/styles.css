@@ -870,6 +870,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* B19: done rows grey out so open ones stand out. The strikethrough is one value, pending Brian's pick (2ea283a3). */
 :root { --done-decoration: line-through; }
 .continuous-editor .editor-task-title.task-done, .continuous-editor .editor-task-title.task-done * { color:var(--ink-3); text-decoration:var(--done-decoration); }
+/* A button block (docs/design/buttons.md): quiet, as nothing can make one or run it yet. */
+.editor-button-line { display: flex; min-height: 28px; align-items: center; }
+.editor-button { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); color: var(--ink-2); font-size: var(--text-ui); }
 /* B19: a nested line's text starts one step (24px) right of its parent's text. */
 .continuous-editor .bn-block-group .bn-block-group { margin-left:45px; }
 /* A synced block (states §3): its own row takes no line, and an outline in the margin holds room above and below it, so nothing
@@ -2030,7 +2033,11 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu:has(.formula-editor) { width: min(620px, calc(100vw - 16px)); max-height: min(80vh, 560px); }
 .formula-editor { display: flex; gap: 10px; min-height: 0; padding: 2px 6px 6px; }
 .formula-main { display: flex; flex: 1 1 60%; flex-direction: column; gap: 6px; min-width: 0; }
-.formula-field { box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; resize: vertical; outline: none; }
+.formula-field-box { position: relative; display: flex; min-width: 0; }
+.formula-field { position: relative; z-index: 1; display: block; box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; white-space: pre-wrap; overflow-wrap: break-word; resize: vertical; outline: none; }
+/* Behind the field, the same box and the same words, with only the tokens seen. Their fill reaches past the words by a shadow, as padding would move every word after them. */
+.formula-backing { position: absolute; inset: 0; box-sizing: border-box; padding: 6px 8px; overflow: hidden; border: 1px solid transparent; color: transparent; font: inherit; white-space: pre-wrap; overflow-wrap: break-word; pointer-events: none; }
+.formula-token { border-radius: 3px; background: var(--fill); box-shadow: 0 0 0 1px var(--fill); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .formula-field:focus, .formula-field:focus-visible { border-color: var(--blue); outline: none; box-shadow: none; }
 .formula-status { min-height: 1.4em; margin: 0; color: var(--ink); font-size: var(--text-meta); overflow-wrap: anywhere; }
 .formula-status.is-error { color: var(--formula-red); }
@@ -2221,7 +2228,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu .database-filter-group-head .database-rule-more { height: 40px; }
   .database-filter-adds .database-add-rule { min-height: 44px; }
   .formula-editor { flex-direction: column; padding: 2px 0 6px; }
-  .formula-field { font-size: 16px; }
+  .formula-field, .formula-backing { font-size: 16px; }
   .formula-actions button { min-height: 44px; }
   .database-menu .formula-item { min-height: 44px; }
   .formula-reference { max-height: 40vh; }

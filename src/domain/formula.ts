@@ -1,7 +1,7 @@
 // Formulas (docs/design/formula.md): what's stored is the text with properties by id, and nothing else. Its type is checked against the
 // databases it reads before it's saved and again whenever it's read, as a property it reads can change; its value is worked out per row when read.
 import { functionList, formulaFunctions, FormulaDate, FormulaPage, FormulaRich, FormulaRowError, FormulaTooLong, format, formatDate, isList, itemOf, notApplicable, pageTarget, unionType, validDateUnit, type Clock, type FormulaFunction, type RichRun, type RunContext, type Value, type ValueType } from './formula-functions.ts'
-import { FormulaSyntaxError, parseFormula, rewriteRefs, type FormulaNames, type FormulaNode, type PropRef } from './formula-parse.ts'
+import { FormulaSyntaxError, parseFormula, partialRefs, rewriteRefs, type FormulaNames, type FormulaNode, type PropRef } from './formula-parse.ts'
 import { cellValue, isDatabase, readValue, titleId, type CellValue, type Database, type DateValue, type Json, type Property, type FileValue } from './database.ts'
 import { rollupType } from './relations.ts'
 import { withTodos } from './todos-source.ts'
@@ -259,9 +259,20 @@ export function storedFormula(typed: string, world: FormulaWorld, databaseId: st
   }
   return rewriteRefs(typed, [...refs, ...checker.memberRefs], id => `prop(${quoted(id)})`)
 }
+/** Where properties sit in the text as typed, in order: what the field draws as tokens (G2-7). Never an error: text that doesn't read yet just has fewer. */
+export function propertyTokens(typed: string, world: FormulaWorld, databaseId: string): readonly { from: number; to: number }[] {
+  const { tree, refs } = partialRefs(typed, typedNames(world, databaseId))
+  const members: PropRef[] = []
+  if (tree) {
+    // After a dot, which database a name is in takes the types. If they don't work out yet, those wait.
+    const checker = new Checker(world, databaseId, [], true)
+    try { checker.typeOf(tree, new Map()); members.push(...checker.memberRefs) } catch (error) { if (!(error instanceof CheckError)) throw error }
+  }
+  return [...refs, ...members].sort((a, b) => a.from - b.from)
+}
 /**
  * A property as he writes it: its bare name, as he'd type it, or `prop("…")` where a bare name wouldn't read back as that property.
- * Real tokens would need a rich field, and the field's composition and phone keyboard are its riskiest parts (design §2).
+ * It stays text, as the field's composition and phone keyboard are its riskiest parts (design §2). `propertyTokens` is how it reads as a token.
  */
 const notBare = new Set(['true', 'false', 'not', 'and', 'or', 'mod', 'current', 'index', 'let', 'lets', 'prop', ...functionList.map(f => f.name)].map(n => n.toLocaleLowerCase()))
 export const writtenName = (name: string): string => (/^[\p{L}_][\p{L}\p{N}_ ]*$/u.test(name) && !name.endsWith(' ') && !notBare.has(name.toLocaleLowerCase()) && name !== deletedName ? name : `prop(${quoted(name)})`)
