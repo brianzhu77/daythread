@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { PGlite } from '@electric-sql/pglite';
+import { pgliteClient } from '../../../src/server/db/sql.ts';
+import { PostgresWorkspaceRepository as NewRepo } from '../../../src/server/postgres-repository.ts';
+import { asOwner } from '../../../src/server/auth/request-owner.ts';
+import { PostgresWorkspaceRepository as OldRepo } from '/Users/dogrod/Developer/daythread-ratchet-look-floor/src/server/postgres-repository.ts';
+import { asOwner as oldOwner } from '/Users/dogrod/Developer/daythread-ratchet-look-floor/src/server/auth/request-owner.ts';
+const db=await PGlite.create(),client=pgliteClient(db),old=new OldRepo(client,undefined,{today:'2026-11-05'}),fresh=new NewRepo(client,undefined,{today:'2026-11-05'}),owner='11111111-1111-4111-8111-111111111111';
+await old.prepare();await old.workspaceIdFor(owner);
+await oldOwner(owner,async()=>{let w=await old.load();await old.execute({operationId:crypto.randomUUID(),expectedRevision:w.revision,action:{type:'create-document',pageId:'p',title:'Before',body:'words'}})});
+await fresh.prepare();
+await asOwner(owner,async()=>{let w=await fresh.load();for(const action of [{type:'set-page-icon',pageId:'p',icon:'🌲'},{type:'set-page-cover',pageId:'p',cover:'https://pictures.test/a.png',position:.25}])w=(await fresh.execute({operationId:crypto.randomUUID(),expectedRevision:w.revision,action:action as never})).workspace as typeof w;});
+await oldOwner(owner,async()=>{const w=await old.load();assert.equal(w.pages.find(p=>p.id==='p')?.icon,undefined);await old.execute({operationId:crypto.randomUUID(),expectedRevision:w.revision,action:{type:'rename-page',pageId:'p',title:'Floor edit'}})});
+await asOwner(owner,async()=>{const p=(await fresh.load()).pages.find(p=>p.id==='p')!;assert.deepEqual([p.title,p.icon,p.cover,p.coverPosition],['Floor edit','🌲','https://pictures.test/a.png',.25]);console.log('PASS old schema migrated on prepare; actual floor rename preserved all three new columns and words')});await db.close();

@@ -1,0 +1,1 @@
+PASS old schema migrated on prepare; actual floor rename preserved all three new columns and words

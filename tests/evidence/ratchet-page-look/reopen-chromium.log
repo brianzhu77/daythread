@@ -1,0 +1,19 @@
+{"before":"🌲","during":"🐨","after":"🌲","events":["icon","icon"]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: an earlier picker instance must not clear the newer choice while its save is held
+
+'🐨' !== '🌲'
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-page-look/tests/evidence/ratchet-page-look/reopen.mjs:5:427 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: '🐨',
+  expected: '🌲',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

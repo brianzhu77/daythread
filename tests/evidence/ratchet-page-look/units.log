@@ -1,0 +1,16 @@
+✔ an icon is one emoji as a person sees it, however many code points it takes (2.770041ms)
+✔ adding, changing and removing say so, each with one Undo; what isn't an emoji is refused (3.038292ms)
+✔ a title stays words: search and the title don't change, and export writes the emoji before the heading (1.049583ms)
+✔ Duplicate row copies it, a row template and a day template pass it on (P1-6, P1-7) (1.166209ms)
+✔ it survives the database: written, read back, and a save that doesn't touch it leaves it (947.823875ms)
+✔ a cover is an http or https link; added, changed, moved and removed each say so, with one Undo; a changed link starts in the middle (1.08825ms)
+✔ a cover goes with a copy and a template, export writes it at the top, and it survives the database (492.160041ms)
+✔ step 3: an icon may be one of ours or an upload, a cover one of ours or an upload; export leaves no dead link and names the files; the sweep holds them; the warning counts them (P1-5) (3.039834ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1626.172958
