@@ -13,6 +13,14 @@ await run({ type: 'create-database', pageId: 'runs', homeBlockId: null, title: '
 await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'when', name: 'When', type: 'date' } } } as never)
 await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'n', name: 'N', type: 'number' } } } as never)
 await run({ type: 'add-row', databaseId: 'runs', pageId: 'r1', title: 'One', values: { n: 1 }, at } as never)
+await run({ type: 'add-row', databaseId: 'runs', pageId: 'r2', title: 'Two', values: { n: 2 }, at } as never)
+if (process.argv[3] === 'property') {
+  const bump: ButtonStep[] = [{ id: 'e', kind: 'edit-property', set: [{ id: 'n', name: 'N', value: { kind: 'fixed', raw: 5 } }] }]
+  await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'go', name: 'Go', type: 'button', button: { label: 'Bump', steps: writeSteps(bump) } } } } as never)
+  const shown = ws.pages.find(p => p.id === 'runs')!.database!.views[0]!
+  await run({ type: 'change-database', pageId: 'runs', change: { kind: 'updateView', viewId: shown.id, columns: [{ id: 'n' }, { id: 'go' }] } } as never)
+  for (const layout of ['list', 'board', 'gallery'] as const) await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addView', view: { ...ws.pages.find(p => p.id === 'runs')!.database!.views[0]!, id: `v-${layout}`, name: layout, layout } as never } } as never)
+}
 await run({ type: 'create-document', title: 'Notes', body: '', pageId: 'notes' })
 await run({ type: 'create-document', title: 'Other', body: '', pageId: 'other' })
 const line = (id: string, text: string, type = 'paragraph') => ({ id, type, props: {}, content: [{ type: 'text', text, styles: {} }], children: [] })

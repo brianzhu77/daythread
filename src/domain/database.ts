@@ -5,7 +5,7 @@ import { rowTemplateTarget } from "./day-template.ts";
 import { formulaProblem, rollupProblem, worldOf } from "./formula.ts";
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
-export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula", "files"] as const;
+export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula", "files", "button"] as const;
 export type PropertyType = (typeof propertyTypes)[number];
 export type NumberFormat = "plain" | "comma" | "percent" | "currency";
 export type StatusGroup = "todo" | "active" | "done";
@@ -44,6 +44,8 @@ export interface Property {
   rollup?: Rollup;
   /** formula: its text, with properties by id. Stays when read: a column reads as the type it works out to, and this says it's a formula (formula.ts). */
   formula?: string;
+  /** button: what it's called and its steps, as a block keeps them (buttons.md). It holds no value in a row. */
+  button?: { label: string; steps: string };
   /** formula, as read, never stored: why the whole column reads Error. */
   formulaError?: string;
   /** relation, as read (relations.ts), never stored: its target's name, and whether that's in Trash. */
@@ -201,7 +203,7 @@ export const todosSourceId = "source:tasks";
 /** Where a row keeps its number, among its values: under no property, so changing a property's type never touches it. */
 export const rowNumberKey = "@id";
 /** The types the app fills in: they can't be typed, pasted, or set by a filter's `+ New` (R3-9). */
-export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id";
+export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id" || type === "button";
 /** Nothing can be typed here: the app's own columns, a rollup, To-dos' Page. */
 export const isReadOnly = (property: Property): boolean => isReadOnlyType(property.type) || Boolean(property.readOnly);
 export const isTimeType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime";
@@ -218,7 +220,7 @@ function localWall(iso: string): string {
 }
 export const databaseBlockType = "database";
 // To-dos have their own limit, below rows': each one's plan rewrites its page and re-reads the workspace, as a single edit does. On a 128 MB heap Planned took 500 and ran out at 1,000 (Roadbuster).
-export const limits = { formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 10_000, todosAtOnce: 500, repeatsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
+export const limits = { buttonSteps: 200_000, formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 10_000, todosAtOnce: 500, repeatsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
 
 export const isDatabase = (p: Page | undefined | null): p is Page & { database: Database } => Boolean(p?.database);
 /** A row: a page whose parent is a database. */
@@ -320,6 +322,7 @@ export function readValue(property: Property, raw: unknown): CellValue {
     case "id":
     case "rollup":
     case "formula":
+    case "button":
       return null;
     case "files": {
       const files = Array.isArray(raw) ? raw.filter(isFileValue) : [];
@@ -386,6 +389,7 @@ export function storedValue(property: Property, input: unknown): Json | undefine
     case "id":
     case "rollup":
     case "formula":
+    case "button":
       return refuse();
     case "files": {
       if (!Array.isArray(input) || input.length > fileLimits.perCell || !input.every(isFileValue)) refuse();
@@ -463,6 +467,8 @@ export function cellValue(db: Database, row: Page, columnId: string): CellValue 
   if (!property) return null;
   if (property.type === "id") { const n = row.values?.[rowNumberKey]; return typeof n === "number" ? n : null; }
   if (isTimeType(property.type)) return rowTime(property, row);
+  // Its label, so a cell draws it. Nothing's stored under it.
+  if (property.type === "button") return property.button?.label || property.name;
   return readValue(property, rawOf(row, columnId));
 }
 
@@ -529,6 +535,7 @@ export function conditionHolds(property: Property, condition: Condition, value: 
     // Read as the type it works out to (relations.ts), so a condition never meets it here.
     case "rollup":
     case "formula":
+    case "button":
       return null;
     case "files": {
       if (typeof want !== "string") return null;
@@ -615,6 +622,7 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
   switch (property.type) {
     case "rollup":
     case "formula":
+    case "button":
       return 0;
     case "files":
       return collator.compare((a as FileValue[])[0]?.name ?? "", (b as FileValue[])[0]?.name ?? "");
@@ -751,7 +759,7 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
 
 /** The group of rows with no value. */
 export const noGroupKey = "none";
-const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup" && type !== "formula";
+const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup" && type !== "formula" && type !== "button";
 const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox" || type === "relation";
 /** A rollup groups by what it works out to, whatever that is, though a card can't be dragged there, so it makes no board. */
 const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "board" ? !p.rollup && p.formula === undefined && canMakeColumns(p.type) : Boolean(p.rollup) || p.formula !== undefined || canGroup(p.type));
@@ -938,11 +946,11 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
 // ---------------------------------------------------------------- commands' inputs
 
 /** A property as `addProperty` sends it: options without ids get them; a Status with none gets the three groups. */
-export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
+export interface PropertyInput { button?: { label: string; steps: string }; id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
 /** One schema or view change: one write, the database page. */
 export type DatabaseChange =
   | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string; /** in that view, placed before this column (R4-18's Insert); last otherwise */ beforeId?: string }
-  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
+  | { kind: "updateProperty"; propertyId: string; button?: { label: string; steps: string }; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
   /** "Show on Books": a relation's other side, made as a property of the target, or gone with null. */
   | { kind: "setDependencies"; on: { blockedBy: string; blocking: string; date: string; end?: string; mode: DependencyMode; avoidWeekends?: boolean; using?: boolean } | null }
   | { kind: "setSubItems"; on: { parent: string; sub: string; using?: boolean } | null }
@@ -969,6 +977,7 @@ const everyCalc: CalcKind[] = ["countAll", "countValues", "countUnique", "countE
 /** What a column of this type can add up to, in the menu's order. */
 export function calcChoices(type: PropertyType): CalcKind[] {
   switch (type) {
+    case "button": return [];
     case "number": return [...everyCalc, "sum", "average", "median", "min", "max", "range"];
     case "date":
     case "createdTime":
@@ -1059,7 +1068,7 @@ function cleanCalculations(db: Database, input: unknown): Record<string, CalcKin
   return out;
 }
 
-export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", files: "Files", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
+export const typeLabels: Record<PropertyType, string> = { button: "Button", text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", files: "Files", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
 const hasOptions = (type: PropertyType): boolean => type === "select" || type === "multiSelect" || type === "status";
 
 function cleanName(value: unknown, what: string): string {
@@ -1112,6 +1121,7 @@ function checkLinks(ws: Workspace, databaseId: string, db: Database, property: P
   const source = target.database.properties.find((p) => p.id === read);
   if (!source) throw new DatabaseError("Property not found");
   if (source.type === "rollup") throw new DatabaseError("A rollup can't read another rollup");
+  if (source.type === "button") throw new DatabaseError("A rollup can't read a button");
   if (source.type === "formula") { const problem = rollupProblem(worldOf(ws), databaseId, property); if (problem) throw new DatabaseError(problem); }
 }
 /**
@@ -1163,6 +1173,10 @@ function cleanProperty(input: PropertyInput, db: Database, except?: string): Pro
     if (input.limit === 1) property.limit = 1;
   }
   if (input.type === "rollup") property.rollup = cleanRollup(input.rollup);
+  if (input.type === "button") {
+    const button = input.button as { label?: unknown; steps?: unknown } | undefined;
+    property.button = { label: typeof button?.label === "string" ? button.label.slice(0, limits.name) : "", steps: typeof button?.steps === "string" && button.steps.length <= limits.buttonSteps ? button.steps : "" };
+  }
   if (input.type === "formula") {
     if (input.formula !== undefined && (typeof input.formula !== "string" || input.formula.length > limits.formula)) throw new DatabaseError("That formula is too long");
     property.formula = input.formula ?? "";
@@ -1327,7 +1341,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       const old = property(change.propertyId);
       const type = change.type ?? old.type;
       if (old.mirror && type !== "relation") throw new DatabaseError("Turn off its other side first");
-      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? (makesOptions(old, type) ? optionsFromText(ws, page.id, old, type) : old.options), format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup, formula: change.formula ?? old.formula }, db, old.id);
+      const next = cleanProperty({ ...(change.button ?? old.button ? { button: change.button ?? old.button } : {}), id: old.id, name: change.name ?? old.name, type, options: change.options ?? (makesOptions(old, type) ? optionsFromText(ws, page.id, old, type) : old.options), format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup, formula: change.formula ?? old.formula }, db, old.id);
       if (old.mirror) { if (next.target !== old.target) throw new DatabaseError("Turn off its other side first"); next.mirror = old.mirror; }
       checkLinks(ws, page.id, db, next);
       const notes: string[] = [];

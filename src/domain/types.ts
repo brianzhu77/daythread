@@ -143,6 +143,8 @@ export type Action =
   | { type: "apply-link-preview"; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }
   /** A tap on a button: every step in one operation (buttons.md §4). Its `at` and `today` are the tap's, kept by a retry. */
+  /** A Button property: its steps on each row given, in one operation (buttons.md §6). */
+  | { type: "run-row-button"; databaseId: string; propertyId: string; rowIds: string[]; stepsKey: string; at: string; today: LocalDate }
   | { type: "run-button"; pageId: string; blockId: string; stepsKey: string; expectedContent: string; at: string; today: LocalDate }
   /** A new thread on the page, or with `threadId` a reply on one. */
   | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string }

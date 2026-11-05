@@ -3,6 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { openButtonEditor } from './button-editor'
 import { tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View, type Repeat } from '../domain/database.ts'
 import { timelineUnits, viewDateEnd, type TimelineUnit } from '../domain/timeline'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
@@ -317,6 +318,7 @@ export function opsFor(type: PropertyType): FilterOp[] {
     case 'relation': case 'multiSelect': return ['contains', 'doesNotContain', 'isEmpty']
     case 'files': return ['contains', 'doesNotContain', 'isEmpty', 'isNotEmpty']
     // Read as the type it works out to (relations.ts), so it never gets here.
+    case 'button':
     case 'rollup':
     case 'formula': return []
     case 'date': return ['is', 'before', 'after', 'within', 'isEmpty']
@@ -324,7 +326,8 @@ export function opsFor(type: PropertyType): FilterOp[] {
   }
 }
 const titleProperty: Property = { id: titleId, name: 'Name', type: 'text' }
-function columnsOf(db: Database): Property[] { return [titleProperty, ...db.properties] }
+/** What a rule or a sort can be on: a button has no value to read. */
+function columnsOf(db: Database): Property[] { return [titleProperty, ...db.properties.filter(p => p.type !== 'button')] }
 
 /** Conditional colour (R4-12): one filter rule and a tint each, the highest that matches wins. A new rule starts grey, so colour takes a deliberate tap. */
 function ColourPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
@@ -1018,6 +1021,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
       </select>
     </label>
     <LinkSettings db={db} property={property} update={fields => update(fields, true)} change={change} />
+    {property.type === 'button' && <button type="button" role="menuitem" onClick={e => { const anchor = e.currentTarget.closest('.database-menu'); setOpenMenu(null); openButtonEditor({ pageId: null, initial: { label: property.button?.label ?? '', steps: property.button?.steps ?? '' }, anchor, rowsOf: db.database, onDone: draft => update({ button: draft }, true) }) }}>Edit button</button>}
     {isFormula(property) && <>
       <button type="button" role="menuitem" onClick={() => go({ formula: propertyId })}>Edit formula</button>
       {property.formulaError && <p className="database-menu-quiet is-error" role="status">{property.formulaError}</p>}

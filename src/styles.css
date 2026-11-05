@@ -2781,3 +2781,6 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
   body:has(.comments-pane.is-sheet) .editor-phone-toolbar { display: none; }
 }
 
+
+/* In a cell, 28 drawn, with the row as its tap area (Jazz). */
+.editor-button-pill.is-cell { position: relative; z-index: 1; height: 28px; padding: 0 10px; font-size: var(--text-meta); max-width: 100%; }
