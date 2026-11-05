@@ -125,6 +125,15 @@ test('Load latest keeps a caption and a replaced file, and a picture both sides 
   const both = merged([was], [theirs], [captioned])
   assert.deepEqual(both.map(b => b.props.caption), ['Theirs', 'Mine'], 'nothing he wrote is lost')
   assert.equal(merged([was], [was], [was]).length, 1, 'no change, no copy')
+  // Ratchet: a line that became a picture while the other tab changed another line.
+  const blank = { id: 'i', type: 'paragraph', props: {}, content: [], children: [] }, other = { id: 'o', type: 'paragraph', props: {}, content: [{ type: 'text', text: 'Before', styles: {} }], children: [] }, otherNow = { ...other, content: [{ type: 'text', text: 'After', styles: {} }] }
+  const became = merged([blank, other], [blank, otherNow], [was, other])
+  assert.equal(became[0]!.type, 'image', 'still a picture')
+  assert.equal(became[0]!.props.url, was.props.url)
+  assert.equal('content' in became[0]!, false, 'no line left inside it')
+  assert.equal((became[1] as unknown as typeof otherNow).content[0]!.text, 'After', 'and the other tab\'s line stays')
+  const back = merged([was, other], [was, otherNow], [blank, other])
+  assert.equal(back[0]!.type, 'paragraph', 'and the other way')
 })
 test('restoring a day from Trash onto a newer one keeps a picture that was all the newer one held (B87 13)', () => {
   const h = harness()
