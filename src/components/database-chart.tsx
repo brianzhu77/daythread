@@ -1,7 +1,7 @@
 // Chart, a layout of a view (docs/design/chart.md): bars or one number from the view's rows, read-only. Loaded only when a chart is on screen.
 // Bars are elements, not a picture: each is a button with its value, labels get real ellipses, and it costs nothing to measure.
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { chartData, chartMeasure, chartSettings, chartTicks, chartValue, type ChartPoint } from '../domain/chart'
+import { axisLabels, axisStep, chartData, chartMeasure, chartSettings, chartTicks, chartValue, shortNumber, type ChartPoint } from '../domain/chart'
 import { calcLabels, cellValue, databaseRows, valueText, viewRows, type CalcKind, type CalcResult, type View } from '../domain/database'
 import type { Page } from '../domain/types'
 import { DatabaseHeader, useOpenRow, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
@@ -11,6 +11,8 @@ import { displayPageTitle } from './page-title'
 import { calcText } from './property-values'
 
 const openedLimit = 100
+/** The room left of the plot, for the axis's numbers. */
+const plotLeft = 44
 
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null)
@@ -26,13 +28,18 @@ function useWidth() {
   return { ref, width }
 }
 
+// Coming back from a row finds its bar still open, as someone may be working down the list. Until a reload, as a fold is.
+const openedBars = new Map<string, string>()
+
 export default function DatabaseChart({ workspace, db, view, changeView, blockId, pageDate, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const today = todayIso(), weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   const settings = chartSettings(view), measure = chartMeasure(db.database, view)
   const data = useMemo(() => chartData(db.database, view, rows, weekStart), [db.database, view, rows, weekStart])
-  const [opened, setOpened] = useState<string | null>(null)
+  const openKey = `${blockId}|${view.id}`
+  const [opened, setOpenedState] = useState<string | null>(() => openedBars.get(openKey) ?? null)
+  const setOpened = (build: (now: string | null) => string | null) => setOpenedState(now => { const next = build(now); if (next) openedBars.set(openKey, next); else openedBars.delete(openKey); return next })
   const [showData, setShowData] = useState(false)
   const openRow = useOpenRow(view, rows, blockId)
   const kind: CalcKind = measure && measure !== 'gone' ? measure.kind : 'countAll', property = measure && measure !== 'gone' ? measure.property : null
@@ -48,7 +55,7 @@ export default function DatabaseChart({ workspace, db, view, changeView, blockId
         : data === 'choose' || !data ? <p className="database-empty"><button type="button" className="app-link" onClick={choose}>Choose what to show</button></p>
         : data.tooMany ? <p className="database-empty">Too many values to draw · {data.points.length.toLocaleString('en-US')}, 200 at most</p>
         : settings.form === 'barHorizontal' ? <HorizontalBars points={data.points} opened={opened} onOpen={key => setOpened(now => (now === key ? null : key))} textOf={textOf} />
-        : <VerticalBars points={data.points} opened={opened} onOpen={key => setOpened(now => (now === key ? null : key))} textOf={textOf} format={r => textOf(r)} measured={Boolean(property)} />}
+        : <VerticalBars points={data.points} dateAxis={data.dateAxis} opened={opened} onOpen={key => setOpened(now => (now === key ? null : key))} textOf={textOf} />}
       {rows.length === 0 && databaseRows(workspace, db.id).length === 0 && <p className="database-empty">No rows</p>}
       <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
       {point && <OpenedRows point={point} text={textOf(point.result)} db={db} openRow={openRow} measureId={property?.id} />}
@@ -62,31 +69,32 @@ export default function DatabaseChart({ workspace, db, view, changeView, blockId
   </>
 }
 
-function VerticalBars({ points, opened, onOpen, textOf, format, measured }: { points: ChartPoint[]; opened: string | null; onOpen: (key: string) => void; textOf: (r: CalcResult) => string; format: (r: CalcResult) => string; measured: boolean }) {
+function VerticalBars({ points, dateAxis, opened, onOpen, textOf }: { points: ChartPoint[]; dateAxis: boolean; opened: string | null; onOpen: (key: string) => void; textOf: (r: CalcResult) => string }) {
   const { ref, width } = useWidth()
   const values = points.flatMap(p => (p.value === null ? [] : [p.value]))
   const ticks = chartTicks(values), low = ticks[0]!, high = ticks.at(-1)!, span = high - low || 1
   const at = (n: number) => ((n - low) / span) * 100
-  // Labels thin out rather than overlap, and the first always shows (§5).
-  const step = width && points.length ? Math.max(1, Math.ceil((points.length * 56) / Math.max(width - 44, 1))) : 1
-  const band = width ? (width - 44) / Math.max(points.length, 1) : 0
-  const valueFits = band >= 34
-  return <div className="database-chart-vertical" ref={ref}>
+  const band = width ? (width - plotLeft) / Math.max(points.length, 1) : 0
+  const step = axisStep(points, band, dateAxis)
+  // A date can be counted along from the labels either side, but an option can't, so bars that can't all be named go across, for this width only.
+  if (!dateAxis && step > 1) return <div ref={ref}><HorizontalBars points={points} opened={opened} onOpen={onOpen} textOf={textOf} /></div>
+  const shown = axisLabels(points, step, dateAxis)
+  return <div className={`database-chart-vertical${band && band < 6 ? ' is-dense' : ''}`} ref={ref}>
     <div className="database-chart-plot">
-      {ticks.map(t => <div key={t} className={`database-chart-tick${t === 0 ? ' is-zero' : ''}`} style={{ bottom: `${at(t)}%` }}><span>{measured ? format({ type: 'number', value: t }) : t.toLocaleString('en-US')}</span></div>)}
+      {ticks.map(t => <div key={t} className={`database-chart-tick${t === 0 ? ' is-zero' : ''}`} style={{ bottom: `${at(t)}%` }}><span>{shortNumber(t)}</span></div>)}
       <div className="database-chart-bars">
         {points.map(p => {
           const value = p.value, from = at(Math.min(0, value ?? 0)), to = at(Math.max(0, value ?? 0)), text = textOf(p.result)
           return <button key={p.key} type="button" className={`database-chart-bar${opened === p.key ? ' is-open' : ''}${opened && opened !== p.key ? ' is-dim' : ''}`} title={`${p.name}: ${text}`} aria-label={`${p.name}: ${text}`} aria-pressed={opened === p.key} onClick={() => onOpen(p.key)}>
             {value ? <i style={{ bottom: `${from}%`, height: `${to - from}%` }} /> : null}
-            {valueFits && value !== null && <b style={{ bottom: `${to}%` }}>{text}</b>}
+            {band >= 34 && value !== null && <b style={{ bottom: `${to}%` }}>{shortNumber(value)}</b>}
           </button>
         })}
       </div>
     </div>
     <div className="database-chart-labels" aria-hidden="true">
       {/* A label shown takes the room of the bars whose labels gave way to it. */}
-      {points.filter((_, i) => i % step === 0).map((p, i, all) => <span key={p.key} className={step > 1 ? (i === all.length - 1 ? 'is-spanning is-last' : 'is-spanning') : undefined} title={p.name} style={{ flexGrow: step }}>{p.short}</span>)}
+      {shown.map((l, i) => <span key={l.key} className={step > 1 ? (i === shown.length - 1 ? 'is-spanning is-last' : 'is-spanning') : undefined} title={l.full} style={{ flexGrow: step }}>{l.label}</span>)}
     </div>
   </div>
 }
@@ -101,7 +109,7 @@ function HorizontalBars({ points, opened, onOpen, textOf }: { points: ChartPoint
       return <button key={p.key} type="button" className={`database-chart-line${opened === p.key ? ' is-open' : ''}${opened && opened !== p.key ? ' is-dim' : ''}`} title={`${p.name}: ${text}`} aria-label={`${p.name}: ${text}`} aria-pressed={opened === p.key} onClick={() => onOpen(p.key)}>
         <span className="database-chart-line-name">{p.name}</span>
         <span className="database-chart-line-track">{value ? <i style={{ left: `${from}%`, width: `${to - from}%` }} /> : null}</span>
-        <span className="database-chart-line-value">{text}</span>
+        <span className="database-chart-line-value">{value === null ? text : shortNumber(value)}</span>
       </button>
     })}
   </div>

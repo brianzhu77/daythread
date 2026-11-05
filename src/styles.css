@@ -2083,7 +2083,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-chart { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 4px; }
 .database-chart-loading { height: 240px; }
 .database-chart-number { display: flex; flex-direction: column; gap: 2px; padding: 12px 0; }
-.database-chart-number strong { color: var(--ink); font-size: 40px; font-weight: var(--weight-semibold); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.database-chart-number strong { min-width: 0; overflow-wrap: anywhere; color: var(--ink); font-size: 40px; font-weight: var(--weight-semibold); line-height: 1.1; font-variant-numeric: tabular-nums; }
 .database-chart-number span { color: var(--ink-2); font-size: var(--text-ui); }
 .database-chart-vertical { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .database-chart-plot { position: relative; height: 220px; margin: 14px 0 0 44px; }
@@ -2096,6 +2096,8 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-chart-bar b { position: absolute; left: 0; right: 0; padding-bottom: 2px; overflow: hidden; color: var(--ink-2); font-size: var(--text-caption); font-weight: var(--weight-regular); line-height: 14px; text-align: center; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .database-chart-bar.is-dim i, .database-chart-line.is-dim i { background: var(--ink-3); }
 @media (hover: hover) { .database-chart-bar:hover i, .database-chart-line:hover i { background: var(--ink-2); } }
+/* Too thin for a gap: one would round unevenly into stripes. */
+.database-chart-vertical.is-dense .database-chart-bar i { width: 100%; border-radius: 0; }
 .database-chart-labels { display: flex; margin-left: 44px; }
 .database-chart-labels span { flex: 1 1 0; min-width: 0; padding: 0 2px; overflow: hidden; color: var(--ink-2); font-size: var(--text-caption); line-height: 16px; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
 .database-chart-labels span.is-spanning { text-align: left; }
@@ -2109,12 +2111,13 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-chart-line-value { color: var(--ink-2); font-size: var(--text-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .database-chart-toggle { align-self: flex-start; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--text-caption); cursor: pointer; }
 @media (hover: hover) { .database-chart-toggle:hover { color: var(--ink); } }
-.database-chart-table { width: 100%; border-collapse: collapse; font-size: var(--text-ui); }
+.database-chart-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--text-ui); }
+.database-chart-table td:last-child:not(:first-child), .database-chart-table th:last-child:not(:first-child) { width: 34%; }
 .database-chart-table th { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); color: var(--ink-3); font-size: var(--text-caption); font-weight: var(--weight-regular); text-align: left; }
 .database-chart-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line-soft); color: var(--ink); overflow-wrap: anywhere; }
 .database-chart-table th:last-child, .database-chart-table td:last-child:not(:first-child) { padding-right: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .database-chart-opened h4 { margin: 4px 0; color: var(--ink); font-size: var(--text-ui); font-weight: var(--weight-semibold); }
-.database-chart .database-chart-row { display: block; width: 100%; min-height: 24px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.database-chart .database-chart-row { display: block; width: 100%; min-height: 24px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 @media (hover: hover) { .database-chart-row:hover { text-decoration: underline; } }
 @media (max-width: 899px) {
   .database-chart-plot { height: 180px; }

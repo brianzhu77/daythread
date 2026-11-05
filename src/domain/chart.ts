@@ -21,8 +21,8 @@ export interface ChartSettings {
 /** More values than can be told apart, as Notion's limit. It says so, and the table of data still has them all. */
 export const chartLimit = 200
 
-export interface ChartPoint { key: string; name: string; /** What the axis has room for: a date without its year or "Week of". */ short: string; rows: Page[]; value: number | null; result: CalcResult }
-export interface ChartData { property: Property; points: ChartPoint[]; tooMany: boolean }
+export interface ChartPoint { key: string; name: string; rows: Page[]; value: number | null; result: CalcResult }
+export interface ChartData { property: Property; points: ChartPoint[]; dateAxis: boolean; tooMany: boolean }
 
 export const chartSettings = (view: Pick<View, 'chart'>): ChartSettings => view.chart ?? { form: 'bar' }
 /** What's measured: null for a count. `gone` when its property was deleted or stopped being a number, so it asks again rather than counting instead. */
@@ -47,47 +47,76 @@ const next = (key: string, by: 'day' | 'week' | 'month'): string => {
   const d = new Date(`${key}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + (by === 'week' ? 7 : 1)); return d.toISOString().slice(0, 10)
 }
 const noValue = 'none'
-const shortDay = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
-const shortMonth = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
-function shortName(key: string, name: string, isDate: boolean): string {
-  if (!isDate || key === noValue) return name
-  if (/^\d{4}-\d{2}-\d{2}$/.test(key)) return shortDay.format(new Date(`${key}T12:00:00Z`))
-  return /^\d{4}-\d{2}$/.test(key) ? shortMonth.format(new Date(`${key}-01T12:00:00Z`)) : name
-}
 const isDateAxis = (p: Property): boolean => p.type === 'date' || p.type === 'createdTime' || p.type === 'editedTime'
 
 export function chartData(db: Database, view: View, rows: readonly Page[], weekStart: WeekStart = 0): ChartData | 'choose' | null {
   const settings = chartSettings(view), measure = chartMeasure(db, view)
   if (settings.form === 'number') return null
   if (measure === 'gone') return 'choose'
-  const groups = viewGroups(db, view, rows, undefined, weekStart)
+  // By year goes through months, as a year must hold whole months: a week's key is its first day, which can be in the year before.
+  const groups = viewGroups(db, settings.byYear ? { ...view, groupDateBy: 'month' } : view, rows, undefined, weekStart)
   if (!groups) return 'choose'
   let shown = groups.shown.map(g => ({ key: g.key, name: g.name, rows: g.rows }))
-  if (isDateAxis(groups.property)) {
+  const dateAxis = isDateAxis(groups.property)
+  let tooMany = false
+  if (dateAxis) {
     const by = view.groupDateBy ?? 'month', dated = shown.filter(g => g.key !== noValue), none = shown.filter(g => g.key === noValue), byKey = new Map(dated.map(g => [g.key, g]))
+    const hidden = new Set(view.hiddenGroups ?? [])
     let filled = dated
-    // Every period between the first and the last, so a gap reads as a gap (§3). A view that hides its empty groups has asked not to.
-    if (dated.length > 1 && !view.hideEmptyGroups && !settings.byYear) {
-      filled = []
-      for (let key = dated[0]!.key, last = dated.at(-1)!.key; key <= last && filled.length <= chartLimit; key = next(key, by)) filled.push(byKey.get(key) ?? { key, name: dateGroupName(key, by), rows: [] })
-    }
     if (settings.byYear) {
       const years = new Map<string, Page[]>()
       for (const g of dated) { const y = g.key.slice(0, 4); years.set(y, [...(years.get(y) ?? []), ...g.rows]) }
       const list = [...years.keys()].sort()
-      filled = []
-      if (list.length) for (let y = Number(list[0]); y <= Number(list.at(-1)) && filled.length <= chartLimit; y++) filled.push({ key: String(y), name: String(y), rows: years.get(String(y)) ?? [] })
+      if (list.length && Number(list.at(-1)) - Number(list[0]) < chartLimit) { filled = []; for (let y = Number(list[0]); y <= Number(list.at(-1)); y++) filled.push({ key: String(y), name: String(y), rows: years.get(String(y)) ?? [] }) }
+      else { filled = list.map(y => ({ key: y, name: y, rows: years.get(y)! })); tooMany = list.length > 1 }
+    } else if (dated.length > 1 && !view.hideEmptyGroups) {
+      // Every period between the first and the last, so a gap reads as a gap (§3), but for one he hid. A view that hides its empty groups has asked not to.
+      // Past the limit it can't be drawn anyway, and only real values go to the table of data.
+      const all: typeof dated = []
+      for (let key = dated[0]!.key, last = dated.at(-1)!.key; key <= last; key = next(key, by)) {
+        if (all.length > chartLimit) { tooMany = true; break }
+        if (!hidden.has(key)) all.push(byKey.get(key) ?? { key, name: dateGroupName(key, by), rows: [] })
+      }
+      if (!tooMany) filled = all
     }
     shown = [...filled, ...none]
   }
-  const dateAxis = isDateAxis(groups.property)
-  let points: ChartPoint[] = shown.map(g => { const result = chartValue(db, g.rows, measure); return { ...g, short: shortName(g.key, g.name, dateAxis), result, value: numberOf(result) } })
+  // No value only where a row has none: a select always has the group, for a board to drop on, but it isn't a bar.
+  shown = shown.filter(g => g.key !== noValue || g.rows.length > 0)
+  let points: ChartPoint[] = shown.map(g => { const result = chartValue(db, g.rows, measure); return { ...g, result, value: numberOf(result) } })
   if (settings.cumulative && !settings.sortByValue && (kindOf(measure) === 'countAll' || kindOf(measure) === 'sum')) {
     let total = 0, any = false
     points = points.map(p => { if (p.value !== null) { total += p.value; any = true } const value = any ? total : null; return { ...p, value, result: measure ? { type: 'number', value } : { type: 'count', value: value ?? 0 } } })
   }
   if (settings.sortByValue) points = [...points].sort((a, b) => (b.value ?? -Infinity) - (a.value ?? -Infinity))
-  return { property: groups.property, points, tooMany: points.length > chartLimit }
+  return { property: groups.property, points, dateAxis, tooMany: tooMany || points.length > chartLimit }
+}
+
+const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
+/** For where a whole number won't fit: an axis, or above a bar. The exact value is in its hover and the table of data. */
+export const shortNumber = (n: number): string => (Math.abs(n) >= 10_000 ? compact.format(n) : n.toLocaleString('en-US', { maximumFractionDigits: 2 }))
+
+const shortDay = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+const shortMonth = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' })
+/**
+ * The labels an axis shows, every `step`th. A date gives its year only on the first and where it changes, so each is short and none leaves you guessing:
+ * "Jan 2025, Mar, May, Jan 2026". Anything else is its name.
+ */
+export function axisLabels(points: readonly Pick<ChartPoint, 'key' | 'name'>[], step: number, dateAxis: boolean): { key: string; label: string; full: string }[] {
+  let year = ''
+  return points.filter((_, i) => i % step === 0).map(p => {
+    const isDay = /^\d{4}-\d{2}-\d{2}$/.test(p.key), isMonth = /^\d{4}-\d{2}$/.test(p.key)
+    if (!dateAxis || (!isDay && !isMonth)) return { key: p.key, label: p.name, full: p.name }
+    const y = p.key.slice(0, 4), at = new Date(`${isDay ? p.key : `${p.key}-01`}T12:00:00Z`), head = (isDay ? shortDay : shortMonth).format(at), changed = y !== year
+    year = y
+    return { key: p.key, label: changed ? `${head}${isDay ? ',' : ''} ${y}` : head, full: p.name }
+  })
+}
+/** The fewest labels' worth of thinning at which every label has room, at about 6.5 px a character in the axis's size. */
+export function axisStep(points: readonly Pick<ChartPoint, 'key' | 'name'>[], band: number, dateAxis: boolean): number {
+  if (!band) return 1
+  for (let step = 1; step < points.length; step++) if (Math.max(0, ...axisLabels(points, step, dateAxis).map(l => l.label.length * 6.5 + 8)) <= band * step) return step
+  return Math.max(points.length, 1)
 }
 
 /** Round numbers from below the lowest value to above the highest, always with zero, as bars start there. */

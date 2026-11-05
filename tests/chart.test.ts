@@ -1,7 +1,7 @@
 // Chart (docs/design/chart.md): its numbers are the view's own rows and groups, so they match a table and a column calculation.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chartData, chartMeasure, chartTicks, chartValue, type ChartPoint } from '../src/domain/chart.ts'
+import { axisLabels, axisStep, chartData, chartMeasure, chartTicks, chartValue, shortNumber, type ChartPoint } from '../src/domain/chart.ts'
 import { columnCalc, groupableProperties, viewRows, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import type { Action } from '../src/domain/types.ts'
@@ -32,6 +32,8 @@ const pairs = (p: ChartPoint[]) => p.map(x => [x.name, x.value])
 
 test('count by a select: every option, and rows with none, in its own order', () => {
   assert.deepEqual(pairs(of(shelf(), view())), [['Novel', 2], ['Essay', 1], ['Poem', 0], ['No value', 1]])
+  // No value only where a row has none.
+  assert.deepEqual(pairs(of(shelf(), view({ filter: [{ by: 'kind', op: 'isNotEmpty' }] }))), [['Novel', 2], ['Essay', 1], ['Poem', 0]])
 })
 test('a measure matches a column calculation on the same rows, and a blank is not a zero', () => {
   const h = shelf(), v = view({ chart: { form: 'bar', measure: { by: 'pages', kind: 'sum' } } }), points = of(h, v)
@@ -55,8 +57,6 @@ test('a date axis fills empty periods, by month, week, day and year, and rows wi
   assert.deepEqual(pairs(weeks), [['Week of Mar 1, 2026', 1], ['Week of Mar 8, 2026', 0], ['Week of Mar 15, 2026', 1]])
   // Week starts moves the weeks (R3-20).
   assert.equal(of(h, view({ groupBy: 'due', groupDateBy: 'week', filter: [{ by: 'due', op: 'onOrAfter', value: { date: '2026-03-01' } }] }), 1)[0]!.name, 'Week of Mar 2, 2026')
-  assert.deepEqual(of(h, byMonth).map(p => p.short), ['Jan 2026', 'Feb 2026', 'Mar 2026', 'No value'])
-  assert.equal(of(h, view({ groupBy: 'due', groupDateBy: 'week', filter: [{ by: 'due', op: 'onOrAfter', value: { date: '2026-03-01' } }] }))[0]!.short, 'Mar 1')
   // A view that hides empty groups has asked not to.
   assert.deepEqual(pairs(of(h, view({ groupBy: 'due', hideEmptyGroups: true }))).map(x => x[1]), [1, 2, 1])
 })
@@ -79,6 +79,29 @@ test('what can be charted: not text, files, ID or a rollup', () => {
   const names = groupableProperties(shelf().db(), 'chart').map(p => p.id)
   for (const id of ['kind', 'tags', 'pages', 'due']) assert.ok(names.includes(id), id)
   for (const id of ['note', 'att']) assert.ok(!names.includes(id), id)
+})
+test('Ratchet: by year goes through months, whatever the axis was; a hidden group stays hidden; past the limit the data keeps every real value', () => {
+  const h = shelf()
+  // Jan 1, 2027 is in a week that starts in 2026.
+  h.run({ type: 'add-row', databaseId: 'list', pageId: 'newyear', title: 'newyear', values: { due: { start: '2027-01-01' } } as never, at })
+  assert.deepEqual(pairs(of(h, view({ groupBy: 'due', groupDateBy: 'week', chart: { form: 'bar', byYear: true } }))), [['2026', 3], ['2027', 1], ['No value', 1]])
+  assert.deepEqual(pairs(of(h, view({ groupBy: 'due', hiddenGroups: ['2026-02'], filter: [{ by: 'due', op: 'before', value: { date: '2026-12-01' } }] }))).map(x => x[0]), ['January 2026', 'March 2026'])
+  const days = view({ groupBy: 'due', groupDateBy: 'day' }), d = chartData(h.db(), days, viewRows(h.ws, 'list', days, ctx))
+  assert.ok(d && d !== 'choose'); assert.equal(d.tooMany, true)
+  assert.deepEqual(d.points.filter(p => p.value).map(p => p.key), ['2026-01-15', '2026-03-02', '2026-03-20', '2027-01-01', 'none'])
+})
+test('an axis gives a year on the first label and where it changes, and thins so every label has room', () => {
+  const months = ['2025-11', '2025-12', '2026-01', '2026-02'].map(key => ({ key, name: key }))
+  assert.deepEqual(axisLabels(months, 1, true).map(l => l.label), ['Nov 2025', 'Dec', 'Jan 2026', 'Feb'])
+  assert.deepEqual(axisLabels(months, 2, true).map(l => l.label), ['Nov 2025', 'Jan 2026'])
+  assert.deepEqual(axisLabels([{ key: '2025-12-29', name: 'x' }, { key: '2026-01-05', name: 'y' }, { key: '2026-01-12', name: 'z' }], 1, true).map(l => l.label), ['Dec 29, 2025', 'Jan 5, 2026', 'Jan 12'])
+  assert.deepEqual(axisLabels([{ key: 'none', name: 'No value' }, { key: 'novel', name: 'Novel' }], 1, false).map(l => l.label), ['No value', 'Novel'])
+  assert.equal(axisStep(months, 100, true), 1)
+  assert.ok(axisStep(months, 20, true) > 1)
+  assert.equal(axisStep(months, 0, true), 1)
+})
+test('a short number for tight places', () => {
+  assert.equal(shortNumber(1000000000), '1B'); assert.equal(shortNumber(1234567), '1.2M'); assert.equal(shortNumber(9999), '9,999'); assert.equal(shortNumber(0.5), '0.5'); assert.equal(shortNumber(-25000), '-25K')
 })
 test('past the limit it says so, and doesn\'t try to draw', () => {
   const h = shelf()
