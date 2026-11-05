@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { flatNodes, pageContentKey, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
-import { blockUpdates, expandedWorkspace, storedDocument, strippedWorkspace, syncedBlockType } from '../src/domain/synced.ts'
+import { blockUpdates, expandedWorkspace, homePageOfRecord, storedDocument, strippedWorkspace, syncedBlockType } from '../src/domain/synced.ts'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
 import { applyCommand } from '../src/domain/workspace.ts'
 import { planWrites, rowsOf, workspaceOf } from '../src/server/workspace-rows.ts'
@@ -427,3 +427,75 @@ test('with no block nothing changes: the same objects, the same key', () => {
   assert.equal(storedDocument(h.page('a').document), h.page('a').document)
   assert.equal(h.ws.synced, undefined)
 })
+
+// B21-11: what can go inside.
+const databaseLine = (id: string, pageId: string) => ({ id, type: 'database', props: { pageId, view: '' }, children: [] }) as unknown as EditorNode
+function withDatabase() {
+  const h = harness()
+  for (const [id, title] of [['a', 'A'], ['b', 'B']] as const) h.run({ type: 'create-document', title, body: '', pageId: id })
+  h.run({ type: 'create-database', pageId: 'db', parentId: 'a', homeBlockId: 'home', title: 'Books' })
+  h.run({ type: 'add-row', databaseId: 'db', pageId: 'r1', title: 'One', values: {}, at: '2026-11-05T00:00:00.000Z' } as never)
+  h.save('a', () => [line('above', 'Above'), block('sa', 's1', [line('l1', 'Shared'), databaseLine('home', 'db')])])
+  h.save('b', () => [block('sb', 's1')])
+  return h
+}
+const holder = (h: ReturnType<typeof harness>, id: string) => h.page('db').database!.homeBlockId === id
+test('a database inside: home on the original under its own id, a view of the same rows everywhere else (B21-11)', () => {
+  const h = withDatabase()
+  assert.equal(holder(h, 'home'), true)
+  const copy = flatNodes(pageNodes(h.page('b'))).find(n => n.type === 'database')!
+  assert.notEqual(copy.id, 'home', 'so the copy is a view')
+  assert.equal(copy.props?.pageId, 'db')
+  assert.equal(h.page('r1').trashedAt ?? null, null)
+})
+test('deleting a copy of the block never trashes the database; deleting its line from a copy leaves the database as a full page, rows and all (B21-11)', () => {
+  const h = withDatabase()
+  const lineGone = (nodes: EditorNode[]) => nodes.map(n => n.type === syncedBlockType ? { ...n, children: n.children!.filter(c => c.type !== 'database') } : n)
+  h.save('b', lineGone)
+  assert.equal(flatNodes(pageNodes(h.page('a'))).some(n => n.type === 'database'), false, 'shared lines, so it left the original too')
+  assert.equal(h.page('db').trashedAt ?? null, null)
+  assert.equal(h.page('r1').trashedAt ?? null, null)
+  assert.equal(h.page('db').database!.homeBlockId, null)
+  assert.equal(h.page('db').parentId, 'a')
+})
+test('deleting the home line on the original follows the usual rule: it goes to Trash (B21-11)', () => {
+  const h = withDatabase()
+  h.save('a', nodes => nodes.map(n => n.type === syncedBlockType ? { ...n, children: n.children!.filter(c => c.type !== 'database') } : n))
+  assert.ok(h.page('db').trashedAt)
+})
+test('moving the home line out of the block on the original keeps it the home (B21-11)', () => {
+  const h = withDatabase()
+  h.save('a', nodes => [...nodes.map(n => n.type === syncedBlockType ? { ...n, children: n.children!.filter(c => c.type !== 'database') } : n), databaseLine('home', 'db')])
+  assert.equal(holder(h, 'home'), true)
+  assert.equal(h.page('db').trashedAt ?? null, null)
+})
+test('deleting the original: the database stays as a full page, and the other places keep a view of it (B21-11)', () => {
+  const h = withDatabase()
+  h.run({ type: 'delete-synced-place', pageId: 'a', blockId: 'sa' })
+  assert.equal(h.page('db').trashedAt ?? null, null)
+  assert.equal(h.page('db').database!.homeBlockId, null)
+  assert.equal(flatNodes(pageNodes(h.page('b'))).find(n => n.type === 'database')?.props?.pageId, 'db')
+})
+test('deleting a copy place leaves the home alone (B21-11)', () => {
+  const h = withDatabase()
+  h.run({ type: 'delete-synced-place', pageId: 'b', blockId: 'sb' })
+  assert.equal(holder(h, 'home'), true)
+})
+test('what\'s made in a copy lives on the original\'s page; a page in Trash can\'t be a home (B21-11)', () => {
+  const h = withDatabase()
+  assert.equal(homePageOfRecord(h.ws, 's1')?.id, 'a')
+  h.run({ type: 'delete-page', pageId: 'a', at: '2026-11-05T00:00:00.000Z' })
+  assert.equal(homePageOfRecord(h.ws, 's1'), undefined)
+})
+test('a database made inside a copy: its home line reaches the original and it isn\'t trashed by saving either page (B21-11)', () => {
+  const h = withDatabase()
+  h.run({ type: 'create-database', pageId: 'db2', parentId: 'a', homeBlockId: 'made', title: 'New' })
+  h.save('b', nodes => nodes.map(n => n.type === syncedBlockType ? { ...n, children: [...n.children!, databaseLine('made', 'db2')] } : n))
+  assert.ok(flatNodes(pageNodes(h.page('a'))).some(n => n.id === 'made'), 'plain id on the original')
+  assert.equal(flatNodes(pageNodes(h.page('b'))).some(n => n.id === 'made'), false, 'its own id on the copy')
+  h.save('a', nodes => nodes)
+  h.save('b', nodes => nodes)
+  assert.equal(h.page('db2').trashedAt ?? null, null)
+  assert.equal(h.page('db2').database!.homeBlockId, 'made')
+})
+

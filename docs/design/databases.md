@@ -66,7 +66,8 @@ database meets Daythread's days.
   and opens it, with the caret in its title. This is one entry point, with no condition and no notice. It costs one
   extra tap on every new page, which is acceptable at his rate of about one new page a day (13 documents in about two
   weeks). It answers the case he's most likely to try first, a standalone "Reading list" (Bumblebee 7d888f86).
-- **Where it's not offered:** inside a synced block, and inside a draft band.
+- **Inside a synced block (B21-11):** offered. Its home is on the original's page, whichever place it's made in, and every other place shows a view.
+- **Where it's not offered:** inside a draft band.
 - **In a template:** the database is made there, and the template is its home. Each new page made from the template
   gets a **linked view** of it, never a fresh database (Roadbuster's model). No explanatory line. This comes with
   linked views (§9.4).
@@ -738,7 +739,7 @@ Restore brings back the database with its rows. Nothing else shows, and nothing 
   - ⌘Z in page text stays the editor's own;
   - **The rule he sees: ⌘Z undoes the last thing he did where his focus is.** Roadbuster to confirm the routing.
 - **Text cells save** on Enter, on blur, or after 1 s without typing. A cell edit is never sent per key.
-- **The block moves** by its `⋮⋮` like any block. It can't go into a synced block or a template (§3.1).
+- **The block moves** by its `⋮⋮` like any block, into a synced block too. It can't go into a template (§3.1).
 - **Paste:** pasting text into a cell sets that cell. Pasting several lines or a table (TSV) into the table fills across and down (R4-9, `csv.md` §3).
   In a To-dos view, only the first line goes in, and the notice says "Pasted the first line only".
 

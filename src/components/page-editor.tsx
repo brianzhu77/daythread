@@ -17,7 +17,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
 import { chooseCsv } from './csv-import'
-import { blockLinesKey, blockUpdates, mirroredLines, ownLineIds, syncedBlockType, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
+import { blockLinesKey, blockUpdates, mirroredLines, ownLineIds, syncedBlockType, homePageOfRecord, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
 import { EditorScrollerContext, pageScopeOf } from './editor-scope'
 import { syncedKeys } from './synced-keys'
 import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-label'
@@ -1330,8 +1330,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * lost reply never removes the card: the same id is retried (a page the server already made is just confirmed),
    * and after that the card offers Retry (Ratchet #64, Jazz). The new page opens only once card and page both exist.
    */
+  /** Where a page or database made at the caret lives: in a copy of a synced block, on the original's page (B21-11). */
+  function homeForNew(): Page {
+    const caret = editor.getTextCursorPosition().block.id
+    const holder = deepNodes(nodes()).find(n => n.type === syncedBlockType && deepNodes(n.children ?? []).some(c => c.id === caret))
+    return (holder && homePageOfRecord(latestWorkspace.current, String(holder.props?.syncId))) || page
+  }
+  const madeElsewhere = (what: string, home: Page) => { if (home.id !== page.id) toast(`${what} made in ${displayPageTitle(home)}`, { timeout: 6000 }) }
   async function createSubpage() {
-    const pageId = crypto.randomUUID()
+    const pageId = crypto.randomUUID(), home = homeForNew()
     // Card and the empty line after it go in as one transaction, so a single Undo takes the card back out while the
     // page is still being created (Ratchet #64); insertOrUpdateBlockForSlashMenu made those two separate steps.
     let cardId: string | undefined
@@ -1343,7 +1350,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const [line] = editor.insertBlocks([{ type: 'paragraph' } as never], inserted!, 'after')
       editor.setTextCursorPosition(line!, 'start')
     })
-    await confirmSubpage(pageId, cardId, true)
+    madeElsewhere('Page', home)
+    await confirmSubpage(pageId, cardId, true, home.id)
   }
   /**
    * `/` Database (design §3.1): always an inline database. The block goes in at once with ids chosen here, then the
@@ -1364,23 +1372,24 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return blockId!
   }
   async function createDatabase() {
-    const pageId = crypto.randomUUID()
+    const pageId = crypto.randomUUID(), home = homeForNew()
     const blockId = insertDatabaseBlock({ pageId })
     madeHere.current.add(pageId)
-    await confirmDatabase(pageId, blockId)
+    madeElsewhere('Database', home)
+    await confirmDatabase(pageId, blockId, home.id)
   }
   /** `/` Database: the picker, as To-dos is always there to show (design §3.1, §11). */
   const chooseDatabase = () => {
     const line = editor.domElement?.querySelector(`[data-id="${CSS.escape(editor.getTextCursorPosition().block.id)}"]`)?.getBoundingClientRect()
     setPicker({ top: Math.max(8, Math.min((line?.bottom ?? 80) + 4, window.innerHeight - 320)), left: Math.max(8, line?.left ?? 8) })
   }
-  async function confirmDatabase(pageId: string, blockId: string) {
-    const retry = () => void confirmDatabase(pageId, blockId)
+  async function confirmDatabase(pageId: string, blockId: string, parentId = page.id) {
+    const retry = () => void confirmDatabase(pageId, blockId, parentId)
     setDatabasePending(pageId, { state: 'creating', retry })
     let created = false
     for (let attempt = 0; attempt < 3 && !created; attempt++) {
       if (!editor.getBlock(blockId)) { setDatabasePending(pageId, null); return } // block undone: abandon
-      created = Boolean(await run({ type: 'create-database', pageId, parentId: page.id, homeBlockId: blockId, title: '' }))
+      created = Boolean(await run({ type: 'create-database', pageId, parentId, homeBlockId: blockId, title: '' }))
         || latestWorkspace.current.pages.some(p => p.id === pageId)
     }
     if (!created) { setDatabasePending(pageId, { state: 'failed', retry }); setStatus('Database not created · tap it to retry'); return }
@@ -1396,16 +1405,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     setDatabasePending(pageId, null)
     return blockId
   }
-  async function confirmSubpage(pageId: string, cardId: string | undefined, open: boolean) {
-    const retry = () => void confirmSubpage(pageId, cardId, false)
-    setPending(pageId, { state: 'creating', parentId: page.id, retry })
+  async function confirmSubpage(pageId: string, cardId: string | undefined, open: boolean, parentId = page.id) {
+    const retry = () => void confirmSubpage(pageId, cardId, false, parentId)
+    setPending(pageId, { state: 'creating', parentId, retry })
     let created = false
     for (let attempt = 0; attempt < 3 && !created; attempt++) {
       if (cardId && !editor.getBlock(cardId)) { setPending(pageId, null); return } // card undone: abandon
-      created = Boolean(await run({ type: 'create-document', title: '', body: '', pageId, parentId: page.id }))
+      created = Boolean(await run({ type: 'create-document', title: '', body: '', pageId, parentId }))
         || latestWorkspace.current.pages.some(p => p.id === pageId)
     }
-    if (!created) { setPending(pageId, { state: 'failed', parentId: page.id, retry }); setStatus('Page not created · card kept, tap it to retry'); return }
+    if (!created) { setPending(pageId, { state: 'failed', parentId, retry }); setStatus('Page not created · card kept, tap it to retry'); return }
     setPending(pageId, null)
     clearTimeout(timer.current)
     for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
@@ -1498,7 +1507,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const [next] = editor.insertBlocks([{ type: lineType } as never], insertedBlocks.at(-1)!, 'after')
       editor.setTextCursorPosition(next!, 'start')
     })
-    const action: Extract<Action, { type: 'make-link-pages' }> = { type: 'make-link-pages', parentPageId: page.id, items: items.map(({ url, pageId, title }) => ({ url, pageId, ...(title ? { title } : {}) })), at: new Date().toISOString() }
+    const action: Extract<Action, { type: 'make-link-pages' }> = { type: 'make-link-pages', parentPageId: homeForNew().id, items: items.map(({ url, pageId, title }) => ({ url, pageId, ...(title ? { title } : {}) })), at: new Date().toISOString() }
     const fresh = items.filter(it => !latestWorkspace.current.pages.some(p => p.id === it.pageId))
     const retry = () => void confirmLinks(action, items.map(it => it.cardBlockId), operationId, fresh.map(it => it.pageId))
     for (const it of fresh) setPending(it.pageId, { state: 'creating', parentId: page.id, retry })
@@ -1734,16 +1743,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (newTitle) void createLinkedPage(pageId, newTitle)
   }
   /** §4: `/page`'s confirm loop for a page made from `[[`: 3 tries, then "Not created · Retry" on the link. No notice. */
-  async function createLinkedPage(pageId: string, title: string) {
-    const retry = () => void createLinkedPage(pageId, title)
+  async function createLinkedPage(pageId: string, title: string, parentId = homeForNew().id) {
+    const retry = () => void createLinkedPage(pageId, title, parentId)
     const linked = () => JSON.stringify(editor.document).includes(`"pageId":"${pageId}"`)
-    setPending(pageId, { state: 'creating', parentId: page.id, retry })
+    setPending(pageId, { state: 'creating', parentId, retry })
     let created = false
     for (let attempt = 0; attempt < 3 && !created; attempt++) {
       if (!linked()) { setPending(pageId, null); return } // undone before it was made: abandon
-      created = Boolean(await run({ type: 'create-document', title, body: '', pageId, parentId: page.id }, null)) || latestWorkspace.current.pages.some(p => p.id === pageId)
+      created = Boolean(await run({ type: 'create-document', title, body: '', pageId, parentId }, null)) || latestWorkspace.current.pages.some(p => p.id === pageId)
     }
-    if (!created) { setPending(pageId, { state: 'failed', parentId: page.id, retry }); setStatus('Page not created · link kept, tap it to retry'); return }
+    if (!created) { setPending(pageId, { state: 'failed', parentId, retry }); setStatus('Page not created · link kept, tap it to retry'); return }
     setPending(pageId, null)
     if (dirty.current && !sending.current) { clearTimeout(timer.current); void flushRef.current() }
   }
@@ -1884,7 +1893,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!chosen.length) return
     if (chosen.some(n => insideSyncedBlock(n.id))) { toast("A synced block can't go inside another. Select only other lines.", { timeout: 6000 }); return }
     if (deepNodes(chosen).some(n => n.type === syncedBlockType)) { toast("A synced block can't go inside another. Select only other lines.", { timeout: 6000 }); return }
-    if (deepNodes(chosen).some(n => n.type === 'database')) { toast("A database can't be synced yet. Select only other lines.", { timeout: 6000 }); return }
     const id = crypto.randomUUID()
     selected.current = []; setSelectionLabel('')
     editor.replaceBlocks(chosen.map(n => n.id), [{ id, type: syncedBlockType, props: { syncId: crypto.randomUUID(), rev: 0, key: '', roles: '' }, children: chosen }] as never)
@@ -2771,7 +2779,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         } }
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
         // Pick the file, see the preview, and only then does a block appear (R4-8).
-        const csvItem = { title: 'CSV', icon: <ImportIcon />, aliases: ['csv', 'import', 'tsv', '导入'], group: 'Other', onItemClick: () => chooseCsv({ kind: 'new', parentId: page.id, place: placeImportedDatabase }) }
+        const csvItem = { title: 'CSV', icon: <ImportIcon />, aliases: ['csv', 'import', 'tsv', '导入'], group: 'Other', onItemClick: () => chooseCsv({ kind: 'new', parentId: homeForNew().id, place: placeImportedDatabase }) }
         const databaseItem = { title: 'Database', icon: <DatabaseIcon />, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: chooseDatabase }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
         const linkItem = { title: 'Link to page', icon: <LineLinkIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
