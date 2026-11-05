@@ -9,7 +9,8 @@ import type { PushPayload, SendResult } from '../src/server/push/send.ts'
 import { asOwner } from '../src/server/auth/request-owner.ts'
 import { dateOnlyTime, dueReminders, zonedEpoch } from '../src/domain/reminders.ts'
 import { expandedWorkspace, syncedBlockType } from '../src/domain/synced.ts'
-import type { Workspace } from '../src/domain/types.ts'
+import { pageContentKey } from '../src/domain/editor-document.ts'
+import type { Action, Workspace } from '../src/domain/types.ts'
 
 // Reminders for @date chips over web push (docs/design/reminders.md): what is due, what was sent, and the handlers.
 
@@ -221,5 +222,19 @@ test('a chip moved to another time fires again, once; the same chip shown twice 
   sent.length = 0
   await run(at('16:00'), sixteen + 60_000)
   assert.deepEqual(sent.sort(), [`a:e1@${sixteen}`, `b:e1@${sixteen}`], 'moved, so it fires again')
+})
+test('a synced chip read back through the store still opens a page he can see, not the shared record (B60 7)', async () => {
+  const { repo, wsA } = await stores().then(r => r), at = '2099-10-28'
+  await asOwner(A, async () => {
+    let w = await repo.load()
+    const run = async (action: Action) => { w = (await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action })).workspace as Workspace }
+    await run({ type: 'create-document', title: 'Holds it', body: '', pageId: 'place' })
+    const page = () => w.pages.find(p => p.id === 'place')!
+    await run({ type: 'save-editor', pageId: 'place', expectedContent: pageContentKey(page()), document: JSON.stringify([{ id: 's1', type: syncedBlockType, props: { syncId: 'rec-1', rev: 0, key: '', roles: '' }, children: [line('l1', [text('Shared '), chip('e-s', at, '15:00')])] }]) })
+  })
+  const loaded = await repo.loadWorkspace(wsA)
+  const fire = zonedEpoch(at, '15:00', loaded!.timezone)
+  const due = dueReminders(loaded!, fire - 60_000, fire + 60_000)
+  assert.deepEqual(due.map(r => [r.eventId, r.url]), [['e-s', '/pages?page=place']])
 })
 
