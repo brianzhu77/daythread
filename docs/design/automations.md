@@ -15,6 +15,23 @@ An automation is a rule on a database: **when** something happens to a row, **do
 - **A rule is on the database,** so every view and linked view shares it, and it's deleted, trashed and restored with the database. Undo works on adding, changing and deleting a rule.
 - **Editor:** "When" with triggers, "In", then "Do" with steps. As in Buttons, Done is off until every part is complete.
 
+**Jazz's read (96c42328, from the doc and Buttons' rules, no sketch; for the Lead):**
+
+- **The list.** Two lines per rule, the name with its switch and a status line below. A tap opens the editor, and Delete lives there. With no rules, "No automations" and `+ New automation`. Rules reorder by ↑↓, as they run in list order (§5, point 6). The status line:
+
+| State | Second line | Switch |
+| --- | --- | --- |
+| On, has run | Last ran Nov 3, 09:14 | on |
+| On, never run | Not run yet | on |
+| Off by hand | Off · Last ran Nov 3, 09:14 | off |
+| Broken: a target deleted or changed type | Paused · Status was deleted · Edit | off, and a tap opens Edit |
+| Stopped by a limit | Paused · Not run · command limit reached | off, and it can be turned on again |
+
+- **Fixing a broken rule** turns it back on when the edit is finished, with a notice and Undo. A rule switched off by hand stays off after an edit. Reasons wrap, with red only on the words of a broken or stopped rule.
+- **A pause stays findable.** The menu's own row reads "Automations · 1 paused", and costs nothing when all is well. A failure found on opening shows once then.
+- **The failure notice keeps Undo:** "Moved to Done · Log finish paused · Edit · Undo", with a long rule name taking the ellipsis and several rules reading "2 paused". A failed scheduled run has no edit, so it shows Edit alone.
+- **The editor** is Buttons' shell: Done in the head, the same leaving rule, one row per step, and Buttons' step pages shared. When, In and Do are three sections on the first page, and "All" or "any" only appears with a second trigger. Choosing "Every…" with an Edit property step marks that step incomplete and says why, rather than dropping it, and likewise for a second trigger added to Every. A blank name falls back to its first step's words, as a placeholder that saves if left alone.
+
 ## 3. Triggers
 
 | Trigger | Fires when | Notes |
