@@ -2079,6 +2079,22 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-rule button:not(.database-rule-remove) { min-height: 0; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
 .database-rule-remove { display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; margin-left: auto; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 @media (hover: hover) { .database-rule-remove:hover, .database-menu-back:hover { background: var(--hover-dim); color: var(--ink); } }
+.database-filter-sheet { display: contents; }
+@media (min-width: 900px) { .database-menu:has(.database-filter-sheet) { width: 360px; } }
+/* A line, no box: three layers of boxes would be most of what's in the sheet. */
+.database-filter-group { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 4px 6px; padding-left: 6px; border-left: 1px solid var(--line); }
+.database-filter-group .database-rule + .database-rule { border-top: 0; }
+.database-filter-group-head { display: flex; align-items: center; gap: 6px; padding: 6px 40px 0 10px; }
+.database-filter-group-head select { flex: none; width: auto; field-sizing: content; }
+.database-filter-group-head .database-rule-more { margin-left: auto; }
+.database-rule-more { display: inline-grid; place-items: center; order: 2; height: 28px; margin-left: auto; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.database-rule-more + .database-rule-remove { margin-left: 0; }
+.database-filter-sheet button.database-rule-remove:not([role=menuitem]):not([role=menuitemcheckbox]), .database-filter-sheet button.database-rule-more:not([role=menuitem]):not([role=menuitemcheckbox]) { width: 28px; }
+@media (hover: hover) { .database-rule-more:hover { background: var(--hover-dim); color: var(--ink); } }
+.database-rule-moves { display: flex; flex-direction: column; order: 4; width: 100%; padding: 2px 0; }
+.database-rule-moves button { min-height: 32px; padding: 4px 8px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+@media (hover: hover) { .database-rule-moves button:hover { background: var(--hover-dim); } }
+.database-filter-adds { display: flex; flex-wrap: wrap; gap: 4px; }
 .database-rule-deleted, .database-filter-chip.is-deleted { text-decoration: line-through; color: var(--ink-3); }
 /* Properties (design §7.5): a switch, the name with its type, and a move. */
 .database-property-line { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 6px 0 10px; color: var(--ink); }
@@ -2148,6 +2164,11 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .csv-import .formula-actions button { min-height: 44px; }
   /* A sheet above the keyboard: the only panel opened to type at length (design §4). */
   .database-menu:has(.formula-editor) { bottom: var(--keyboard-lift, 0px) !important; width: auto; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
+  .database-menu:has(.database-filter-sheet) { bottom: var(--keyboard-lift, 0px) !important; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
+  .database-filter-sheet button.database-rule-remove:not([role=menuitem]):not([role=menuitemcheckbox]), .database-filter-sheet button.database-rule-more:not([role=menuitem]):not([role=menuitemcheckbox]) { width: 36px; height: 40px; }
+  .database-filter-group-head { padding-right: 42px; }
+  .database-rule-moves button { min-height: 44px; }
+  .database-filter-adds .database-add-rule { min-height: 44px; }
   .formula-editor { flex-direction: column; padding: 2px 0 6px; }
   .formula-field { font-size: 16px; }
   .formula-actions button { min-height: 44px; }

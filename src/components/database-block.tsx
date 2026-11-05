@@ -1509,8 +1509,13 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
  * when tapped, each with its own ×; a rule on a deleted property struck through; one with no value yet reads "…".
  */
 function RulesLine({ db, view, blockId, databaseId, onChange }: { db: Database; view: View; blockId: string; databaseId: string; onChange: (build: (current: View) => { filter?: Condition[]; sort?: View['sort'] }) => void }) {
+  const groups = view.filterGroups?.length ?? 0
   return <div className="database-filter-line">
-    {view.filter.map((c, i) => {
+    {/* A line of chips can't show a tree: with a group it's one chip, which opens the sheet. Nothing to clear from one tap (filter-groups.md §2). */}
+    {groups > 0 && <span className="database-filter-chip">
+      <button type="button" className="database-chip-open" onClick={() => openDatabaseMenu(blockId, databaseId, 'filter')}>{[...view.filter.map(c => ruleWords(db, c)), groups === 1 ? '1 group' : `${groups} groups`].join(view.filterAny ? ' or ' : ' and ')}</button>
+    </span>}
+    {groups === 0 && view.filter.map((c, i) => {
       const property = propertyOf(db, c.by)
       return <Fragment key={`f${i}`}>{view.filterAny && i > 0 && <span className="database-filter-or">or</span>}<span className={`database-filter-chip ${property ? '' : 'is-deleted'}`}>
         <button type="button" className="database-chip-open" onClick={() => openDatabaseMenu(blockId, databaseId, 'filter')}>{property ? property.name : '(deleted)'} {filterWords(c, property)}</button>
@@ -1527,6 +1532,8 @@ function RulesLine({ db, view, blockId, databaseId, onChange }: { db: Database; 
     })}
   </div>
 }
+/** A rule in words, as on the line of chips. */
+export const ruleWords = (db: Database, c: Condition): string => { const property = propertyOf(db, c.by); return `${property ? property.name : '(deleted)'} ${filterWords(c, property)}` }
 function filterWords(c: Condition, property: Property | null): string {
   const op = { contains: 'contains', doesNotContain: "doesn't contain", is: 'is', isNot: 'is not', isEmpty: 'is empty', isNotEmpty: 'is not empty', eq: '=', ne: '≠', gt: '>', lt: '<', gte: '≥', lte: '≤', isAnyOf: 'is', isNoneOf: 'is not', before: 'before', after: 'after', onOrBefore: 'on or before', onOrAfter: 'on or after', within: 'within' }[c.op]
   if (c.op === 'isEmpty' || c.op === 'isNotEmpty') return op
