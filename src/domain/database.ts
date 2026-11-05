@@ -173,6 +173,8 @@ export interface Repeat {
   last?: LocalDate;
   lastRan?: string;
 }
+export type { Automation } from './automations.ts'
+import type { Automation } from './automations.ts'
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
   homeBlockId: string | null;
@@ -188,6 +190,8 @@ export interface Database {
   dependencies?: Dependencies;
   /** Row templates that repeat, by template id. */
   repeats?: Record<string, Repeat>;
+  /** What happens by itself when a row changes, in the order they run (automations.md). */
+  automations?: Automation[];
   /** The next row number, once an ID property has been made. It only goes up, past a delete or an undone add (R3-9). */
   nextRowNumber?: number;
 }
@@ -230,7 +234,7 @@ export const databaseBlockType = "database";
 // To-dos have their own limit, below rows': each one's plan rewrites its page and re-reads the workspace, as a single edit does. On a 128 MB heap Planned took 500 and ran out at 1,000 (Roadbuster).
 /** Filter groups nest to this many layers, counting the top one (filter-groups.md §2, as Notion). */
 export const filterLayers = 3;
-export const limits = { buttonSteps: 200_000, formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 10_000, todosAtOnce: 500, repeatsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
+export const limits = { automations: 100, buttonSteps: 200_000, formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 10_000, todosAtOnce: 500, repeatsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
 
 export const isDatabase = (p: Page | undefined | null): p is Page & { database: Database } => Boolean(p?.database);
 /** A row: a page whose parent is a database. */
@@ -999,7 +1003,13 @@ export type DatabaseChange =
   | { kind: "setRepeat"; templateId: string; repeat: Omit<Repeat, "last" | "lastRan"> | null }
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
-  | { kind: "moveView"; viewId: string; beforeId: string | null };
+  | { kind: "moveView"; viewId: string; beforeId: string | null }
+  | { kind: "addAutomation"; automation: Automation }
+  /** What the editor saves. A rule that had stopped comes back on, as its fix is what's being saved; one switched off by hand stays off. */
+  | { kind: "updateAutomation"; automation: Automation }
+  | { kind: "setAutomationActive"; automationId: string; active: boolean }
+  | { kind: "removeAutomation"; automationId: string }
+  | { kind: "moveAutomation"; automationId: string; beforeId: string | null };
 /** One row's edit: values by column id (`title` for the title), null clears; `expected`: those columns as the edit saw them. */
 export interface RowEdit { pageId: string; values: Record<string, Json>; expected: Record<string, Json>; /** The database the sender thinks it's in: a tab that missed a move is refused rather than writing a property across (move-row §7). */ databaseId?: string }
 
@@ -1363,10 +1373,17 @@ function mirrorOf(ws: Workspace, property: Property): { db: Database; property: 
   const other = isDatabase(target) ? target.database.properties.find((p) => p.id === property.mirror) : undefined;
   return other ? { db: target!.database!, property: other, title: target!.title.trim() || "Untitled" } : null;
 }
+function cleanAutomation(input: Automation): Automation {
+  if (!input || typeof input !== "object") throw new DatabaseError("Invalid automation");
+  const triggers = (Array.isArray(input.triggers) ? input.triggers : []).map((t) => t.kind === "row-added" ? { kind: t.kind } : { kind: t.kind, propertyId: checkId(t.propertyId), name: String(t.name ?? "").slice(0, limits.name), ...(t.condition ? { condition: t.condition } : {}) }) as Automation["triggers"];
+  if (typeof input.steps !== "string" || input.steps.length > limits.buttonSteps) throw new DatabaseError("Invalid automation");
+  return { id: checkId(input.id), name: cleanName(input.name, "An automation"), active: input.active !== false, triggers, ...(input.any ? { any: true as const } : {}), ...(input.viewId ? { viewId: checkId(input.viewId) } : {}), steps: input.steps };
+}
 export function changeDatabase(ws: Workspace, page: Page & { database: Database }, change: DatabaseChange): string {
   const db = page.database;
   const property = (id: string): Property => { const p = db.properties.find((x) => x.id === id); if (!p) throw new DatabaseError("Property not found"); return p; };
   const view = (id: string): View => { const v = db.views.find((x) => x.id === id); if (!v) throw new DatabaseError("View not found"); return v; };
+  const automationOf = (id: string): Automation => { const r = db.automations?.find((x) => x.id === id); if (!r) throw new DatabaseError("Automation not found"); return r; };
   switch (change?.kind) {
     case "addProperty": {
       if (db.properties.length >= limits.properties) throw new DatabaseError("Too many properties");
@@ -1594,6 +1611,36 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     case "moveView":
       db.views = move(db.views, change.viewId, change.beforeId);
       return "View moved";
+    case "addAutomation": {
+      const rule = cleanAutomation(change.automation);
+      if (db.automations?.some((r) => r.id === rule.id)) throw new DatabaseError("Automation id already in use");
+      if ((db.automations?.length ?? 0) >= limits.automations) throw new DatabaseError(`${limits.automations} automations at most`);
+      db.automations = [...(db.automations ?? []), rule];
+      return `${rule.name} added`;
+    }
+    case "updateAutomation": {
+      const old = automationOf(change.automation.id), rule = cleanAutomation(change.automation);
+      db.automations = db.automations!.map((r) => (r === old ? { ...rule, active: old.paused ? true : old.active, ...(old.lastRanAt ? { lastRanAt: old.lastRanAt } : {}) } : r));
+      return `${rule.name} changed`;
+    }
+    case "setAutomationActive": {
+      const old = automationOf(change.automationId);
+      db.automations = db.automations!.map((r) => { if (r !== old) return r; const { paused: _paused, ...rest } = r; return { ...rest, active: change.active }; });
+      return `${old.name} ${change.active ? "on" : "off"}`;
+    }
+    case "removeAutomation": {
+      const old = automationOf(change.automationId);
+      db.automations = db.automations!.filter((r) => r !== old);
+      if (!db.automations.length) delete db.automations;
+      return `${old.name} deleted`;
+    }
+    case "moveAutomation": {
+      automationOf(change.automationId);
+      const list = db.automations!, from = list.findIndex((r) => r.id === change.automationId), [rule] = [list[from]!], rest = list.filter((_, i) => i !== from), to = change.beforeId === null ? rest.length : rest.findIndex((r) => r.id === change.beforeId);
+      if (to < 0) throw new DatabaseError("Automation not found");
+      db.automations = [...rest.slice(0, to), rule, ...rest.slice(to)];
+      return "Automation moved";
+    }
     default:
       throw new DatabaseError("Unknown change");
   }

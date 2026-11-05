@@ -23,6 +23,7 @@ const calculations = z.record(id, z.enum(calcKinds));
 const boardCalculation = z.object({ by: id, kind: z.enum(calcKinds) });
 const colourRules = z.array(z.object({ id, rule: z.object({ by: id, op: z.enum(filterOpList), value: json.optional() }), tint: z.enum(["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"]), scope: z.literal("property").optional() })).max(50);
 const timelineUnit = z.enum(["hours", "day", "week", "month", "quarter", "year"]);
+const automation = z.object({ id, name: z.string().max(200), active: z.boolean(), any: z.literal(true).optional(), viewId: id.optional(), steps: z.string().max(200_000), triggers: z.array(z.union([z.object({ kind: z.literal("row-added") }), z.object({ kind: z.literal("property-edited"), propertyId: id, name: z.string().max(200), condition: filter.element.optional() })])).max(20), lastRanAt: z.string().max(40).optional(), paused: z.object({ reason: z.string().max(500), limit: z.literal(true).optional() }).optional() });
 const view = z.object({ id, subItemsDisplay: z.enum(["nested", "flat"]).optional(), subItemsShow: z.enum(["both", "parents", "subs"]).optional(), name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, filterGroups: filterGroups.optional(), groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), timelineEnd: id.optional(), timelineUnit: timelineUnit.optional(), timelineTable: z.literal(true).optional(), openIn: z.enum(["center", "side"]).optional(), colourRules: colourRules.optional(), frozenThrough: id.optional(), nameWidth: z.number().int().optional(), filterAny: z.literal(true).optional(), wrapName: z.literal(true).optional(), calculations: calculations.optional(), boardCalculation: boardCalculation.optional(), defaultTemplate: id.optional() });
 const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional(), beforeId: id.optional() }),
@@ -39,6 +40,11 @@ const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("setDefaultTemplate"), templateId: id.nullable() }),
   z.object({ kind: z.literal("removeView"), viewId: id }),
   z.object({ kind: z.literal("moveView"), viewId: id, beforeId: id.nullable() }),
+  z.object({ kind: z.literal("addAutomation"), automation }),
+  z.object({ kind: z.literal("updateAutomation"), automation }),
+  z.object({ kind: z.literal("setAutomationActive"), automationId: id, active: z.boolean() }),
+  z.object({ kind: z.literal("removeAutomation"), automationId: id }),
+  z.object({ kind: z.literal("moveAutomation"), automationId: id, beforeId: id.nullable() }),
 ]);
 const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("save-editor"), pageId: id, expectedContent: z.string().max(200), document: z.string().max(2_000_000), singleDeleteIds: z.array(id).max(100).optional(), cutTaskIds: z.array(id).max(200).optional(),
