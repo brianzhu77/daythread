@@ -1,0 +1,31 @@
+PASS an empty sheet offers a rule or a group 
+PASS a group starts with a rule [{"rules":[{"by":"title","op":"contains"}]}]
+PASS an unfinished rule in it hides nothing more 
+PASS the rule and the group both hold ["dune"]
+PASS any in the group, all above it ["dune","emma"]
+PASS a group inside the group 
+PASS the third layer offers no fourth 
+PASS its rule can only move out 
+PASS Esc shuts the moves and leaves the sheet 
+PASS taking the last rule takes the group {"any":true,"rules":[{"by":"pages","op":"gt","value":350},{"by":"tags","op":"contains","value":["hist"]}]}
+PASS one chip with the words ["Kind is Novel and 1 group"]
+PASS and no × 
+PASS it opens the sheet 
+PASS it stays after a reload ["dune","emma"]
+PASS + New takes what the tree needs {"kind":"novel","tags":["hist"]}
+PASS and shows, so nothing is said 
+PASS a rule moves into a new group [2,1]
+PASS and out, its group going with its last rule 
+PASS in with a group beside it ["pages","tags","kind"]
+PASS and out again 
+PASS removing a group names its rules 
+PASS Remove group takes it 
+PASS and its Undo brings it back whole 
+PASS its rules join the top, and the field goes ["kind","pages","tags"]
+PASS plain chips again ["Kind is Novel\n×","Pages > 350\n×","Tags contains History\n×"]
+PASS nothing matches 
+PASS Clear filter brings them all back 
+PASS and empties it 
+PASS at twenty rules it offers no more 20
+PASS no page errors []
+[filter-groups chromium 1280] fail 0
