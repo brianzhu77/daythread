@@ -150,6 +150,6 @@ An icon and a cover are changes to the page, separate from its words, and neithe
 
 ## 8. Later releases, as far as the design goes
 
-- **Upload (P1-5)** uses the states in `body-files.md` §4 on the band or the icon: a progress track, "Not uploaded · Retry", "Too large · 25 MB at most". An uploaded icon draws in the same box as an emoji, with its corners slightly rounded.
+- **Upload (P1-5)** shows its states in the panel, not on the band or the icon as I first wrote: "Uploading {name} · Cancel" with a progress track, "Not uploaded · Retry", "Too large · 25 MB at most". The page holds the picture only once its bytes are in, so a failed upload leaves nothing behind (Roadbuster, #147, which is simpler). So a click elsewhere doesn't close the panel while a picture's on its way; Cancel and Esc do, and leaving the page does, and each stops the upload. An uploaded icon draws in the same box as an emoji, with its corners slightly rounded.
 - **Our own icons** are a tab in the picker, in `--ink-2`.
 - **Unsplash** is a tab in Change, with the credit its terms ask for.

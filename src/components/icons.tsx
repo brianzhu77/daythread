@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 // Small stroke icons drawn for Daythread (craft-v1 §4: no Craft icon assets).
 import type { ReactNode } from 'react'
 
@@ -98,7 +99,11 @@ export const DatabaseIcon = () => (
   </Icon>
 )
 /** A page's emoji in place of its kind, when it has one. Text in the same box, so the row's words don't move (icons-covers.md §7.3). */
-export const PageEmoji = ({ icon }: { icon: string }) => <span className="page-emoji" aria-hidden="true">{icon}</span>
+export const PageEmoji = ({ icon, className = 'page-emoji' }: { icon: string; className?: string }) => {
+  if (icon.startsWith('icon:')) return <span className={`${className} is-own-icon`} aria-hidden="true" style={{ '--own-icon': `url(/page-icons/${icon.slice(5)}.svg)` } as CSSProperties} />
+  if (icon.startsWith('/api/files/')) return <span className={`${className} is-uploaded-icon`} aria-hidden="true"><img src={icon} alt="" loading="lazy" draggable={false} /></span>
+  return <span className={className} aria-hidden="true">{icon}</span>
+}
 export const PageKindIcon = ({ url, database, icon }: { url?: string | null; database?: boolean; icon?: string | null | undefined }) => (icon ? <PageEmoji icon={icon} /> : database ? <DatabaseIcon /> : url ? <GlobeIcon /> : <PagesIcon />)
 
 /** ↳: a link to one line (A11, Jazz line-links-states §3): "a passage", not a page. */

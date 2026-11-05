@@ -821,7 +821,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     }
     case "set-page-icon": {
       const p = page(state, action.pageId);
-      if (action.icon !== null && !isPageIcon(action.icon)) throw new DomainError("That isn't one emoji");
+      if (action.icon !== null && !isPageIcon(action.icon)) throw new DomainError("That isn't one emoji or picture");
       const had = Boolean(p.icon);
       if (action.icon === null) delete p.icon; else p.icon = action.icon;
       if (isRow(state, p)) p.editedAt = isoTime(undefined);

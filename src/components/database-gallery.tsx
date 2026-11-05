@@ -9,7 +9,7 @@ import { sectionKey, viewSections, viewSubGroups, canWrap, cellValue, databaseRo
 import type { Page } from '../domain/types'
 import { rowTint, SubItemParent, CardSubItems, PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
-import { ChevronRightIcon } from './icons'
+import { ChevronRightIcon, PageEmoji } from './icons'
 import { displayPageTitle } from './page-title'
 import { PropertyCell, PropertyCheckbox, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
@@ -68,7 +68,7 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
       <div className="database-gallery-words">
         <TodoTick row={row} />
         <button type="button" className={`database-gallery-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav}
-          data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.icon && <span className="database-row-icon" aria-hidden="true">{row.icon}</span>}{row.title || 'Untitled'}{group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
+          data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.icon && <PageEmoji icon={row.icon} className="database-row-icon" />}{row.title || 'Untitled'}{group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
         {viewColumnsShown.map(({ property, wrap = false }) => {
           const pending = pendingCells.get(pendingKey(row.id, property.id))
           const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)

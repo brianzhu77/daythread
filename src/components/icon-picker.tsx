@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { createPortal } from 'react-dom'
 import { toast } from '@heroui/react'
 import type { Page } from '../domain/types'
+import { uploadLook, type UploadFailure } from './file-upload'
+import { PageEmoji } from './icons'
 import { useKeyboardTop } from './keyboard'
 import { useWorkspace } from './use-day'
 
@@ -30,6 +32,8 @@ export function usePageIcon(page: Pick<Page, 'id' | 'icon'>): string | null {
   return draft !== undefined ? draft : page.icon ?? null
 }
 
+let ownSet: Promise<[string, string][]> | null = null
+const loadOwnIcons = () => ownSet ??= fetch('/page-icons/index.json').then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json() as Promise<[string, string][]> }).catch(e => { ownSet = null; throw e })
 let data: Promise<EmojiData> | null = null
 const loadEmoji = () => data ??= fetch('/emoji-v1.json').then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json() as Promise<EmojiData> }).catch(e => { data = null; throw e })
 const stored = (key: string) => { try { return localStorage.getItem(key) } catch { return null } }
@@ -75,6 +79,20 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
   const [emoji, setEmoji] = useState<EmojiData | null>(null), [failed, setFailed] = useState(false), [query, setQuery] = useState(''), [composing, setComposing] = useState(false)
   const [tone, setTone] = useState(() => Number(stored('daythread.icon-tone')) || 0), [recent, setRecent] = useState(recentOf)
   const panel = useRef<HTMLDivElement>(null), search = useRef<HTMLInputElement>(null)
+  const [tab, setTab] = useState<'emoji' | 'icons' | 'upload'>('emoji'), [own, setOwn] = useState<[string, string][] | null>(null), [ownFailed, setOwnFailed] = useState(false)
+  const loadOwn = useCallback(() => { setOwnFailed(false); loadOwnIcons().then(setOwn, () => setOwnFailed(true)) }, [])
+  useEffect(() => { if (tab === 'icons') loadOwn() }, [tab, loadOwn])
+  const [upload, setUpload] = useState<{ percent: number; note: string | null; retry: File | null; busy: string | null }>({ percent: 0, note: null, retry: null, busy: null })
+  const putting = useRef<{ abort: () => void } | null>(null)
+  useEffect(() => () => putting.current?.abort(), [])
+  const sendFile = (file: File) => {
+    setUpload({ percent: 0, note: null, retry: null, busy: file.name })
+    const put = uploadLook(file, 256, percent => setUpload(u => ({ ...u, percent })))
+    putting.current = put
+    // Cancel has already let this one go, so whatever it comes back with says nothing.
+    put.done.then(url => { if (putting.current !== put) return; putting.current = null; pick(url) }, (failure: UploadFailure) => { if (putting.current !== put) return; putting.current = null; setUpload({ percent: 0, note: failure.message, retry: failure.retry ? file : null, busy: null }) })
+  }
+  const cancelUpload = () => { const put = putting.current; putting.current = null; put?.abort(); setUpload({ percent: 0, note: null, retry: null, busy: null }) }
   const phone = useMemo(() => window.matchMedia('(max-width: 899px)').matches, [])
   const keyboardTop = useKeyboardTop()
   const load = useCallback(() => { setFailed(false); loadEmoji().then(setEmoji, () => setFailed(true)) }, [])
@@ -88,7 +106,8 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
     return () => document.removeEventListener('keydown', esc, true)
   })
   useEffect(() => {
-    const away = (e: PointerEvent) => { if (!panel.current?.contains(e.target as Node)) finish() }
+    // Not while a picture's on its way: a click elsewhere isn't asking to lose it. Esc and Cancel are.
+    const away = (e: PointerEvent) => { if (!putting.current && !panel.current?.contains(e.target as Node)) finish() }
     document.addEventListener('pointerdown', away)
     return () => document.removeEventListener('pointerdown', away)
   })
@@ -98,7 +117,7 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
   const finish = () => { flush(); closePicker() }
   const finishBack = () => { finish(); if (openedFrom?.isConnected) openedFrom.focus({ preventScroll: true }) }
   const withTone = (entry: Entry) => (tone && entry[4]?.[tone - 1]) || entry[0]
-  const remember = (icon: string) => { const next = [icon, ...recent.filter(x => x !== icon)].slice(0, 16); setRecent(next); store('daythread.icon-recent', JSON.stringify(next)) }
+  const remember = (icon: string) => { if (icon.startsWith('/')) return; const next = [icon, ...recent.filter(x => x !== icon)].slice(0, 16); setRecent(next); store('daythread.icon-recent', JSON.stringify(next)) }
   const pick = (icon: string) => { if (pending.current) { clearTimeout(pending.current.timer); pending.current = null } remember(icon); setDraft(pageId, icon); send(pageId, icon); closePicker() }
   const remove = () => { if (pending.current) { clearTimeout(pending.current.timer); pending.current = null } setDraft(pageId, null); send(pageId, null); closePicker() }
   const random = () => {
@@ -127,15 +146,28 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
     const across = 8, next = at + (e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowDown' ? across : -across)
     if (next < 0) search.current?.focus(); else cells[Math.min(next, cells.length - 1)]?.focus()
   }
-  const cell = (icon: string, label: string) => <button key={`${icon}-${label}`} type="button" className="icon-picker-cell" aria-label={label} onClick={() => pick(icon)}>{icon}</button>
+  const cell = (icon: string, label: string) => <button key={`${icon}-${label}`} type="button" className="icon-picker-cell" aria-label={label} onClick={() => pick(icon)}>{icon.startsWith('icon:') ? <PageEmoji icon={icon} /> : icon}</button>
+  const ownFound = own && (typed ? own.filter(([name, words]) => name.includes(typed) || words.includes(typed)) : own)
   return createPortal(<div ref={panel} className={`icon-picker${phone ? ' is-sheet' : ''}`} role="dialog" aria-label="Choose an icon" onKeyDown={onKeyDown}
     style={phone ? (keyboardTop !== null ? { bottom: window.innerHeight - keyboardTop, height: Math.min(window.innerHeight * 0.6, (window.visualViewport?.height ?? window.innerHeight) - 8) } : undefined) : { left: place?.left ?? anchor.left, top: place?.top ?? anchor.bottom + 4, visibility: place ? 'visible' : 'hidden' }}>
     <div className="icon-picker-top">
-      <input ref={search} className="icon-picker-search" type="text" aria-label="Search emoji" placeholder="Search" value={query} onChange={e => setQuery(e.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={e => { setComposing(false); setQuery(e.currentTarget.value) }} />
-      <button type="button" className="app-link" disabled={!emoji} onClick={random}>Random</button>
-      {shown && <button type="button" className="app-link" onClick={remove}>Remove</button>}
+      {tab !== 'upload' && <input ref={search} className="icon-picker-search" type="text" aria-label="Search emoji" placeholder="Search" value={query} onChange={e => setQuery(e.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={e => { setComposing(false); setQuery(e.currentTarget.value) }} />}
+      {tab === 'emoji' && <button type="button" className="app-link" disabled={!emoji} onClick={random}>Random</button>}
+      {shown && <button type="button" className="app-link icon-picker-remove" onClick={remove}>Remove</button>}
     </div>
-    <div className="icon-picker-scroll">
+    <div className="icon-picker-tabs" role="tablist">{(['emoji', 'icons', 'upload'] as const).map(t => <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? 'is-on' : ''} onClick={() => setTab(t)}>{t === 'emoji' ? 'Emoji' : t === 'icons' ? 'Icons' : 'Upload'}</button>)}</div>
+    {tab === 'icons' && <div className="icon-picker-scroll">
+      {ownFailed && !own ? <p className="icon-picker-note">Can't load icons · <button type="button" className="app-link" onClick={loadOwn}>Try again</button></p>
+        : !ownFound ? <div className="icon-picker-grid is-loading" aria-hidden="true">{Array.from({ length: 40 }, (_, i) => <span key={i} className="icon-picker-blank" />)}</div>
+        : ownFound.length ? <div className="icon-picker-grid">{ownFound.map(([name]) => cell(`icon:${name}`, name))}</div> : <p className="icon-picker-note">No icon for {query.trim()}</p>}
+    </div>}
+    {tab === 'upload' && <div className="icon-picker-scroll icon-picker-upload">
+      <label className="app-link icon-picker-choose">Choose a picture<input type="file" accept="image/*" disabled={Boolean(upload.busy)} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) sendFile(file) }} /></label>
+      {upload.busy && <p className="icon-picker-note" role="status">Uploading {upload.busy} · <button type="button" className="app-link" onClick={cancelUpload}>Cancel</button></p>}
+      {upload.busy && <div className="icon-picker-track" aria-hidden="true"><div style={{ width: `${upload.percent}%` }} /></div>}
+      {upload.note && <p className="icon-picker-note" role="status">{upload.note === "Couldn't upload" ? 'Not uploaded' : upload.note}{upload.retry && <> · <button type="button" className="app-link" onClick={() => sendFile(upload.retry!)}>Retry</button></>}</p>}
+    </div>}
+    {tab === 'emoji' && <div className="icon-picker-scroll">
       {asEmoji && cell(asEmoji, asEmoji)}
       {failed && !emoji ? <p className="icon-picker-note">Can't load emoji · <button type="button" className="app-link" onClick={load}>Try again</button></p>
         : !emoji ? <div className="icon-picker-grid is-loading" aria-hidden="true">{Array.from({ length: 64 }, (_, i) => <span key={i} className="icon-picker-blank" />)}</div>
@@ -147,7 +179,7 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
           {recent.length > 0 && <div className="icon-picker-grid">{recent.map(icon => cell(icon, icon))}</div>}
           {emoji.groups.map((name, group) => name && <section key={name} className="icon-picker-section"><div className="icon-picker-group-head"><span>{name}</span></div><div className="icon-picker-grid">{emoji.emoji.filter(e => e[1] === group).map(e => cell(withTone(e), e[2].split(' ')[0]!))}</div></section>)}
         </>}
-    </div>
+    </div>}
   </div>, document.body)
 }
 
@@ -155,5 +187,5 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
 export function PageIconLine({ page }: { page: Pick<Page, 'id' | 'icon'> }) {
   const icon = usePageIcon(page)
   if (!icon) return null
-  return <div className="page-icon-line"><button type="button" className="page-icon" aria-label="Change icon" onClick={e => openIconPicker(page.id, e.currentTarget)}>{icon}</button></div>
+  return <div className="page-icon-line"><button type="button" className="page-icon" aria-label="Change icon" onClick={e => openIconPicker(page.id, e.currentTarget)}><PageEmoji icon={icon} className="page-icon-glyph" /></button></div>
 }

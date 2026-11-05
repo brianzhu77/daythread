@@ -5,9 +5,11 @@ import { createPortal } from 'react-dom'
 import { toast } from '@heroui/react'
 import { coverLinkLimit, coverPlace, isCoverLink } from '../domain/page-look'
 import type { Page } from '../domain/types'
+import { uploadLook, type UploadFailure } from './file-upload'
 import { useWorkspace } from './use-day'
 
 type Look = { cover: string; position: number } | null
+const ourCovers = ['paper', 'stone', 'slate', 'ink', 'ruled', 'dotted', 'fog', 'sand']
 const drafts = new Map<string, Look>(), movable = new Set<string>(), listeners = new Set<() => void>()
 let panel: { pageId: string; anchor: { right: number; bottom: number } } | null = null
 let moving: string | null = null
@@ -80,6 +82,18 @@ function CoverPanel({ pageId, anchor }: { pageId: string; anchor: { right: numbe
     return () => { current = false; image.onload = null; image.onerror = null; image.src = '' }
   }, [typed, valid])
   const ready = loaded === typed && valid
+  const [upload, setUpload] = useState<{ percent: number; note: string | null; retry: File | null; busy: string | null }>({ percent: 0, note: null, retry: null, busy: null })
+  const putting = useRef<{ abort: () => void } | null>(null)
+  useEffect(() => () => putting.current?.abort(), [])
+  // Only the width a band can use, and the page holds it only once its bytes are in.
+  const sendFile = (file: File) => {
+    setUpload({ percent: 0, note: null, retry: null, busy: file.name })
+    const put = uploadLook(file, 2400, percent => setUpload(u => ({ ...u, percent })))
+    putting.current = put
+    // Cancel has already let this one go, so whatever it comes back with says nothing.
+    put.done.then(url => { if (putting.current !== put) return; putting.current = null; send(pageId, { cover: url, position: 0.5 }); closePanel() }, (failure: UploadFailure) => { if (putting.current !== put) return; putting.current = null; setUpload({ percent: 0, note: failure.message, retry: failure.retry ? file : null, busy: null }) })
+  }
+  const cancelUpload = () => { const put = putting.current; putting.current = null; put?.abort(); setUpload({ percent: 0, note: null, retry: null, busy: null }) }
   const add = () => { if (ready) { send(pageId, { cover: typed, position: 0.5 }); closePanel() } }
   const [place, setPlace] = useState<{ left: number; top: number } | null>(null)
   useLayoutEffect(() => {
@@ -89,7 +103,8 @@ function CoverPanel({ pageId, anchor }: { pageId: string; anchor: { right: numbe
   }, [anchor])
   useEffect(() => { const timer = setTimeout(() => field.current?.focus({ preventScroll: true }), 60); return () => clearTimeout(timer) }, [])
   useEffect(() => {
-    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) closePanel() }
+    // Not while a picture's on its way: a click elsewhere isn't asking to lose it. Esc and Cancel are.
+    const away = (e: PointerEvent) => { if (!putting.current && !box.current?.contains(e.target as Node)) closePanel() }
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePanel() } }
     document.addEventListener('pointerdown', away); document.addEventListener('keydown', esc, true)
     return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc, true) }
@@ -98,6 +113,11 @@ function CoverPanel({ pageId, anchor }: { pageId: string; anchor: { right: numbe
   return createPortal(<div ref={box} className="cover-panel" role="dialog" aria-label={look ? 'Change cover' : 'Add cover'} style={{ left: place?.left ?? 0, top: place?.top ?? anchor.bottom + 4, visibility: place ? 'visible' : 'hidden' }}>
     <input ref={field} className="cover-panel-field" type="url" aria-label="Paste an image link" placeholder="Paste an image link" value={link} onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }} />
     {note && <p className="cover-panel-note" role="status">{note}</p>}
+    <div className="cover-panel-set" role="group" aria-label="Covers">{ourCovers.map(name => <button key={name} type="button" aria-label={name} style={{ backgroundImage: `url(/covers/${name}.svg)` }} onClick={() => { send(pageId, { cover: `/covers/${name}.svg`, position: 0.5 }); closePanel() }} />)}</div>
+    <label className="app-link cover-panel-choose">Upload a picture<input type="file" accept="image/*" disabled={Boolean(upload.busy)} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) sendFile(file) }} /></label>
+    {upload.busy && <p className="cover-panel-note" role="status">Uploading {upload.busy} · <button type="button" className="app-link" onClick={cancelUpload}>Cancel</button></p>}
+    {upload.busy && <div className="icon-picker-track" aria-hidden="true"><div style={{ width: `${upload.percent}%` }} /></div>}
+    {upload.note && <p className="cover-panel-note" role="status">{upload.note === "Couldn't upload" ? 'Not uploaded' : upload.note}{upload.retry && <> · <button type="button" className="app-link" onClick={() => sendFile(upload.retry!)}>Retry</button></>}</p>}
     {ready && <img className="cover-panel-preview" src={typed} alt="" referrerPolicy="no-referrer" />}
     <div className="cover-panel-actions">
       {look && <button type="button" className="app-link" onClick={() => { send(pageId, null); closePanel() }}>Remove</button>}
