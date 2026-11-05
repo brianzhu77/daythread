@@ -711,7 +711,7 @@ function RelationRef({ id, name }: { id: string; name: string }) {
   const taskId = taskIdOfRow(id)
   const line = () => { const ws = latest(); return taskId && ws ? todoLine(ws, taskId) : null }
   const target = taskId ? line() : null
-  return <Link to="/pages" search={taskId ? (target ? { page: target.pageId, block: target.lineId } : {}) : { page: id }} className="cell-relation-ref" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}><PagesIcon />{name}</Link>
+  return <Link to="/pages" search={taskId ? (target ? { page: target.pageId, block: target.lineId } : {}) : { page: id }} className="cell-relation-ref" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>{latest()?.pages.find(p => p.id === id)?.icon ? <span className="database-row-icon" aria-hidden="true">{latest()!.pages.find(p => p.id === id)!.icon}</span> : <PagesIcon />}{name}</Link>
 }
 
 /**

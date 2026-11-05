@@ -2411,6 +2411,33 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-timeline .database-pane-name, .database-timeline .database-pane-cell { flex: none; min-height: 0; padding: 0 8px; overflow: hidden; border: 0; border-radius: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-small); text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .database-timeline .database-pane-name { padding-left: 16px; }
 .database-pane-name.is-placeholder { color: var(--placeholder); }
+/* A page's emoji (icons-covers.md §7). In the box a page's icon has, so a row's words stay where they are. */
+.page-emoji { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 16px; height: 16px; font-size: 14px; line-height: 1; font-style: normal; }
+.database-row-icon { margin-right: 6px; font-size: 14px; font-style: normal; }
+.database-title-icon { flex: none; margin-right: 6px; font-size: 17px; line-height: 1; }
+.page-icon-line { height: 52px; margin-left: -2px; }
+.page-icon { height: 52px; min-height: 0; padding: 0; border: 0; background: none; font-size: 44px; line-height: 52px; cursor: pointer; }
+.icon-picker { position: fixed; z-index: 1200; display: flex; flex-direction: column; width: 352px; height: 400px; padding: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-block); box-shadow: var(--shadow-float); }
+.icon-picker.is-sheet { left: 0; right: 0; bottom: 0; width: auto; height: 60vh; border-width: 1px 0 0; border-radius: var(--radius-block) var(--radius-block) 0 0; }
+.icon-picker-top { display: flex; flex: none; align-items: center; gap: 10px; padding-bottom: 8px; }
+.icon-picker-search { flex: 1; min-width: 0; min-height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-control); background: none; color: var(--ink); font: inherit; }
+.icon-picker-top .app-link { flex: none; font-size: var(--text-meta); }
+.icon-picker-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.icon-picker-section { content-visibility: auto; contain-intrinsic-size: auto 600px; }
+.icon-picker-group-head { display: flex; align-items: center; justify-content: space-between; min-height: 26px; color: var(--ink-3); font-size: var(--text-meta); }
+.icon-picker-tone { max-width: 120px; border: 0; background: none; color: var(--ink-2); font: inherit; }
+.icon-picker-grid { display: grid; grid-template-columns: repeat(8, 1fr); }
+.icon-picker-cell { display: flex; align-items: center; justify-content: center; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-inline); background: none; font-size: 22px; line-height: 1; cursor: pointer; }
+.icon-picker-cell:hover, .icon-picker-cell:focus-visible { background: var(--fill-soft); outline: none; }
+.icon-picker-blank { height: 28px; margin: 4px; border-radius: var(--radius-inline); background: var(--fill-soft); }
+.icon-picker-note { padding: 16px 4px; color: var(--ink-2); font-size: var(--text-meta); }
+@media (max-width: 899px) {
+  .page-icon-line { height: 44px; }
+  .page-icon { height: 44px; font-size: 36px; line-height: 44px; }
+  .icon-picker-search { font-size: 16px; }
+  .icon-picker-cell { height: 44px; }
+  body:has(.icon-picker.is-sheet) .editor-phone-toolbar { display: none; }
+}
 @media (hover: hover) { .database-timeline .database-pane-name:hover, .database-timeline .database-pane-cell:hover { background: var(--hover-dim); } }
 .database-pane-handle { position: absolute; left: 1px; top: 8px; z-index: 1; width: 14px; color: var(--ink-3); font-size: 11px; line-height: 18px; opacity: 0; cursor: grab; touch-action: none; user-select: none; }
 .database-bar-lane:hover .database-pane-handle { opacity: 1; }

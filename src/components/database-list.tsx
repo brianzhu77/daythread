@@ -100,7 +100,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
       {wide && !view.sort.length && !db.database.fixed && !treeOf.get(row.id)?.depth && <span className="database-list-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
       <TodoTick row={row} />
       {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggle(subFoldKey(row.id))} />}
-      <button type="button" className={`database-list-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav} data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}{group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
+      <button type="button" className={`database-list-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav} data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.icon && <span className="database-row-icon" aria-hidden="true">{row.icon}</span>}{row.title || 'Untitled'}{group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
       <span className="database-list-values">
         {columns.map(({ property }) => {
           const pending = pendingCells.get(pendingKey(row.id, property.id))

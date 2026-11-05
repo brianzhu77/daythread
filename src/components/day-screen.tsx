@@ -4,6 +4,7 @@ import { getCalendarTasks } from '../domain/workspace'
 import { longLabel } from './dates'
 import { ContinuousPage } from './continuous-page'
 import { dayMenuGroups, LinkedFrom, Subpages } from './page-tree'
+import { PageIconLine } from './icon-picker'
 import { RowMenu } from './row-menu'
 import { useDeletePage, useRestore, useRunFromButton } from './trash'
 import { FactsStrip } from './facts-strip'
@@ -59,6 +60,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
 
   return (
     <div className="day-screen">
+      {page && <PageIconLine page={page} />}
       <DayHeader date={date} today={today} menu={menuGroups && <RowMenu label="Day actions" triggerClass="page-more" groups={menuGroups} />} />
       {page && <LinkedFrom page={page} workspace={workspace} />}
       {page && isToday && <DraftLine page={page} />}

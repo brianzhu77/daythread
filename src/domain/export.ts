@@ -65,7 +65,8 @@ export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>)
   const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(p.url ? [`url: ${yamlString(p.url)}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), ...(template && p.parentId ? [`template-for: ${yamlString(p.parentId)}`] : []), ...values, '---']
   const title = p.type === 'daily' && p.date ? p.date : p.title || 'Untitled'
   const body = [p.url ? `<${p.url}>` : '', isDatabase(p) ? databaseMarkdown(ws, p, names) : '', blocksMarkdown(editorSeed(p, ws), ws, names)].filter(Boolean).join('\n\n')
-  return `${front.join('\n')}\n\n# ${title}\n${body ? `\n${body}\n` : ''}`
+  // Before the heading, so the title stays words.
+  return `${front.join('\n')}\n\n${p.icon ? `${p.icon}\n\n` : ''}# ${title}\n${body ? `\n${body}\n` : ''}`
 }
 
 export function blocksMarkdown(nodes: EditorNode[], ws: Workspace, names: Map<string, string>): string {

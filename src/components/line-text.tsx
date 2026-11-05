@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { inlineText, textDate, type EditorNode } from '../domain/editor-document'
-import { CalendarIcon, GlobeIcon, LineLinkIcon, PagesIcon, TrashIcon } from './icons'
+import { CalendarIcon, GlobeIcon, LineLinkIcon, PagesIcon, TrashIcon, PageEmoji } from './icons'
 import { resolveLine, type LineTarget, type ResolvedLine } from '../domain/page-refs'
 import { fromIso, todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -14,7 +14,7 @@ export type PageRefState = 'live' | 'trashed' | 'missing' | 'creating' | 'failed
 export function pageRefView(workspace: Workspace | null | undefined, pageId: string, newTitle?: string): { target?: Page; state: PageRefState; label: string; icon: ReactElement } {
   const target = workspace?.pages.find(p => p.id === pageId)
   if (!target) return newTitle ? { state: 'creating', label: newTitle, icon: <PagesIcon /> } : { state: 'missing', label: 'Page not found', icon: <PagesIcon /> }
-  const icon = target.trashedAt ? <TrashIcon /> : target.type === 'daily' ? <CalendarIcon /> : target.url ? <GlobeIcon /> : <PagesIcon />
+  const icon = target.trashedAt ? <TrashIcon /> : target.icon ? <PageEmoji icon={target.icon} /> : target.type === 'daily' ? <CalendarIcon /> : target.url ? <GlobeIcon /> : <PagesIcon />
   return { target, state: target.trashedAt ? 'trashed' : 'live', label: pageLabel(target), icon }
 }
 

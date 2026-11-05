@@ -111,7 +111,7 @@ function TimelineWeeks({ tintOf, bars, undated, from, weekStart, limit, setLimit
   const earlierCount = earlier.reduce((n, w) => n + w.bars.length, 0)
   const line = (bar: TimelineBar) => <div key={bar.row.id} data-row={bar.row.id} {...(tintOf(bar.row) ? { style: tintOf(bar.row)!.style } : {})} className={`database-week-row${tintOf(bar.row)?.className ?? ''}${returned === bar.row.id ? ' is-returned' : ''}`}>
     <button type="button" className="database-week-open" data-cell={cellKey({ blockId, databaseId, rowId: bar.row.id, columnId: titleId })} onClick={() => openRow(bar.row.id)}>
-      <span className={`database-week-title${bar.row.title ? '' : ' is-placeholder'}`}>{bar.row.title || 'Untitled'}</span>
+      <span className={`database-week-title${bar.row.title ? '' : ' is-placeholder'}`}>{bar.row.icon && <span className="database-row-icon" aria-hidden="true">{bar.row.icon}</span>}{bar.row.title || 'Untitled'}</span>
       <span className={`database-week-dates${bar.shape === 'inverted' ? ' is-error' : ''}`}>{datesOf(bar)}</span>
     </button>
   </div>
@@ -129,7 +129,7 @@ function TimelineWeeks({ tintOf, bars, undated, from, weekStart, limit, setLimit
     {total > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     {undated.length > 0 && <div className="database-undated">
       <button type="button" className="database-undated-head" aria-expanded={undatedOpen} onClick={() => setUndatedOpen(o => !o)}>No date · {undated.length} ›</button>
-      {undatedOpen && undated.map(row => <div key={row.id} data-row={row.id} {...(tintOf(row) ? { style: tintOf(row)!.style } : {})} className={`database-week-row${tintOf(row)?.className ?? ''}`}><button type="button" className="database-week-open" onClick={() => openRow(row.id)}><span className={`database-week-title${row.title ? '' : ' is-placeholder'}`}>{row.title || 'Untitled'}</span></button></div>)}
+      {undatedOpen && undated.map(row => <div key={row.id} data-row={row.id} {...(tintOf(row) ? { style: tintOf(row)!.style } : {})} className={`database-week-row${tintOf(row)?.className ?? ''}`}><button type="button" className="database-week-open" onClick={() => openRow(row.id)}><span className={`database-week-title${row.title ? '' : ' is-placeholder'}`}>{row.icon && <span className="database-row-icon" aria-hidden="true">{row.icon}</span>}{row.title || 'Untitled'}</span></button></div>)}
     </div>}
   </div>
 }
@@ -304,7 +304,7 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
   }
   const paneRow = (row: Page, group?: string) => <div className="database-pane" style={{ width: pane }}>
     {!view.sort.length && !db.database.fixed && <span className="database-pane-handle" role="button" aria-label={`Drag ${row.title || 'Untitled'}`} onPointerDown={e => startReorder(e, row.id, group ?? null)}>⋮⋮</span>}
-    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth }} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}{groups && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
+    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth }} onClick={() => openRow(row.id)}>{row.icon && <span className="database-row-icon" aria-hidden="true">{row.icon}</span>}{row.title || 'Untitled'}{groups && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
     {columns.map(c => cell(row, c.property, group))}
   </div>
 
@@ -419,7 +419,7 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
         {...(deps ? { onPointerEnter: () => showLinks(bar.row.id, true), onPointerLeave: () => showLinks(bar.row.id, false) } : {})}
         data-nav={index === 0 ? '0:0' : undefined} data-cell={cellKey({ blockId, databaseId, rowId: bar.row.id, columnId: titleId })} aria-label={`${title}, ${datesOf(at)}`}
         onPointerDown={e => startDrag(e, bar, 'move')} onMouseDown={e => e.preventDefault()} onClick={() => { if (!justDragged.current) openRow(bar.row.id) }}>
-        <span className={`database-bar-title${bar.row.title ? '' : ' is-placeholder'}`}>{title}{groups && !paneOn && <SubItemParent workspace={workspace} db={db} row={bar.row} />}{unsaved && <span className="database-card-unsaved"> · Not saved</span>}</span>
+        <span className={`database-bar-title${bar.row.title ? '' : ' is-placeholder'}`}>{bar.row.icon && <span className="database-row-icon" aria-hidden="true">{bar.row.icon}</span>}{title}{groups && !paneOn && <SubItemParent workspace={workspace} db={db} row={bar.row} />}{unsaved && <span className="database-card-unsaved"> · Not saved</span>}</span>
         {!bar.readOnly && <>
           <span className="database-bar-edge is-start" onPointerDown={e => { e.stopPropagation(); startDrag(e, bar, 'start') }} />
           <span className="database-bar-edge is-end" onPointerDown={e => { e.stopPropagation(); startDrag(e, bar, 'end') }} />

@@ -861,6 +861,7 @@ export function DatabaseHeader({ db, view, changeView, blockId, showTitle, linke
   return <>
     {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
+      {db.icon && <span className="database-title-icon" aria-hidden="true">{db.icon}</span>}
       <input ref={titleInput} className="database-title" data-database={linked ? undefined : db.id} aria-label={linked ? 'View name' : 'Database name'} placeholder="Untitled database" defaultValue={linked ? linked.title : db.title} key={linked ? linked.title : db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
@@ -1122,7 +1123,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               <TodoTick row={row} />
               {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggle(subFoldKey(row.id))} />}
               <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onPointerDown={e => startHold(e, row.id)} onPointerMove={moveHold} onPointerUp={endHold} onPointerCancel={endHold} onContextMenu={e => { if (!wide) e.preventDefault() }} onClick={() => openRow(row.id)}>
-                <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
+                {row.icon && <span className="database-row-icon" aria-hidden="true">{row.icon}</span>}<span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
                 {group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}
               </button>
               {tree && !db.database.fixed && <button type="button" className="database-sub-add" aria-label={`New sub-item in ${displayPageTitle(row)}`} onClick={() => { if (!folded.has(subFoldKey(row.id))) toggle(subFoldKey(row.id)); addRow(undefined, { [db.database.subItems!.parent]: [row.id] }, null) }}>+</button>}
