@@ -78,7 +78,7 @@ function VerticalBars({ points, opened, onOpen, textOf, format, measured }: { po
         {points.map(p => {
           const value = p.value, from = at(Math.min(0, value ?? 0)), to = at(Math.max(0, value ?? 0)), text = textOf(p.result)
           return <button key={p.key} type="button" className={`database-chart-bar${opened === p.key ? ' is-open' : ''}${opened && opened !== p.key ? ' is-dim' : ''}`} title={`${p.name}: ${text}`} aria-label={`${p.name}: ${text}`} aria-pressed={opened === p.key} onClick={() => onOpen(p.key)}>
-            <i style={{ bottom: `${from}%`, height: `${to - from}%` }} />
+            {value ? <i style={{ bottom: `${from}%`, height: `${to - from}%` }} /> : null}
             {valueFits && value !== null && <b style={{ bottom: `${to}%` }}>{text}</b>}
           </button>
         })}
@@ -100,7 +100,7 @@ function HorizontalBars({ points, opened, onOpen, textOf }: { points: ChartPoint
       const value = p.value, from = at(Math.min(0, value ?? 0)), to = at(Math.max(0, value ?? 0)), text = textOf(p.result)
       return <button key={p.key} type="button" className={`database-chart-line${opened === p.key ? ' is-open' : ''}${opened && opened !== p.key ? ' is-dim' : ''}`} title={`${p.name}: ${text}`} aria-label={`${p.name}: ${text}`} aria-pressed={opened === p.key} onClick={() => onOpen(p.key)}>
         <span className="database-chart-line-name">{p.name}</span>
-        <span className="database-chart-line-track"><i style={{ left: `${from}%`, width: `${to - from}%` }} /></span>
+        <span className="database-chart-line-track">{value ? <i style={{ left: `${from}%`, width: `${to - from}%` }} /> : null}</span>
         <span className="database-chart-line-value">{text}</span>
       </button>
     })}
