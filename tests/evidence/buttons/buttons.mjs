@@ -171,6 +171,21 @@ await scenario('Keys: Enter runs it only when chosen by its handle; a long label
   const long = page.locator('.editor-button-pill', { hasText: 'A very long label' }), ell = await long.locator('span').evaluate(n => n.scrollWidth > n.clientWidth), box = await long.boundingBox()
   return { ok: ran === before + 1 && arrowed === ran && ell && box.height === 36 && pillBox.height === 36, ran, arrowed, before, ell, box }
 })
+await scenario('Insert\'s editor: the whole / menu shows and can be picked, one Esc closes only it, and its words start where the other fields\' do', async page => {
+  await page.getByRole('button', { name: 'Add lines actions' }).click({ force: true }); await wait(250); await page.getByRole('menuitem', { name: 'Edit' }).click(); await wait(350)
+  await editor(page).locator('.button-step-open').first().click(); await wait(400)
+  const words = page.locator('.button-blocks .ProseMirror')
+  await words.click(); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.press('Enter'); await page.keyboard.type('/', { delay: 20 }); await wait(400)
+  const menu = page.locator('#bn-suggestion-menu'), box = await menu.boundingBox(), hit = await menu.evaluate(n => { const r = n.getBoundingClientRect(), t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return Boolean(t && n.contains(t)) })
+  await page.keyboard.press('Escape'); await wait(200)
+  const gone = await menu.count(), still = await page.locator('.button-blocks').count()
+  await page.keyboard.type('/', { delay: 20 }); await wait(400)
+  await page.locator('#bn-suggestion-menu [role=option]').first().click(); await wait(250)
+  const picked = await page.locator('#bn-suggestion-menu').count()
+  const inset = await page.evaluate(() => { const b = document.querySelector('.button-blocks').getBoundingClientRect(), t = document.querySelector('.button-blocks .bn-block-content, .button-blocks .bn-inline-content').getBoundingClientRect(); return t.x - b.x })
+  const done = (await editor(page).getByRole('button', { name: 'Done' }).boundingBox()).height
+  return { ok: box.height >= 100 && hit && gone === 0 && still === 1 && picked === 0 && inset <= 12 && done === 28, box, hit, gone, still, picked, inset, done }
+})
 await scenario('To-dos: Add row is its + New, with Open and one Undo', async page => {
   await pill(page, 'New to-do').click(); await wait(1000)
   const made = store().tasks.filter(t => t.title === 'From a button').length, words = await notices(page)
