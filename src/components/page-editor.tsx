@@ -2689,6 +2689,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         })
         return
       }
+      // Esc lets go of a chosen image or file, as of a picked line (B87 §5): the caret goes to the nearest line.
+      if (e.key === 'Escape' && editor.prosemirrorState.selection instanceof NodeSelection && /^(image|file)$/.test(editor.prosemirrorState.selection.node.firstChild?.type.name ?? editor.prosemirrorState.selection.node.type.name)) {
+        e.preventDefault(); e.stopPropagation()
+        const { doc, selection, tr } = editor.prosemirrorState
+        editor.prosemirrorView.dispatch(tr.setSelection(Selection.near(doc.resolve(selection.to))))
+        return
+      }
       // A handle selection is for moving and deleting, not typing (editor spec §1, design 4a45305): printable keys
       // do nothing, Enter goes into the heading's text, Escape lets go. Arrows, copy, cut and undo work as before.
       if (selected.current.length && !e.metaKey && !e.ctrlKey) {

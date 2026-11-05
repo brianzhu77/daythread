@@ -343,7 +343,7 @@ await scenario('A file that turns up later shows when the page regains focus', a
   r.ok = /isn't here/.test(r.gone) && r.lines === 0 && r.width === 1400
   return r
 })
-await scenario('Keys on a chosen image: Enter adds a line below, Backspace removes it with one Undo, and arrows move on', async page => {
+await scenario('Keys on a chosen image: Enter adds a line below, Backspace removes it with one Undo, an arrow moves on, and Esc lets go', async page => {
   await pasted(page)
   const count = () => doc().length, order = () => doc().map(n => n.type).join()
   await page.locator('.bn-visual-media').first().click(); await wait(400)
@@ -355,7 +355,16 @@ await scenario('Keys on a chosen image: Enter adds a line below, Backspace remov
   r.backspace = order()
   await undo(page)
   r.undo = order()
-  r.ok = !r.backspace.includes('image') && r.undo.includes('image') && r.enter.split(',').length === r.start.split(',').length + 1 && r.enter.split(',')[r.start.split(',').indexOf('image') + 1] === 'paragraph'
+  const selected = () => page.evaluate(() => { const s = getSelection(); return [document.querySelectorAll('.ProseMirror-selectednode').length, s?.anchorNode?.textContent?.slice(0, 20) ?? null] })
+  await page.locator('.bn-visual-media').first().click(); await wait(400)
+  r.chosen = await selected()
+  await page.keyboard.press('ArrowDown'); await wait(300)
+  r.down = await selected()
+  await page.locator('.bn-visual-media').first().click(); await wait(400)
+  await page.keyboard.press('Escape'); await wait(300)
+  r.esc = await selected()
+  r.keys = r.chosen[0] === 1 && r.down[0] === 0 && r.esc[0] === 0
+  r.ok = r.keys && !r.backspace.includes('image') && r.undo.includes('image') && r.enter.split(',').length === r.start.split(',').length + 1 && r.enter.split(',')[r.start.split(',').indexOf('image') + 1] === 'paragraph'
   return r
 })
 await scenario('Moved by its handle: the block goes, its address with it', async page => {
