@@ -18,7 +18,7 @@
 | Source | Needs | When |
 | --- | --- | --- |
 | **Emoji** | Nothing stored but the character. A picker, with search in English and Chinese | First. No infrastructure |
-| **Image link** (cover or icon) | A pasted URL. Stored as a link, not a copy, like images in a body (R3-3): it may vanish | First. A failed one leaves no cover, with no frame, and the words stay where they'd be |
+| **Image link** (cover or icon) | A pasted URL. Stored as a link, not a copy, like images in a body (R3-3): it may vanish | First. A failed one keeps its place as a plain band with no broken-image mark, and the words stay where they are (§7.6) |
 | **Upload** | Files (R3-11), the same store and limits. Icons small, covers wide | After R3-11 |
 | **Gallery of covers** | Images we'd host, or ones we pick | With upload. A small set of plain greys and textures suits his look, at no real cost |
 | **Unsplash** | Its API, with a key and required attribution | **In scope and last (Lead 4a1712e6).** A new outside service that would see what Brian searches, so at the front of the queue it goes to Brian as one choice. Its terms must be checked by then: not checked yet, and no running cost that I know of |
@@ -32,7 +32,7 @@
 - **Copying:** Duplicate row copies them. A template row's icon and cover go to rows made from it (R3-12).
 - **Export:** an icon's emoji is written before the page's heading. A cover link is written as an image at the top. Uploads follow R3-11's rule for files.
 - **Another account can never read an upload** (R3-11). A pasted link is fetched by his browser with `no-referrer`, as Gallery's cards are. The server fetches nothing.
-- **Offline:** an emoji always shows. A cover that can't load leaves no gap.
+- **Offline:** an emoji always shows. A cover that can't load keeps its place, as §7.6 settles.
 
 ## 4. For Roadbuster and Jazz
 
@@ -53,7 +53,7 @@
 - A page with no icon or cover looks exactly as today, pixel for pixel, on a copy of his real data (R1-18).
 - An emoji lines up with the title and in the sidebar, `[[` links and a row's Name at both widths, with the alignment gate on.
 - The picker at 390 in the Home Screen app: keyboard comes up only for search, Pinyin works.
-- A dead image link: no broken frame, and nothing moves once it fails.
+- A dead image link: no broken-image mark, and nothing moves once it fails (§7.6). The panel's check loads the picture the same way the band does, with `no-referrer`, so a picture that passes in the panel can't fail on the page for that reason.
 - An older tab keeps both, with a rollback run.
 
 ## 7. How it looks and behaves (Jazz, 2026-11-05)
@@ -79,6 +79,8 @@ From the top: **cover, then the line with the breadcrumb and `⋯`, then the ico
 ### 7.2 A day
 
 The cover goes above the head and the icon above "Today" and the date, at the title's left edge, with the arrows where they are. **A day has its `⋯` only once it holds something** (`dayMenuGroups`), so an empty day needs one for these. Added to the Day template, every new day has them (P1-6). At 390 with a cover, the day's first section starts about 120 px lower. That's his choice, and worth stating in the budget.
+
+**Proposed (Bumblebee, for the Lead): an empty day doesn't get a `⋯` for this.** A `⋯` on an empty day would change that screen for everyone, against P1-1's "exactly as today", to offer something nobody has asked for there. A day made from the template holds something, so it has its `⋯` already, and the template itself takes them. The cost: a day with nothing written can't take a cover until it has a line.
 
 ### 7.3 Where an icon shows
 
@@ -117,7 +119,9 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 - **Reposition:** the picture moves up and down under the pointer or finger, with "Drag to move · Done · Cancel" on it. Esc cancels. Done is one change with one Undo. It's saved as a share of the picture's height, so it holds at both widths. A picture with nothing to spare in height doesn't offer it.
 - **While loading:** the band at its full height in `--fill`, so nothing moves.
 
-### 7.6 A question for Bumblebee: a cover that won't load
+### 7.6 A cover that won't load
+
+**Settled (Bumblebee, 2026-11-05): it keeps its place, as Jazz recommends below.** It's state, which the minimal look allows, and a page that jumps 200 px under someone reading is the worse failure. The cost is a grey band on every open until it's changed or removed, which is why Change and Remove stay reachable.
 
 §3 says it "leaves no gap", and P1-4 and §6 say "nothing moves once it fails". **Both can't hold,** since the band holds its place while it loads.
 
