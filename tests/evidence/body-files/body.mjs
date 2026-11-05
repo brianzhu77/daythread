@@ -594,10 +594,11 @@ await scenario('390: a tap brings ⋯, with what the bar offers; no resize; a sa
   await page.screenshot({ path: '/tmp/rb-csv/body-menu-390.png' })
   const menu = await page.locator('.body-file-menu').boundingBox(); r.menuFits = menu.x >= 0 && menu.x + menu.width <= 390
   await page.locator('.body-file-menu [role=menuitem]', { hasText: 'Caption' }).tap(); await wait(200)
+  r.fieldSize = await page.locator('.body-image-caption').evaluate(f => parseFloat(getComputedStyle(f).fontSize))
   await page.keyboard.type('From the phone', { delay: 30 }); await page.keyboard.press('Enter'); await wait(1400)
   r.caption = imageBlock().props.caption
   r.overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
-  r.ok = r.before === 0 && r.afterTap === 1 && r.handles === 0 && r.bar === 0 && r.menu.includes('Replace') && r.menu.includes('Download') && r.menu.includes('Remove') && r.menuFits && r.caption === 'From the phone' && r.overflow <= 0
+  r.ok = r.before === 0 && r.afterTap === 1 && r.handles === 0 && r.bar === 0 && r.menu.includes('Replace') && r.menu.includes('Download') && r.menu.includes('Remove') && r.menuFits && r.caption === 'From the phone' && r.fieldSize >= 16 && r.overflow <= 0
   return r
 }, { viewport: { width: 390, height: 780 }, hasTouch: true })
 await scenario('390: a file row has its ⋯, and /image\'s panel fits the screen', async page => {
