@@ -89,7 +89,8 @@ await scenario('Cmd-Z after making one takes only the view', async page => {
   return { first, again, ok: first.blocks === 1 && !first.trashed && first.rows === 3 && again === 2 }
 })
 // The linked view is the block right after the last line: the caret stops on it, selected, one arrow down.
-const selectLinked = async page => { await page.getByText('After the table').click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.press('ArrowDown'); await wait(200) }
+// By its handle: arriving at a block by arrow doesn't choose it (B89).
+const selectLinked = async page => { await page.locator('.database-block').last().hover(); await wait(250); await page.locator('.bn-side-menu [aria-label^="Select or drag"]').first().click(); await wait(300) }
 const onlyTheView = (r) => r.blocks === 1 && !r.trashed && r.rows === 3
 const afterRemoving = async page => { const ws = store(); return { blocks: dbBlocks(ws).length, trashed: Boolean(list(ws).trashedAt), rows: ws.pages.filter(p => p.parentId === 'list' && !p.trashedAt).length, notice: await notices(page) } }
 for (const [label, press] of [['Backspace', async page => { await page.keyboard.press('Backspace') }], ['Cmd-X', async page => { await page.keyboard.press('Meta+x') }]]) {
@@ -106,7 +107,7 @@ for (const [label, press] of [['Backspace', async page => { await page.keyboard.
 await scenario('Cmd-V over the selected view replaces only the view', async page => {
   await makeLinked(page)
   await page.getByText('Before the table').click(); await page.keyboard.press('Meta+a'); await page.keyboard.press('Meta+c'); await wait(200)
-  await selectLinked(page)
+  await page.getByText('After the table').click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.press('ArrowDown'); await wait(200) // A paste needs the editor's own selection.
   await page.keyboard.press('Meta+v'); await wait(1800)
   const r = await afterRemoving(page)
   r.pasted = JSON.stringify(JSON.parse(store().pages.find(p => p.id === 'books').document).slice(-3)).includes('Before the table')
@@ -114,7 +115,7 @@ await scenario('Cmd-V over the selected view replaces only the view', async page
 })
 await scenario('the source in Trash: one line, nothing to edit, and Restore', async page => {
   await makeLinked(page)
-  await page.getByText('Before the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('ArrowDown'); await wait(200)
+  await page.locator('.database-block').first().hover(); await wait(250); await page.locator('.bn-side-menu [aria-label^="Select or drag"]').first().click(); await wait(300)
   await page.keyboard.press('Backspace'); await wait(1800)
   const ws = store(), r = { trashed: Boolean(list(ws).trashedAt), line: await page.locator('.database-block .database-empty').first().innerText().catch(() => ''), tables: await page.locator('.database-table').count() }
   await page.locator('.database-block .database-empty').getByRole('button', { name: 'Restore' }).click(); await wait(1800)

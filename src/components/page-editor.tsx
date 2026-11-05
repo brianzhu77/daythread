@@ -2047,6 +2047,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (!block || !isDatabase(source)) return
       editor.insertBlocks([{ type: 'database', props: { pageId: source.id, view: linkedViewJson(linkedViewOf(source.database, (block.props as { view?: string }).view)) } } as never], blockId, 'after')
     },
+    saved: () => flushRef.current(),
     // Esc from the table: the block selected whole again, in the page editor (design §10). Chosen, as by its handle.
     select: blockId => { if (editor.getBlock(blockId)) select(blockId) },
   }), [editor, page.id])
