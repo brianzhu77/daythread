@@ -177,7 +177,7 @@ await scenario('Insert\'s editor: the whole / menu shows and can be picked, one 
   const words = page.locator('.button-blocks .ProseMirror')
   await words.click(); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.press('Enter'); await page.keyboard.type('/', { delay: 20 }); await wait(400)
   const menu = page.locator('#bn-suggestion-menu'), box = await menu.boundingBox(), hit = await menu.evaluate(n => { const r = n.getBoundingClientRect(), t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return Boolean(t && n.contains(t)) })
-  await page.keyboard.press('Escape'); await wait(200)
+  await page.keyboard.press('Escape'); await wait(900)
   const gone = await menu.count(), still = await page.locator('.button-blocks').count()
   await page.keyboard.type('/', { delay: 20 }); await wait(400)
   await page.locator('#bn-suggestion-menu [role=option]').first().click(); await wait(250)

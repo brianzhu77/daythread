@@ -71,9 +71,10 @@ function Editor({ open: { initial, anchor, onDone }, schema }: { open: Open; sch
   }
   useEffect(() => {
     const esc = (e: KeyboardEvent) => {
-      // One Esc per layer: a menu that's open in the blocks' editor closes by itself.
-      if (e.key !== 'Escape' || document.querySelector('.button-editor .bn-suggestion-menu, #bn-suggestion-menu')) return
+      if (e.key !== 'Escape') return
       e.preventDefault(); e.stopPropagation()
+      // One Esc per layer: a menu open in the blocks' editor goes first.
+      if (closeBlocksMenu?.()) return
       if (at !== null) setAt(null); else leave()
     }
     const away = (e: PointerEvent) => { const t = e.target as Element; if (!changedYet && !box.current?.contains(t) && !t.closest?.('.button-ask, .bn-suggestion-menu, [data-floating-ui-portal]')) closeEditor() }
@@ -224,11 +225,16 @@ function FixedValue({ property, raw, onChange }: { property: Property; raw: Json
 
 // Over the sheet, which clips what's inside it. Fixed takes it out of the sheet's scrolling box.
 const overSheet = { useFloatingOptions: { strategy: 'fixed' as const } }
+let closeBlocksMenu: (() => boolean) | null = null
 const slashKinds = new Set(['paragraph', 'heading', 'heading_2', 'heading_3', 'bullet_list', 'numbered_list', 'check_list', 'quote'])
 /** What Insert blocks puts in, written as on a page: to-dos and `@date` chips come out new each tap (§2). It saves nowhere but the step. */
 function BlocksField({ schema, blocks, onChange }: { schema: never; blocks: EditorNode[]; onChange(blocks: EditorNode[]): void }) {
   const editor = useCreateBlockNote({ schema, ...(blocks.length ? { initialContent: blocks as never } : {}) })
-  return <div className="button-blocks" aria-label="Blocks to insert" onKeyDownCapture={e => { if (e.key === 'Escape' && document.querySelector('#bn-suggestion-menu')) { e.preventDefault(); e.stopPropagation(); editor.getExtension(SuggestionMenu)?.closeMenu() } }}>
+  useEffect(() => {
+    closeBlocksMenu = () => { const menu = editor.getExtension(SuggestionMenu); if (!menu?.shown()) return false; menu.closeMenu(); return true }
+    return () => { closeBlocksMenu = null }
+  }, [editor])
+  return <div className="button-blocks" aria-label="Blocks to insert">
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} onChange={() => onChange(editor.document as never)}>
       <SuggestionMenuController triggerCharacter="/" floatingUIOptions={overSheet} getItems={async query => filterSuggestionItems(getDefaultReactSlashMenuItems(editor).filter(item => slashKinds.has((item as { key?: string }).key ?? '')), query)} />
       <SuggestionMenuController triggerCharacter="@" floatingUIOptions={overSheet} getItems={async query => {
