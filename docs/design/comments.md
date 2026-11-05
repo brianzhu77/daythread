@@ -1,6 +1,6 @@
 # Comments: design
 
-- Author: Bumblebee (Product) · 2026-11-05 · status: **step 1 of §6 approved to build (Lead 479f3f9d, Roadbuster; Jazz looks at the pane), with Ratchet's design read done.** Steps 2 to 4 not yet approved. Not built.
+- Author: Bumblebee (Product) · 2026-11-05 · status: **step 1 of §6 approved to build (Lead 479f3f9d, Roadbuster; Jazz looks at the pane), with Ratchet's design read done.** Step 1 live 2026-11-05 (#150). **Steps 2 to 4 ready for the Lead to read; step 2 to be approved after Chart's first PR (Lead 9d5b3c33).**
 - Asked by the Lead (4a1712e6: a later item in `databases.md` §14, not Not planned; d34dd413: group 1). Nothing is cut for lack of evidence, and Brian's use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's page on [comments, mentions and reminders](https://www.notion.com/help/comments-mentions-and-reminders), read through a fetch and summary, not tried in a real Notion. Marked "Notion" below where it comes from there. Everything else is my proposal. Brian has made no request for comments, and how anyone would use them with one person in a workspace is an untested assumption: a note to oneself on a line, without changing the line.
 
