@@ -257,7 +257,11 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     await upsert('pages', pageColumns, diff.pages.upsert); await remove('pages', diff.pages.remove)
     await upsert('tasks', taskColumns, diff.tasks.upsert); await remove('tasks', diff.tasks.remove)
     await upsert('deleted_tasks', deletedColumns, diff.deleted.upsert); await remove('deleted_tasks', diff.deleted.remove)
-    if (diff.threads) { await upsert('comment_threads', threadColumns, diff.threads.upsert); await remove('comment_threads', diff.threads.remove) }
+    if (diff.threads) {
+      // An inverse written by a build with no anchors has no such key: the thread keeps the one it has.
+      const knows = diff.threads.upsert.filter(t => t.anchor !== undefined), older = diff.threads.upsert.filter(t => t.anchor === undefined)
+      await upsert('comment_threads', threadColumns, knows); await upsert('comment_threads', threadColumns.filter(c => c !== 'anchor'), older); await remove('comment_threads', diff.threads.remove)
+    }
   }
   /** Operations older than `operationKeepMs` go, except the newest of the workspace (the Undo marker). */
   async pruneOperations(tx: SqlClient, workspaceId: string, now: Date): Promise<void> {
