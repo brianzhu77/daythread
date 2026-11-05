@@ -24,6 +24,8 @@ export interface FormulaNames {
   memberNames: readonly string[]
   idOf(name: string): string | null
   stored: boolean
+  /** Names in scope from the start: a button's variables, read as a `let`'s are. */
+  locals?: readonly string[]
 }
 export interface PropRef { from: number; to: number; id: string }
 export interface Parsed { tree: FormulaNode | null; refs: PropRef[] }
@@ -69,6 +71,7 @@ class Parser {
   constructor(text: string, names: FormulaNames) {
     this.text = text
     this.names = names
+    this.scope = [...(names.locals ?? [])]
     this.byLength = [...names.names].sort((a, b) => b.length - a.length)
     this.membersByLength = [...names.memberNames].sort((a, b) => b.length - a.length)
   }

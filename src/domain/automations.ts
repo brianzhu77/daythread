@@ -26,14 +26,14 @@ export interface Automation {
   /** Why it stopped: a failed run, or the command's limit, which can simply be turned on again. */
   paused?: { reason: string; limit?: true }
 }
-export const automationSteps: readonly ButtonStep['kind'][] = ['edit-property', 'add-row', 'edit-rows']
+export const automationSteps: readonly ButtonStep['kind'][] = ['edit-property', 'add-row', 'edit-rows', 'variables']
 
 /** What's not "a row was made" or "a value was edited": they'd fire hundreds of times, or undo what's being undone (§3, §5.7). A rule's own writes never get here, as matches are frozen first. */
 const quietActions: ReadonlySet<string> = new Set(['undo', 'restore-page', 'restore-batch', 'import-csv', 'add-rows', 'run-repeats', 'change-database', 'move-row', 'move-page', 'delete-page', 'delete-pages', 'ensure-day'])
 export const firesRules = (action: Pick<Action, 'type'>): boolean => !quietActions.has(action.type)
 
 /** What's wrong with a rule now, in its own words, without its having to run: a delete or a type change shows at once (§5.4). */
-export function automationProblem(ws: Pick<Workspace, 'pages'>, db: Database, rule: Automation): string | null {
+export function automationProblem(ws: Workspace, db: Database, rule: Automation, databaseId = ''): string | null {
   if (rule.viewId && !db.views.some(v => v.id === rule.viewId)) return 'Its view was deleted'
   if (everyOf(rule) && readSteps(rule.steps).some(s => everyProblem(s))) return 'Every… has no row to edit'
   for (const t of rule.triggers) {
@@ -43,8 +43,10 @@ export function automationProblem(ws: Pick<Workspace, 'pages'>, db: Database, ru
     // A condition this type can't hold would just never be met, with the rule looking healthy (Ratchet).
     if (t.condition && !opsFor(property.type).includes(t.condition.op)) return `${t.name} changed type`
   }
-  for (const step of readSteps(rule.steps)) { const problem = stepBroken(ws, db, step); if (problem) return problem }
-  return null
+  const steps = readSteps(rule.steps)
+  for (const step of steps) { const problem = stepBroken(ws, db, step); if (problem) return problem }
+  // A schedule has no row, so its formulas have no properties to read.
+  return usesFormulas(steps) ? stepFormulaProblems(steps, freshWorldOf(ws), everyOf(rule) ? '' : databaseId).find(Boolean) ?? null : null
 }
 const stepDatabase = (ws: Pick<Workspace, 'pages'>, db: Database, step: Extract<ButtonStep, { kind: 'edit-property' | 'add-row' | 'edit-rows' }>): { database: Database; title?: string } | null => {
   if (step.kind === 'edit-property') return { database: db }
