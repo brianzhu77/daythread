@@ -155,6 +155,6 @@ function applySet<R extends { id: string }>(rows: R[], set: RowSet<R>): R[] {
 export function applyDiff(rows: Rows, diff: RowDiff): Rows {
   return {
     revision: rows.revision, timezone: diff.timezone ?? rows.timezone, weekStart: diff.weekStart ?? rows.weekStart ?? 0,
-    pages: applySet(rows.pages, diff.pages), tasks: applySet(rows.tasks, diff.tasks), deleted: applySet(rows.deleted, diff.deleted), threads: diff.threads ? applySet(rows.threads, diff.threads) : rows.threads,
+    pages: applySet(rows.pages, diff.pages), tasks: applySet(rows.tasks, diff.tasks), deleted: applySet(rows.deleted, diff.deleted), threads: diff.threads ? applySet(rows.threads, { ...diff.threads, upsert: diff.threads.upsert.map((t) => (t.anchor !== undefined ? t : { ...t, anchor: rows.threads.find((held) => held.id === t.id)?.anchor ?? null })) }) : rows.threads,
   }
 }

@@ -846,7 +846,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       }
       const on = page(state, action.pageId);
       if (isTrashed(on)) throw new DomainError("That page is in Trash");
-      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
+      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
       return { message: "Comment added", entityId: action.threadId };
     }
     case "edit-comment": {
@@ -1380,6 +1380,15 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
       const home = state.pages.find((p) => p.id === thread.pageId);
       if (!home || !flatNodes(pageNodes(home)).some((n) => n.id === thread.anchor!.blockId)) thread.pageId = savedTo;
     }
+  }
+  // A to-do planned to another day is a new line there, so a thread on it goes to that line. Its plan row if it has one, as that's where the to-do is now (Roadbuster, #158).
+  for (const thread of state.threads ?? []) {
+    const anchor = thread.anchor;
+    if (!anchor?.taskId) continue;
+    const home = state.pages.find((p) => p.id === thread.pageId);
+    if (home && flatNodes(pageNodes(home)).some((n) => n.id === anchor.blockId)) continue;
+    const rows = taskRows(state, anchor.taskId), row = rows.find((r) => r.role === "plan") ?? rows[0];
+    if (row) { thread.pageId = row.page.id; anchor.blockId = row.node.id; }
   }
   // A page gone for good takes its threads with it. In Trash they wait for it.
   if (state.threads?.length) { const held = new Set(state.pages.map((p) => p.id)); state.threads = state.threads.filter((t) => held.has(t.pageId)); }

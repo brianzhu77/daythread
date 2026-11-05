@@ -2502,7 +2502,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const block = editor.getBlock(id) as unknown as EditorNode | undefined
     if (!block) return
     selected.current = []; setSelectionLabel('')
-    openComments(page.id, { composing: true, anchor: { blockId: id, quote: lineQuote(block) } })
+    const taskId = rowTaskId(block)
+    openComments(page.id, { composing: true, anchor: { blockId: id, quote: lineQuote(block), ...(taskId ? { taskId } : {}) } })
   }
   /** A11 §4 (Jazz §1): the line "Copy link to line" points at, or null where it isn't offered. */
   const lineLinkTarget = (blockId: string): LineTarget | null => {
