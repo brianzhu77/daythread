@@ -633,7 +633,7 @@ Acceptance list by Bumblebee (Lead d34dd413, 2026-11-05), from `docs/design/icon
 | P2-8 | **Elsewhere.** Search finds a comment and opens the thread. The day draft sends the model none. Export writes a `Comments` part with quotes, times and status. Another account can never read one. Over 2,000 characters says so and keeps the words. Offline or failed keeps the words with Retry. | missing |
 | P2-9 | **An older tab** shows no mark and can't harm a thread, with a rollback run on the floor build. | missing |
 
-**Not in these rows:** mentions, Inbox, unread marks, email and push (each needs a second person); reactions and a cover made from a prompt (proposed Not planned, for the Lead); Unsplash (last in §14).
+**Not in these rows:** mentions, Inbox, unread marks, email and push (each needs a second person); reactions and a cover made from a prompt (Not planned, Lead 3f167c20); Unsplash (last in §14).
 
 ## C. Open questions for Brian
 
