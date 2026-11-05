@@ -163,6 +163,23 @@ await scenario('While loading the band holds its height, so nothing moves when i
   r.ok = r.height === 200 && r.moved === 0
   return r
 })
+await scenario('Two choices through two panels, each save held: the first reply doesn\'t take the band back to it (Ratchet)', async page => {
+  const holds = []
+  await page.route('**/_serverFn/**', async route => { if (isCoverCommand(route.request())) await new Promise(res => holds.push(res)); await route.continue().catch(() => {}) })
+  await menu(page, /(Add|Change) cover/); await field(page).fill(PORTRAIT); await addButton(page).waitFor(); await addButton(page).click(); await wait(500)
+  const first = await page.locator('.page-cover-image').getAttribute('src')
+  await page.keyboard.press('Escape'); await wait(200)
+  // Saved only once its reply is in, so the menu may still offer Add.
+  await menu(page, /(Add|Change) cover/); await field(page).fill(WIDE); await addButton(page).waitFor(); await addButton(page).click(); await wait(500)
+  const second = await page.locator('.page-cover-image').getAttribute('src')
+  const r = { first, second, sends: holds.length }
+  holds[0](); await wait(900)
+  r.afterFirst = await page.locator('.page-cover-image').getAttribute('src')
+  holds[1](); await wait(1000)
+  r.afterSecond = await page.locator('.page-cover-image').getAttribute('src'); r.saved = pageOf('notes').cover
+  r.ok = first === PORTRAIT && second === WIDE && r.afterFirst === WIDE && r.afterSecond === WIDE && r.saved === WIDE
+  return r
+})
 await scenario('A failed save goes back to what\'s saved and says so, and Try again sends it; a cover changed while words save keeps both (P1-9)', async page => {
   await add(page, PORTRAIT)
   await page.route('**/_serverFn/**', route => isCoverCommand(route.request()) ? route.abort() : route.continue())
