@@ -1,0 +1,24 @@
+(node:83092) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ zonedEpoch: a wall-clock time in a zone, DST aware; an unknown zone counts as UTC (0.958125ms)
+✔ dueReminders: a timed chip fires at its time, a date-only chip at 9:00, in the workspace zone; trashed pages never (1.042583ms)
+✔ PushStore: a subscription belongs to one workspace, the same endpoint again moves it, only its own workspace can drop it, RLS is on (714.01475ms)
+✔ runTick: each due reminder once per subscription, never twice; a gone endpoint is dropped; a failed send is tried again next tick (461.479625ms)
+✔ tickAllowed: CRON_SECRET in the header or the query, nothing without it (2.178625ms)
+✔ handleSubscribe and handleUnsubscribe: same-origin JSON for the signed-in account’s workspace; keys required (432.034209ms)
+✔ a chip on a finished to-do stays quiet; an open one reminds (B60 6) (0.6845ms)
+✔ no reminder from a page in Trash, a day template, a row template or a draft; a synced chip opens a page he can see (B60 5, 7) (0.447917ms)
+✔ turning on is a clean start: what fell due before a device signed up stays quiet, after that it fires once; October stays quiet too (B60 3, 4) (434.473083ms)
+✔ a device the push service drops: no more sends, and the account reads as stopped until one signs up; turning off says nothing (B60 8) (502.420542ms)
+✔ a chip moved to another time fires again, once; the same chip shown twice is one reminder (B60 4) (477.254792ms)
+✔ a synced chip read back through the store still opens a page he can see, not the shared record (B60 7) (469.553042ms)
+✔ two ticks at once send one reminder once, and a device moved to another workspace starts clean there (Ratchet, #138) (482.478458ms)
+✔ a slow batch holds each reminder only while it sends it: a second tick takes the later ones, once, and a slow device doesn't delay the next (Ratchet, #138) (467.594333ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14744.780208
