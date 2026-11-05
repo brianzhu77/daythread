@@ -23,7 +23,7 @@ test('Load latest keeps a button whole, and once', () => {
 test('export writes its label, so a page never loses a line on the way out', () => {
   const ws = createEmptyWorkspace()
   assert.equal(blocksMarkdown([button()], ws, new Map()), 'Log a run')
-  assert.equal(blocksMarkdown([{ ...button(), props: { label: '', steps: '' } }], ws, new Map()), '')
+  assert.equal(blocksMarkdown([{ ...button(), props: { label: '', steps: '' } }], ws, new Map()), 'Button')
 })
 
 test('a day template copies a button, with its own id and its steps', () => {

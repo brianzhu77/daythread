@@ -95,7 +95,7 @@ const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: 
 // keeps it whole. Its steps are one opaque prop, so what they can do can grow without the floor having to read them. Here a tap does nothing.
 const button = createReactBlockSpec({ type: buttonBlockType, propSchema: { label: { default: '' }, steps: { default: '' } }, content: 'none' }, {
   render: ({ block }) => <div className="editor-button-line" contentEditable={false}><span className="editor-button">{block.props.label || 'Button'}</span></div>,
-  toExternalHTML: ({ block }) => <p>{block.props.label}</p>,
+  toExternalHTML: ({ block }) => <p>{block.props.label || 'Button'}</p>,
 })()
 // A synced block (docs/design/synced-blocks.md): the lines shown in several places, as this block's children. Known to the
 // editor before anything can make one, so a build at the rollback floor keeps it whole (docs/plan/b21-sizing.md).
