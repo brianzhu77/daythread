@@ -24,6 +24,8 @@ export const startReposition = (pageId: string) => { moving = pageId; changed() 
 const stopReposition = () => { moving = null; changed() }
 /** Whether this picture has any height to spare at this size. One that doesn't, doesn't offer to move (§7.5). */
 export const coverCanMove = (pageId: string) => movable.has(pageId)
+/** For a menu that offers it: the picture usually loads after the menu's first drawn. */
+export const useCoverCanMove = (pageId: string) => useSyncExternalStore(subscribe, () => movable.has(pageId), () => false)
 function useLook(page: Pick<Page, 'id' | 'cover' | 'coverPosition'>): Look {
   const draft = useSyncExternalStore(subscribe, () => drafts.get(page.id), () => undefined)
   if (draft !== undefined) return draft
