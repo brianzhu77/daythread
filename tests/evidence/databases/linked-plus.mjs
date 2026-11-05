@@ -56,6 +56,21 @@ const undo = p => p.getByRole('button', { name: 'Undo' })
   check(JSON.stringify(data().pages.find(x => x.id === 'linked').document).includes('The line above more'), 'and the words typed before it stay')
   check(errors.length === 0, 'no page errors', errors)
   await c.close() }
+// Left before the column saved (Ratchet): the property nobody's seen isn't made, and a later change keeps its own Undo.
+{ const { c, p, errors, wait } = await open('linked')
+  const order = [], held = []
+  await p.route('**/*', async route => { const q = route.request(); if (q.method() === 'POST' && /save-editor|change-database/.test(q.postData() ?? '')) { order.push(/save-editor/.test(q.postData()) ? 'save-editor' : 'addProperty'); if (held.length === 0) { held.push(1); await new Promise(r => setTimeout(r, 1500)) } } await route.continue() })
+  await p.locator('.bn-inline-content', { hasText: 'The line above' }).click(); await p.keyboard.press(engine === 'webkit' ? 'Meta+ArrowRight' : 'End'); await p.keyboard.type(' more'); await wait(900)
+  await p.locator('.database-th.is-add button').first().click(); await wait(100)
+  await p.locator('.sidebar a, .sidebar button', { hasText: /^elsewhere$/ }).first().click(); await wait(3500)
+  check(!order.includes('addProperty') && !props().includes('Property'), 'leaving while it waits: the property is not made', [order, props()])
+  check(JSON.stringify(data().pages.find(x => x.id === 'linked').document).includes('The line above more'), 'and the words typed before it stay')
+  await p.locator('.sidebar a, .sidebar button', { hasText: /^linked$/ }).first().click(); await wait(2200)
+  check(!(await heads(p)).includes('Property'), 'and going back shows no column', await heads(p))
+  await p.locator('.database-th.is-add button').first().click(); await wait(1500)
+  check((await heads(p)).includes('Property') && await undo(p).count() === 1, 'the + still works, with Undo', await heads(p))
+  check(errors.length === 0, 'no page errors', errors)
+  await c.close() }
 // A page that can't save (Ratchet): the property waits for the column, as a later save would take its Undo, and goes when the page saves again.
 { const { c, p, errors, wait } = await open('linked')
   const block = route => { const q = route.request(); return q.method() === 'POST' && /save-editor/.test(q.postData() ?? '') ? route.abort() : route.continue() }

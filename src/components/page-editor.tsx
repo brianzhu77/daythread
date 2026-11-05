@@ -2069,7 +2069,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (!block || !isDatabase(source)) return
       editor.insertBlocks([{ type: 'database', props: { pageId: source.id, view: linkedViewJson(linkedViewOf(source.database, (block.props as { view?: string }).view)) } } as never], blockId, 'after')
     },
-    // Until what the page holds now has really saved: past a save already on its way, and past a failed one, which tries again by itself and says so.
+    // Until what the page holds now has really saved: past a save already on its way, and past a failed one, which tries again by itself and says so. False if the page was left first.
     saved: async () => {
       await flushRef.current()
       let sentAgain = false
@@ -2077,6 +2077,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         if (!sending.current && !sentAgain) { sentAgain = true; await flushRef.current(); continue }
         await new Promise(r => setTimeout(r, 100))
       }
+      return !left.current
     },
     // Esc from the table: the block selected whole again, in the page editor (design §10). Chosen, as by its handle.
     select: blockId => { if (editor.getBlock(blockId)) select(blockId) },

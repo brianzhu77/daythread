@@ -125,13 +125,13 @@ export interface BlockActions {
   updateLinkedView(blockId: string, build: (json: string) => string): void
   /** Another block of the same database, right after this one: a linked view (design §9.1). */
   duplicate(blockId: string): void
-  /** Once what the page holds now is saved, however long that takes, or the page is left. */
-  saved(): Promise<void>
+  /** Once what the page holds now is saved, however long that takes; false if the page is left first. */
+  saved(): Promise<boolean>
 }
 /** The actions of each block on screen, by block id: the menu lives outside the editor (app shell) and finds them here. */
 export const blockActions = new Map<string, BlockActions>()
-/** A linked view's new column goes first, in its page, and the property after it: Undo only reaches the latest change, so the other way round would take its Undo away (R4-18). */
-export const afterLinkedColumn = (blockId: string, add: () => void) => void (blockActions.get(blockId)?.saved() ?? Promise.resolve()).then(add)
+/** A linked view's new column goes first, in its page, and the property after it: Undo only reaches the latest change, so the other way round would take its Undo away (R4-18). Left before that, the property nobody's seen yet isn't made. */
+export const afterLinkedColumn = (blockId: string, add: () => void) => void (blockActions.get(blockId)?.saved() ?? Promise.resolve(true)).then(saved => { if (saved) add() })
 
 export function DatabaseBlock({ blockId, pageId, viewJson, hostDate, actions }: { blockId: string; pageId: string; viewJson: string; hostDate: string | null; actions?: BlockActions | null }) {
   useLayoutEffect(() => { if (!actions) return; blockActions.set(blockId, actions); return () => { if (blockActions.get(blockId) === actions) blockActions.delete(blockId) } }, [blockId, actions])
