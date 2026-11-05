@@ -14,7 +14,7 @@ import { loopRefusal } from '../domain/dependencies.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
-import { ChevronDownIcon, ChevronRightIcon } from './icons'
+import { ChevronDownIcon, ChevronRightIcon, PageEmoji } from './icons'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
 import { calcText, emailHref, phoneHref, urlHref } from './property-values'
@@ -889,6 +889,7 @@ export function DatabaseHeader({ db, view, changeView, blockId, showTitle, linke
   return <>
     {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
+      {db.icon && <PageEmoji icon={db.icon} className="database-title-icon" />}
       <input ref={titleInput} className="database-title" data-database={linked ? undefined : db.id} aria-label={linked ? 'View name' : 'Database name'} placeholder="Untitled database" defaultValue={linked ? linked.title : db.title} key={linked ? linked.title : db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
@@ -1153,7 +1154,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               <TodoTick row={row} />
               {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggleSub(treeOf.get(row.id)!)} />}
               <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onPointerDown={e => startHold(e, row.id)} onPointerMove={moveHold} onPointerUp={endHold} onPointerCancel={endHold} onContextMenu={e => { if (!wide) e.preventDefault() }} onClick={() => openRow(row.id)}>
-                <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
+                {row.icon && <PageEmoji icon={row.icon} className="database-row-icon" />}<span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
                 {group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}
               </button>
               {tree && !db.database.fixed && <button type="button" className="database-sub-add" aria-label={`New sub-item in ${displayPageTitle(row)}`} onClick={() => { if (!folded.has(subFoldKey(row.id))) toggle(subFoldKey(row.id)); addRow(undefined, { [db.database.subItems!.parent]: [row.id] }, null) }}>+</button>}

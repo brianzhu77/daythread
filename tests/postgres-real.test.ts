@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import postgres from 'postgres'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
+import { asOwner } from '../src/server/auth/request-owner.ts'
 import { postgresClient } from '../src/server/db/sql.ts'
 
 // The Postgres store (rows, shot 2) through postgres-js on a real Postgres, as Vercel runs it: separate connections, prepare: false.
@@ -131,3 +132,56 @@ test('real Postgres: several to-dos in one command, and one Undo brings back eve
   }
 })
 
+
+test('real Postgres: comments in their own table, a page save leaves them, a replay isn\'t made twice, Undo brings one back, a late Undo is refused, and another account reads none', { skip }, async () => {
+  const schema = `daythread_test_comments_${process.pid}`, a = connect()
+  const owner = '11111111-1111-4111-8111-111111111111', other = '22222222-2222-4222-8222-222222222222'
+  try {
+    const repo = new PostgresWorkspaceRepository(postgresClient(a), schema)
+    await repo.workspaceIdFor(owner); await repo.workspaceIdFor(other)
+    await asOwner(owner, async () => {
+      let ws = await repo.load()
+      const run = async (operationId: string, action: unknown) => { ws = (await repo.execute({ operationId, expectedRevision: ws.revision, action: action as never })).workspace }
+      const at = '2026-11-05T10:00:00.000Z', stored = () => a.unsafe(`select id, version, resolved_at, comments::text as comments from ${schema}.comment_threads`)
+      await run('page', { type: 'create-document', title: 'Trip', body: 'Words', pageId: 'p' })
+      const add = { type: 'add-comment', pageId: 'p', threadId: 't', commentId: 'c', body: 'nul \u0000 · 🧵 · 中文', at }
+      await run('add', add)
+      await repo.execute({ operationId: 'add', expectedRevision: ws.revision, action: add as never })
+      ws = await repo.load()
+      assert.equal(ws.threads?.[0]?.comments.length, 1)
+      assert.equal(ws.threads?.[0]?.comments[0]?.body, 'nul  · 🧵 · 中文', 'everything but U+0000, which a text column refuses')
+      const before = await stored()
+      await run('rename', { type: 'rename-page', pageId: 'p', title: 'Trip 2' })
+      assert.deepEqual(await stored(), before)
+      await run('resolve', { type: 'resolve-thread', threadId: 't', resolved: true, version: 1, at })
+      assert.ok((await stored())[0]!.resolved_at)
+      await run('back', { type: 'undo', targetOperationId: 'resolve' })
+      assert.equal((await stored())[0]!.resolved_at, null)
+      await run('gone', { type: 'delete-comment', threadId: 't', commentId: 'c', version: ws.threads![0]!.version })
+      assert.equal((await stored()).length, 0)
+      await run('again', { type: 'undo', targetOperationId: 'gone' })
+      assert.equal((await stored()).length, 1)
+      await run('resolve2', { type: 'resolve-thread', threadId: 't', resolved: true, version: ws.threads![0]!.version, at })
+      await run('reply', { type: 'add-comment', pageId: 'p', threadId: 't', commentId: 'c2', body: 'Newer', at })
+      await assert.rejects(run('late', { type: 'undo', targetOperationId: 'resolve2' }), /Cannot undo after later changes/)
+      assert.equal((await repo.load()).threads?.[0]?.comments.length, 2)
+      await run('other', { type: 'create-document', title: 'Other', body: 'Keep', pageId: 'o' })
+      await run('trash', { type: 'delete-page', pageId: 'o', at })
+      await run('jot', { type: 'add-comment', pageId: 'p', threadId: 't2', commentId: 'j', body: 'Jotted after', at })
+      assert.equal((await repo.load()).undo?.operationId, 'trash')
+      await run('untrash', { type: 'undo', targetOperationId: 'trash' })
+      assert.equal(ws.pages.find(p => p.id === 'o')!.trashedAt, undefined)
+      assert.equal(ws.threads?.find(t => t.id === 't2')?.comments[0]?.body, 'Jotted after')
+    })
+    await asOwner(other, async () => {
+      const ws = await repo.load()
+      assert.equal(ws.threads, undefined)
+      await assert.rejects(repo.execute({ operationId: 'theirs', expectedRevision: ws.revision, action: { type: 'delete-comment', threadId: 't', commentId: 'c', version: 1 } as never }), /gone/)
+    })
+    assert.equal((await a.unsafe(`select count(*)::int as n from ${schema}.comment_threads`))[0]!.n, 2)
+    assert.equal((await a.unsafe(`select relrowsecurity from pg_class where oid = '${schema}.comment_threads'::regclass`))[0]!.relrowsecurity, true)
+  } finally {
+    await a.unsafe(`drop schema if exists ${schema} cascade`)
+    await a.end()
+  }
+})

@@ -27,11 +27,11 @@ export function putFile(id: string, body: Blob, type: string, onProgress?: (perc
 }
 
 /** A small copy for a Gallery card, as full photos would be slow there. Best effort: some images can't be decoded here (HEIC outside Safari), and the card then has the file itself. */
-async function smallCopy(file: File): Promise<Blob | null> {
+async function smallCopy(file: File, longest = 640): Promise<Blob | null> {
   if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') return null
   try {
     const bitmap = await createImageBitmap(file)
-    const scale = Math.min(1, 640 / Math.max(bitmap.width, bitmap.height))
+    const scale = Math.min(1, longest / Math.max(bitmap.width, bitmap.height))
     const canvas = document.createElement('canvas')
     canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale)
     canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
@@ -54,3 +54,23 @@ export function uploadFile(file: File, onProgress: (percent: number) => void): {
   })
   return { done, abort: () => { stopped = true; main.abort() } }
 }
+
+/**
+ * A picture for a page's icon or cover: only the size it needs, so a photo doesn't load whole in the sidebar, and only once its bytes are in does the page hold it, so a failed upload leaves nothing behind.
+ * A picture this browser can't decode goes as it is. SVG is refused, as it could run on our origin (R3-11).
+ */
+export function uploadLook(file: File, longest: number, onProgress: (percent: number) => void): { done: Promise<string>; abort: () => void } {
+  let current: { abort: () => void } | null = null, stopped = false
+  const done = (async () => {
+    if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') throw { message: 'That needs to be a picture', retry: false } satisfies UploadFailure
+    const small = await smallCopy(file, longest)
+    if (stopped) throw { message: 'Stopped', retry: true } satisfies UploadFailure
+    const body = small ?? file, type = small ? 'image/jpeg' : file.type, id = crypto.randomUUID()
+    const put = putFile(id, body, type, onProgress)
+    current = put
+    await put.done
+    return `/api/files/${id}?name=${encodeURIComponent(file.name.slice(0, 120) || 'Untitled')}`
+  })()
+  return { done, abort: () => { stopped = true; current?.abort() } }
+}
+

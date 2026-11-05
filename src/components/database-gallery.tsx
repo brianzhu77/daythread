@@ -9,18 +9,19 @@ import { sectionKey, viewSections, viewSubGroups, canWrap, cellValue, databaseRo
 import type { Page } from '../domain/types'
 import { rowTint, SubItemParent, CardSubItems, PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
-import { ChevronRightIcon } from './icons'
+import { ChevronRightIcon, PageEmoji } from './icons'
 import { displayPageTitle } from './page-title'
 import { PropertyCell, PropertyCheckbox, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-function CardImage({ row, property }: { row: Page; property?: Property }) {
+function CardImage({ row, property, useCover }: { row: Page; property?: Property; useCover?: boolean }) {
   const url = useMemo(() => {
+    if (useCover) return row.cover ?? null
     if (!property) return firstImageUrl(row)
     // A card asks for the small copy. A file that's gone, or one with no image, leaves a clean card.
     const image = ((readValue(property, row.values?.[property.id]) ?? []) as FileValue[]).find(f => f.type.startsWith('image/'))
     return image ? `/api/files/${image.thumb ?? image.id}` : null
-  }, [row.document, row.values, property]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [row.document, row.values, row.cover, property, useCover]) // eslint-disable-line react-hooks/exhaustive-deps
   const [failed, setFailed] = useState<string | null>(null)
   if (!url || failed === url) return null
   return <img className="database-gallery-image" src={url} alt="" loading="lazy" referrerPolicy="no-referrer" draggable={false} onError={() => setFailed(url)} />
@@ -63,11 +64,11 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
     const nav = drawn++ === 0 ? '0:0' : undefined
     const tint = rowTint(db.database, view, row, context)
     return <article key={row.id} data-row={row.id} {...(tint ? { style: tint.style } : {})} className={`database-gallery-card${tint ? tint.className : ''}${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}`}>
-      <CardImage row={row} {...(cardImage ? { property: cardImage } : {})} />
+      <CardImage row={row} useCover={view.cardImage === 'cover'} {...(cardImage ? { property: cardImage } : {})} />
       <div className="database-gallery-words">
         <TodoTick row={row} />
         <button type="button" className={`database-gallery-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav}
-          data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}{group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
+          data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.icon && <PageEmoji icon={row.icon} className="database-row-icon" />}{row.title || 'Untitled'}{group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
         {viewColumnsShown.map(({ property, wrap = false }) => {
           const pending = pendingCells.get(pendingKey(row.id, property.id))
           const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
