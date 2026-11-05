@@ -1,0 +1,55 @@
+{
+  "document": [
+    {
+      "id": "target",
+      "type": "paragraph",
+      "props": {
+        "url": "/api/files/image1234?name=photo.png&size=70&type=image%2Fpng",
+        "name": "photo.png",
+        "caption": ""
+      },
+      "content": [],
+      "children": []
+    },
+    {
+      "id": "remote",
+      "type": "paragraph",
+      "props": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Other tab words",
+          "styles": {}
+        }
+      ],
+      "children": []
+    }
+  ],
+  "inserted": [
+    "target"
+  ],
+  "placed": {}
+}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Load latest must preserve the new image kind
++ actual - expected
+
++ 'paragraph'
+- 'image'
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-body-files/tests/evidence/ratchet-body-files/merge-type.ts:9:8
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'paragraph',
+  expected: 'image',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

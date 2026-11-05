@@ -1,0 +1,3 @@
+import {SqliteWorkspaceRepository} from '../../../src/server/sqlite-repository.ts'
+import {pageContentKey} from '../../../src/domain/editor-document.ts'
+const r=new SqliteWorkspaceRepository(process.argv[2]!,undefined,{allowMissingLegacy:true}),ws=await r.load(),p=ws.pages.find(x=>x.id==='notes')!,d=JSON.parse(p.document!);if(process.argv[3]==='blank') d.push({id:'old-empty',type:'paragraph',props:{},content:[],children:[]});else d[0].content=[{type:'text',text:'REMOTE WORDS',styles:{}}];await r.execute({operationId:crypto.randomUUID(),expectedRevision:ws.revision,action:{type:'save-editor',pageId:'notes',expectedContent:pageContentKey(p),document:JSON.stringify(d)}})
