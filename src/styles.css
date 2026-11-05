@@ -1293,6 +1293,7 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .linked-from-label { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-3); }
 .linked-from a { display: inline-flex; align-items: center; min-height: 28px; padding: 0 8px; border-radius: 7px; background: var(--fill); color: var(--ink); font-size: var(--text-meta); font-weight: 500; text-decoration: none; }
 .linked-from a:hover { background: var(--line-strong); }
+.linked-from a .page-emoji { margin-right: 4px; }
 .linked-from-more { padding: 0 4px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
 
 /* The editor's bottom room moves below the list, so the list isn't pushed far down (layout §4). */
@@ -1306,6 +1307,8 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .subpage-row:hover { background: var(--fill); }
 .subpage-row svg { flex: none; color: var(--ink-3); }
 .subpage-row > svg:first-child { width: 18px; height: 18px; }
+/* An icon takes the box the kind's icon has, so the name stays where it was (P1-3). */
+.subpage-row > .page-emoji:first-child { width: 18px; height: 18px; }
 .subpage-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .subpage-count { font-size: var(--text-meta); color: var(--ink-3); }
 @media (max-width: 599px) { .subpage-row { min-height: 44px; } }
@@ -1320,6 +1323,7 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .move-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 4px 10px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .move-row:hover, .move-row.active { background: var(--fill); }
 .move-row-icon { display: grid; place-items: center; flex: none; color: var(--ink-3); }
+.move-row-icon .page-emoji { width: 18px; height: 18px; }
 .move-row-text { display: grid; flex: 1; min-width: 0; }
 .move-row-text > span, .move-row-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .move-row-text small { font-size: 12.5px; color: var(--ink-3); }
@@ -1801,6 +1805,8 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-title-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
 .database-title { flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-section); line-height: 28px; font-weight: var(--weight-semibold); outline: none; text-overflow: ellipsis; }
 .database-title::placeholder { color: var(--placeholder); }
+/* §7.3: 6 px before the title, whatever the row's gap, and centred on it as a baseline would sit it low. */
+.database-title-row > .database-title-icon { align-self: center; margin-right: -6px; }
 .database-view-name { flex: none; display: inline-flex; align-items: center; gap: 2px; color: var(--ink-2); font-size: var(--text-ui); line-height: 20px; }
 /* The same chevron as the day title's picker, centred on the word (Lead b8be5d85: the glyph sat 3 px low). */
 .database-view-name > svg { width: 14px; height: 14px; color: var(--ink-3); }
