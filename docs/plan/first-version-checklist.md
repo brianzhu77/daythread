@@ -680,7 +680,7 @@ Acceptance list by Bumblebee, from `docs/design/chart.md`, for the Lead and Jazz
 | G4-1 | **A layout of a view.** From `+ Add view` and Layout, and as a linked view on a page. Read-only. Vertical bar, horizontal bar and Number first. The first time, it asks for What to show and defaults Measure to Count. | **live** 2026-11-05 (#157, main 73144136, `infra/cloudflare` 36bbe7c5, rollback `--ref rollback/cf-9417eea`, backup `2026-11-05-before-155`, **floor moved up to 9417eea2**; the Lead's build, read by Roadbuster, Jazz clear on the look, Ratchet reads after release). Vertical bars, horizontal bars and Number. |
 | G4-2 | **Settings and the numbers.** Count, or Sum, Average, Median, Min, Max or Range of a Number, and Cumulative on a sorted axis. Not offered for Button, ID, Files, Rollup or a list-output Formula. A date axis groups by day, week (Week starts, R3-20), month or year, with every period shown: Count draws zero in an empty one, Sum and the rest have no value there and a line breaks, and Cumulative stays flat (`chart.md` §3, corrected). The view's filter applies, groups included, and a chart's total matches a table and column calculations on the same rows, on a copy of Brian's real data. | **live** 2026-11-05 (#157), for bars and Number: a Sum on the Worker, a reload keeps it, and Ratchet's three calculation cases fixed (a year axis, a hidden group, a table past 200 days). **Not read by me:** a total against a table on a copy of real data, as Brian's has no databases. |
 | G4-3 | **Line and Donut,** with Cumulative on a line and the value in a donut's centre. | **live** 2026-11-05 (#162, main c626d6c1, `infra/cloudflare` 33b2f58a, rollback `--ref rollback/cf-36bbe7c`, backup `2026-11-05-before-161`, floor 9417eea2; Jazz clear at 5edbe055 on all 18 charts in both themes, Ratchet's numbers at d41fa34a). Cumulative on a line, and a donut's centre total, left out when anything isn't drawn. **Not on the Worker:** `worker-chart` doesn't reach a line or donut. **Not run:** a real phone, tapping a ring slice or a dot. |
-| G4-4 | **Group by and greys.** The four largest are named, by value on a donut and by a series' total under Group by, with up to 4 greys from the app's tokens in axis order among them, so a filter repaints a value only when the top four change (Lead 836135d4). The rest are "Other", as an outline, which a tap opens. A legend for 2 or more series, direct labels where they fit, tap to focus, no second y-axis. Readable in both themes, by eye. | **partly live** 2026-11-05 (#162), for a donut: the four largest, Other as an outline which a tap opens with each row's value, a fourth grey per theme, a legend capped near 320 px. **Still to come:** Group by with several series, tap to focus, direct labels. Line's dimming not tried. |
+| G4-4 | **Group by and greys.** The four largest are named, by value on a donut and by a series' total under Group by, with up to 4 greys from the app's tokens in axis order among them, so a filter repaints a value only when the top four change (Lead 836135d4). The rest are "Other", as an outline, which a tap opens. When any row sits in more than one series, they draw side by side rather than stacked, and a blank stays a blank per series (Lead f9bab535). A legend for 2 or more series, direct labels where they fit, tap to focus, no second y-axis. Readable in both themes, by eye. | **partly live** 2026-11-05 (#162), for a donut: the four largest, Other as an outline which a tap opens with each row's value, a fourth grey per theme, a legend capped near 320 px. **Still to come:** Group by with several series, tap to focus, direct labels. Line's dimming not tried. |
 | G4-5 | **Reading.** Hover at 1280 and tap at 390 show the value, and open that group's rows in a plain read-only table. A table of the data is one tap away, so no number is only in a shape. At 390, full width with no sideways scroll, and labels thin out rather than overlap. A tap raises no keyboard. | **live** 2026-11-05 (#157), for bars and Number, by Jazz's retest. **Not run:** a real phone. |
 | G4-6 | **States.** No rows, a property deleted or changed ("Choose what to show", restored by Undo or changing back), blanks not counted as zero except in Count, counted past the row cap, updating without a reload, and a stated limit with a clear refusal on a very large database. | **live** 2026-11-05 (#157), for bars and Number, by the PR's script. Not on the Worker. |
 | G4-7 | **On a day.** A template with a chart shows each new day's rows, and R2-6 and R2-7 hold. Its code loads only when a chart is on screen. A day with no chart pays nothing. | **partly:** `worker-chart` shows no chart loads none of its code, and its code loads from the Worker. **Not run:** a template carrying a chart, and R2-6's and R2-7's bars with one. |
@@ -704,6 +704,52 @@ Acceptance list by Bumblebee, from `docs/design/automations.md`, approved (Lead 
 | G3-19 | **Scheduled rules (§9 step 2, catch-up on open, with R4-6's path).** Each period runs once across two tabs, a retry and a rollback, with its key, effects and marker committed together. Only the latest missed period runs. A schedule edit or a resume counts from that moment, with at most one run on a date and the next run shown in the editor. Fixing a failed rule runs its latest missed period once, unless the fix changes the schedule or it was turned off and on by hand (`automations.md` §6). A late tick can't run an old schedule. A failure found on opening shows once then, and stays findable in the menu's count. | missing |
 | G3-20 | **To-dos as a source (§9 step 3),** with R2-7's bar on tick speed. | missing |
 | G3-21 | **Rollback.** Rules survive an older tab's save and a rollback, with the floor stated. | **live** 2026-11-05 (#161), for this step. An older build opens the database and keeps a rule, and forward it runs (`worker-automations`), and `worker-floor` holds a rule on 9417eea2. |
+
+## D12. Feed (tracked, not counted)
+
+Acceptance list by Bumblebee, from `docs/design/feed.md` as approved (Lead f9bab535). The Lead builds it after G4-7.
+
+| ID | Check | Status |
+| --- | --- | --- |
+| G5-1 | **A layout of a view.** From `+ Add view` and Layout. Not offered on To-dos. Starts sorted by Created time, newest first, and showing it. Filter and Group as a list. | missing |
+| G5-2 | **The card.** Title, a properties line, the body at the page's text size, no box, at both widths. A card's words match its page, including chips and Chinese. A comment count opens the pane, with no marks in a card. | missing |
+| G5-3 | **Length.** About 288 px at 1280 and 384 at 390, with no Show more under about 3 hidden lines. Show less keeps the title on screen, and expanded survives a trip to the row. The cut never halves a checkbox or link. Images capped at 240 px in the preview. | missing |
+| G5-4 | **What a card draws and does:** `feed.md` §3's list and nothing else. A button doesn't run. A database is a link. Anything else links to the row. No editor mounts. | missing |
+| G5-5 | **A tick.** The task command on the task's id, and the row's document byte for byte unchanged. No keyboard, and no row opens. One Undo. In synced content, a task shown twice, a failure, another tab, and a row leaving a filter after the tick. | missing |
+| G5-6 | **`+ New`** opens the row, in a peek at 1280 with the caret in the title, and on its page on a phone. | missing |
+| G5-7 | **Loading.** Title and properties at once, with space held, nothing moving when an image resolves, and "Couldn't load · Retry" on a failure. | missing |
+| G5-8 | **Speed and days.** 25 cards at 390 with 4× slowdown, measured and stated. R2-7's bar with one on a day page. A body edited in another tab updates here. | missing |
+| G5-9 | **An older tab** keeps `layout: feed` and draws a table, with a rollback run. | missing |
+
+## D13. Dashboard (tracked, not counted)
+
+Acceptance list by Bumblebee, from `docs/design/dashboard.md` as approved (Lead f9bab535). After Feed, and once Chart is finished.
+
+| ID | Check | Status |
+| --- | --- | --- |
+| G6-1 | **A full page of widgets.** A day page shows it as a link. Each widget is a linked view holding its own copy of its settings, so editing one changes no other page. To-dos can be one. | missing |
+| G6-2 | **Edit mode at 1280.** Outline and handle, content inert, a line where it lands, widths and heights snapping. Saved as it happens with one Undo, no Cancel, and Done only ends it. "12 widgets at most". A row wraps under about 280 px, unstored. | missing |
+| G6-3 | **At 390.** Full width in order, capped near 360 px with Show more and no inner scroll. Move up, Move down, Duplicate and Remove, with a scroll and tint after a move. | missing |
+| G6-4 | **Removing** a widget or the dashboard leaves every row, says so, and has Undo. A source in Trash or deleted doesn't break the others. | missing |
+| G6-5 | **Two tabs.** A move and a filter edit both survive, and Undo refuses a stale widget change. | missing |
+| G6-6 | **Filters across widgets.** By name and type, options by name, and an option a widget lacks counts neither way there, with "Not filtered". A different Relation target is unreadable. Added to a widget's own filter as whole groups, and never saved back. A rename or delete can't move a saved rule to another property. `+ New` follows both. | missing |
+| G6-7 | **Speed.** 12 widgets at 1280 and at 390 with 4× slowdown, measured and stated, with off-screen widgets loading late. | missing |
+| G6-8 | **An older build** draws a table and keeps the fields, with a rollback run including widths, heights, widget filters and an older tab's unrelated edit. | missing |
+
+## D14. Forms, Only me (tracked, not counted)
+
+Acceptance list by Bumblebee, from `docs/design/forms.md` as approved (Lead f9bab535). Roadbuster's, after To-dos as a source, unless swapped with Feed. **The public link is off, and isn't on this list:** it comes to Brian as one choice once its quotas are designed.
+
+| ID | Check | Status |
+| --- | --- | --- |
+| G7-1 | **Building on the form,** at both widths, with Required, ↑↓ and × in place, and a sheet only for adding. Read-only types and Button can't be questions. Preview adds nothing. | missing |
+| G7-2 | **Wording doesn't rename.** A new question names its property once, and later edits leave the property's name and every view unchanged. In the release note as a difference from Notion. | missing |
+| G7-3 | **Answering is a page,** 560 px at most. A missing answer is marked and scrolled to, with no asterisks. On a phone, fields, keyboards, Return and Send above the keyboard, with Pinyin in the Home Screen app. | missing |
+| G7-4 | **One answer, one row,** with the right values for each type, firing Row added, and Responses made by the first form. | missing |
+| G7-5 | **Sending.** Failure and offline keep every answer. A send holds its payload and key, a lost reply retries the same one, words typed during a send stay as a draft even after a late success, and Send another gets a new key. A question renamed, removed or newly required loses no answers. | missing |
+| G7-6 | **Conditional logic and Files,** the second step. | missing |
+| G7-7 | **Closed, deleted and Trash** read the same. | missing |
+| G7-8 | **An older tab** keeps `layout` and the form's settings, with a rollback run. Brian's days don't change on a copy of the real data. | missing |
 
 ## C. Open questions for Brian
 

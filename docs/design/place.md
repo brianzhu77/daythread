@@ -75,7 +75,7 @@ Seven searches can't decide it, but it suggests Vancouver is fine and Chinese pl
 
 **All three Chinese misses are found under the short name:** 西湖, 外滩 and 兵马俑 each come first with the right city, as do 西湖 杭州 and 外滩 上海 with a space. City and place run together is what fails. 
 
-**My recommendation, for the Lead: Photon, and don't take Mapbox to Brian.** This doesn't meet "misses Chinese places he'd use": each place was found, and a wrong result shows its city. Nothing is lost if he still can't find one, as his words are kept with no pin (§2), and coordinates are stored, so the provider can change later. Look at Mapbox again if he reports a place it can't find.
+**Decided (Lead f9bab535): Place stays on Photon, and doesn't go to Brian as a choice.** My recommendation was: This doesn't meet "misses Chinese places he'd use": each place was found, and a wrong result shows its city. Nothing is lost if he still can't find one, as his words are kept with no pin (§2), and coordinates are stored, so the provider can change later. Look at Mapbox again if he reports a place it can't find.
 
 **The test as written:** 20 public places, half in Chinese. If Mapbox is chosen, it's for search only, with a hard cap on our side so that it can't start billing. The choice is easy to change, since coordinates are stored with the value.
 
