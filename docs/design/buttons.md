@@ -1,6 +1,6 @@
 # Buttons: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **approved to build, in §7's order (Lead 962245dd, 2026-11-05); Roadbuster builds.** Steps that reach outside the app stay undecided, one at a time. #152 goes out first, and the first build that can make a button waits until it's live. Not built past #152.
 - Asked by the Lead (3f046122). Scope rule: nothing cut for lack of evidence, and his use only sets the order (Brian 57deaed7). `databases.md` §14 puts Buttons in "Later", waiting for this pass.
 - **Evidence:** Notion's help pages on [page buttons](https://www.notion.com/help/buttons) and [database buttons](https://www.notion.com/help/database-buttons). I read them; I haven't used Notion's buttons. Those pages don't cover the phone, a button in a table cell, or running one on several rows, so those parts below are my proposal, not Notion's behaviour.
 - **His use:** he had no databases at the last read (Nov 2). Nothing here comes from watching him, so the examples are illustrations.
@@ -38,6 +38,15 @@ Example: a "Log a run" button in his Day template adds a row to Runs with today'
 - **Making one:** `/` Button opens the editor straight away: a Name field and `+ Add step`. It's a popover at 1280 and a sheet at 390, as other database settings are. Done is off while a step is incomplete, and the step that's incomplete is marked, as Notion refuses to save one with setup errors.
 - **Editing:** a small `⋯` on hover at 1280 and on the block's selected bar at 390, with Edit, Duplicate and Delete. A tap on the pill always runs it.
 - **Keys at 1280:** it's a block that can be selected whole. Enter from there runs it, and keys don't leak (R1-26).
+
+**Jazz's answers (36161d64, decided by the Lead 962245dd; these replace what's above where they differ):**
+
+- **Leaving the editor.** With no changes, a tap outside or Esc closes it, and a new button with no finished step leaves no block. With changes, a tap outside does nothing, and Esc or back asks one line: "Discard changes? Keep editing · Discard".
+- **Steps as a list.** One row per step, such as "Add row to Runs", with ↑↓ and ×. Tapping a row opens that step's own page with a back arrow, as the Filter and property sheets do. An incomplete step says what's missing. Done sits in the sheet's head, and tapping it while it's off goes to the first incomplete step.
+- **Waiting.** Same place and size at reduced opacity, as the sign-in button does. After about 300 ms, a spinner replaces the label with its width held.
+- **Size.** "44 px" means the tap area. Drawn 36 on a page line and 28 in a cell, with the tap area filling its line or row and never reaching the next. A press doesn't start a card's drag or a line's swipe-to-select, and a swipe or scroll doesn't run it. A long label ends in an ellipsis.
+- **Enter.** It runs a button only when the button alone was selected by its handle. Arriving by arrow does what other blocks with no text do. In a table cell, Enter runs it, and Delete and paste do nothing.
+- **A blank label** reads "Button", on the page and in export. Button version data stays inside `steps`, as that string is all the floor can keep (Lead).
 
 **After a tap:** the usual notice, naming the result, with Undo. Each reads from what ran:
 

@@ -654,7 +654,7 @@ Acceptance list by Bumblebee, from `docs/design/filter-groups.md` (approved, Lea
 
 ## D9. Buttons (tracked, not counted)
 
-Acceptance list by Bumblebee, from `docs/design/buttons.md`, with Jazz's five gaps (36161d64, awaiting the Lead). Group 3 of `databases.md` §14. Notion's pages were read, not tried. Page button first, then the property (§7). Steps that reach outside the app are each the Lead's own decision and aren't here.
+Acceptance list by Bumblebee, from `docs/design/buttons.md`, approved to build (Lead 962245dd), with Jazz's five answers and Ratchet's three contracts. Group 3 of `databases.md` §14. Notion's pages were read, not tried. Page button first, then the property (§7). Steps that reach outside the app are each the Lead's own decision and aren't here.
 
 | ID | Check | Status |
 | --- | --- | --- |
