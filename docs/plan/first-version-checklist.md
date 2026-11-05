@@ -652,6 +652,23 @@ Acceptance list by Bumblebee, from `docs/design/filter-groups.md` (approved, Lea
 | G2-7 | **Property tokens in the formula field** (`formula.md` line 13). A property reads as a token in place of a bare name, at both widths. Typing a name, pasting `prop("Name")` or a bare `Name`, and a misspelt name all behave as today. The composition and phone keyboard are the plain field's riskiest parts, so Pinyin and the on-screen delete key get a native check. An existing formula's stored text doesn't change, and an older tab reads it. | missing |
 | G2-8 | **A dependency between two to-dos: `todo-dependency.md` §6's checks.** Draft, not approved. No date ever moves. | missing |
 
+## D9. Buttons (tracked, not counted)
+
+Acceptance list by Bumblebee, from `docs/design/buttons.md`, with Jazz's five gaps (36161d64, awaiting the Lead). Group 3 of `databases.md` §14. Notion's pages were read, not tried. Page button first, then the property (§7). Steps that reach outside the app are each the Lead's own decision and aren't here.
+
+| ID | Check | Status |
+| --- | --- | --- |
+| G3-1 | **The floor release.** The editor knows a `button` block before anything can make one, kept whole through a save, a template, Load latest and export. A blank label exports as "Button", so a page never loses a line. The floor moves to this release before the feature ships. | built, #152, not live |
+| G3-2 | **Making and editing.** `/` Button opens the editor: a popover at 1280, a sheet at 390, Done in its head. One row per step, with reorder and ×, and a step opens on its own page. An incomplete step says what's missing, and Done goes there. Leaving: with no changes it just closes, and a new button with no finished step leaves no block; with changes a tap outside does nothing, and Esc or back asks "Discard changes? Keep editing · Discard". | missing |
+| G3-3 | **The pill.** Outlined, black, white and grey, with an ellipsis on a long label. The tap area fills its line or row and never reaches the next one (36 drawn on a line, 28 in a cell). A press doesn't start a drag or swipe, and a scroll doesn't run it. A tap on a phone raises no keyboard and keeps the caret where it was. Waiting: dimmed, then a spinner, with the width held. | missing |
+| G3-4 | **Page button steps.** Insert blocks, Add row to, Edit rows in, Open page or URL, Show confirmation. To-dos in inserted blocks are new tasks each tap, and a `@date` chip a new event. `@today`, `@this page` and `@this page's day` are read at the tap. In To-dos, the same task commands. | missing |
+| G3-5 | **One tap, one change, one Undo.** Every step in one command on real Postgres, all or none, and a failure names the step. A second tap does nothing while one runs, and a retry after a lost reply makes one row. Offline says "Not run · offline" and never queues. The open editor's typing is saved first, including a save in flight, and words typed while it runs survive. Confirmations come before any write, and Open after commit, so a blocked popup retries nothing. A changed button or source content is refused or refreshed. A retry keeps its ids and the tap's date past midnight. Limits count across steps and selected rows (Ratchet 6c8ed9c9, `buttons.md` §4). Each row of §3's notice table, with a step matching nothing carrying on. | missing |
+| G3-6 | **Broken targets.** Shown at the tap: "Runs is in Trash" with Restore, "Status was deleted" with Edit. The pill stays and other steps don't run. | missing |
+| G3-7 | **Keys.** Enter runs it only when the button alone was chosen by its handle; arriving by arrow does what other blocks with no text do. Keys don't leak (R1-26), and B88 and B89's rule holds, as it has no line of text. In a table cell, Enter runs it, and Delete and paste do nothing. | missing |
+| G3-8 | **Copies and days.** A copy is a separate button, and in a synced block it's one. A template doesn't run steps: a tap opens Edit. In the Day template on a copy of Brian's real data, new days copy it, the day draft doesn't treat it as a filled slot or an anchor (R2-6), and day open stays within R2-7's bar. | missing |
+| G3-9 | **The property.** A Button property on every layout and the row page, with Edit property, not opening the row. Not offered for sort, filter, Group, Chart or Rollup, and left out of CSV export. Several selected rows run on each with one Undo. To-dos can't have one (§11). An older build keeps the property, with a rollback run. | missing |
+| G3-10 | **Variables and formula values** (R4-3 is live). | missing |
+
 ## C. Open questions for Brian
 
 Asked 2026-10-19 02:18Z (9e538364 572b3c3a); Brian answered 02:20Z (a4fd5686). Re-ask any future question within 24 h if unanswered.
