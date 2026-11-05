@@ -2036,7 +2036,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const nextHeading = blocks.findIndex((b, i) => i > firstHeading && b.type === 'heading')
     const firstSection = blocks.slice(firstHeading + 1, nextHeading < 0 ? blocks.length : nextHeading)
     // Only a line takes the caret: a card or a database block has no text, and would be selected whole instead.
-    const target = firstSection.find(b => Array.isArray(b.content) && !inlineText(b.content)) ?? blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
+    // Where the end isn't a line, there's no caret at all (B88): not the whole block, which a key would remove, and not a line further up, whose text they can't see going.
+    const line = (b: (typeof blocks)[number] | undefined) => Array.isArray(b?.content)
+    const end = blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
+    const target = firstSection.find(b => line(b) && !inlineText(b.content as never)) ?? (line(end) ? end : undefined)
     // Desktop opens ready to type; on touch screens focusing would raise the keyboard over a page that is read as often as written.
     // Arriving at a block from a tag focuses nothing, so the view stays on that block.
     // A page just made with `/page` opens to name it: the title field has the cursor (Jazz f69dd341).
@@ -2474,7 +2477,18 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   return <div className={`continuous-editor ${keyboardShown ? 'is-keyboard-up' : ''} ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''} ${pausedFor ? 'is-paused' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
-    onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
+    onMouseDownCapture={e => {
+      const target = e.target as Element
+      if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') }
+      // The space below a last block with no text gives a line, as the strip just under it does. Left alone, the press goes to the nearest text, a line further up, or selects the block whole, and a key then removes it (B88).
+      const last = editor.document.at(-1), lastEl = last && !Array.isArray(last.content) ? editor.domElement?.querySelector(`.bn-block[data-id="${last.id}"]`) : null
+      if (target === editor.domElement && e.button === 0 && last && lastEl && e.clientY > lastEl.getBoundingClientRect().bottom) {
+        e.preventDefault()
+        const [line] = editor.insertBlocks([{ type: 'paragraph' }], last.id, 'after')
+        editor.setTextCursorPosition(line!, 'start')
+        editor.focus()
+      }
+    }}
     onMouseUpCapture={e => {
       const target = e.target instanceof Element ? e.target : null
       const view = editor.prosemirrorView
