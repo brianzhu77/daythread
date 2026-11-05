@@ -205,6 +205,29 @@ await scenario('390: a sheet with a 16 px field; Enter is a new line and the but
   await pane(page).getByRole('button', { name: 'Comment', exact: true }).tap(); await wait(500)
   return { ok: sheet.width === 390 && sheet.y + sheet.height === 780 && size === '16px' && !focused && none === 0 && value === 'one\ntwo' && threads()[0].comments[0].body === 'one\ntwo', sheet, size, focused, none, value }
 }, phone)
+await scenario('At 1280 the pane sits beside what it is about: the page makes room, a side peek moves over and stays in sight, and Esc closes the pane first', async page => {
+  await fromMenu(page); await wait(300)
+  const box = l => l.first().boundingBox()
+  const title = await box(page.locator('.page-title-field')), p1 = await box(pane(page))
+  const r = { page: [title.x, title.x + title.width], pane: p1.x, overflow: await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) }
+  await page.goto(`${base}/pages?page=books&peek=one&side=1`); await wait(1800)
+  await page.locator('.peek .page-more').first().click(); await wait(250); await page.getByRole('menuitem', { name: 'Comment', exact: true }).click(); await wait(500)
+  const peek = await box(page.locator('.peek')), p2 = await box(pane(page))
+  r.peek = [peek.x, peek.x + peek.width]; r.pane2 = p2.x
+  r.behind = (await box(page.locator('.app-main .large-title, .app-main .page-title-field'))).height
+  await page.keyboard.press('Escape'); await wait(300)
+  r.esc = [await pane(page).count(), await page.locator('.peek').count()]
+  r.ok = r.page[1] <= r.pane && r.overflow <= 0 && r.peek[1] <= r.pane2 + 1 && r.peek[0] >= 260 && r.behind < 50 && r.esc[0] === 0 && r.esc[1] === 1
+  return r
+})
+await scenario('A comment reads first: its Edit and Delete wait for the pointer, and Reply and Resolve are quiet', async page => {
+  await fromMenu(page); await addComment(page, 'A note'); await wait(200); await page.mouse.move(2, 2); await wait(150)
+  const r = { hidden: await pane(page).locator('.comment-actions').first().evaluate(e => getComputedStyle(e).opacity), weight: await pane(page).locator('.comment-thread-actions .app-link').first().evaluate(e => getComputedStyle(e).textDecorationLine) }
+  await pane(page).locator('.comment').first().hover(); await wait(150)
+  r.shown = await pane(page).locator('.comment-actions').first().evaluate(e => getComputedStyle(e).opacity)
+  r.ok = r.hidden === '0' && r.shown === '1' && r.weight === 'none'
+  return r
+})
 await browser.close()
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
