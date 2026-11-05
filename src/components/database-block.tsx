@@ -10,6 +10,7 @@ import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan 
 import { formulaErrorOf } from '../domain/formula'
 import { parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
 import { limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { loopRefusal } from '../domain/dependencies.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -274,8 +275,10 @@ export function useCommitCell() {
         }
         return said ? { text: said, undoOperationId: r.operationId } : null
       }, newId(),
-      { inlineRefusal: /Saved elsewhere|Changed elsewhere|This row moved/, onRefused: m => {
+      { inlineRefusal: /Saved elsewhere|Changed elsewhere|This row moved|make a loop/, onRefused: m => {
         refused = true
+        // A loop stays a loop, so it says why and goes back, rather than "not saved" with a Retry that can't work.
+        if (m === 'make a loop') { show(null); toast(loopRefusal, { timeout: 6000 }); return }
         // Another tab moved the row: this one's out of date, and the value goes nowhere, with a notice (move-row §7).
         if (m.startsWith('This row moved')) { show(null); onSaved?.(); toast(m, { timeout: 8000 }); void refresh(); return }
         void again()
