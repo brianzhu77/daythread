@@ -66,7 +66,18 @@ All Mapbox numbers come from third-party comparison sites, so check [its pricing
 
 Seven searches can't decide it, but it suggests Vancouver is fine and Chinese places are the weak spot, and he writes in both.
 
-**The test:** 20 public places, half in Chinese. If Mapbox is chosen, it's for search only, with a hard cap on our side so that it can't start billing. The choice is easy to change, since coordinates are stored with the value.
+**The 20-place test, run 2026-11-05 by Bumblebee, on Photon's public service, public places only. The places are my choice, not ones Brian has searched for.**
+
+| Searched | In the top three | First result right | Missed |
+| --- | --- | --- | --- |
+| 10 in English, around Vancouver plus two abroad | 10 | 8 | UBC Museum of Anthropology came second, after one in Madrid. Tokyo Tower came third, after two towers with similar names |
+| 10 in Chinese | 7 | 7 | 上海外滩: museum and hotels, not the Bund. 杭州西湖: a place of that name in Kaohsiung, with 高雄市 showing. 西安兵马俑: nothing |
+
+**All three Chinese misses are found under the short name:** 西湖, 外滩 and 兵马俑 each come first with the right city, as do 西湖 杭州 and 外滩 上海 with a space. City and place run together is what fails. 
+
+**My recommendation, for the Lead: Photon, and don't take Mapbox to Brian.** This doesn't meet "misses Chinese places he'd use": each place was found, and a wrong result shows its city. Nothing is lost if he still can't find one, as his words are kept with no pin (§2), and coordinates are stored, so the provider can change later. Look at Mapbox again if he reports a place it can't find.
+
+**The test as written:** 20 public places, half in Chinese. If Mapbox is chosen, it's for search only, with a hard cap on our side so that it can't start billing. The choice is easy to change, since coordinates are stored with the value.
 
 ## 5. For Roadbuster and Jazz
 
