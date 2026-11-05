@@ -81,15 +81,17 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
   const [tab, setTab] = useState<'emoji' | 'icons' | 'upload'>('emoji'), [own, setOwn] = useState<[string, string][] | null>(null), [ownFailed, setOwnFailed] = useState(false)
   const loadOwn = useCallback(() => { setOwnFailed(false); loadOwnIcons().then(setOwn, () => setOwnFailed(true)) }, [])
   useEffect(() => { if (tab === 'icons') loadOwn() }, [tab, loadOwn])
-  const [upload, setUpload] = useState<{ percent: number; note: string | null; retry: File | null; busy: boolean }>({ percent: 0, note: null, retry: null, busy: false })
+  const [upload, setUpload] = useState<{ percent: number; note: string | null; retry: File | null; busy: string | null }>({ percent: 0, note: null, retry: null, busy: null })
   const putting = useRef<{ abort: () => void } | null>(null)
   useEffect(() => () => putting.current?.abort(), [])
   const sendFile = (file: File) => {
-    setUpload({ percent: 0, note: null, retry: null, busy: true })
+    setUpload({ percent: 0, note: null, retry: null, busy: file.name })
     const put = uploadLook(file, 256, percent => setUpload(u => ({ ...u, percent })))
     putting.current = put
-    put.done.then(url => { putting.current = null; pick(url) }, (failure: UploadFailure) => { putting.current = null; setUpload({ percent: 0, note: failure.message, retry: failure.retry ? file : null, busy: false }) })
+    // Cancel has already let this one go, so whatever it comes back with says nothing.
+    put.done.then(url => { if (putting.current !== put) return; putting.current = null; pick(url) }, (failure: UploadFailure) => { if (putting.current !== put) return; putting.current = null; setUpload({ percent: 0, note: failure.message, retry: failure.retry ? file : null, busy: null }) })
   }
+  const cancelUpload = () => { const put = putting.current; putting.current = null; put?.abort(); setUpload({ percent: 0, note: null, retry: null, busy: null }) }
   const phone = useMemo(() => window.matchMedia('(max-width: 899px)').matches, [])
   const keyboardTop = useKeyboardTop()
   const load = useCallback(() => { setFailed(false); loadEmoji().then(setEmoji, () => setFailed(true)) }, [])
@@ -103,7 +105,8 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
     return () => document.removeEventListener('keydown', esc, true)
   })
   useEffect(() => {
-    const away = (e: PointerEvent) => { if (!panel.current?.contains(e.target as Node)) finish() }
+    // Not while a picture's on its way: a click elsewhere isn't asking to lose it. Esc and Cancel are.
+    const away = (e: PointerEvent) => { if (!putting.current && !panel.current?.contains(e.target as Node)) finish() }
     document.addEventListener('pointerdown', away)
     return () => document.removeEventListener('pointerdown', away)
   })
@@ -147,9 +150,9 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
   return createPortal(<div ref={panel} className={`icon-picker${phone ? ' is-sheet' : ''}`} role="dialog" aria-label="Choose an icon" onKeyDown={onKeyDown}
     style={phone ? (keyboardTop !== null ? { bottom: window.innerHeight - keyboardTop, height: Math.min(window.innerHeight * 0.6, (window.visualViewport?.height ?? window.innerHeight) - 8) } : undefined) : { left: place?.left ?? anchor.left, top: place?.top ?? anchor.bottom + 4, visibility: place ? 'visible' : 'hidden' }}>
     <div className="icon-picker-top">
-      <input ref={search} className="icon-picker-search" type="text" aria-label="Search emoji" placeholder="Search" value={query} onChange={e => setQuery(e.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={e => { setComposing(false); setQuery(e.currentTarget.value) }} />
+      {tab !== 'upload' && <input ref={search} className="icon-picker-search" type="text" aria-label="Search emoji" placeholder="Search" value={query} onChange={e => setQuery(e.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={e => { setComposing(false); setQuery(e.currentTarget.value) }} />}
       {tab === 'emoji' && <button type="button" className="app-link" disabled={!emoji} onClick={random}>Random</button>}
-      {shown && <button type="button" className="app-link" onClick={remove}>Remove</button>}
+      {shown && <button type="button" className="app-link icon-picker-remove" onClick={remove}>Remove</button>}
     </div>
     <div className="icon-picker-tabs" role="tablist">{(['emoji', 'icons', 'upload'] as const).map(t => <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? 'is-on' : ''} onClick={() => setTab(t)}>{t === 'emoji' ? 'Emoji' : t === 'icons' ? 'Icons' : 'Upload'}</button>)}</div>
     {tab === 'icons' && <div className="icon-picker-scroll">
@@ -158,8 +161,9 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
         : ownFound.length ? <div className="icon-picker-grid">{ownFound.map(([name]) => cell(`icon:${name}`, name))}</div> : <p className="icon-picker-note">No icon for {query.trim()}</p>}
     </div>}
     {tab === 'upload' && <div className="icon-picker-scroll icon-picker-upload">
-      <label className="app-link icon-picker-choose">Choose a picture<input type="file" accept="image/*" disabled={upload.busy} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) sendFile(file) }} /></label>
-      {upload.busy && <div className="icon-picker-track" role="status" aria-label="Uploading"><div style={{ width: `${upload.percent}%` }} /></div>}
+      <label className="app-link icon-picker-choose">Choose a picture<input type="file" accept="image/*" disabled={Boolean(upload.busy)} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) sendFile(file) }} /></label>
+      {upload.busy && <p className="icon-picker-note" role="status">Uploading {upload.busy} · <button type="button" className="app-link" onClick={cancelUpload}>Cancel</button></p>}
+      {upload.busy && <div className="icon-picker-track" aria-hidden="true"><div style={{ width: `${upload.percent}%` }} /></div>}
       {upload.note && <p className="icon-picker-note" role="status">{upload.note === "Couldn't upload" ? 'Not uploaded' : upload.note}{upload.retry && <> · <button type="button" className="app-link" onClick={() => sendFile(upload.retry!)}>Retry</button></>}</p>}
     </div>}
     {tab === 'emoji' && <div className="icon-picker-scroll">

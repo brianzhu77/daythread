@@ -86,6 +86,32 @@ await scenario('The small set of covers: one tap, and it draws; uploading a cove
   r.ok = r.set === 8 && r.cover === '/covers/ruled.svg' && r.loaded && r.uploaded && r.natural === 2400 && r.report === 0
   return r
 })
+await scenario('While a picture is on its way: the panel names it, a click elsewhere keeps it going, Cancel stops it and sends nothing', async page => {
+  let puts = 0
+  await page.route('**/api/files/**', async route => { if (route.request().method() === 'PUT') { puts++; await wait(1500) } await route.continue().catch(() => {}) })
+  await menu(page, 'Add cover'); await page.locator('.cover-panel input[type=file]').first().setInputFiles(photo); await wait(500)
+  const r = { words: await page.locator('.cover-panel-note').first().innerText() }
+  await page.mouse.click(300, 700); await wait(200)
+  r.open = await page.locator('.cover-panel').count()
+  await wait(2500)
+  r.landed = Boolean(pageOf('notes').cover); r.closedAfter = await page.locator('.cover-panel').count()
+  await menu(page, 'Change cover'); await page.locator('.cover-panel input[type=file]').first().setInputFiles(photo); await wait(500)
+  const before = pageOf('notes').cover
+  await page.locator('.cover-panel-note').getByRole('button', { name: 'Cancel' }).click(); await wait(2500)
+  r.cancelled = pageOf('notes').cover === before; r.idle = await page.locator('.cover-panel-note').count(); r.stillOpen = await page.locator('.cover-panel').count()
+  r.ok = /^Uploading .*photo\.png/.test(r.words) && r.open === 1 && r.landed && r.closedAfter === 0 && r.cancelled && r.idle === 0 && r.stillOpen === 1
+  return r
+})
+await scenario('Upload has no search; our icon sits in the box an emoji has, so a row\'s words stay put', async page => {
+  const words = () => page.evaluate(() => { const t = [...document.querySelectorAll('.tree-row .tree-title')].find(e => e.textContent.includes('Notes')), w = document.createTreeWalker(t, NodeFilter.SHOW_TEXT); w.nextNode(); const r = document.createRange(); r.selectNodeContents(w.currentNode); return Math.round(r.getBoundingClientRect().x) })
+  const x = await words()
+  await menu(page, 'Add icon'); await tab(page, 'Icons'); await page.locator('.icon-picker-tabs + .icon-picker-scroll .icon-picker-cell').first().click(); await wait(1000)
+  const r = { x, after: await words() }
+  await page.locator('.page-icon').click(); await wait(400); await tab(page, 'Upload'); await wait(200)
+  r.search = await page.locator('.icon-picker-search').count()
+  r.ok = r.x === r.after && r.search === 0
+  return r
+})
 await browser.close()
 console.log(failed ? `${failed} FAILED` : 'ALL PASS')
 process.exit(failed ? 1 : 0)
