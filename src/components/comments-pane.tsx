@@ -113,6 +113,7 @@ function ThreadView({ thread, focused }: { thread: CommentThread; focused: boole
   const anchor = thread.anchor, page = anchor ? workspace?.pages.find(p => p.id === thread.pageId) : undefined
   // On the page as saved, or on screen, as it may not have been saved yet.
   const gone = anchor ? !lineOf(anchor.blockId) && !(page && flatNodes(pageNodes(page)).some(n => n.id === anchor.blockId)) : false
+  const hidden = anchor ? lineOf(anchor.blockId)?.getBoundingClientRect().height === 0 : false
   // What's edited is the thread as it read when Edit was pressed, so a change since is refused rather than written over.
   const [editing, setEditing] = useState<{ id: string; version: number } | null>(null), [replying, setReplying] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -122,6 +123,8 @@ function ThreadView({ thread, focused }: { thread: CommentThread; focused: boole
   return <div ref={box} className={`comment-thread${focused ? ' is-focused' : ''}`}>
     {anchor && (gone
       ? <p className="comment-quote is-gone">Line removed{anchor.quote ? ` · ${anchor.quote}` : ''}</p>
+      // An empty row hidden on a past day is there, but there's nowhere to go: its words, and no button that seems to do nothing.
+      : hidden ? <p className="comment-quote">{anchor.quote || 'An empty line'}</p>
       : <button type="button" className="comment-quote" onClick={() => goToLine(anchor.blockId)}>{anchor.quote || 'An empty line'}</button>)}
     {thread.comments.map((comment: Comment) => <div key={comment.id} className="comment">
       <div className="comment-head">

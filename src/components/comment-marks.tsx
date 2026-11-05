@@ -31,7 +31,8 @@ export function CommentMarks({ pageId, host, onChange }: { pageId: string; host:
         const rects = inline ? [...range.getClientRects()].filter(r => r.width > 0) : []
         const first = rects[0], last = rects.at(-1)
         const rightEdge = box.width - markSize - 4
-        const left = wide ? rightEdge : Math.min(rightEdge, (last ? last.right - box.left : 0) + 4)
+        // Outside the column at 1280, where it can't cover words or a row's own ⋯. At 390 there's no margin: after the last word, or for a line with none, a card say, left of its chevron.
+        const left = wide ? box.width + 2 : last ? Math.min(rightEdge, last.right - box.left + 4) : rightEdge - 24
         const anchorBox = wide ? first : last
         const top = (anchorBox ? anchorBox.top + anchorBox.height / 2 : lineBox.top + markSize / 2) - box.top - markSize / 2
         next.push({ blockId, threadId: t.id, count: 1, top, left })

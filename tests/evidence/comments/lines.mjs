@@ -43,7 +43,7 @@ await closePane(); await wait(300)
 check(await mark.count() === 1, 'a mark draws'); await shot('mark')
 { const after = await geometry(); check(Math.abs(after.top - before.top) < 0.5 && Math.abs(after.left - before.left) < 0.5 && Math.abs(after.height - before.height) < 0.5, "it shifts nothing on the line", [before, after]) }
 { const m = await mark.boundingBox(), g = await geometry(), vw = Number(width), editor = await page.locator('.continuous-editor').first().boundingBox()
-  check(m.x + m.width <= vw && m.x >= 0 && m.x + m.width <= editor.x + editor.width + 1, 'the mark is on screen and inside the editor', [m.x, m.width, editor.x + editor.width])
+  check(m.x + m.width <= vw && m.x >= 0, 'the mark is on screen', [m.x, m.width]); if (wide) check(m.x >= editor.x + editor.width, 'at 1280, outside the column, so it covers no words or a row\'s own ⋯', [m.x, editor.x + editor.width])
   check(m.y + m.height / 2 >= g.top - 2 && m.y + m.height / 2 <= g.top + (wide ? 26 : 30), "and level with the line", [m.y, g.top])
   if (wide) check(m.x >= g.right, 'at 1280, in the margin past the words', [m.x, g.right]); else check(Math.abs(m.x - g.right) <= 8, "at 390, at the line's end", [m.x, g.right]) }
 // A page with a mark still scrolls no wider.
