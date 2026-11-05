@@ -1,5 +1,5 @@
 import type { LocalDate, Page, Workspace } from "./types.ts";
-import { flatNodes, inlineText, isTaskRow, pageNodes, textDate, type EditorNode } from "./editor-document.ts";
+import { flatNodes, inlineText, isFileBlock, isTaskRow, pageNodes, textDate, type EditorNode } from "./editor-document.ts";
 import { refHolders, refTargetPage } from "./page-refs.ts";
 import { isTemplate } from "./day-template.ts";
 import { isDraft } from "./day-draft.ts";
@@ -214,9 +214,9 @@ export function bookmarkPages(ws: Workspace): Page[] {
     .sort((a, b) => (a.when === b.when ? position.get(b.p.id)! - position.get(a.p.id)! : a.when < b.when ? 1 : -1))
     .map(({ p }) => p);
 }
-/** Something was written on the page: a to-do row with a task, or a line with words. */
+/** Something was written on the page: a to-do row with a task, a line with words, or a picture or file. */
 export function hasContent(page: Page): boolean {
-  return flatNodes(pageNodes(page)).some((n) => (isTaskRow(n) && !String(n.props!.taskId).startsWith("editor-task:")) || (n.type !== "heading" && inlineText(n.content, textDate(page)).trim() !== ""));
+  return flatNodes(pageNodes(page)).some((n) => (isTaskRow(n) && !String(n.props!.taskId).startsWith("editor-task:")) || (isFileBlock(n) && Boolean(n.props?.url)) || (n.type !== "heading" && inlineText(n.content, textDate(page)).trim() !== ""));
 }
 export function writtenDays(ws: Workspace): Set<string> {
   return new Set(ws.pages.filter((p) => p.type === "daily" && p.date && !p.trashedAt && (hasContent(p) || childPages(ws, p.id).length > 0)).map((p) => p.date!));

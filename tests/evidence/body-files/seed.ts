@@ -13,4 +13,14 @@ await run({ type: 'save-editor', pageId: 'notes', expectedContent: pageContentKe
 await run({ type: 'create-document', title: 'With a table', body: '', pageId: 'with-table' })
 await run({ type: 'create-database', pageId: 'table-1', parentId: 'with-table', homeBlockId: 'table-block', title: 'A table' })
 await run({ type: 'save-editor', pageId: 'with-table', expectedContent: pageContentKey(ws.pages.find(p => p.id === 'with-table')!), document: JSON.stringify([line('t', 'Above the table'), { id: 'table-block', type: 'database', props: { pageId: 'table-1' }, children: [] }]) })
+// Days: a past one with written lines, and yesterday's open to-do for today to carry.
+const dayOf = (back: number) => new Intl.DateTimeFormat('en-CA', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).format(new Date(Date.now() - back * 86_400_000))
+const write = async (date: string, lines: ReturnType<typeof line>[]) => {
+  await run({ type: 'ensure-day', date })
+  const day = () => ws.pages.find(p => p.date === date && p.type === 'daily')!
+  await run({ type: 'save-editor', pageId: day().id, expectedContent: pageContentKey(day()), document: JSON.stringify([...JSON.parse(day().document), ...lines]) })
+}
+await write(dayOf(3), [line('past-1', 'Written that day'), line('past-2', 'And after it')])
+await write(dayOf(1), [line('yest-1', 'Yesterday wrote this')])
+await run({ type: 'add-task', pageId: ws.pages.find(p => p.date === dayOf(1))!.id, title: 'Carried to-do', plannedOn: dayOf(1) })
 console.log('seeded', process.argv[2])

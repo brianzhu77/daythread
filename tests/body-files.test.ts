@@ -9,6 +9,9 @@ import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { filesToSweep } from '../src/server/file-store.ts'
 import { buildDayDraftRequest } from '../src/server/model/day-draft.ts'
 import { syncedBlockType } from '../src/domain/synced.ts'
+import { mergeDraft } from '../src/domain/draft-merge.ts'
+import { hasContent, writtenDays } from '../src/domain/page-tree.ts'
+import { isEmptyLine, sectionInsertIndex } from '../src/domain/editor-document.ts'
 import { dayId, harness, today } from './v2-helpers.ts'
 
 const id = 'fileBody0001', url = bodyFileUrl(id, 'My shot, 1.png', 1500, 'image/png')
@@ -96,4 +99,43 @@ test('the sweep holds a file through a template, a copy on another page and a sy
   const synced = notes()
   synced.save('notes', () => [{ id: 's1', type: syncedBlockType, props: { syncId: 'sync-1', rev: 0, key: '', roles: '' }, children: [image('s2')] } as never])
   assert.equal(await held(synced), true, 'a synced block')
+})
+test('a picture is writing, not an empty line: a day holding only one is written, and a row goes below it (B87 13)', () => {
+  const h = harness()
+  h.day(today)
+  const day = () => h.page(dayId(today))
+  assert.equal(hasContent(day()), false)
+  h.save(dayId(today), d => [...d, { id: 'empty', type: 'image', props: { url: '', name: '' }, children: [] } as never])
+  assert.equal(hasContent(day()), false, 'an Add image left empty says nothing')
+  h.save(dayId(today), d => d.map(n => (n.id === 'empty' ? image('d1') as never : n)))
+  assert.equal(hasContent(day()), true)
+  assert.equal(writtenDays(h.ws).has(today), true)
+  assert.equal(isEmptyLine(image() as never), false)
+  const doc = [{ id: 'h', type: 'heading', props: { level: 2 }, content: [], children: [] }, image('i'), { id: 'e', type: 'paragraph', props: {}, content: [], children: [] }] as never[]
+  assert.equal(sectionInsertIndex(doc, 'h'), 2, 'below the picture, above the trailing empty line')
+})
+test('Load latest keeps a caption and a replaced file, and a picture both sides changed comes back beside it (B23)', () => {
+  const was = image('i'), line = { id: 'l', type: 'paragraph', props: {}, content: [], children: [] }
+  const captioned = { ...was, props: { ...was.props, caption: 'Mine' } }
+  let n = 0
+  const merged = (base: unknown[], latest: unknown[], draft: unknown[]) => mergeDraft(base as never, draft as never, latest as never, new Set(), () => `new-${++n}`).document as unknown as typeof was[]
+  assert.equal(merged([was, line], [was, line], [captioned, line])[0]!.props.caption, 'Mine', 'in place')
+  const theirs = { ...was, props: { ...was.props, caption: 'Theirs' } }
+  const both = merged([was], [theirs], [captioned])
+  assert.deepEqual(both.map(b => b.props.caption), ['Theirs', 'Mine'], 'nothing he wrote is lost')
+  assert.equal(merged([was], [was], [was]).length, 1, 'no change, no copy')
+})
+test('restoring a day from Trash onto a newer one keeps a picture that was all the newer one held (B87 13)', () => {
+  const h = harness()
+  h.day(today)
+  h.run({ type: 'delete-page', pageId: dayId(today), at: '2026-10-22T10:00:00.000Z' })
+  h.day(today)
+  const trashed = h.ws.pages.find(p => p.trashedAt && p.date === today), newer = h.ws.pages.find(p => !p.trashedAt && p.date === today)!
+  assert.notEqual(newer.id, trashed?.id)
+  h.save(newer.id, d => [...d, image('only') as never])
+  assert.ok(trashed, 'the older day is in Trash')
+  h.run({ type: 'restore-page', pageId: trashed!.id })
+  const live = h.ws.pages.filter(p => p.date === today && !p.trashedAt)
+  assert.equal(live.length, 1)
+  assert.equal(JSON.stringify(live[0]).includes(id), true)
 })

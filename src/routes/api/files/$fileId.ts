@@ -22,6 +22,14 @@ export const Route = createFileRoute('/api/files/$fileId')({
         await there?.body.cancel()
         return there?.size === size ? Response.json({ id: params.fileId, size, type: there.type }) : Response.json({ error: 'taken' }, { status: 409 })
       },
+      // Whether a block's file is there, without sending it (B87): a day with several photos mustn't fetch each one to find out.
+      HEAD: async ({ params }) => {
+        const { fileStore, fileKey, fileIdPattern } = await import('../../../server/file-store.ts')
+        if (!fileIdPattern.test(params.fileId)) return new Response(null, { status: 404 })
+        const file = await (await fileStore()).get(fileKey(params.fileId))
+        await file?.body.cancel()
+        return new Response(null, { status: file ? 200 : 404, headers: { 'cache-control': 'no-store' } })
+      },
       GET: async ({ request, params }) => {
         const { fileStore, fileKey, fileIdPattern } = await import('../../../server/file-store.ts')
         if (!fileIdPattern.test(params.fileId)) return new Response(null, { status: 404 })

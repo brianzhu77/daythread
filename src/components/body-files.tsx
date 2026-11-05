@@ -7,7 +7,7 @@ import { createReactBlockSpec, FileBlockWrapper, ImageToExternalHTML, ResizableF
 import { fileLimits } from '../domain/database'
 import { bodyFileOf, bodyFileUrl, shownInPlace, showsAsImage } from '../domain/body-files'
 import { fileSizeLabel, putFile, type UploadFailure } from './file-upload'
-import { CaptionIcon, DownloadIcon, ExternalIcon, PaperclipIcon } from './icons'
+import { CaptionIcon, DownloadIcon, ExternalIcon, ImageIcon, PaperclipIcon } from './icons'
 
 type UploadState = 'waiting' | 'uploading' | 'failed' | 'offline' | 'refused' | 'done'
 interface Upload { id: string; file: File; preview: string | null; state: UploadState; percent: number; message: string; abort?: () => void }
@@ -73,30 +73,31 @@ export function insertBodyFiles(editor: Editor, files: readonly File[], referenc
   const made = editor.insertBlocks(files.map(f => fileBlock(f)) as never, reference, placement)
   return made.map((b: { id: string }) => b.id)
 }
-/** A paste lands at the caret and the caret goes to the line below, so typing carries on. An empty line it lands on is used up. */
+/** A paste lands at the caret and the caret goes to the line below, of the same kind, so a day's bullets carry on. An empty line it lands on is used up. */
 export function pasteBodyFiles(editor: Editor, files: readonly File[]) {
   const at = editor.getTextCursorPosition().block as { id: string; type: string; content?: unknown }
-  const empty = at.type === 'paragraph' && Array.isArray(at.content) && at.content.length === 0
+  const type = at.type === 'bulletListItem' || at.type === 'numberedListItem' ? at.type : 'paragraph'
+  const empty = at.type === type && Array.isArray(at.content) && at.content.length === 0
   const ids = insertBodyFiles(editor, files, at.id, 'after')
   if (empty) editor.removeBlocks([at.id])
   // A line that's empty, or a new one: typing mustn't land inside the words below.
   const last = ids.at(-1)!, below = editor.getNextBlock(last) as { id: string; type: string; content?: unknown } | undefined
-  if (below?.type === 'paragraph' && Array.isArray(below.content) && !below.content.length) { editor.setTextCursorPosition(below.id, 'start'); return }
-  const [line] = editor.insertBlocks([{ type: 'paragraph' }] as never, last, 'after')
+  if (below?.type === type && Array.isArray(below.content) && !below.content.length) { editor.setTextCursorPosition(below.id, 'start'); return }
+  const [line] = editor.insertBlocks([{ type }] as never, last, 'after')
   editor.setTextCursorPosition(line!.id, 'start')
 }
 
 /** Whether the file's there, for a block that holds no bytes here. Looks again when the page regains focus, so an upload finished elsewhere shows up. */
-function useFileThere(url: string, ours: boolean, skip: boolean): boolean | null {
+function useFileThere(url: string, look: boolean): boolean | null {
   const [there, setThere] = useState<boolean | null>(null)
   useEffect(() => {
-    if (!ours || skip) return
+    if (!look) return
     let stopped = false
-    const look = () => { void fetch(url, { cache: 'no-cache' }).then(r => { void r.body?.cancel(); if (!stopped) setThere(r.ok || r.status === 304) }, () => {}) }
-    look()
-    window.addEventListener('focus', look)
-    return () => { stopped = true; window.removeEventListener('focus', look) }
-  }, [url, ours, skip])
+    const ask = () => { void fetch(url, { method: 'HEAD', cache: 'no-store' }).then(r => { if (!stopped) setThere(r.ok) }, () => {}) }
+    ask()
+    window.addEventListener('focus', ask)
+    return () => { stopped = true; window.removeEventListener('focus', ask) }
+  }, [url, look])
   return there
 }
 /** Choose again and Replace: the block, its width and its caption stay. The old file stays until the sweep, so Undo brings it back. */
@@ -226,13 +227,20 @@ function useStopWhenGone(blockId: string, up: Upload | undefined) {
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/** An `Add image` nobody filled: its way out, as a handle or a key isn't always to hand on a phone (B87 15). */
+function BodyEmptyFile({ blockId, children }: { blockId: string; children: ReactNode }) {
+  const editor = useBlockNoteEditor<any, any, any>()
+  return <div className="body-file-empty">{children}<button type="button" contentEditable={false} onClick={() => editor.removeBlocks([blockId])}>Remove</button></div>
+}
 function BodyImageView(props: any) {
   const url: string = props.block.props.url, name: string = props.block.props.name, ours = bodyFileOf(url)
-  const up = useUpload(ours?.id), there = useFileThere(url, Boolean(ours), Boolean(up))
-  const [broken, setBroken] = useState(false), [loaded, setLoaded] = useState(false), [chosen, setChosen] = useState(false)
+  const [broken, setBroken] = useState(false), [failedOnce, setFailedOnce] = useState(false), [loaded, setLoaded] = useState(false), [chosen, setChosen] = useState(false)
+  const up = useUpload(ours?.id)
+  // The picture's own request says whether it's there; asking first would cost every photo on a day a second trip.
+  const there = useFileThere(url, Boolean(ours && !up && failedOnce))
   const writing = useWritingCaption(props.block.id)
   useStopWhenGone(props.block.id, up)
-  useEffect(() => { setBroken(false); setLoaded(false) }, [url])
+  useEffect(() => { setBroken(false); setFailedOnce(false); setLoaded(false) }, [url])
   // A caption is written where it reads: a click on it edits it.
   useEffect(() => {
     const onCaption = (e: MouseEvent) => { const on = e.target as Element; if (on.closest?.('.bn-file-caption') && on.closest('.bn-block')?.getAttribute('data-id') === props.block.id) writeCaption(props.block.id) }
@@ -249,14 +257,16 @@ function BodyImageView(props: any) {
     document.addEventListener('pointerdown', away)
     return () => document.removeEventListener('pointerdown', away)
   }, [props.block.id])
-  const missing = Boolean(ours && !up && (there === false)), cantShow = Boolean(ours && broken && (up || there === true))
-  const failed = broken && !missing && !cantShow
+  const missing = Boolean(ours && !up && there === false), cantShow = Boolean(ours && broken && (up || there === true))
+  // Ours, online and not yet known either way: the box holds its place until the answer's back.
+  const failed = broken && !missing && !cantShow && (!ours || !navigator.onLine)
+  if (!url) return <BodyEmptyFile blockId={props.block.id}><ResizableFileBlockWrapper {...props} buttonIcon={<ImageIcon />} /></BodyEmptyFile>
   return <ResizableFileBlockWrapper {...props}>
-    {missing || cantShow
+    {missing || cantShow || (broken && !failed)
       ? <div className="body-image-box" contentEditable={false} />
       : failed
         ? <div className="body-file-line" contentEditable={false}><span>{navigator.onLine ? "Can't load this image" : "Offline · Can't load this image"}</span>{!ours && <a href={url} target="_blank" rel="noreferrer">{url}</a>}</div>
-        : <img className={`bn-visual-media${loaded ? '' : ' body-image-loading'}`} src={up?.preview ?? url} alt={name || ''} width={props.block.props.previewWidth} contentEditable={false} draggable={false} onLoad={() => setLoaded(true)} onError={() => setBroken(true)} />}
+        : <img className={`bn-visual-media${loaded ? '' : ' body-image-loading'}`} src={up?.preview ?? url} alt={name || ''} width={props.block.props.previewWidth} loading="lazy" decoding="async" contentEditable={false} draggable={false} onLoad={() => setLoaded(true)} onError={() => { setBroken(true); setFailedOnce(true) }} />}
     {(up?.state === 'uploading' || up?.state === 'waiting') && <div className="body-file-progress"><div style={{ width: `${up.percent}%` }} /></div>}
     {chosen && <div className="body-image-more"><BodyBlockMenu block={props.block} /></div>}
     <BodyFileLine blockId={props.block.id} up={up} name={name || ours?.name || 'This file'} missing={missing} cantShow={cantShow && uploadDone(url) ? url : undefined} />
@@ -265,9 +275,10 @@ function BodyImageView(props: any) {
 }
 function BodyFileView(props: any) {
   const url: string = props.block.props.url, ours = bodyFileOf(url), name: string = props.block.props.name || ours?.name || 'File'
-  const up = useUpload(ours?.id), there = useFileThere(url, Boolean(ours), Boolean(up))
+  const up = useUpload(ours?.id), there = useFileThere(url, Boolean(ours && !up))
   useStopWhenGone(props.block.id, up)
   const missing = Boolean(ours && !up && there === false)
+  if (!url) return <BodyEmptyFile blockId={props.block.id}><FileBlockWrapper {...props} buttonIcon={<PaperclipIcon />} /></BodyEmptyFile>
   const size = ours?.size ?? null
   const note = up?.state === 'uploading' && size !== null ? `${fileSizeLabel(size * up.percent / 100)} of ${fileSizeLabel(size)}` : size !== null ? fileSizeLabel(size) : ''
   const ready = !up || up.state === 'done', opens = !ours || shownInPlace.has(ours.type)
