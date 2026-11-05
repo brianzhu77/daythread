@@ -50,6 +50,15 @@ ws = await run({ type: 'create-document', title: 'Fixture empty page', body: '',
 ws = await run({ type: 'create-document', title: 'Fixture page with a very long title that has to wrap onto a second line on a phone 长标题需要换行', body: '', pageId: longId, parentId: scratchId })
 ws = await run({ type: 'make-link-pages', parentPageId: scratchId, items: [{ url: 'https://example.com/fixture-link', pageId: linkId }] })
 
+// Icons, for the gate's P1-3 checks: a page with an emoji and one with an icon of ours, each with a card and a [[ link below, a day, and a row's page.
+const iconPageId = 'fixture-icon-page', ownIconPageId = 'fixture-own-icon-page', iconTrashId = 'fixture-icon-trash', iconDay = '2026-12-30'
+for (const [pageId, title, icon] of [[iconPageId, 'Fixture icon page', '🌲'], [ownIconPageId, 'Fixture own icon page', 'icon:activity'], [iconTrashId, 'Fixture icon in Trash', '🌲']] as const) {
+  ws = await run({ type: 'create-document', title, body: 'A first line', pageId, parentId: scratchId })
+  ws = await run({ type: 'set-page-icon', pageId, icon })
+}
+ws = await run({ type: 'ensure-day', date: iconDay })
+ws = await run({ type: 'set-page-icon', pageId: dayPage(ws, iconDay).id, icon: '🌲' })
+
 const words = (t: string) => (t ? [textRun(t)] : [])
 const bullet = (t: string, children: EditorNode[] = [], id = crypto.randomUUID()): EditorNode => ({ id, type: 'bulletListItem', props: {}, content: words(t), children })
 const todo = (t: string, role: 'plan' | 'reference', children: EditorNode[] = []): EditorNode => {
@@ -79,6 +88,8 @@ const document: EditorNode[] = [
   bullet(''),
   headingNode('Good Stuffs'),
   card(linkId),
+  card(iconPageId),
+  card(ownIconPageId),
   headingNode('Notes'),
   bullet('Fixture parent', [bullet('Fixture nested child', [bullet('Fixture level 3')]), bullet('')], lineTarget),
   bullet('Fixture list with a to-do', [todo('Fixture to-do under a bullet', 'reference')]),
@@ -95,6 +106,8 @@ const document: EditorNode[] = [
   { id: galleryBlock, type: 'database', props: { pageId: galleryId, view: '' }, children: [] },
   { id: calendarBlock, type: 'database', props: { pageId: calendarId, view: '' }, children: [] },
   { id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: [textRun('See '), { type: 'pageRef', props: { pageId: scratchId, refId: crypto.randomUUID(), newTitle: '', lineId: lineTarget, taskId: '' } }, textRun(' for the list')], children: [] },
+  { id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: [textRun('See '), { type: 'pageRef', props: { pageId: iconPageId, refId: crypto.randomUUID(), newTitle: '', lineId: '', taskId: '' } }, textRun(' for the icon')], children: [] },
+  { id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: [textRun('See '), { type: 'pageRef', props: { pageId: previewId, refId: crypto.randomUUID(), newTitle: '', lineId: '', taskId: '' } }, textRun(' with no icon')], children: [] },
 ]
 ws = await run({ type: 'save-editor', pageId: scratchId, expectedContent: pageContentKey(dayPage(ws, SCRATCH)), document: JSON.stringify(document), today })
 
@@ -177,6 +190,16 @@ for (const [id, block, title, layout] of [[boardId, boardBlock, 'Fixture board',
   for (let i = 0; i < 26; i++) ws = await run({ type: 'add-row', databaseId: id, pageId: crypto.randomUUID(), title: `Fixture row ${i + 1}`, values: { state: 'next', note: 'A note', on: { start: SCRATCH } }, at: new Date().toISOString() })
   ws = await run({ type: 'add-row', databaseId: id, pageId: crypto.randomUUID(), title: 'Fixture hidden row', values: { state: 'old' }, at: new Date().toISOString() })
 }
+
+// A row's icon before its name, in every layout, and a row's page with its head.
+for (const id of [groupedId, boardId, listId, galleryId, calendarId, timelineId]) {
+  const row = ws.pages.find(p => p.parentId === id && !p.trashedAt && !p.database)
+  if (!row) { console.error(`Fixture ${id} has no row for its icon.`); process.exit(1) }
+  ws = await run({ type: 'set-page-icon', pageId: row.id, icon: '🌲' })
+}
+ws = await run({ type: 'add-row', databaseId: listId, pageId: 'fixture-icon-row', title: 'Fixture icon row', values: { state: 'next' }, at: new Date().toISOString() })
+ws = await run({ type: 'set-page-icon', pageId: 'fixture-icon-row', icon: '🌲' })
+ws = await run({ type: 'delete-page', pageId: iconTrashId, at: new Date().toISOString() })
 
 const task = (title: string) => {
   const found = ws.tasks.find(t => t.title === title)

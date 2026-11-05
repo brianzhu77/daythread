@@ -1303,6 +1303,8 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .subpage-row:hover { background: var(--fill); }
 .subpage-row svg { flex: none; color: var(--ink-3); }
 .subpage-row > svg:first-child { width: 18px; height: 18px; }
+/* An icon takes the box the kind's icon has, so the name stays where it was (P1-3). */
+.subpage-row > .page-emoji:first-child { width: 18px; height: 18px; }
 .subpage-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .subpage-count { font-size: var(--text-meta); color: var(--ink-3); }
 @media (max-width: 599px) { .subpage-row { min-height: 44px; } }
