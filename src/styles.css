@@ -2520,3 +2520,14 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-td.is-frozen { position: sticky; z-index: 1; background: var(--bg-doc); }
 .database-row.has-tint > td.is-frozen, .database-td.is-frozen.has-tint { background: var(--row-tint); }
 .database-th.is-frozen-last, .database-td.is-frozen-last { box-shadow: inset -1px 0 0 var(--line); }
+
+/* Files in a page's body (B87): a block's own line for what's happening to it, in the words the design gives. */
+.body-file { display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--ink); }
+.body-file svg { flex: none; color: var(--ink-3); }
+.body-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.body-file-name { color: inherit; text-decoration: underline; text-decoration-color: var(--line); }
+.body-file-size { flex: none; color: var(--ink-3); font-size: var(--text-meta); }
+.body-file-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; color: var(--ink-2); font-size: var(--text-meta); }
+.body-file-line button { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-decoration-color: var(--line); cursor: pointer; }
+.body-file-progress { height: 2px; background: var(--ink-2); transition: width .15s; }
+.body-image-box { width: 100%; aspect-ratio: 16 / 9; max-height: 160px; background: var(--fill-soft); border-radius: var(--radius-row); }

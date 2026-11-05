@@ -199,11 +199,11 @@ export function withBlockBack(list: readonly EditorNode[], place: BlockPlace): E
   return (place.afterId && beside(list, place.afterId, 1)) || (place.beforeId && beside(list, place.beforeId, 0)) || [...list, place.node]
 }
 
-/** A row's card image (design §7.2): the first image in its body with a web address. Nothing uploads yet, so that's a link to where it lives. */
+/** A row's card image (design §7.2): the first image in its body, a link to where it lives or one uploaded here (B87 9). */
 export function firstImageUrl(page: Pick<Page, 'document'>): string | null {
   for (const n of flatNodes(pageNodes(page))) {
     const url = n.type === 'image' ? n.props?.url : undefined
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url
+    if (typeof url === 'string' && /^(https?:\/\/|\/api\/files\/)/i.test(url)) return url
   }
   return null
 }
