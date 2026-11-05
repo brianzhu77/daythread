@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom'
 import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
-import { parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
+import { descendantsOf, parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
 import { limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import { loopRefusal } from '../domain/dependencies.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
@@ -533,7 +533,7 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
   const { run, latest } = useWorkspace()
   const commit = useCommitCell()
   const moveRows = useMoveRows(db, view, context, groups)
-  return (rowId: string, from: string | null, to: string | null, before: string | null, shown: readonly Page[]) => {
+  return (rowId: string, from: string | null, to: string | null, before: string | null, shown: readonly { id: string }[]) => {
     const stored = latest()
     const ws = stored && db.database.fixed ? withTodos(stored) : stored
     const row = ws?.pages.find(p => p.id === rowId)
@@ -549,10 +549,12 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
     if (from === to) {
       // To-dos have no order of their own to keep.
       if (db.database.fixed) return
-      // Dropped where it already is, as he sees it: nothing to send.
-      const here = groups ? target?.rows ?? [] : shown
-      const next = here[here.findIndex(r => r.id === rowId) + 1]?.id ?? null
-      if (sorted || before === rowId || before === next || beforeId === undefined) return
+      // Dropped where it already is, as he sees it: nothing to send. Nested, a row's sub-items go where it goes, so its own don't count as a place.
+      const here: readonly { id: string }[] = groups ? target?.rows ?? [] : shown
+      const links = nestedBy(db, view, Boolean(groups))
+      const own = new Set(links ? descendantsOf(all, links, rowId).map(r => r.id) : [])
+      const next = here.slice(here.findIndex(r => r.id === rowId) + 1).find(r => !own.has(r.id))?.id ?? null
+      if (sorted || before === rowId || before === next || (before !== null && own.has(before)) || beforeId === undefined) return
       void run({ type: 'move-page', pageId: rowId, parentId: db.id, beforeId }, r => ({ text: 'Row moved', undoOperationId: r.operationId }))
       return
     }
@@ -784,10 +786,31 @@ export function useViewClipboard(wrap: { current: HTMLElement | null }) {
 
 /** Which groups are folded in a table or list: on this device only, per view of a block, never a save or an Undo, like the view shown. */
 function foldKey(blockId: string, viewId: string) { return `daythread.database-fold.${blockId}.${viewId}` }
+const nestedBy = (db: Page & { database: Database }, view: View, grouped: boolean) => (grouped || view.subItemsDisplay === 'flat' || view.subItemsShow === 'subs' ? null : db.database.subItems ?? null)
 /** A table's or list's rows as a tree, when this view nests them: never with groups, where a sub-item sits in its own group (sub-items design §2). */
-export function subItemTree(workspace: Workspace, db: Page & { database: Database }, view: View, rows: readonly Page[], grouped: boolean, opened: ReadonlySet<string>): TreeEntry[] | null {
-  if (grouped || !db.database.subItems || view.subItemsDisplay === 'flat' || view.subItemsShow === 'subs') return null
-  return treeEntries(db.database, rows, databaseRows(workspace, db.id), id => opened.has(subFoldKey(id)), view.subItemsShow === 'parents')
+export function subItemTree(workspace: Workspace, db: Page & { database: Database }, view: View, rows: readonly Page[], grouped: boolean, opened: ReadonlySet<string>, shut: ReadonlySet<string>): TreeEntry[] | null {
+  if (!nestedBy(db, view, grouped)) return null
+  return treeEntries(db.database, rows, databaseRows(workspace, db.id), (id, context) => (context ? !shut.has(id) : opened.has(subFoldKey(id))), view.subItemsShow === 'parents')
+}
+// A parent only there for a match below it, under a filter, starts open, as closed it would read as the filter finding nothing. Closed by hand it stays closed
+// until the filter changes, and none of this is kept: clearing the filter leaves the view as it was. By view here, as a block can be drawn anew.
+const shutUnderFilter = new Map<string, { filter: string; ids: ReadonlySet<string> }>()
+const noneShut: ReadonlySet<string> = new Set()
+export function useSubOpen(blockId: string, view: View, toggle: (key: string) => void) {
+  const key = `${blockId}|${view.id}`, filter = JSON.stringify([view.filter, view.filterAny])
+  const [, redraw] = useState(0)
+  const held = shutUnderFilter.get(key)
+  // Until the filter changes, so coming back to it starts open again.
+  if (held && held.filter !== filter) shutUnderFilter.delete(key)
+  const shut = held?.filter === filter ? held.ids : noneShut
+  const toggleSub = (entry: TreeEntry) => {
+    if (!entry.context) { toggle(subFoldKey(entry.row.id)); return }
+    const ids = new Set(shut)
+    if (!ids.delete(entry.row.id)) ids.add(entry.row.id)
+    shutUnderFilter.set(key, { filter, ids })
+    redraw(n => n + 1)
+  }
+  return { shut, toggleSub }
 }
 export const subFoldKey = (rowId: string) => `sub:${rowId}`
 /** A sub-item in a group sits apart from its parent, so it says whose it is (sub-items design §2). */
@@ -984,7 +1007,8 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   // Each group, with its sub-groups if the view has them; rows are drawn per section, under the section's key.
   const layers = groups?.shown.map(group => ({ group, subs: viewSubGroups(db.database, view, group.rows, shownRaw, weekStart) }))
   const drawn = (key: string, all: readonly Page[]) => (folded.has(key) ? [] : all.slice(0, limitOf(key)))
-  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded)
+  const { shut, toggleSub } = useSubOpen(blockId, view, toggle)
+  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded, shut)
   const treeOf = new Map(tree?.map(e => [e.row.id, e]))
   const entries: { row: Page; group?: string }[] = tree ? treeUpTo(tree, limit) : layers ? layers.flatMap(({ group, subs }) => folded.has(group.key) ? [] : subs && group.rows.length
     ? subs.shown.flatMap(sub => { const key = sectionKey(group.key, sub.key); return drawn(key, sub.rows).map(row => ({ row, group: key })) })
@@ -1126,7 +1150,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               {/* A row opens as a page, from Name, at both widths (design §5). */}
               {picking && <input type="checkbox" className="database-row-tick" tabIndex={-1} aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} readOnly />}
               <TodoTick row={row} />
-              {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggle(subFoldKey(row.id))} />}
+              {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggleSub(treeOf.get(row.id)!)} />}
               <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onPointerDown={e => startHold(e, row.id)} onPointerMove={moveHold} onPointerUp={endHold} onPointerCancel={endHold} onContextMenu={e => { if (!wide) e.preventDefault() }} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
                 {group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}
@@ -1282,9 +1306,12 @@ const todosAtOnce = databaseLimits.todosAtOnce
 export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, deletePicked, pickable, editing, setEditing }, db, floating }: { picks: RowPicking; db: Page & { database: Database }; floating?: boolean }) {
   // A big change takes seconds on the Worker (Planned on 500: about 6 s, Lead's deployed read). It says so, past a moment a small one never reaches, and the notice says when it's done.
   const [changing, setChanging] = useState<string | null>(null)
+  const inFlight = useRef(0)
   const track = useCallback((words: string, work: Promise<unknown>) => {
+    inFlight.current++
     const timer = setTimeout(() => setChanging(words), 400)
-    void work.finally(() => { clearTimeout(timer); setChanging(null) })
+    // A second change queues behind the first, so the words stay until the last one is done.
+    void work.finally(() => { clearTimeout(timer); if (--inFlight.current === 0) setChanging(null) })
   }, [])
   if (!picked.length && !picking) return null
   // To-dos (R4-17): no Delete, as it would take lines off day pages not in view; a to-do can still be deleted from its line.
