@@ -39,23 +39,23 @@ A workspace holds one person, so a comment is a note attached to something, kept
 
 ## 3. Where a comment is stored (for Roadbuster, the main choice)
 
-**I'd keep comments out of the page's document entirely:** in their own rows, each thread holding its page, the block id if any, and the quoted words with their place in the line. The mark and underline are drawn over the document, not written in it.
+**I'd keep comments out of the page's document entirely (Lead leans yes, 3f167c20; Roadbuster agrees, 6d11ad9d):** in a table of their own, not page rows as synced records are, because a floor build reads page rows and might show an unknown type, but never touches a table it doesn't know. Each thread holds its page, the block id if any, and the quoted words with their place in the line. The mark and underline are drawn over the document, not written in it.
 
 - **Why:** the document stays byte for byte what it was. So Brian's days don't change, the floor build can't damage a comment by saving over a mark it doesn't know (the B87 condition), a comment causes no document save or conflict, and export, search, the day draft and the sweep don't have to learn a new mark.
 - **The cost:** the underline has to find its words each time. If the words were edited, the thread falls back to the whole line, and the pane shows the words as they were quoted. A mark in the document would follow edits exactly, so this is less precise. I think that's the right trade for a note-to-self.
 - **Alternative:** an inline mark in the document, as Notion's behaviour suggests. More exact, but it needs every build from the floor up to keep an unknown mark, and it writes to the document on every comment. I wouldn't start there.
-- **Please size:** whether threads travel with the workspace or load per page. The workspace ceiling is about 10 MB (Lead 6934c378), and a count has to be known in lists only if we show one there, which I don't propose.
+- **Loading (Roadbuster):** with the workspace. A person's notes should stay far under the 10 MB ceiling (Lead 6934c378), and loading per page would add a fetch to every page for no gain yet. Usage reads report their bytes alongside the workspace's size.
 
 ## 4. What happens to it
 
 - **A line moved:** the thread follows it, using the block id and B29's move identity. Cut and paste the same way.
 - **A line deleted:** the thread stays in the pane, reading "Line removed" with its quoted words. Undo of the delete brings the mark back.
 - **A line copied, a page or row duplicated, a template used:** the copy has no comments. A new day never brings a comment from a template.
-- **A synced block:** a comment on a line in a synced block belongs to the shared record, and shows on every copy, as its words do. Please check this reads sensibly in the page that isn't the one it was made on.
+- **A synced block:** a comment on a line in a synced block belongs to the shared record, and shows on every copy, as its words do. Please check this reads sensibly in the page that isn't the one it was made on. A line has a different id in each place, so the thread holds the record's line id (Roadbuster).
 - **A page or row in Trash:** its threads go with it and come back with it, and go for good with it. Moving a row to another database keeps them.
 - **Search:** finds a comment's words and opens the thread. Resolved ones too, marked as resolved.
 - **The day draft:** sends the model no comments. They're notes about a line rather than the day's words, and sending them would widen what the model sees.
-- **Export:** a `Comments` part at the end of the page's Markdown, with each thread's quoted words, comments, times and whether it's resolved. Nothing is left out.
+- **Export:** a `Comments` part at the end of the page's Markdown, with each thread's quoted words, comments, times and whether it's resolved. Nothing is left out. §3 spares export a new mark, not this: it has to read the table (Roadbuster).
 - **Offline or failed:** the words stay in the field with "Not saved · Retry", as anywhere else.
 - **An older tab:** knows nothing of them, shows no mark, and can't harm them, given §3.
 - **Another account can never read one.** Each query carries the owner, as Files' do.
