@@ -11,11 +11,14 @@ type Entry = [char: string, group: number, en: string, zh: string, tones?: strin
 interface EmojiData { groups: (string | null)[]; emoji: Entry[] }
 
 let open: { pageId: string; anchor: { left: number; bottom: number } } | null = null
+/** Esc goes back to where it was opened from (§7.4). */
+let openedFrom: HTMLElement | null = null
 const drafts = new Map<string, string | null>(), listeners = new Set<() => void>()
 const changed = () => listeners.forEach(l => l())
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
 export function openIconPicker(pageId: string, anchor?: Element | null) {
   const box = anchor?.getBoundingClientRect()
+  openedFrom = anchor instanceof HTMLElement ? anchor : document.activeElement instanceof HTMLElement ? document.activeElement : null
   open = { pageId, anchor: box ? { left: box.left, bottom: box.bottom } : { left: window.innerWidth / 2 - 176, bottom: 96 } }
   changed()
 }
@@ -79,7 +82,7 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
   // After the menu it was opened from has handed focus back. Esc closes it wherever the focus is.
   useEffect(() => { if (phone) return; const timer = setTimeout(() => search.current?.focus({ preventScroll: true }), 60); return () => clearTimeout(timer) }, [phone])
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !panel.current?.contains(document.activeElement)) { e.preventDefault(); e.stopPropagation(); finish() } }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !panel.current?.contains(document.activeElement)) { e.preventDefault(); e.stopPropagation(); finishBack() } }
     document.addEventListener('keydown', esc, true)
     return () => document.removeEventListener('keydown', esc, true)
   })
@@ -92,6 +95,7 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
   const pending = useRef<{ timer: ReturnType<typeof setTimeout>; icon: string } | null>(null)
   const flush = () => { if (pending.current) { clearTimeout(pending.current.timer); const { icon } = pending.current; pending.current = null; send(pageId, icon) } }
   const finish = () => { flush(); closePicker() }
+  const finishBack = () => { finish(); if (openedFrom?.isConnected) openedFrom.focus({ preventScroll: true }) }
   const withTone = (entry: Entry) => (tone && entry[4]?.[tone - 1]) || entry[0]
   const remember = (icon: string) => { const next = [icon, ...recent.filter(x => x !== icon)].slice(0, 16); setRecent(next); store('daythread.icon-recent', JSON.stringify(next)) }
   const pick = (icon: string) => { if (pending.current) { clearTimeout(pending.current.timer); pending.current = null } remember(icon); setDraft(pageId, icon); send(pageId, icon); closePicker() }
@@ -113,7 +117,7 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
     setPlace({ left: Math.max(edge, Math.min(anchor.left, window.innerWidth - width - edge)), top: Math.max(edge, Math.min(anchor.bottom + 4, window.innerHeight - height - edge)) })
   }, [phone, anchor])
   const onKeyDown = (e: ReactKeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(); return }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finishBack(); return }
     if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) return
     const cells = [...(panel.current?.querySelectorAll<HTMLElement>('.icon-picker-cell') ?? [])], on = document.activeElement as HTMLElement, at = cells.indexOf(on)
     if (e.key === 'Enter') { if (at < 0 && cells[0]) { e.preventDefault(); cells[0].click() } return }

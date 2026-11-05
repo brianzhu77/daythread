@@ -2435,6 +2435,12 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .cover-panel-actions { display: flex; justify-content: flex-end; gap: 12px; font-size: var(--text-meta); }
 .cover-panel-actions:empty { display: none; }
 .page-icon-line { height: 52px; margin-left: -2px; }
+/* Above "Today" and the date (§7.2), whatever order the day's head is drawn in. */
+.day-screen > .page-icon-line { order: -3; margin-top: 24px; }
+.day-screen > .page-icon-line + .day-head { padding-top: 4px; }
+/* In a chip, an emoji takes the 14 px its icon has, so the gap after it holds. */
+.page-ref-icon:has(.page-emoji) { vertical-align: 0; }
+.page-ref-icon .page-emoji { width: 14px; height: 14px; font-size: 13px; }
 .page-icon { height: 52px; min-height: 0; padding: 0; border: 0; background: none; font-size: 44px; line-height: 52px; cursor: pointer; }
 .icon-picker { position: fixed; z-index: 1200; display: flex; flex-direction: column; width: 352px; height: 400px; padding: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-block); box-shadow: var(--shadow-float); }
 .icon-picker.is-sheet { left: 0; right: 0; bottom: 0; width: auto; height: 60vh; border-width: 1px 0 0; border-radius: var(--radius-block) var(--radius-block) 0 0; }

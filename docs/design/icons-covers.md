@@ -68,7 +68,7 @@ From the top: **cover, then the line with the breadcrumb and `⋯`, then the ico
 
 | | 1280 | 390 |
 | --- | --- | --- |
-| **Icon** | 44 px, on a line 52 px tall, 2 px above the title | 36 px, on a line 44 px tall |
+| **Icon** | 44 px, on a line 52 px tall, just above the title | 36 px, on a line 44 px tall |
 | **Its left edge** | The title's edge, by eye: an emoji has a little space of its own, so 2 px back | The same |
 | **Cover** | 200 px, whatever the window's height, from the sidebar's edge to the window's | 120 px, edge to edge |
 | **First line of the body, with both** | About 365 px down | About 280 px down, with the title and first lines above the toolbar |
@@ -99,7 +99,7 @@ It takes the place of the page's default icon where there is one, and comes befo
 | Board and Gallery cards | 14 px, before the title | Before the title |
 | Calendar's chips, the phone's Timeline list | The line's text size | Before the title |
 
-**The Name column at 390** already cuts a short name to "First r…" in the sketch, and an icon takes 20 px more. I'd grow the column by 20 px when any row shown has an icon, so a name isn't cut shorter for having one. To be looked at once it's built.
+**The Name column at 390** stays as it is, looked at on #144. The cut name in my sketch came from the sketch: on the built table "Second book" fits with its icon. A long name is cut 20 px sooner with an icon, which I'd accept.
 
 To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows its icon before its date, if it has one.
 
