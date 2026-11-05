@@ -16,9 +16,12 @@ await run({ type: 'add-row', databaseId: 'runs', pageId: 'r1', title: 'One', val
 await run({ type: 'add-row', databaseId: 'runs', pageId: 'r2', title: 'Two', values: { n: 2 }, at } as never)
 if (process.argv[3] === 'property') {
   const bump: ButtonStep[] = [{ id: 'e', kind: 'edit-property', set: [{ id: 'n', name: 'N', value: { kind: 'fixed', raw: 5 } }] }]
-  await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'go', name: 'Go', type: 'button', button: { label: 'Bump', steps: writeSteps(bump) } } } } as never)
+  await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'go', name: 'Go', type: 'button', button: { label: process.argv[4] === 'long' ? 'A very long label that goes on and on and on, far past what any row can hold at either width of this app' : 'Bump', steps: writeSteps(bump) } } } } as never)
   const shown = ws.pages.find(p => p.id === 'runs')!.database!.views[0]!
   await run({ type: 'change-database', pageId: 'runs', change: { kind: 'updateView', viewId: shown.id, columns: [{ id: 'n' }, { id: 'go' }] } } as never)
+  await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addView', view: { ...ws.pages.find(p => p.id === 'runs')!.database!.views[0]!, id: 'v-timeline', name: 'timeline', layout: 'timeline', dateBy: 'when', timelineTable: true } as never } } as never)
+  if (process.argv[4] === 'timeline') for (const id of ['r1', 'r2']) await run({ type: 'set-values', pageId: id, values: { when: { start: new Date().toLocaleDateString('en-CA') } }, expected: {}, at } as never)
+  if (process.argv[4] === 'timeline') await run({ type: 'change-database', pageId: 'runs', change: { kind: 'updateView', viewId: shown.id, layout: 'timeline', dateBy: 'when', timelineTable: true } } as never)
   for (const layout of ['list', 'board', 'gallery'] as const) await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addView', view: { ...ws.pages.find(p => p.id === 'runs')!.database!.views[0]!, id: `v-${layout}`, name: layout, layout } as never } } as never)
 }
 await run({ type: 'create-document', title: 'Notes', body: '', pageId: 'notes' })

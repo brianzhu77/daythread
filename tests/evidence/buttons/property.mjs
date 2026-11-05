@@ -9,9 +9,9 @@ const valueOf = id => store().pages.find(p => p.id === id).values?.n
 const wait = ms => new Promise(r => setTimeout(r, ms))
 const browser = await pw[engine].launch({ headless: true })
 let failed = 0
-const scenario = async (name, act, options = { viewport: { width: 1280, height: 900 } }, path = '/pages?page=runs') => {
+const scenario = async (name, act, options = { viewport: { width: 1280, height: 900 } }, path = '/pages?page=runs', seedArg = '') => {
   if (process.env.ONLY && !name.includes(process.env.ONLY)) return
-  execSync(`rm -f ${S} ${S}-wal ${S}-shm && node --no-warnings tests/evidence/buttons/seed.ts ${S} property`, { stdio: 'ignore' })
+  execSync(`rm -f ${S} ${S}-wal ${S}-shm && node --no-warnings tests/evidence/buttons/seed.ts ${S} property ${seedArg}`, { stdio: 'ignore' })
   const context = await browser.newContext({ ...options, serviceWorkers: 'block' }), page = await context.newPage(), errors = []
   page.on('pageerror', e => { if (!/ResizeObserver loop/.test(e.message)) errors.push(e.message) })
   let r
@@ -35,9 +35,22 @@ for (const layout of ['list', 'board', 'gallery']) await scenario(`On ${layout}:
   const menu = page.locator('.database-menu')
   await page.locator('.database-more-button').first().click(); await wait(300); await menu.getByRole('menuitem', { name: 'Layout' }).click(); await wait(300); await menu.getByRole('menuitemradio', { name: new RegExp(`^${layout}`, 'i') }).click(); await wait(800); await page.keyboard.press('Escape'); await wait(200)
   const count = await pills(page).count(), at = page.url()
+  // A near miss, 3 px above what's drawn, still takes it rather than opening the card.
+  const box = await pills(page).first().boundingBox()
+  const near = await page.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('.editor-button-pill')), [box.x + box.width / 2, box.y - 3])
   await pills(page).first().click(); await wait(900)
-  return { ok: count === 2 && page.url() === at && await page.locator('.peek').count() === 0 && (valueOf('r1') === 5 || valueOf('r2') === 5), count, r1: valueOf('r1'), r2: valueOf('r2') }
+  return { ok: count === 2 && near && page.url() === at && await page.locator('.peek').count() === 0 && (valueOf('r1') === 5 || valueOf('r2') === 5), count, near, r1: valueOf('r1'), r2: valueOf('r2') }
 })
+await scenario('On a Timeline\'s table: a pill that runs, and no button inside a button', async page => {
+  const pill = page.locator('.database-pane .editor-button-pill').first(), count = await page.locator('.database-pane .editor-button-pill').count(), nested = await page.locator('button button').count()
+  await pill.click(); await wait(900)
+  return { ok: count >= 1 && nested === 0 && (valueOf('r1') === 5 || valueOf('r2') === 5), count, nested, r1: valueOf('r1'), r2: valueOf('r2') }
+}, undefined, '/pages?page=runs', 'timeline')
+await scenario('390: a long label stays on the row page, ending in an ellipsis, and on a list', async page => {
+  const pill = page.locator('.editor-button-pill').first(), box = await pill.boundingBox(), ell = await pill.locator('span').evaluate(n => n.scrollWidth > n.clientWidth), height = box.height
+  const over = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
+  return { ok: box.x + box.width <= 390 && ell && height === 28 && !over, box, ell, over }
+}, { viewport: { width: 390, height: 780 }, hasTouch: true }, '/pages?page=r1', 'long')
 await scenario('In a table cell: Enter runs it, and Delete does nothing', async page => {
   const cell = page.locator('.database-cell.is-read-only', { has: page.locator('.editor-button-pill') }).first()
   await cell.focus(); await page.keyboard.press('Delete'); await wait(400)
