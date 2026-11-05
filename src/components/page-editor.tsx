@@ -2867,7 +2867,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
         // Pick the file, see the preview, and only then does a block appear (R4-8).
         const csvItem = { title: 'CSV', icon: <ImportIcon />, aliases: ['csv', 'import', 'tsv', '导入'], group: 'Other', onItemClick: () => chooseCsv({ kind: 'new', parentId: homeForNew().id, place: placeImportedDatabase }) }
-        const databaseItem = { title: 'Database', icon: <DatabaseIcon />, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: chooseDatabase }
+        const databaseItem = { title: 'Database', icon: <DatabaseIcon />, aliases: ['database', 'table', 'db', 'chart', '数据库', '表格', '图表'], group: 'Suggested', onItemClick: chooseDatabase }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
         const linkItem = { title: 'Link to page', icon: <LineLinkIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
           if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return

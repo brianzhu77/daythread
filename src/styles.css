@@ -2092,6 +2092,52 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-rule button:not(.database-rule-remove) { min-height: 0; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
 .database-rule-remove { display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; margin-left: auto; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 @media (hover: hover) { .database-rule-remove:hover, .database-menu-back:hover { background: var(--hover-dim); color: var(--ink); } }
+/* Chart (docs/design/chart.md): bars in the page's ink, one series, no colour. */
+.database-chart { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 4px; }
+.database-chart-loading { height: 240px; }
+.database-chart-number { display: flex; flex-direction: column; gap: 2px; padding: 12px 0; }
+.database-chart-number strong { min-width: 0; overflow-wrap: anywhere; color: var(--ink); font-size: 40px; font-weight: var(--weight-semibold); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.database-chart-number span { color: var(--ink-2); font-size: var(--text-ui); }
+.database-chart-vertical { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.database-chart-plot { position: relative; height: 220px; margin: 14px 0 0 44px; }
+.database-chart-tick { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--line-soft); }
+.database-chart-tick.is-zero { border-top-color: var(--line); }
+.database-chart-tick span { position: absolute; right: 100%; top: -8px; padding-right: 6px; color: var(--ink-3); font-size: var(--text-caption); line-height: 16px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.database-chart-bars { position: absolute; inset: 0; display: flex; }
+.database-chart-bar { position: relative; flex: 1 1 0; min-width: 0; padding: 0; border: 0; background: none; cursor: pointer; touch-action: manipulation; }
+.database-chart-bar i { position: absolute; left: 50%; width: min(70%, 48px); min-height: 1px; transform: translateX(-50%); border-radius: 2px 2px 0 0; background: var(--ink); }
+.database-chart-bar b { position: absolute; left: 0; right: 0; padding-bottom: 2px; overflow: hidden; color: var(--ink-2); font-size: var(--text-caption); font-weight: var(--weight-regular); line-height: 14px; text-align: center; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.database-chart-bar.is-dim i, .database-chart-line.is-dim i { background: var(--ink-3); }
+@media (hover: hover) { .database-chart-bar:hover i, .database-chart-line:hover i { background: var(--ink-2); } }
+/* Too thin for a gap: one would round unevenly into stripes. */
+.database-chart-vertical.is-dense .database-chart-bar i { width: 100%; border-radius: 0; }
+.database-chart-labels { position: relative; display: flex; min-height: 16px; margin-left: 44px; }
+.database-chart-labels span { flex: 1 1 0; min-width: 0; padding: 0 2px; overflow: hidden; color: var(--ink-2); font-size: var(--text-caption); line-height: 16px; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
+.database-chart-labels span.is-spanning { text-align: left; }
+/* However few bars are left for it, the last label reads in full, up against the edge. */
+.database-chart-labels span.is-last { position: absolute; right: 0; text-align: right; }
+.database-chart-horizontal { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.database-chart-line { display: grid; grid-template-columns: minmax(0, 30%) minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-ui); text-align: left; cursor: pointer; touch-action: manipulation; }
+.database-chart-line-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.database-chart-line-track { position: relative; height: 14px; min-width: 0; }
+.database-chart-line-track i { position: absolute; top: 0; bottom: 0; min-width: 1px; border-radius: 0 2px 2px 0; background: var(--ink); }
+.database-chart-line-value { color: var(--ink-2); font-size: var(--text-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.database-chart-toggle { align-self: flex-start; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--text-caption); cursor: pointer; }
+@media (hover: hover) { .database-chart-toggle:hover { color: var(--ink); } }
+.database-chart-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--text-ui); }
+.database-chart-table td:last-child:not(:first-child), .database-chart-table th:last-child:not(:first-child) { width: 34%; }
+.database-chart-table th { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); color: var(--ink-3); font-size: var(--text-caption); font-weight: var(--weight-regular); text-align: left; }
+.database-chart-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line-soft); color: var(--ink); overflow-wrap: anywhere; }
+.database-chart-table th:last-child, .database-chart-table td:last-child:not(:first-child) { padding-right: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.database-chart-opened h4 { margin: 4px 0; color: var(--ink); font-size: var(--text-ui); font-weight: var(--weight-semibold); }
+.database-chart .database-chart-row { display: block; width: 100%; min-height: 24px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+@media (hover: hover) { .database-chart-row:hover { text-decoration: underline; } }
+@media (max-width: 899px) {
+  .database-chart-plot { height: 180px; }
+  .database-chart-line { min-height: 36px; }
+  .database-chart-toggle { min-height: 36px; }
+  .database-chart .database-chart-row { min-height: 36px; }
+}
 .database-filter-sheet { display: contents; }
 @media (min-width: 900px) { .database-menu:has(.database-filter-sheet) { width: 360px; } }
 /* A line, no box: three layers of boxes would be most of what's in the sheet. */

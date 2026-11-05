@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createPortal } from 'react-dom'
-import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback } from 'react'
+import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback, lazy, Suspense } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { descendantsOf, parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
@@ -867,6 +867,8 @@ function DatabaseView(props: DatabaseViewProps) {
   const changeView = useViewChange(props.db.id, view.id)
   return <LaidOutView {...props} view={view} changeView={changeView} />
 }
+// Its code loads only when a chart is on screen, so a day with none pays nothing (chart.md §7).
+const DatabaseChart = lazy(() => import('./database-chart'))
 /** A view in its layout, for a home block and a linked view alike. */
 export function LaidOutView(props: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   if (props.view.layout === 'board') return <DatabaseBoard {...props} />
@@ -874,6 +876,7 @@ export function LaidOutView(props: DatabaseViewProps & { view: View; changeView:
   if (props.view.layout === 'gallery') return <DatabaseGallery {...props} />
   if (props.view.layout === 'calendar') return <DatabaseCalendar {...props} />
   if (props.view.layout === 'timeline') return <DatabaseTimeline {...props} />
+  if (props.view.layout === 'chart') return <Suspense fallback={<div className="database-chart-loading" />}><DatabaseChart {...props} /></Suspense>
   return <DatabaseTable {...props} />
 }
 
