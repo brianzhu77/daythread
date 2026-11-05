@@ -99,6 +99,22 @@ await scenario('A failed save goes back to what\'s saved and says so, and Try ag
   r.ok = r.shown === '🐨' && r.saved === '🐨' && /Couldn't change the icon/.test(r.notice) && r.after !== '🐨' && r.after === r.shownAfter
   return r
 })
+await scenario('Two choices through two pickers, each save held: the first reply doesn\'t take the head back to it (Ratchet)', async page => {
+  const holds = []
+  await page.route('**/_serverFn/**', async route => { if (isIconCommand(route.request())) await new Promise(res => holds.push(res)); await route.continue().catch(() => {}) })
+  await openPicker(page); await page.locator('.icon-picker-search').fill('koala'); await wait(150); await page.locator('.icon-picker-cell').first().click(); await wait(500)
+  const first = await page.locator('.page-icon').innerText()
+  await page.keyboard.press('Escape'); await wait(200)
+  await page.locator('.page-icon').click(); await wait(300); await page.locator('.icon-picker-search').fill('tree'); await wait(150); await page.locator('.icon-picker-cell').first().click(); await wait(500)
+  const second = await page.locator('.page-icon').innerText()
+  const r = { first, second, sends: holds.length }
+  holds[0](); await wait(900)
+  r.afterFirst = await page.locator('.page-icon').innerText(); r.sends2 = holds.length
+  holds[1](); await wait(1000)
+  r.afterSecond = await page.locator('.page-icon').innerText(); r.saved = iconOf('notes')
+  r.ok = first === '🐨' && second !== first && r.afterFirst === second && r.afterSecond === second && r.saved === second
+  return r
+})
 await scenario('An icon changed while words are saving, with the save held: both stay, the newest choice shows, and a late Undo takes only what it says (P1-9)', async page => {
   let release, count = 0
   const held = new Promise(res => { release = res })
