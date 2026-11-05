@@ -2031,10 +2031,10 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .formula-editor { display: flex; gap: 10px; min-height: 0; padding: 2px 6px 6px; }
 .formula-main { display: flex; flex: 1 1 60%; flex-direction: column; gap: 6px; min-width: 0; }
 .formula-field-box { position: relative; display: flex; min-width: 0; }
-.formula-field { position: relative; display: block; box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; white-space: pre-wrap; overflow-wrap: break-word; resize: vertical; outline: none; }
+.formula-field { position: relative; z-index: 1; display: block; box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; white-space: pre-wrap; overflow-wrap: break-word; resize: vertical; outline: none; }
 /* Behind the field, the same box and the same words, with only the tokens seen. Their fill reaches past the words by a shadow, as padding would move every word after them. */
 .formula-backing { position: absolute; inset: 0; box-sizing: border-box; padding: 6px 8px; overflow: hidden; border: 1px solid transparent; color: transparent; font: inherit; white-space: pre-wrap; overflow-wrap: break-word; pointer-events: none; }
-.formula-token { border-radius: 3px; background: var(--fill-soft); box-shadow: 0 0 0 1px var(--fill-soft); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.formula-token { border-radius: 3px; background: var(--fill); box-shadow: 0 0 0 1px var(--fill); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .formula-field:focus, .formula-field:focus-visible { border-color: var(--blue); outline: none; box-shadow: none; }
 .formula-status { min-height: 1.4em; margin: 0; color: var(--ink); font-size: var(--text-meta); overflow-wrap: anywhere; }
 .formula-status.is-error { color: var(--formula-red); }

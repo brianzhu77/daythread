@@ -108,12 +108,13 @@ export function FormulaEditor({ workspace, read, db, propertyId, stored, wide, o
   return <div className="formula-editor" data-refused={refused || undefined}>
     <div className="formula-main">
       <div className="formula-field-box">
-      <TokenBacking text={text} tokens={shownTokens} field={field} />
       <textarea ref={field} className="formula-field" aria-label="Formula" rows={wide ? 5 : 3} autoFocus spellCheck={false} autoCapitalize="off" autoCorrect="off" placeholder='Price * Qty' value={text}
         onChange={e => change(e.target.value)}
         onCompositionStart={e => { composing.current = true; composingFrom.current = e.currentTarget.selectionStart }}
         onCompositionEnd={e => { composing.current = false; setSettled(e.currentTarget.value) }}
         onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) { e.preventDefault(); done() } }} />
+      {/* After the field, so the field's ref is there for its layout effect. It's drawn behind it by z-index. */}
+      <TokenBacking text={text} tokens={shownTokens} field={field} />
       </div>
       <p className={`formula-status${message ? ' is-error' : ''}`} role="status">
         {message ?? (preview && 'text' in preview && row ? <><span className="formula-preview-of">{displayPageTitle(row)}</span> {shortened(preview.text) || 'Empty'}</> : null)}

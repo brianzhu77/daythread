@@ -43,7 +43,7 @@ await scenario('Properties read as tokens where they sit, and what is stored is 
 await scenario('A saved formula opens with its tokens; picking from the list makes one', 'written', async page => {
   await openProperties(page); await menu(page).locator('.database-property-name', { hasText: 'Total' }).click(); await wait(250); await menu(page).getByRole('menuitem', { name: 'Edit formula' }).click(); await wait(300)
   const opened = await tokens(page)
-  await field(page).focus(); await page.keyboard.press(engine === 'webkit' ? 'Meta+ArrowDown' : 'Control+End'); await page.keyboard.type(' + '); await menu(page).locator('.formula-item', { hasText: /^Qty$/ }).click(); await wait(150)
+  await field(page).focus(); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.type(' + '); await menu(page).locator('.formula-item', { hasText: /^Qty$/ }).click(); await wait(150)
   const picked = await tokens(page), text = await field(page).inputValue()
   return { ok: opened.join() === 'Price,Qty' && picked.join() === 'Price,Qty,Qty' && text === 'Price * Qty + Qty', opened, picked, text }
 })
@@ -56,27 +56,30 @@ await scenario('Paste and typing behave as today: prop(), a bare name, a misspel
 await scenario('Delete works a character at a time, and a name no longer whole stops being a token', '', async page => {
   await addFormula(page, 'Sum')
   await set(page, 'Price * Qty')
-  await field(page).focus(); await page.keyboard.press('Backspace'); await wait(150)
+  await field(page).focus(); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.press('Backspace'); await wait(150)
   const after = await tokens(page), text = await field(page).inputValue()
   await page.keyboard.type('y'); await wait(150)
   return { ok: after.join() === 'Price' && text === 'Price * Qt' && (await tokens(page)).join() === 'Price,Qty', after, text }
 })
 await scenario('The backing keeps step with the field: long lines wrap alike, and it scrolls with it', '', async page => {
   await addFormula(page, 'Sum')
-  const long = Array.from({ length: 30 }, (_, i) => (i % 2 ? 'Price' : 'Qty')).join(' + ')
+  const long = Array.from({ length: 120 }, (_, i) => (i % 2 ? 'Price' : 'Qty')).join(' + ')
   await set(page, long)
   const wrapped = await inStep(page)
   await field(page).evaluate(n => { n.scrollTop = n.scrollHeight }); await wait(150)
   const scrolled = await inStep(page)
+  // A scrollbar that takes room from the words, as on a machine that always shows them.
+  let narrowed = { fieldInner: 0, backingInner: 0, field: 0, backing: 0 }
+  if (engine === 'chromium') { await page.addStyleTag({ content: '.formula-field::-webkit-scrollbar { width: 14px; }' }); await wait(200); narrowed = await inStep(page) }
   await set(page, `${'x'.repeat(200)} + Price\n\n`)
   const unbroken = await inStep(page)
-  return { ok: wrapped.field === wrapped.backing && wrapped.field > 100 && scrolled.fieldTop > 0 && scrolled.fieldTop === scrolled.backingTop && unbroken.field === unbroken.backing && wrapped.fieldInner === wrapped.backingInner, wrapped, scrolled, unbroken }
+  return { ok: wrapped.field === wrapped.backing && wrapped.field > 100 && scrolled.fieldTop > 0 && scrolled.fieldTop === scrolled.backingTop && unbroken.field === unbroken.backing && wrapped.fieldInner === wrapped.backingInner && narrowed.fieldInner === narrowed.backingInner && narrowed.field === narrowed.backing, wrapped, scrolled, narrowed, unbroken }
 })
 await scenario('Pinyin: letters being spelled aren\'t a token, even if they spell a name, and a Chinese name is one once chosen', '', async page => {
   if (engine !== 'chromium') return { ok: true, skipped: 'needs CDP' }
   await addFormula(page, 'Sum')
   const cdp = await page.context().newCDPSession(page)
-  await set(page, 'Qty + '); await field(page).focus(); await page.keyboard.press('End')
+  await set(page, 'Qty + '); await field(page).focus(); await page.keyboard.press('Meta+ArrowDown')
   await cdp.send('Input.imeSetComposition', { text: 'Price', selectionStart: 5, selectionEnd: 5 }); await wait(150)
   const during = await tokens(page), duringText = await field(page).inputValue()
   await cdp.send('Input.insertText', { text: 'Price' }); await wait(150)

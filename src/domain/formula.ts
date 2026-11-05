@@ -272,7 +272,7 @@ export function propertyTokens(typed: string, world: FormulaWorld, databaseId: s
 }
 /**
  * A property as he writes it: its bare name, as he'd type it, or `prop("…")` where a bare name wouldn't read back as that property.
- * Real tokens would need a rich field, and the field's composition and phone keyboard are its riskiest parts (design §2).
+ * It stays text, as the field's composition and phone keyboard are its riskiest parts (design §2). `propertyTokens` is how it reads as a token.
  */
 const notBare = new Set(['true', 'false', 'not', 'and', 'or', 'mod', 'current', 'index', 'let', 'lets', 'prop', ...functionList.map(f => f.name)].map(n => n.toLocaleLowerCase()))
 export const writtenName = (name: string): string => (/^[\p{L}_][\p{L}\p{N}_ ]*$/u.test(name) && !name.endsWith(' ') && !notBare.has(name.toLocaleLowerCase()) && name !== deletedName ? name : `prop(${quoted(name)})`)
