@@ -40,7 +40,7 @@ await scenario('With no icon nothing is drawn, and the picker\'s data isn\'t fet
 })
 await scenario('Pick, with its notice and one Undo; the title stays words; a tap on the icon opens the picker again, with Remove', async page => {
   await setIcon(page, 'koala')
-  const r = { icon: iconOf('notes'), title: store().pages.find(p => p.id === 'notes').title, notice: await notices(page), head: await page.locator('.page-icon').innerText() }
+  const r = { icon: iconOf('notes'), title: store().pages.find(p => p.id === 'notes').title, notice: await notices(page), head: await page.locator('.page-icon').textContent() }
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1000)
   r.undone = iconOf('notes') ?? null; r.line = await page.locator('.page-icon-line').count()
   await setIcon(page, 'koala')
@@ -77,10 +77,10 @@ await scenario('Random changes at once on each press and stays open; a run of pr
   page.on('request', q => { if (isIconCommand(q)) sent++ })
   await page.locator('.page-icon').click(); await wait(300)
   const seen = new Set()
-  for (let i = 0; i < 6; i++) { await page.locator('.icon-picker').getByRole('button', { name: 'Random' }).click(); seen.add(await page.locator('.page-icon').innerText()); await wait(50) }
+  for (let i = 0; i < 6; i++) { await page.locator('.icon-picker').getByRole('button', { name: 'Random' }).click(); seen.add(await page.locator('.page-icon').textContent()); await wait(50) }
   const r = { shown: seen.size, open: await page.locator('.icon-picker').count(), sentDuring: sent }
   await wait(1400)
-  r.sent = sent; const settled = await page.locator('.page-icon').innerText(); r.same = iconOf('notes') === settled
+  r.sent = sent; const settled = await page.locator('.page-icon').textContent(); r.same = iconOf('notes') === settled
   await page.keyboard.press('Escape'); await wait(200)
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1000)
   r.back = iconOf('notes')
@@ -92,10 +92,10 @@ await scenario('A failed save goes back to what\'s saved and says so, and Try ag
   await page.route('**/_serverFn/**', route => isIconCommand(route.request()) ? route.abort() : route.continue())
   await page.locator('.page-icon').click(); await wait(300)
   await page.locator('.icon-picker-search').fill('tree'); await wait(150); await page.locator('.icon-picker-cell').first().click(); await wait(1200)
-  const r = { shown: await page.locator('.page-icon').innerText(), saved: iconOf('notes'), notice: await notices(page) }
+  const r = { shown: await page.locator('.page-icon').textContent(), saved: iconOf('notes'), notice: await notices(page) }
   await page.unroute('**/_serverFn/**')
   await page.getByRole('button', { name: 'Try again' }).click(); await wait(1200)
-  r.after = iconOf('notes'); r.shownAfter = await page.locator('.page-icon').innerText()
+  r.after = iconOf('notes'); r.shownAfter = await page.locator('.page-icon').textContent()
   r.ok = r.shown === '🐨' && r.saved === '🐨' && /Couldn't change the icon/.test(r.notice) && r.after !== '🐨' && r.after === r.shownAfter
   return r
 })
@@ -105,12 +105,12 @@ await scenario('An icon changed while words are saving, with the save held: both
   await page.route('**/_serverFn/**', async route => { const q = route.request(); if (q.method() === 'POST' && (q.postData() ?? '').includes('save-editor') && !count++) await held; await route.continue().catch(() => {}) })
   await line(page, 'Another line').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.type(' typed while it saves', { delay: 10 }); await wait(1500)
   await openPicker(page); await page.locator('.icon-picker-search').fill('koala'); await wait(150); await page.locator('.icon-picker-cell').first().click(); await wait(200)
-  const r = { during: await page.locator('.page-icon').innerText() }
+  const r = { during: await page.locator('.page-icon').textContent() }
   await page.locator('.page-icon').click(); await wait(200); await page.locator('.icon-picker-search').fill('tree'); await wait(150); const want = await page.locator('.icon-picker-cell').first().innerText(); await page.locator('.icon-picker-cell').first().click(); await wait(200)
-  r.newest = await page.locator('.page-icon').innerText() === want
+  r.newest = await page.locator('.page-icon').textContent() === want
   release(); await wait(2600)
   const doc = JSON.stringify(store().pages.find(p => p.id === 'notes').document)
-  r.words = doc.includes('typed while it saves'); r.icon = iconOf('notes') === want; r.shownStill = await page.locator('.page-icon').innerText() === want
+  r.words = doc.includes('typed while it saves'); r.icon = iconOf('notes') === want; r.shownStill = await page.locator('.page-icon').textContent() === want
   await line(page, 'Another line').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.type(' more', { delay: 10 }); await wait(1800)
   const undo = page.getByRole('button', { name: 'Undo' })
   r.undoGone = await undo.count() === 0
@@ -194,7 +194,7 @@ await scenario('A written day takes one; an empty day has no ⋯', async page =>
   await page.goto(`${base}/day/${store().pages.find(p => p.type === 'daily' && p.document.includes('Written today')).date}`); await wait(1800)
   const r = { more: await page.locator('.day-head .page-more').count() }
   await openPicker(page); await page.locator('.icon-picker-search').fill('koala'); await wait(150); await page.locator('.icon-picker-cell').first().click(); await wait(1000)
-  r.head = await page.locator('.page-icon').innerText(); r.sidebar = await page.locator('.tree-row[data-kind="day"] .page-emoji').count()
+  r.head = await page.locator('.page-icon').textContent(); r.sidebar = await page.locator('.tree-row[data-kind="day"] .page-emoji').count()
   const future = new Intl.DateTimeFormat('en-CA').format(new Date(Date.now() + 86_400_000))
   await page.goto(`${base}/day/${future}`); await wait(1500)
   r.emptyMore = await page.locator('.day-head .page-more').count()
