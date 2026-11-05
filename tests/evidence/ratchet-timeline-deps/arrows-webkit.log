@@ -1,0 +1,48 @@
+PASS an arrow for each link between rows on the scale; none to a row with no date ["build>ship","design>build","design>clash","ship>far"]
+PASS it leaves the end of the blocker [[719,255],{"x":526,"y":241,"width":192,"height":28}]
+PASS and reaches the start of what it blocks [[765,291],{"x":766,"y":277,"width":240,"height":28}]
+PASS a blocked bar that starts too soon: the arrow doubles back to reach its start "M3073 62L3077 62Q3081 62 3081 66L3081 76Q3081 80 3077 80L2923 80Q2919 80 2919 84L2919 166Q2919 170 2923 170L2927 170"
+PASS the arrows take no clicks 
+PASS they draw under the bars 
+PASS a bar under the pointer darkens its own arrows 
+PASS and shows its dots 
+PASS a line to a bar off-screen goes behind that row's name "rgb(255, 255, 255)"
+PASS a bar far off: the line runs to the edge of what's drawn [4510,3610]
+PASS with no head out there 
+PASS a click on a dot opens nothing "http://127.0.0.1:3699/pages?page=plan"
+PASS no page errors []
+PASS the arrow goes with a bar while it moves [719,911]
+PASS no dots while it's moving 
+PASS the chain follows on the drop, and the notice says so "3 rows moved "
+PASS one Undo puts it back, with its arrow [719,719]
+PASS no page errors []
+PASS a dashed line follows the pointer 
+PASS and the bar under it says so 
+PASS from a bar's end: this blocks that, with an arrow ["build>ship","design>build","design>clash","loose>ship","ship>far"]
+PASS both sides of the relation are in the store [["build","loose"],["ship"]]
+PASS and the notice says who "Ship is blocked by On its own "
+PASS one Undo takes it out, both sides [["build"]]
+PASS from a bar's start: that blocks this ["build>ship","design>build","design>clash","design>loose","ship>far"]
+PASS the same link again says so and changes nothing "Already linked | On its own is blocked by Design | Undone "
+PASS a loop is refused, with the reason, and no Retry "That would make a loop: a row can't end up blocking itself | Already linked | On its own is blocked by Design | Undone "
+PASS and nothing changes 
+PASS Esc lets it go 
+PASS and nothing changes 
+PASS letting go on nothing changes nothing 
+PASS letting go on its own bar changes nothing, and opens nothing 
+PASS no page errors []
+PASS with the table open, an arrow still meets its bar [939,{"x":746,"y":241,"width":192,"height":28}]
+PASS and the table sits over any line that runs under it 2
+PASS no page errors []
+PASS in groups, an arrow crosses from one to another ["build>ship","design>build","design>clash","ship>far"]
+PASS and meets its bar on the right line [[1053,435],{"x":1054,"y":421,"width":96,"height":28}]
+PASS a folded group has no arrows, and nothing else breaks ["ship>far"]
+PASS groups: no page errors []
+PASS a row a filter hides has no arrow ["design>build"]
+PASS filter: no page errors []
+PASS dark: arrows take the theme "rgb(110, 110, 110)"
+PASS dependencies off: no arrows 
+PASS and no dots 
+PASS 390: a list by week, with no arrows 6
+PASS 390: no page errors []
+ALL PASS

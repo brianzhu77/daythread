@@ -1,0 +1,11 @@
+PASS Turn on with rows and off again: every row and value unchanged, both ways {"on":{"parent":"95a1d8b7-3ca0-4c4f-a81c-bb006ce4abfe","sub":"9353ce0c-d0d0-4bc1-9602-4d55656ae3ed"},"unchanged":true,"columns":["Name","N","+\n"],"off":null,"after":true,"kept":2,"again":{"parent":"95a1d8b7-3ca0-4c4f-a81c-bb006ce4abfe","sub":"9353ce0c-d0d0-4bc1-9602-4d55656ae3ed"},"same":true,"ok":true,"errors":[]}
+PASS Nested: toggles open and close, with the indent stopping at 4 levels; flat lists them all {"closed":["top","other"],"opened":["top","kid","grand","great","deep","deeper","kid2","other"],"steps":[437,453,469,485,501,501],"lastLevel":0,"stepOne":16,"closedAgain":["top","other"],"flat":["top","kid","grand","great","deep","deeper","kid2","other"],"ok":true,"errors":[]}
+PASS Which rows: parents only, opening onto their sub-items, and sub-items only {"parents":["top","other"],"parentsOpen":["top","kid","kid2","other"],"subs":["kid","grand","great","deep","deeper","kid2"],"ok":true,"errors":[]}
+PASS In a group a sub-item says whose it is, on every layout; a row with no parent says nothing {"table":["in top"],"list":["in top"],"board":["in top"],"gallery":["in top"],"timeline":["in top"],"ok":true,"errors":[]}
+PASS A new sub-item from a parent's + {"madeParent":["other"],"otherSub":["caec3b68-5d5f-459c-99f0-3aea42e8eb2a"],"ok":true,"errors":[]}
+PASS Delete a parent: the count, one trash batch, one Undo restores them all {"notice":"Row deleted · 4 sub-items ","left":["kid2","other","top"],"trashIds":1,"back":8,"ok":true,"errors":[]}
+PASS Duplicate a parent: the tree comes, with its own links {"rows":13,"copyPar":["top"],"copySub":1,"kidSub":["grand"],"ok":true,"errors":[]}
+PASS A list nests too {"closed":["top","other"],"opened":["top","kid","kid2","other"],"ok":true,"errors":[]}
+PASS Cards: a gallery shows parents with their sub-items on the card, and flat shows them all {"gallery":["top","other"],"onCard":"kid\nkid2\n","flat":["top","kid","grand","great","deep","deeper","kid2","other"],"flatOnCard":0,"ok":true,"errors":[]}
+PASS 390: toggles take a tap, nothing past the edge {"opened":["top","kid","kid2","other"],"height":44,"overflow":0,"ok":true,"errors":[]}
+ALL PASS
