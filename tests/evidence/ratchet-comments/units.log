@@ -1,0 +1,18 @@
+✔ a thread: added, replied to, edited, resolved and reopened, each moving its version; the page's document stays byte for byte (3.296833ms)
+✔ a tab that hadn't seen the newest change is refused and changes nothing; too long and no words are refused (4.31325ms)
+✔ deleting and resolving have one Undo; deleting the last comment takes the thread, and Undo brings it back; a late Undo can't erase a newer reply (0.401041ms)
+✔ adding and editing leave the Undo slot alone, so a note doesn't cost the Undo of what came before, and that Undo leaves the note (comments.md §2) (0.357959ms)
+✔ a note has no Undo of its own, and one on a page that Undo would take away means Can't undo (0.229833ms)
+✔ threads go to Trash with their page and come back; gone for good with it; a duplicate gets none; moving between days keeps them (2.647959ms)
+✔ search finds a comment's words, resolved too and marked; export writes them at the end; the day draft sends none (P2-8) (1.01575ms)
+✔ the browser's copy follows, and a tab that knows nothing of them isn't handed anything it must use (0.44575ms)
+✔ an inverse written by a build before comments leaves the table alone (P2-9) (0.27175ms)
+✔ on the database: a save of a page never touches them, Undo restores them, and another account reads none (1217.675542ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1419.379584

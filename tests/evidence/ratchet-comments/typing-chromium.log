@@ -1,0 +1,21 @@
+{"remaining":"","draft":[],"stored":["First sent"]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: late success must not clear newer unsent words
++ actual - expected
+
++ ''
+- 'NEW WORDS typed while sending'
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-comments/tests/evidence/ratchet-comments/typing.mjs:3:898 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: '',
+  expected: 'NEW WORDS typed while sending',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
