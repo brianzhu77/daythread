@@ -105,7 +105,8 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
       if (to) moveTo(row, from, to)
     }
     const cancel = () => { finish(); setDrag(null); if (lifted) { justDragged.current = true; setTimeout(() => { justDragged.current = false }) } }
-    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
+    // The button's still down, so its click comes when it's let go, and mustn't open the row.
+    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key !== 'Escape') return; ev.stopPropagation(); finish(); setDrag(null); if (lifted) { justDragged.current = true; document.addEventListener('pointerup', () => setTimeout(() => { justDragged.current = false }), { once: true }) } }
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
   }
   // Scrolled or redrawn away, nothing stays lifted.
