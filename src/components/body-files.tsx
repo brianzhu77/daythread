@@ -201,7 +201,9 @@ function useStopWhenGone(blockId: string, up: Upload | undefined) {
 /** An `Add image` nobody filled: its way out, as a handle or a key isn't always to hand on a phone (B87 15). */
 function BodyEmptyFile({ blockId, children }: { blockId: string; children: ReactNode }) {
   const editor = useBlockNoteEditor<any, any, any>()
-  return <div className="body-file-empty">{children}<button type="button" contentEditable={false} onClick={() => editor.removeBlocks([blockId])}>Remove</button></div>
+  // Clicked, it's chosen as any picture is, so Backspace takes it. A phone has Remove, and no key to want it for.
+  const choose = () => { if (matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(blockId); editor.focus() } }
+  return <div className="body-file-empty" onClick={choose}>{children}<button type="button" contentEditable={false} onClick={e => { e.stopPropagation(); editor.removeBlocks([blockId]) }}>Remove</button></div>
 }
 function BodyImageView(props: any) {
   const url: string = props.block.props.url, name: string = props.block.props.name, ours = bodyFileOf(url)

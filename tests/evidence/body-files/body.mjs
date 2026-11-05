@@ -394,7 +394,7 @@ for (const [label, back] of [['today', 0], ['a past day', 3]]) await scenario(`O
   r.ok = r.added.some(a => a[0] === 'image') && r.images === 1 && r.written && r.sameLines && r.sections && r.below?.[2] === 'After the picture' && r.tray[0] === r.tray[1] && (back ? r.below[1] === 'paragraph' : r.below[1] === 'bulletListItem' && after[image - 1]?.[2] === 'Notes')
   return r
 })
-await scenario('A /image left empty: Remove takes it, with the panel open or shut, and one Undo brings it back', async page => {
+await scenario('A /image left empty: Remove takes it, with its panel open', async page => {
   await caretOn(page, 'Third line')
   await page.keyboard.press('Enter'); await page.keyboard.type('/image'); await wait(500); await page.keyboard.press('Enter'); await wait(500)
   const r = { panel: await page.locator('.bn-panel').count(), held: types().includes('image') }
@@ -433,6 +433,54 @@ await scenario('Keys on a chosen image: Enter adds a line below, Backspace remov
   r.esc = await selected()
   r.keys = r.chosen[0] === 1 && r.down[0] === 0 && r.esc[0] === 0
   r.ok = r.keys && !r.backspace.includes('image') && r.undo.includes('image') && r.enter.split(',').length === r.start.split(',').length + 1 && r.enter.split(',')[r.start.split(',').indexOf('image') + 1] === 'paragraph'
+  return r
+})
+const typesNow = () => doc().map(n => n.type).join()
+await scenario('B88: opening a page ending in a picture, then Backspace, Delete and a letter, changes nothing', async page => {
+  await caretOn(page, 'Third line'); await page.keyboard.press('Enter'); await wait(100); await paste(page, [png]); await wait(1300)
+  // Ends in the picture alone, with its line below gone.
+  await page.locator('.bn-inline-content', { hasText: 'Third line' }).click(); await wait(100)
+  const trailing = doc().at(-1); if (trailing.type === 'paragraph' && !trailing.content.length) { await page.locator('.bn-block-content[data-content-type=paragraph]').last().click(); await page.keyboard.press('Backspace'); await wait(1400) }
+  const r = { last: doc().at(-1).type }, before = JSON.stringify(doc())
+  await page.reload(); await page.locator('.bn-inline-content', { hasText: 'First line' }).waitFor(); await wait(1500)
+  for (const key of ['Backspace', 'Delete', 'x']) { await page.keyboard.press(key); await wait(300) }
+  await wait(1200)
+  r.same = JSON.stringify(doc()) === before
+  r.ok = r.last === 'image' && r.same
+  return r
+})
+await scenario('B89: Delete from the line above and Backspace from the line below leave a picture; an empty line beside it goes', async page => {
+  await pasted(page)
+  const was = typesNow(), r = {}
+  await caretOn(page, 'Second line'); await page.keyboard.press('Delete'); await wait(1300)
+  r.delete = typesNow() === was
+  await page.locator('.bn-block-content[data-content-type=paragraph]').nth(2).click(); await page.keyboard.type('Below'); await wait(1300)
+  const below = doc().find(n => n.content?.[0]?.text?.includes('Below'))
+  await page.locator(`[data-id="${below.id}"] .bn-inline-content`).click(); await page.keyboard.press('Meta+ArrowLeft'); await wait(100); await page.keyboard.press('Home'); await page.keyboard.press('Backspace'); await wait(1300)
+  r.backspace = typesNow().includes('image') && doc().some(n => n.content?.[0]?.text?.includes('Below'))
+  await caretOn(page, 'Second line'); await page.keyboard.press('Enter'); await wait(1300)
+  const withLine = doc().length
+  await page.keyboard.press('Delete'); await wait(1300)
+  r.emptyGoes = doc().length === withLine - 1 && types().includes('image')
+  r.ok = r.delete && r.backspace && r.emptyGoes
+  return r
+})
+await scenario('An arrow arriving at a picture leaves it to Backspace; a click chooses it, and so does a click on an empty Add image', async page => {
+  await pasted(page)
+  const r = {}
+  await page.locator('.bn-visual-media').first().click(); await wait(300); await page.keyboard.press('ArrowDown'); await wait(200); await page.keyboard.press('ArrowUp'); await wait(300)
+  r.arrived = await page.locator('.ProseMirror-selectednode').count()
+  await page.keyboard.press('Backspace'); await wait(1300)
+  r.afterArrow = types().includes('image')
+  await page.locator('.bn-visual-media').first().click(); await wait(300); await page.keyboard.press('Backspace'); await wait(1300)
+  r.afterClick = types().includes('image')
+  await caretOn(page, 'Second line'); await page.keyboard.press('Enter'); await page.keyboard.type('/image'); await wait(500); await page.keyboard.press('Enter'); await wait(500)
+  await page.keyboard.press('Escape'); await wait(300); await page.mouse.click(5, 5); await wait(300)
+  await page.locator('.bn-add-file-button').first().click(); await wait(400)
+  r.selectedEmpty = await page.locator('.ProseMirror-selectednode').count()
+  await page.keyboard.press('Backspace'); await wait(1300)
+  r.emptyGone = !types().includes('image')
+  r.ok = r.arrived === 1 && r.afterArrow && !r.afterClick && r.emptyGone
   return r
 })
 await scenario('Moved by its handle: the block goes, its address with it', async page => {

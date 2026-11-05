@@ -781,6 +781,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
+  const clickedFile = useRef<string | null>(null)
   const [fileDropLine, setFileDropLine] = useState<{ top: number; left: number; width: number } | null>(null)
   const dropRef = useRef<typeof drop>(null)
   // Edit notices ("Deleted 'Notes' · Undo") are HeroUI toasts. Undo only applies while the document is still the
@@ -1845,6 +1846,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const { selection } = editor.prosemirrorState
     if (selection instanceof NodeSelection) {
       const inner = selection.node.type.name === 'blockContainer' ? selection.node.firstChild! : selection.node
+      // A picture or file clicked on is chosen, as by its handle (B87 §5), and so is an Add image nobody filled. One an arrow arrived at stays.
+      if (clickedFile.current && clickedFile.current === editor.getTextCursorPosition().block.id) return false
       return inner.isBlock && !inner.inlineContent && inner.type.name !== 'divider' && inner.type.name !== 'table'
     }
     const { $from } = selection, length = $from.parent.content.size
@@ -2550,6 +2553,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onMouseDownCapture={e => {
       const target = e.target as Element
       if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') }
+      clickedFile.current = target.closest('[data-file-block]')?.closest('[data-node-type="blockContainer"]')?.getAttribute('data-id') ?? null
       // The space below a last block with no text gives a line, as the strip just under it does. Left alone, the press goes to the nearest text, a line further up, or selects the block whole, and a key then removes it (B88).
       const last = editor.document.at(-1), lastEl = last && !Array.isArray(last.content) ? editor.domElement?.querySelector(`.bn-block[data-id="${last.id}"]`) : null
       if (target === editor.domElement && e.button === 0 && last && lastEl && e.clientY > lastEl.getBoundingClientRect().bottom) {
@@ -2650,6 +2654,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
+      if (e.key !== 'Backspace' && e.key !== 'Delete') clickedFile.current = null
       // B44 (Jazz §3): with the paste menu open, ↑/↓ move, Enter picks (Keep is first), Esc keeps; any other key keeps
       // the link and does what it would anyway (⌘Z undoes the paste).
       const menu = pasteMenuRef.current
