@@ -2833,6 +2833,8 @@ body:has(.button-editor) #bn-suggestion-menu { max-height: min(420px, 45vh); }
   .database-menu .button-editor-done { min-height: 36px; height: 36px; }
 }
 /* Comments (comments.md §2). Nothing shows until there's one. */
+/* Grey and quiet, so it doesn't read as an underline he made (comments.md §2). */
+.comment-underline { border-bottom: 2px solid var(--line); }
 .comment-mark { position: absolute; z-index: 2; display: inline-grid; place-items: center; width: 16px; height: 16px; min-height: 0; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; touch-action: manipulation; }
 .comment-mark svg { width: 14px; height: 14px; }
 @media (hover: hover) { .comment-mark:hover { color: var(--ink); } }

@@ -11,6 +11,8 @@ export interface CommentAnchor {
   quote: string
   /** On a to-do's line: its task, as planning it to another day makes it a new line there, and the thread goes too. */
   taskId?: string
+  /** On selected words: where they start in the line, `quote` being those words. If they don't match there any more, it's on the whole line. */
+  at?: number
 }
 export const quoteLimit = 300
 export interface CommentThread {

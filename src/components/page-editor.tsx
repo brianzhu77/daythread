@@ -1,5 +1,6 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
-import { quoteLimit } from '../domain/comments'
+import { quoteLimit, threadsOn, type CommentAnchor } from '../domain/comments'
+import { commentUnderlines, selectedWords, underlineKey } from './comment-underlines'
 import { CommentMarks } from './comment-marks'
 import { openComments } from './comments-pane'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
@@ -50,7 +51,7 @@ import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { PageEmoji, BodyIcon, ImageIcon, PaperclipIcon, BulletListIcon, ButtonIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
+import { CommentIcon, PageEmoji, BodyIcon, ImageIcon, PaperclipIcon, BulletListIcon, ButtonIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
@@ -393,6 +394,10 @@ function LineMenu({ anchor, onClose, onCopy, onComment }: { anchor: { top: numbe
   </div>, document.body)
 }
 /** B35: a failure the network caused (worth retrying), not a refusal from the server (which would refuse again). */
+function CommentWordsButton({ onComment }: { onComment: () => void }) {
+  const Components = useComponentsContext()!
+  return <Components.FormattingToolbar.Button className="bn-button" mainTooltip="Comment" label="Comment" icon={<CommentIcon />} onClick={onComment} />
+}
 /** The words a comment on this line quotes, or what it is if it has none. */
 function lineQuote(node: EditorNode): string {
   const words = inlineText(node.content).trim()
@@ -507,12 +512,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   rowsAnchor.current = rows.length ? eventsAnchor(pageNodes(page), new Set(workspace.tasks.map(t => t.id))) : undefined
   // separatorShortcut needs the editor it is part of; a ref breaks the type cycle of passing `editor` itself.
   const editorRef = useRef<BlockNoteEditor<any, any, any> | null>(null)
+  // What the underlines read: this page's open threads on selected words, kept current below.
+  const lineAnchors = useRef<readonly CommentAnchor[]>([])
+  const commentSelection = useRef<() => void>(() => {})
   const editor = useCreateBlockNote({ schema, dictionary, uploadFile: (file: File, blockId?: string) => Promise.resolve(uploadFromPanel(editorRef.current!, file, blockId)), resolveFileUrl: resolveBodyFile, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [databaseKeys(), syncedKeys(blockId => {
     const block = deepNodes(editorRef.current!.document as never).find(n => n.id === blockId)
     const syncId = block?.props?.syncId
     if (typeof syncId !== 'string' || syncedPlaces(latestWorkspace.current, syncId).filter(p => !p.page.trashedAt).length > 1) return
     void endPlaceRef.current({ type: 'delete-synced-place', pageId: page.id, blockId })
-  }), separatorShortcut(() => editorRef.current!), tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  }), separatorShortcut(() => editorRef.current!), tagDecorations(tagCounts), commentUnderlines(() => lineAnchors.current), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -2227,6 +2235,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         <BasicTextStyleButton key="underline" basicTextStyle="underline" />
         <BasicTextStyleButton key="strike" basicTextStyle="strike" />
         <CreateLinkButton key="createLink" />
+        <CommentWordsButton key="comment" onComment={() => commentSelection.current()} />
         <BodyImageCaptionButton key="fileCaption" />
         <FileReplaceButton key="fileReplace" />
         <BodyImageAlign key="align" />
@@ -2234,6 +2243,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       </FormattingToolbar> }, []) // eslint-disable-line react-hooks/exhaustive-deps
   // Whether the phone toolbar's indent / outdent can act on the caret's line, and the line's style for Aa (F16).
   const [nesting, setNesting] = useState({ in: false, out: false })
+  const [hasWords, setHasWords] = useState(false)
   const [lineStyle, setLineStyle] = useState<LineStyle | null>(null)
   const [headingOk, setHeadingOk] = useState(true)
   const [styleOpen, setStyleOpen] = useState(false)
@@ -2319,6 +2329,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const update = () => {
       const next = { in: canIndent(), out: editor.canUnnestBlock() }
       setNesting(previous => previous.in === next.in && previous.out === next.out ? previous : next)
+      setHasWords(Boolean(selectedWords(editor.prosemirrorState)))
       const block = editor.getTextCursorPosition().block
       const style = isRoleHeading(block.id) ? null : styleOf(block as unknown as EditorNode)
       setLineStyle(style)
@@ -2521,6 +2532,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       <RowMenu label="More actions" triggerClass="editor-bar-button" groups={more} />
     </div>
   }
+  const openAnchors = useMemo(() => threadsOn(workspace.threads, page.id).flatMap(t => (t.anchor && !t.resolvedAt ? [t.anchor] : [])), [workspace.threads, page.id])
+  const anchorsKey = JSON.stringify(openAnchors)
+  useEffect(() => {
+    lineAnchors.current = openAnchors
+    const view = editor.prosemirrorView
+    if (view && !view.isDestroyed && !view.composing) view.dispatch(view.state.tr.setMeta(underlineKey, true))
+  }, [anchorsKey]) // eslint-disable-line react-hooks/exhaustive-deps
   /** Comments on a line (comments.md §6, step 2). A synced line's thread belongs to the shared record, which comes on its own; it's on the page until then. */
   const canComment = (id: string) => { const type = editor.getBlock(id)?.type; return Boolean(type) && type !== syncedBlockType && !insideSyncedBlock(id) }
   function commentOn(id: string) {
@@ -2530,6 +2548,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const taskId = rowTaskId(block)
     openComments(page.id, { composing: true, anchor: { blockId: id, quote: lineQuote(block), ...(taskId ? { taskId } : {}) } })
   }
+  /** Step 3: the selected words of a line, or if a selection runs across lines, the first of them. */
+  function commentOnSelection() {
+    const words = selectedWords(editor.prosemirrorState), id = words?.blockId ?? selected.current[0] ?? editor.getTextCursorPosition().block.id
+    if (!canComment(id)) { openComments(page.id, { composing: true }); return }
+    const block = editor.getBlock(id) as unknown as EditorNode | undefined
+    if (!words || !block) { commentOn(id); return }
+    const taskId = rowTaskId(block)
+    openComments(page.id, { composing: true, anchor: { blockId: id, quote: words.quote.slice(0, quoteLimit), at: words.at, ...(taskId ? { taskId } : {}) } })
+  }
+  commentSelection.current = commentOnSelection
   /** A11 §4 (Jazz §1): the line "Copy link to line" points at, or null where it isn't offered. */
   const lineLinkTarget = (blockId: string): LineTarget | null => {
     const block = editor.getBlock(blockId)
@@ -2794,11 +2822,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         }
       }
       // Tab where nesting would leave the section does nothing (and keeps focus in the editor), as the toolbar's Indent.
-      // ⌘⇧M: the chosen block, or the one at the caret, or else the page (comments.md §2).
+      // ⌘⇧M: selected words, then the chosen block or the one at the caret, or else the page (comments.md §2).
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'm') {
         e.preventDefault(); e.stopPropagation()
-        const id = selected.current[0] ?? editor.getTextCursorPosition().block.id
-        if (selected.current.length <= 1 && canComment(id)) commentOn(id); else openComments(page.id, { composing: true })
+        if (selected.current.length > 1) openComments(page.id, { composing: true }); else commentOnSelection()
         return
       }
       if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !canIndent()) { e.preventDefault(); e.stopPropagation(); return }
@@ -2984,6 +3011,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       <span className="editor-toolbar-gap" aria-hidden="true" />
       <button {...keepCaret} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button>
       <button {...keepCaret} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button>
+      {hasWords && <button {...keepCaret} onClick={() => commentSelection.current()} aria-label="Comment"><CommentIcon /></button>}
       <span className="editor-toolbar-gap" aria-hidden="true" />
       <button {...keepCaret} onClick={() => { setStyleOpen(false); (editor.domElement as HTMLElement | undefined)?.blur() }} aria-label="Hide keyboard"><HideKeyboardIcon /></button>
       {unsaved && <span className="editor-toolbar-unsaved" role="img" aria-label="Not saved yet" />}
