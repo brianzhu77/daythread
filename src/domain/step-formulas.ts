@@ -1,8 +1,9 @@
 // Variables and formula values in a button's or a rule's steps (buttons.md §2, G3-10). They're read at the tap, on the server, at the tap's own time, so a retry gives the same answer.
 import type { ButtonStep } from './buttons.ts'
-import { parseFormula } from './formula-parse.ts'
-import type { Value, ValueType } from './formula-functions.ts'
-import { clockIn, freshWorldOf, notBare, stepFormulaFits, stepProgram, type FormulaProgram, type FormulaWorld, type WorkedCells } from './formula.ts'
+import { titleId } from './database.ts'
+import { parseFormula, type FormulaNode } from './formula-parse.ts'
+import type { Clock, Value, ValueType } from './formula-functions.ts'
+import { clockIn, freshWorldOf, isFormula, notBare, stepFormulaFits, stepProgram, WorkedCells, type FormulaProgram, type FormulaWorld } from './formula.ts'
 import { cellsReading } from './relations.ts'
 import type { Page, Workspace } from './types.ts'
 
@@ -64,23 +65,68 @@ export function stepFormulaProblems(steps: readonly ButtonStep[], world: Formula
   })
 }
 
+const prepared = new WeakMap<readonly ButtonStep[], Map<string, { world: FormulaWorld; problems: (string | null)[] }>>()
+/**
+ * The world and the checks, once for a list of steps however many rows it runs on. Steps can't change a database's properties,
+ * so these hold for the whole command; a list is read afresh for each command.
+ */
+export function preparedSteps(steps: readonly ButtonStep[], ws: Workspace, databaseId: string): { world: FormulaWorld; problems: (string | null)[] } {
+  let byScope = prepared.get(steps)
+  if (!byScope) { byScope = new Map(); prepared.set(steps, byScope) }
+  let found = byScope.get(databaseId)
+  if (!found) {
+    const world = byScope.values().next().value?.world ?? freshWorldOf(ws)
+    found = { world, problems: stepFormulaProblems(steps, world, databaseId) }
+    byScope.set(databaseId, found)
+  }
+  return found
+}
+/** Does it read only this row's own stored values? Then it needs no other row, and no reading of the whole workspace. */
+function readsOnlyRow(node: FormulaNode | null, world: FormulaWorld, databaseId: string): boolean {
+  if (!node) return true
+  switch (node.k) {
+    case 'lit': case 'var': return true
+    case 'list': return node.items.every(i => readsOnlyRow(i, world, databaseId))
+    case 'let': return readsOnlyRow(node.value, world, databaseId) && readsOnlyRow(node.body, world, databaseId)
+    case 'call': return node.args.every(a => readsOnlyRow(a, world, databaseId))
+    case 'member': return false
+    case 'prop': {
+      if (node.id === titleId) return true
+      const p = world.databases.get(databaseId)?.properties.find(x => x.id === node.id)
+      return p !== undefined && !isFormula(p) && !p.rollup && p.type !== 'relation'
+    }
+  }
+}
+
 /** One step's reading of the workspace: it stops being true once the step has written. */
 export class StepReading {
+  private readonly ws: Workspace
   private readonly world: FormulaWorld
-  private readonly cells: WorkedCells
-  private readonly programs = new Map<string, FormulaProgram>()
-  constructor(ws: Workspace, at: string) {
-    this.world = freshWorldOf(ws)
-    this.cells = cellsReading(ws, clockIn(ws.timezone, Date.parse(at)), this.world)
+  private readonly clock: Clock
+  private cells: WorkedCells | null = null
+  private readonly programs = new Map<string, { program: FormulaProgram; light: boolean }>()
+  constructor(ws: Workspace, at: string, world: FormulaWorld) {
+    this.ws = ws
+    this.world = world
+    this.clock = clockIn(ws.timezone, Date.parse(at))
+  }
+  /** One that reads only its row gets cells of its own, which cost nothing; anything else reads the whole workspace, once for the step. */
+  private cellsFor(light: boolean, databaseId: string): WorkedCells {
+    // A copy, as the workspace is changed in place by the steps before, and what's projected from it is kept by identity.
+    if (!light) return (this.cells ??= cellsReading({ ...this.ws }, this.clock, this.world))
+    const db = this.world.databases.get(databaseId)
+    return new WorkedCells({ world: this.world, pages: new Map(), databases: new Map(db ? [[databaseId, db]] : []), clock: this.clock, rollup: () => undefined })
   }
   value(stored: string, row: Page, databaseId: string, variables: StepVariables): { value: Value; type: ValueType; error?: string } {
     const key = `${databaseId}\0${stored}`
-    let program = this.programs.get(key)
-    if (!program) {
-      program = stepProgram(stored, this.world, databaseId, new Map([...variables].map(([name, v]) => [name, v.type])))
-      this.programs.set(key, program)
+    let known = this.programs.get(key)
+    if (!known) {
+      const program = stepProgram(stored, this.world, databaseId, new Map([...variables].map(([name, v]) => [name, v.type])))
+      known = { program, light: readsOnlyRow(program.tree, this.world, databaseId) }
+      this.programs.set(key, known)
     }
+    const { program, light } = known
     if (program.error) return { value: null, type: 'any', error: program.error }
-    return { ...this.cells.stepValue(program.tree, row, new Map([...variables].map(([name, v]) => [name, v.value]))), type: program.type }
+    return { ...this.cellsFor(light, databaseId).stepValue(program.tree, row, new Map([...variables].map(([name, v]) => [name, v.value]))), type: program.type }
   }
 }

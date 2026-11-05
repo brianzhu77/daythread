@@ -7,8 +7,8 @@ import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, d
 import { automationProblem, dueRules, firedRules, type FiredRule } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, usesFormulas, valueAtTap, type ButtonStep, type ButtonValue } from "./buttons.ts";
 import { format } from "./formula-functions.ts";
-import { freshWorldOf, stepCell } from "./formula.ts";
-import { StepReading, stepFormulaProblems, type StepVariables } from "./step-formulas.ts";
+import { stepCell } from "./formula.ts";
+import { preparedSteps, StepReading, type StepVariables } from "./step-formulas.ts";
 import { commentLimit, leavesUndoAlone, type CommentThread, quoteLimit } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
 import { coverPlace, isCoverLink } from "./page-look.ts";
@@ -203,11 +203,12 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
   }
   // A formula reads the row it's on; with none, as for a schedule, only a page's name. Each is checked first too, so a broken one drops the tap before anything's written.
   const formulas = usesFormulas(steps), scopeId = formulas ? databaseOfRow(state, on)?.id ?? "" : "";
-  if (formulas) stepFormulaProblems(steps, freshWorldOf(state), scopeId).forEach((problem, i) => { if (problem) throw new DomainError(`${stepTitle(steps[i]!)}: ${problem}`); });
+  const ready = formulas ? preparedSteps(steps, state, scopeId) : null;
+  ready?.problems.forEach((problem, i) => { if (problem) throw new DomainError(`${stepTitle(steps[i]!)}: ${problem}`); });
   const variables: StepVariables = new Map();
   let reading: StepReading | null = null;
   const worked = (stored: string, row: Page, databaseId: string) => {
-    reading ??= new StepReading(state, at);
+    reading ??= new StepReading(state, at, ready!.world);
     const result = reading.value(stored, row, databaseId, variables);
     if (result.error) throw new DomainError(result.error);
     return result;

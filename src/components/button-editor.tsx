@@ -151,6 +151,7 @@ export function StepPage({ step, problem, canOpenMade, workspace, schema, rowsOf
               <input className="button-variable-name" aria-label="Variable name" placeholder="Name" maxLength={60} autoFocus={i === step.vars.length - 1 && !v.name} autoCapitalize="off" autoCorrect="off" value={v.name} onChange={e => put(i, { name: e.target.value })} />
               <button type="button" className="database-rule-remove" aria-label={`Remove ${v.name || 'this variable'}`} onClick={() => onChange({ ...step, vars: step.vars.filter((_, j) => j !== i) })}>×</button>
             </div>
+            <p className="button-variable-is" aria-hidden="true">{v.name || 'Variable'} is</p>
             <StepFormula label={`${v.name || 'Variable'} is`} stored={v.formula} world={world} databaseId={databaseId} variables={above} onChange={formula => put(i, { formula })} />
           </div>
         })}
@@ -251,7 +252,7 @@ function SetList({ database, set, world, reads, variables, onChange }: { databas
       {s.value.kind === 'formula' && property && <StepFormula key={s.id} label={`${s.name} formula`} stored={s.value.text} world={world} databaseId={reads} variables={variables} property={property} onChange={text => put({ kind: 'formula', text })} />}
       </div>
     })}
-    {free.length > 0 && <select aria-label="Set a property" value="" onChange={e => { const p = free.find(x => x.id === e.target.value); if (p) onChange([...set, { id: p.id, name: p.name, type: p.type, value: firstValue(p) }]) }}><option value="">+ Set a property…</option>{free.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+    {free.length > 0 && <select className="button-set-add" aria-label="Set a property" value="" onChange={e => { const p = free.find(x => x.id === e.target.value); if (p) onChange([...set, { id: p.id, name: p.name, type: p.type, value: firstValue(p) }]) }}><option value="">+ Set a property…</option>{free.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
   </>
 }
 
