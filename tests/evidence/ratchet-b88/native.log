@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/dogrod/Developer/daythread-ratchet-b88/tests/evidence/ratchet-b88/native.py", line 17, in <module>
+    e=tap('#key-probe');call('/element/'+next(iter(e.values()))+'/value',{'text':'AB'});key('XCUIKeyboardKeyDelete');probe=js('return document.querySelector("#key-probe").value');assert probe=='A',probe
+AssertionError: AB
