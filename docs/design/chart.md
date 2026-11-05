@@ -43,8 +43,8 @@ I ran the dataviz skill's palette validator on four greys, `#111111, #555555, #8
 **The rule:**
 
 - **Up to 4 greys, from the app's tokens** (`--ink`, `--ink-2`, `--ink-3` and a lighter grey, not hex), so a chart follows the theme.
-- **A grey follows a value's order, not its size:** a Select or Status uses its option order, and other values their sorted order. A filter never repaints a value. A new value that sorts earlier can, among values with no options, and that's accepted.
-- **Beyond 4 values:** the rest fold into "Other", which a tap opens, with the whole list in the table below. It's drawn as an outline with no fill, not a fifth grey, so it can't be mistaken for a value. Nothing's missing, though Notion would draw up to 50.
+- **Which values get a grey follows size, and which grey follows order (changed 2026-11-05, Lead 836135d4, from Jazz 60daebcf):** the four largest are named, ranked by value on a donut and by a series' total under Group by. Among those four, a grey follows the axis's order: a Select or Status's option order, and other values their sorted order. So a filter repaints a value only when the top four change, which is the accepted cost: folding by order could leave the biggest value unnamed, inside an Other covering most of the ring.
+- **Beyond 4 values:** the smaller ones fold into "Other", which a tap opens, with the whole list in the table below. It's drawn as an outline with no fill, not a fifth grey, so it can't be mistaken for a value. Nothing's missing, though Notion would draw up to 50.
 - **Tap to focus:** tapping a series or legend entry dims the rest, since greys are hardest to follow on a line chart.
 - **Always:** a legend for 2 or more series, direct labels where they fit, and a 2 px gap between fills. A donut's lightest slice needs its label outside.
 - **No two y-axes,** ever.
