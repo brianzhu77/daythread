@@ -15,8 +15,8 @@ A workspace holds one person, so a comment is a note attached to something, kept
 | Replies, edit, delete, resolve, reopen | The same |
 | A pane from 💬: click to see where a comment sits, filter open or resolved, newest reply first | The same, with no filter by person |
 | Comments shown at the side by default, or icons only ("Minimal") | **Icons only, with no setting.** Brian's look is minimal (1ac6784b), and a side column would change the width of Brian's days |
-| Mentions, Inbox, red unread circle, email and push | **Not planned.** Each needs a second person, as Person and Created by do in §14 |
-| Reactions on a comment or on text | **Not planned (Lead 3f167c20):** a reaction is a signal to someone else |
+| Mentions, Inbox, red unread circle, email and push | **Waits for shared pages (Lead 3f167c20).** Each needs a second person in a workspace, which isn't a judgement on its merit |
+| Reactions on a comment or on text | **Waits for shared pages (Lead 3f167c20):** a reaction is a signal to someone else |
 | Attachments | The page doesn't cover them. Not in this design |
 
 ## 2. What Brian sees
@@ -73,7 +73,7 @@ A workspace holds one person, so a comment is a note attached to something, kept
 
 ## 7. Open for review
 
-- **Decided (Lead 3f167c20):** reactions Not planned, and margin marks only, with no comments at the side (§1). **Lead, still open:** no count of comments in Pages or the sidebar.
+- **Decided (Lead 3f167c20):** reactions wait for shared pages, and margin marks only, with no comments at the side (§1). **Lead, still open:** no count of comments in Pages or the sidebar.
 - **Jazz:** where the margin mark sits on a To-do line and in a section with hidden empty rows (B19). The underline in both themes. The pane against a side peek: only one should be open at 1280.
 - **Roadbuster:** §3's storage, how a command for a comment gets its one Undo, and whether Linked from or Search needs anything new.
 - **Ratchet:** the anchor falling back when words change, a thread on a moved or trashed line, owner checks, and a synced block's thread.
