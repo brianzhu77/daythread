@@ -283,7 +283,7 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
     let lifted = false, pointer = start, auto = 0
     const minutesAt = () => { const moved = pointer - start + ((scroller.current?.scrollLeft ?? 0) - startScroll); const snap = snapMinutes(unit); return Math.round(moved / (width * snap / 1440)) * snap }
     const refuse = () => toast(`${(bar.endProperty && isReadOnly(bar.endProperty) ? bar.endProperty : bar.startProperty).name} can't be changed`, { timeout: 4000 })
-    const finish = () => { cancelAnimationFrame(auto); document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', esc, true) }
+    const finish = () => { cancelAnimationFrame(auto); document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', esc, true) }
     const edges = () => {
       const el = scroller.current
       if (el) { const r = el.getBoundingClientRect(); if (pointer < r.left + pane + 40) el.scrollLeft -= 12; else if (pointer > r.right - 40) el.scrollLeft += 12 }
@@ -308,8 +308,9 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
       write(bar.row, after.writes, part === 'move' ? `Moved to ${datesOf(after)}` : datesOf(after))
     }
     const cancel = () => { finish(); setDrag(null); if (lifted) { justDragged.current = true; setTimeout(() => { justDragged.current = false }) } }
-    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', esc, true)
+    // Called off by a key, the click is still to come, when it's let go.
+    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key !== 'Escape') return; ev.stopPropagation(); finish(); setDrag(null); if (lifted) { justDragged.current = true; document.addEventListener('pointerup', () => setTimeout(() => { justDragged.current = false }), { once: true }) } }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
   }
   useEffect(() => () => setDrag(null), [])
 
@@ -357,19 +358,21 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
   const startReorder = (e: ReactPointerEvent, rowId: string, from: string | null) => {
     if (e.button !== 0) return
     e.preventDefault(); e.stopPropagation()
+    // Not onto a sub-item's line: a row can't land between a parent and what's under it, so the line shows where it will.
+    const places = () => [...(scroller.current?.querySelectorAll<HTMLElement>('.database-bar-lane[data-row]:not([data-sub]), .database-group-end') ?? [])]
     const target = (y: number) => {
-      // Not onto a sub-item's line: a row can't land between a parent and what's under it, so the line shows where it will.
-      const lanes = [...(scroller.current?.querySelectorAll<HTMLElement>('.database-bar-lane[data-row]:not([data-sub]), .database-group-end') ?? [])]
+      const lanes = places()
       const at = lanes.find(l => { const r = l.getBoundingClientRect(); return y < r.top + r.height / 2 })
       if (!at) { const last = lanes.at(-1); return { before: null, over: last?.dataset.group ?? null } }
       return { before: at.dataset.row ?? null, over: at.dataset.group ?? null }
     }
     const move = (ev: PointerEvent) => setReorder({ rowId, ...target(ev.clientY) })
-    const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', esc, true) }
-    const up = (ev: PointerEvent) => { finish(); setReorder(null); const t = target(ev.clientY); moveRow(rowId, from, groups ? t.over : null, t.before, rows) }
+    const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', esc, true) }
+    const up = (ev: PointerEvent) => { finish(); setReorder(null); const t = target(ev.clientY); moveRow(rowId, from, groups ? t.over : null, t.before, places().flatMap(l => (l.dataset.row ? [{ id: l.dataset.row }] : []))) }
     const cancel = () => { finish(); setReorder(null) }
+    // On the window, or the document's other listeners hear it too: a peek's, with the caret in its text, would close.
     const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', esc, true)
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
   }
 
   // Where a bar is, as it's being dragged too, so an arrow goes with it.
@@ -417,7 +420,7 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
       show()
       auto = requestAnimationFrame(edges)
     }
-    const finish = () => { cancelAnimationFrame(auto); document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', esc, true); setLinking(null); justDragged.current = true; setTimeout(() => { justDragged.current = false }) }
+    const finish = () => { cancelAnimationFrame(auto); document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', esc, true); setLinking(null); justDragged.current = true; setTimeout(() => { justDragged.current = false }) }
     const move = (ev: PointerEvent) => { pointerX = ev.clientX; pointerY = ev.clientY }
     const up = () => {
       finish()
@@ -430,7 +433,7 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
     }
     const cancel = () => finish()
     const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', esc, true)
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
     auto = requestAnimationFrame(edges)
   }
 

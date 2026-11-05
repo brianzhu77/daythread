@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom'
 import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
-import { parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
+import { descendantsOf, parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
 import { limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import { loopRefusal } from '../domain/dependencies.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
@@ -533,7 +533,7 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
   const { run, latest } = useWorkspace()
   const commit = useCommitCell()
   const moveRows = useMoveRows(db, view, context, groups)
-  return (rowId: string, from: string | null, to: string | null, before: string | null, shown: readonly Page[]) => {
+  return (rowId: string, from: string | null, to: string | null, before: string | null, shown: readonly { id: string }[]) => {
     const stored = latest()
     const ws = stored && db.database.fixed ? withTodos(stored) : stored
     const row = ws?.pages.find(p => p.id === rowId)
@@ -549,10 +549,12 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
     if (from === to) {
       // To-dos have no order of their own to keep.
       if (db.database.fixed) return
-      // Dropped where it already is, as he sees it: nothing to send.
-      const here = groups ? target?.rows ?? [] : shown
-      const next = here[here.findIndex(r => r.id === rowId) + 1]?.id ?? null
-      if (sorted || before === rowId || before === next || beforeId === undefined) return
+      // Dropped where it already is, as he sees it: nothing to send. Nested, a row's sub-items go where it goes, so its own don't count as a place.
+      const here: readonly { id: string }[] = groups ? target?.rows ?? [] : shown
+      const links = nestedBy(db, view, Boolean(groups))
+      const own = new Set(links ? descendantsOf(all, links, rowId).map(r => r.id) : [])
+      const next = here.slice(here.findIndex(r => r.id === rowId) + 1).find(r => !own.has(r.id))?.id ?? null
+      if (sorted || before === rowId || before === next || (before !== null && own.has(before)) || beforeId === undefined) return
       void run({ type: 'move-page', pageId: rowId, parentId: db.id, beforeId }, r => ({ text: 'Row moved', undoOperationId: r.operationId }))
       return
     }
@@ -784,9 +786,10 @@ export function useViewClipboard(wrap: { current: HTMLElement | null }) {
 
 /** Which groups are folded in a table or list: on this device only, per view of a block, never a save or an Undo, like the view shown. */
 function foldKey(blockId: string, viewId: string) { return `daythread.database-fold.${blockId}.${viewId}` }
+const nestedBy = (db: Page & { database: Database }, view: View, grouped: boolean) => (grouped || view.subItemsDisplay === 'flat' || view.subItemsShow === 'subs' ? null : db.database.subItems ?? null)
 /** A table's or list's rows as a tree, when this view nests them: never with groups, where a sub-item sits in its own group (sub-items design §2). */
 export function subItemTree(workspace: Workspace, db: Page & { database: Database }, view: View, rows: readonly Page[], grouped: boolean, opened: ReadonlySet<string>, shut: ReadonlySet<string>): TreeEntry[] | null {
-  if (grouped || !db.database.subItems || view.subItemsDisplay === 'flat' || view.subItemsShow === 'subs') return null
+  if (!nestedBy(db, view, grouped)) return null
   return treeEntries(db.database, rows, databaseRows(workspace, db.id), (id, context) => (context ? !shut.has(id) : opened.has(subFoldKey(id))), view.subItemsShow === 'parents')
 }
 // A parent only there for a match below it, under a filter, starts open, as closed it would read as the filter finding nothing. Closed by hand it stays closed
@@ -797,6 +800,8 @@ export function useSubOpen(blockId: string, view: View, toggle: (key: string) =>
   const key = `${blockId}|${view.id}`, filter = JSON.stringify([view.filter, view.filterAny])
   const [, redraw] = useState(0)
   const held = shutUnderFilter.get(key)
+  // Until the filter changes, so coming back to it starts open again.
+  if (held && held.filter !== filter) shutUnderFilter.delete(key)
   const shut = held?.filter === filter ? held.ids : noneShut
   const toggleSub = (entry: TreeEntry) => {
     if (!entry.context) { toggle(subFoldKey(entry.row.id)); return }
