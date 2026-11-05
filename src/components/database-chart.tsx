@@ -98,7 +98,7 @@ function VerticalBars({ points, dateAxis, line, opened, onOpen, textOf }: { poin
   return <div className={`database-chart-vertical${band && band < 6 ? ' is-dense' : ''}`} ref={ref}>
     <div className="database-chart-plot">
       {ticks.map(t => <div key={t} className={`database-chart-tick${t === 0 ? ' is-zero' : ''}`} style={{ bottom: `${at(t)}%` }}><span>{shortNumber(t)}</span></div>)}
-      {line && <svg className="database-chart-line-path" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">{runs.map(d => <path key={d} d={d} vectorEffect="non-scaling-stroke" />)}</svg>}
+      {line && <svg className="database-chart-line-path" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', minWidth: 0, maxWidth: 'none' }}>{runs.map(d => <path key={d} d={d} vectorEffect="non-scaling-stroke" />)}</svg>}
       <div className="database-chart-bars">
         {points.map(p => {
           const value = p.value, from = at(Math.min(0, value ?? 0)), to = at(Math.max(0, value ?? 0)), text = textOf(p.result)
@@ -132,13 +132,14 @@ function HorizontalBars({ points, opened, onOpen, textOf }: { points: ChartPoint
   </div>
 }
 
+const donutSize = 180
 function Donut({ points, opened, onOpen, textOf }: { points: ChartPoint[]; opened: string | null; onOpen: (key: string) => void; textOf: (r: CalcResult) => string }) {
   const { slices, total } = donutSlices(points)
   if (!slices.length) return <p className="database-empty">No rows</p>
   const radius = 40, round = 2 * Math.PI * radius, gap = slices.length > 1 ? 1 : 0
   let along = 0
   return <div className="database-chart-donut">
-    <svg viewBox="0 0 100 100" className="database-chart-donut-ring" role="img" aria-label={`${slices.map(sl => `${sl.name}: ${textOf(sl.result)}`).join(', ')}`}>
+    <svg viewBox="0 0 100 100" className="database-chart-donut-ring" width={donutSize} height={donutSize} style={{ width: donutSize, height: donutSize }} role="img" aria-label={`${slices.map(sl => `${sl.name}: ${textOf(sl.result)}`).join(', ')}`}>
       {slices.map(sl => {
         const length = sl.share * round, drawn = Math.max(length - gap, 0.5), offset = -along
         along += length
