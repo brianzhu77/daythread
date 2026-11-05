@@ -19,6 +19,9 @@ export function pushConfig(env: NodeJS.ProcessEnv = process.env): PushConfig | n
 /** How long a push service keeps a reminder for a device that is offline: an hour, then it is stale anyway. */
 const ttlSeconds = 3600
 
+/** Well under a tick's lease, so only a crash can outlast it, and a slow push service can't send one reminder twice. */
+const sendTimeoutMs = 30_000
+
 /** The real sender; `origin` is the site's address, the VAPID subject when none is configured. */
 export function webPushSender(config: PushConfig, origin: string): Sender {
   const subject = config.subject ?? origin
@@ -27,7 +30,7 @@ export function webPushSender(config: PushConfig, origin: string): Sender {
       await webpush.sendNotification(
         { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
         JSON.stringify(payload),
-        { vapidDetails: { subject, publicKey: config.publicKey, privateKey: config.privateKey }, TTL: ttlSeconds, urgency: 'high' },
+        { vapidDetails: { subject, publicKey: config.publicKey, privateKey: config.privateKey }, TTL: ttlSeconds, urgency: 'high', timeout: sendTimeoutMs },
       )
       return 'ok'
     } catch (error) {
