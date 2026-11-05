@@ -2714,8 +2714,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}
     onKeyDownCapture={e => {
       // Enter runs a button only when it alone was chosen by its handle: arriving by arrow does what other blocks with no text do (G3-7).
-      if (e.key === 'Enter' && !e.nativeEvent.isComposing && pickedIds.current.length === 1) {
-        const held = editor.getBlock(pickedIds.current[0]!)
+      if (e.key === 'Enter' && !e.nativeEvent.isComposing && selected.current.length === 1 && editor.prosemirrorState.selection instanceof NodeSelection) {
+        const held = editor.getBlock(selected.current[0]!)
         if (held?.type === buttonBlockType) {
           e.preventDefault(); e.stopPropagation()
           if (onTemplate || !readSteps(held.props.steps).length) return

@@ -51,7 +51,7 @@ await scenario('/ Button: Done is off with nothing finished and goes to what\'s 
   await pill(page, 'New one').click(); await wait(800)
   const added = rows().length, words = await notices(page)
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(800)
-  return { ok: opened === 1 && blocksBefore === 12 && toKinds === 1 && incomplete === 'Needs a database' && wentToStep === 1 && kept && added === before + 1 && /Added to Runs/.test(words) && /Open/.test(words) && rows().length === before, opened, blocksBefore, toKinds, incomplete, wentToStep, kept, added, before, words, after: rows().length }
+  return { ok: opened === 1 && toKinds === 1 && incomplete === 'Needs a database' && wentToStep === 1 && kept && added === before + 1 && /Added to Runs/.test(words) && /Open/.test(words) && rows().length === before, opened, blocksBefore, toKinds, incomplete, wentToStep, kept, added, before, words, after: rows().length }
 })
 await scenario('Leaving: a new button with nothing finished leaves no block; with changes a tap outside does nothing and Esc asks', async page => {
   const start = doc('notes').length

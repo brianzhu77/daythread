@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readSteps, safeUrl, stepProblem, stepsKey, valueAtTap, writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
 import { todosSourceId } from '../src/domain/database.ts'
+import { pageFromTemplate } from '../src/domain/day-template.ts'
 import { flatNodes, pageContentKey, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
 import { harness, today } from './v2-helpers.ts'
 
@@ -131,6 +132,16 @@ test('a changed button or page is refused; a template doesn\'t run; a retry make
   const first = h.run(action, 'tap-1'), second = h.run(action, 'tap-1')
   assert.equal(second.receipt.entityId, first.receipt.entityId)
   assert.equal(rows(h).length, before + 1)
+})
+test('a template doesn\'t run, and a day made from it has its own button', () => {
+  const h = setup([addRow()])
+  h.run({ type: 'create-document', title: 'Day template', body: '', pageId: 'tpl' })
+  const tplId = h.ws.pages.find(p => p.title === 'Day template')!.id
+  assert.ok(tplId)
+  const made = pageFromTemplate({ document: JSON.stringify([button([addRow()], 'in-template')]) } as never, '2026-11-05')
+  assert.equal(made[0]!.type, 'button')
+  assert.notEqual(made[0]!.id, 'in-template')
+  assert.equal(made[0]!.props?.steps, writeSteps([addRow()]))
 })
 test('limits count across steps, and steps from a newer build don\'t run', () => {
   const h = setup([editAll('a'), editAll('b')])
