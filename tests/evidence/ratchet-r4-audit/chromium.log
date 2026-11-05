@@ -1,0 +1,20 @@
+PASS day template six layouts 2026-11-04 ["table\n⋯\n↳ from Plans\nName\t\nOwner\t\nSum\t\nCalc\t\n","board\n⋯\n↳ from Plans\nWork\n· 1\nCall\nAda\n7\n8\n+ ","list\n⋯\n↳ from Plans\n⋮⋮\nTrip\n1\n⋮⋮\nCall\nAda\n7\n8","gallery\n⋯\n↳ from Plans\nTrip\n1\nCall\nAda\n7\n8\nEn","calendar\n⋯\n↳ from Plans\nNovember 2026\nSun\nMon","timeline\n⋯\n↳ from Plans\n«\nHours\nDay\nWeek\nMont"]
+PASS template Timeline draws ""
+PASS template Gallery draws ""
+PASS Relation Rollup Formula render together ""
+PASS day template six layouts 2026-11-05 ["table\n⋯\n↳ from Plans\nName\t\nOwner\t\nSum\t\nCalc\t\n","board\n⋯\n↳ from Plans\nWork\n· 1\nCall\nAda\n7\n8\n+ ","list\n⋯\n↳ from Plans\n⋮⋮\nTrip\n1\n⋮⋮\nCall\nAda\n7\n8","gallery\n⋯\n↳ from Plans\nTrip\n1\nCall\nAda\n7\n8\nEn","calendar\n⋯\n↳ from Plans\nNovember 2026\nSun\nMon","timeline\n⋯\n↳ from Plans\n«\nHours\nDay\nWeek\nMont"]
+PASS template Timeline draws ""
+PASS template Gallery draws ""
+PASS Relation Rollup Formula render together ""
+PASS opening days leaves existing stored pages unchanged ""
+added pages [ { id: 'draft:day:2026-11-04', type: 'draft', title: '' } ]
+PASS ArrowDown moves focus between bars {"first":"8b50aed8-fd0e-843c-ad52-b0e0199b9ea6|trip|title|","second":"8b50aed8-fd0e-843c-ad52-b0e0199b9ea6|call|title|"}
+PASS focused bar key leaves pages unchanged: ArrowLeft ""
+PASS focused bar key leaves pages unchanged: ArrowRight ""
+PASS focused bar key leaves pages unchanged: Backspace ""
+PASS focused bar key leaves pages unchanged: Delete ""
+PASS focused bar key leaves pages unchanged: Meta+a ""
+PASS focused Timeline copy contained {"prevented":true,"text":"Trip"}
+PASS focused Timeline cut contained {"prevented":true,"text":""}
+PASS focused Timeline paste contained {"prevented":true,"text":"SHOULD NOT REPLACE"}
+PASS no page errors []

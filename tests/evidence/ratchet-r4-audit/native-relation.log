@@ -1,0 +1,2 @@
+date quick choice {'start': '2026-11-05'}
+relation sheet {"text": "\nPages\nPlans\n\u22ef\nCall\nWhen\n\nNov 5\nFrom\n\nNov 7\nTo\n\nEmpty\nMade\nNov 4, 5:23 PM\nKind\n\nWork\nOwner\n\nAda\nSum\n7\nCalc\n8\n+ Add property\n\n\nOwner\nCall\nDone\nAda\u00d7\n\n\nNew row in People\u2026\n\nAda", "dialog": [{"text": "Owner\nCall\nDone\nAda\u00d7\n\n\nNew row in People\u2026\n\nAda", "rect": {"x": 16, "y": 426, "width": 358, "height": 257, "top": 426, "right": 374, "bottom": 683, "left": 16}}], "input": [{"placeholder": "Search or create", "type": "text"}], "standalone": false}

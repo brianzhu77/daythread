@@ -1,0 +1,5 @@
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+seeded
+PASS day template six layouts in one revision, no databases made 2026-11-04 1ms
+PASS day template six layouts in one revision, no databases made 2026-11-05 1ms
+derived values {"kind":"work","when":{"start":"2026-11-07"},"from":{"start":"2026-11-07"},"owner":["ada"],"sum":7,"calc":8}

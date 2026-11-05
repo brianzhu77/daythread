@@ -1,0 +1,30 @@
+PASS native relation remove commits
+Traceback (most recent call last):
+  File "/Users/dogrod/Developer/daythread-ratchet-r4-audit/tests/evidence/ratchet-r4-audit/native.py", line 5, in call
+    try:return json.load(urllib.request.urlopen(req,timeout=90))['value']
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 214, in urlopen
+    return opener.open(url, data, timeout)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 523, in open
+    response = meth(req, response)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 632, in http_response
+    response = self.parent.error(
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 561, in error
+    return self._call_chain(*args)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 494, in _call_chain
+    result = func(*args)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 641, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 404: Not Found
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/dogrod/Developer/daythread-ratchet-r4-audit/tests/evidence/ratchet-r4-audit/native-more.py", line 8, in <module>
+    xpath('//*[@role="dialog"]//button[normalize-space(.)="Done"]');assert not row()['values'].get('owner');print('PASS native relation remove commits',flush=True);xpath('//button[normalize-space(.)="Undo"]');assert row()['values']['owner']==['ada'];print('PASS native relation Undo restores',flush=True)
+  File "/Users/dogrod/Developer/daythread-ratchet-r4-audit/tests/evidence/ratchet-r4-audit/native-more.py", line 6, in xpath
+    def xpath(v):tap('xpath',v)
+  File "/Users/dogrod/Developer/daythread-ratchet-r4-audit/tests/evidence/ratchet-r4-audit/native-more.py", line 4, in tap
+    e=call('/element',{'using':using,'value':value});call('/element/'+next(iter(e.values()))+'/click',{});time.sleep(.7)
+  File "/Users/dogrod/Developer/daythread-ratchet-r4-audit/tests/evidence/ratchet-r4-audit/native.py", line 6, in call
+    except urllib.error.HTTPError as e:raise RuntimeError(e.read().decode()[:700])
+RuntimeError: {"value":{"error":"no such element","message":"An element could not be located on the page using the given search parameters.","stacktrace":"NoSuchElementError: An element could not be located on the page using the given search parameters.\n    at XCUITestDriver.findWebElementOrElements (file:///Users/dogrod/.raft/agents/90696f6a-eb36-4042-894b-1a02098ff1c4/native-tools/node_modules/appium-xcuitest-driver/build/lib/commands/web.js:293:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async AtomsBackend.findElement (file:///Users/dogrod/.raft/agents/90696f6a-eb36-4042-894b-1a02098ff1c4/native-tools/node_modules/appium-xcuitest-driver/build/lib/web

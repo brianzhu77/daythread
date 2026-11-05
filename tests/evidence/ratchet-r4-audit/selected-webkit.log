@@ -1,0 +1,2 @@
+PASS explicit block selection copies Timeline metadata
+PASS explicit Timeline block deletion removes only linked view; Undo restores block metadata and body (default paragraph props normalized)

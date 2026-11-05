@@ -1,0 +1,4 @@
+PASS prior native remove + Done persisted
+PASS native add + Done persists Ada
+{"width": 390, "standalone": false, "text": "\nPages\nPlans\n\u22ef\nCall\nWhen\n\nNov 5\nFrom\n\nNov 7\nTo\n\nEmpty\nMade\nNov 4, 5:23 PM\nKind\n\nWork\nOwner\n\nAda\nSum\n7\nCalc\n8\n+ Add property\n\n", "visualHeight": 699}
+PASS derived Rollup and Formula update after native relation edit

@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/dogrod/Developer/daythread-ratchet-r4-audit/tests/evidence/ratchet-r4-audit/native-finish.py", line 8, in <module>
+    css('button[aria-label="Undo"]');assert row()['values']['owner']==['ada'];print('PASS native toolbar Undo restores relation',flush=True)
+KeyError: 'owner'
