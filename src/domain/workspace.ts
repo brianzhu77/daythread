@@ -5,7 +5,10 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { automationProblem, dueRules, firedRules, type FiredRule } from "./automations.ts";
-import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, valueAtTap, type ButtonStep } from "./buttons.ts";
+import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, usesFormulas, valueAtTap, type ButtonStep, type ButtonValue } from "./buttons.ts";
+import { format } from "./formula-functions.ts";
+import { freshWorldOf, stepCell } from "./formula.ts";
+import { StepReading, stepFormulaProblems, type StepVariables } from "./step-formulas.ts";
 import { commentLimit, leavesUndoAlone, type CommentThread, quoteLimit } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
 import { coverPlace, isCoverLink } from "./page-look.ts";
@@ -198,6 +201,23 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
     }
     if (step.kind === "open" && step.target.kind === "url" && !safeUrl(step.target.url)) throw new DomainError("That link can't be opened");
   }
+  // A formula reads the row it's on; with none, as for a schedule, only a page's name. Each is checked first too, so a broken one drops the tap before anything's written.
+  const formulas = usesFormulas(steps), scopeId = formulas ? databaseOfRow(state, on)?.id ?? "" : "";
+  if (formulas) stepFormulaProblems(steps, freshWorldOf(state), scopeId).forEach((problem, i) => { if (problem) throw new DomainError(`${stepTitle(steps[i]!)}: ${problem}`); });
+  const variables: StepVariables = new Map();
+  let reading: StepReading | null = null;
+  const worked = (stored: string, row: Page, databaseId: string) => {
+    reading ??= new StepReading(state, at);
+    const result = reading.value(stored, row, databaseId, variables);
+    if (result.error) throw new DomainError(result.error);
+    return result;
+  };
+  const tap = (value: ButtonValue, property: Property, row: Page = on, databaseId = scopeId): Json => {
+    if (value.kind !== "formula") return valueAtTap(value, property, on, today);
+    const cell = stepCell(worked(value.text, row, databaseId).value, property);
+    if ("error" in cell) throw new DomainError(cell.error);
+    return cell.cell;
+  };
   // Counted across the steps, rather than each spending the whole limit (§4.9).
   const spend = (rows: number, todos: boolean) => { if (todos) { budget.todos -= rows; if (budget.todos < 0) throw new DomainError(`${databaseLimits.todosAtOnce} to-dos at most`); } else { budget.rows -= rows; if (budget.rows < 0) throw new DomainError(`${databaseLimits.rowsAtOnce.toLocaleString("en-US")} rows at most`); } };
   let message: string | null = null, made: string | undefined, matchedNothing = false, because: string | undefined;
@@ -208,7 +228,13 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
     }
   };
   for (const [index, step] of steps.entries()) {
-    if (step.kind === "insert") named(step, () => {
+    // What a step reads is the workspace as this step finds it.
+    reading = null;
+    const nameOf = (s: Extract<ButtonStep, { kind: "add-row" }>) => (s.titleFormula === undefined ? s.title : format(worked(s.titleFormula, on, scopeId).value));
+    if (step.kind === "variables") named(step, () => {
+      for (const v of step.vars) { const { value, type } = worked(v.formula, on, scopeId); variables.set(v.name, { type, value }); }
+    });
+    else if (step.kind === "insert") named(step, () => {
       const day = on.date ?? localDay(state, at);
       // Each of these is a new task.
       spend(flatNodes(step.blocks).filter((n) => (n.type === "task" || n.type === "checkListItem") && inlineText(n.content).trim()).length, true);
@@ -231,9 +257,9 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
     else if (step.kind === "add-row") named(step, () => {
       spend(1, isTodosTarget(step.databaseId));
       if (isTodosTarget(step.databaseId)) {
-        const title = text(step.title, 1000).trim();
+        const title = text(nameOf(step), 1000).trim();
         if (!title) throw new DomainError("A to-do needs words");
-        const values = Object.fromEntries(step.set.flatMap((set) => { const property = todosDatabase.properties.find((p: Property) => p.id === set.id); return property ? [[set.id, valueAtTap(set.value, property, on, today)]] : []; }));
+        const values = Object.fromEntries(step.set.flatMap((set) => { const property = todosDatabase.properties.find((p: Property) => p.id === set.id); return property ? [[set.id, tap(set.value, property)]] : []; }));
         const placed = newTodo(todosDatabase.views[0]!, { today, pageDate: on.date }, undefined, values);
         const dayPage = ensureDay(state, placed.date);
         const task = addTask(state, dayPage, { title, plannedOn: placed.date, ...(placed.attentionOn ? { attentionOn: placed.attentionOn } : {}), ...(placed.deadlineOn ? { deadlineOn: placed.deadlineOn } : {}) });
@@ -242,8 +268,8 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
         return;
       }
       const db = buttonTarget(state, step.databaseId, step.databaseName), rowId = `${operationId}:${index}`;
-      const values = Object.fromEntries(step.set.map((set) => [set.id, valueAtTap(set.value, db.database.properties.find((p) => p.id === set.id)!, on, today)]));
-      execute(state, { type: "add-row", databaseId: db.id, pageId: rowId, title: step.title, values, at }, operationId);
+      const values = Object.fromEntries(step.set.map((set) => [set.id, tap(set.value, db.database.properties.find((p) => p.id === set.id)!)]));
+      execute(state, { type: "add-row", databaseId: db.id, pageId: rowId, title: nameOf(step), values, at }, operationId);
       made = rowId;
       message = `Added to ${db.title.trim() || step.databaseName}`;
     });
@@ -255,7 +281,7 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
       const values = Object.fromEntries(step.set.map((set, i) => {
         const property = properties[i];
         if (!property) throw new DomainError(`${set.name} was deleted`);
-        const value = valueAtTap(set.value, property, on, today);
+        const value = tap(set.value, property);
         if (!set.mode) return [set.id, value];
         const had = Array.isArray(on.values?.[set.id]) ? (on.values![set.id] as string[]) : [], given = Array.isArray(value) ? (value as string[]) : [];
         return [set.id, set.mode === "add" ? [...new Set([...had, ...given])] : had.filter((x) => !given.includes(x))];
@@ -269,7 +295,7 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
         const rows = databaseRows(withTodos(state), todosSourceId).filter((r) => inView(todosDatabase, r, { filter: step.filter, ...(step.any ? { filterAny: true } : {}) }, context));
         if (!rows.length) { matchedNothing = true; return; }
         spend(rows.length, true);
-        const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: valueAtTap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? { type: "text" as const }, on, today) })) }] : []; });
+        const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: tap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? ({ type: "text", id: set.id, name: set.name } as Property), r, todosSourceId) })) }] : []; });
         // As the bar's: a to-do that can't take a change, a cancelled one say, is normal here. It reads "3 changed · 1 couldn't", and if none could, later steps carry on, as for no match (Lead 371ebb4b).
         // Only this says nothing changed. Any other refusal can come after some to-dos already have, so it goes up and the whole tap is dropped, as a command works on a copy.
         try { message = execute(state, { type: "edit-todos", items, today }, operationId).message; } catch (error) {
@@ -283,7 +309,9 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
       if (!rows.length) { matchedNothing = true; return; }
       spend(rows.length, false);
       const properties = step.set.map((set) => db.database.properties.find((p) => p.id === set.id)!);
-      for (const row of rows) rowEdit(state, { pageId: row.id, values: Object.fromEntries(step.set.map((set, i) => [set.id, valueAtTap(set.value, properties[i]!, on, today)])), expected: Object.fromEntries(properties.map((p) => [p.id, (row.values?.[p.id] ?? null) as Json])) }, at);
+      // Worked out before any is written, so a formula reading another row doesn't depend on the order they're in.
+      const worth = new Map(rows.map((row) => [row, Object.fromEntries(step.set.map((set, i) => [set.id, tap(set.value, properties[i]!, row, db.id)]))]));
+      for (const row of rows) rowEdit(state, { pageId: row.id, values: worth.get(row)!, expected: Object.fromEntries(properties.map((p) => [p.id, (row.values?.[p.id] ?? null) as Json])) }, at);
       message = `${rows.length} row${rows.length === 1 ? "" : "s"} changed`;
     });
   }
@@ -319,7 +347,7 @@ function runAutomations(start: Workspace, fired: FiredRule[], operationId: strin
   for (const { databaseId, ruleId, rowIds } of fired) {
     const database = state.pages.find((p) => p.id === databaseId)!.database!, rule = database.automations!.find((r) => r.id === ruleId)!;
     if (spent) { pause(state, databaseId, ruleId, "Not run · command limit reached", true); paused.push({ name: rule.name, reason: "Not run · command limit reached" }); continue; }
-    const problem = automationProblem(state, database, rule);
+    const problem = automationProblem(state, database, rule, databaseId);
     if (problem) { pause(state, databaseId, ruleId, problem, false); paused.push({ name: rule.name, reason: problem }); continue; }
     const copy = structuredClone(state), spentBefore = { ...budget }, steps = readSteps(rule.steps);
     try {
@@ -364,7 +392,7 @@ function runScheduledRules(state: Workspace, action: Extract<Action, { type: "ru
   for (const { database, rule, date } of due) {
     if (spent) { stop(database.id, rule.id, "Not run · command limit reached", true, rule.name); continue; }
     const live = state.pages.find((p) => p.id === database.id)!;
-    const problem = automationProblem(state, live.database!, rule);
+    const problem = automationProblem(state, live.database!, rule, database.id);
     if (problem) { stop(database.id, rule.id, problem, false, rule.name); continue; }
     const copy = structuredClone(state), before = { ...budget };
     try {

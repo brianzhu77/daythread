@@ -5,9 +5,11 @@ import { en } from '@blocknote/core/locales'
 import { filterSuggestionItems, SuggestionMenu } from '@blocknote/core/extensions'
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
-import { isTodosTarget, pageKinds, propertyKinds, readSteps, safeUrl, stepKinds, stepProblem, stepTitle, tapValueName, tapValues, writeSteps, type ButtonSet, type ButtonStep, type ButtonValue, type StepKind } from '../domain/buttons'
+import { isTodosTarget, pageKinds, propertyKinds, readSteps, safeUrl, stepKinds, stepProblem, stepTitle, tapValueName, tapValues, usesFormulas, writeSteps, type ButtonSet, type ButtonStep, type ButtonValue, type ButtonVariable, type StepKind } from '../domain/buttons'
 import { isDatabase, isReadOnly, propertyOf, titleId, todosSourceId, type Condition, type Database, type Json, type Property } from '../domain/database'
 import { readDate } from '../domain/date-reading'
+import { stepProgram, worldOf, type FormulaWorld } from '../domain/formula'
+import { stepFormulaProblems, variablesBefore, type VariableTypes } from '../domain/step-formulas'
 import type { EditorNode } from '../domain/editor-document'
 import { todoBarColumns, todosDatabase } from '../domain/todos-source'
 import type { Page, Workspace } from '../domain/types'
@@ -16,12 +18,13 @@ import { opLabels, opsFor, RuleValue } from './database-menu'
 import { todayIso } from './dates'
 import { useKeyboardTop } from './keyboard'
 import { displayPageTitle } from './page-title'
+import { StepFormula } from './step-formula'
 import { useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
 export interface ButtonDraft { label: string; steps: string }
 /** `pageId` null: a Button property's, drawn by the app's own host, with the database whose row it acts on. */
-type Open = { pageId: string | null; initial: ButtonDraft; anchor: Element | null; onDone: (draft: ButtonDraft) => void; rowsOf?: Database }
+type Open = { pageId: string | null; initial: ButtonDraft; anchor: Element | null; onDone: (draft: ButtonDraft) => void; rowsOf?: Database; rowsOfId?: string }
 let open: Open | null = null
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach(l => l())
@@ -38,9 +41,12 @@ export const newStep = (kind: StepKind): ButtonStep => {
     case 'edit-property': return { id, kind, set: [] }
     case 'open': return { id, kind, target: { kind: 'page', pageId: '', name: '' } }
     case 'confirm': return { id, kind, text: '' }
+    case 'variables': return { id, kind, vars: [{ id: crypto.randomUUID(), name: '', formula: '' }] }
   }
 }
 export const problemOf = (steps: readonly ButtonStep[], i: number) => stepProblem(steps[i]!, steps.slice(0, i))
+/** What each step's formulas can't do, for the row's line and for Done. */
+export const useFormulaIssues = (steps: readonly ButtonStep[], world: FormulaWorld | null, databaseId: string) => useMemo(() => (world && usesFormulas(steps) ? stepFormulaProblems(steps, world, databaseId) : []), [steps, world, databaseId])
 
 /** The open editor and any confirmation. One per page editor, drawing only what's for its page. */
 export function ButtonEditorHost({ pageId, schema }: { pageId: string | null; schema: never }) {
@@ -55,8 +61,9 @@ export function ButtonEditorHost({ pageId, schema }: { pageId: string | null; sc
   </>
 }
 
-function Editor({ open: { initial, anchor, onDone, rowsOf }, schema }: { open: Open; schema: never }) {
+function Editor({ open: { initial, anchor, onDone, rowsOf, rowsOfId = '' }, schema }: { open: Open; schema: never }) {
   const { workspace } = useWorkspace()
+  const world = useMemo(() => (workspace ? worldOf(workspace) : null), [workspace])
   const wide = useWide(), keyboardTop = useKeyboardTop()
   const [label, setLabel] = useState(initial.label)
   const [steps, setSteps] = useState(() => readSteps(initial.steps))
@@ -64,7 +71,9 @@ function Editor({ open: { initial, anchor, onDone, rowsOf }, schema }: { open: O
   const [asking, setAsking] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const changedYet = label !== initial.label || writeSteps(steps) !== (initial.steps || writeSteps([]))
-  const firstProblem = steps.findIndex((_, i) => problemOf(steps, i))
+  const issues = useFormulaIssues(steps, world, rowsOfId)
+  const issueOf = (i: number) => problemOf(steps, i) ?? issues[i] ?? null
+  const firstProblem = steps.findIndex((_, i) => issueOf(i))
   const ready = steps.length > 0 && firstProblem < 0
   const leave = () => { if (changedYet) setAsking(true); else closeEditor() }
   const done = () => {
@@ -101,7 +110,7 @@ function Editor({ open: { initial, anchor, onDone, rowsOf }, schema }: { open: O
       {at === null && <>
         <input className="button-editor-name" aria-label="Name" placeholder="Button" maxLength={200} value={label} autoFocus={wide} onChange={e => setLabel(e.target.value)} />
         {steps.map((step, i) => {
-          const problem = problemOf(steps, i)
+          const problem = issueOf(i)
           return <div key={step.id} className={`button-step-row${problem ? ' is-incomplete' : ''}`}>
             <button type="button" className="button-step-open" onClick={() => setAt(i)}><span>{stepTitle(step)}</span>{problem && <small>{problem}</small>}</button>
             <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => shift(i, -1)}>↑</button>
@@ -112,7 +121,7 @@ function Editor({ open: { initial, anchor, onDone, rowsOf }, schema }: { open: O
         <button type="button" role="menuitem" onClick={() => setAt('kinds')}>+ Add step</button>
       </>}
       {at === 'kinds' && stepKinds.filter(k => (rowsOf ? propertyKinds : pageKinds).includes(k.kind)).map(({ kind, name }) => <button key={kind} type="button" role="menuitem" onClick={() => { setSteps(list => [...list, newStep(kind)]); setAt(steps.length) }}>{name}</button>)}
-      {typeof at === 'number' && steps[at] && <StepPage key={steps[at]!.id} step={steps[at]!} problem={problemOf(steps, at)} canOpenMade={steps.slice(0, at).some(s => s.kind === 'add-row')} workspace={workspace} schema={schema} {...(rowsOf ? { rowsOf } : {})} onChange={next => put(at, next)} />}
+      {typeof at === 'number' && steps[at] && <StepPage key={steps[at]!.id} step={steps[at]!} problem={issueOf(at)} canOpenMade={steps.slice(0, at).some(s => s.kind === 'add-row')} workspace={workspace} schema={schema} databaseId={rowsOfId} variables={variablesBefore(steps, at, world!, rowsOfId)} {...(rowsOf ? { rowsOf } : {})} onChange={next => put(at, next)} />}
     </div>
   </>, document.body)
 }
@@ -124,10 +133,31 @@ const fromDatabase = (workspace: Workspace, id: string): { title: string; databa
 }
 const settable = (database: Database): Property[] => database.fixed ? database.properties.filter(p => todoBarColumns.has(p.id)) : database.properties.filter(p => !isReadOnly(p) && p.id !== titleId)
 
-export function StepPage({ step, problem, canOpenMade, workspace, schema, rowsOf, onChange }: { step: ButtonStep; problem: string | null; canOpenMade: boolean; workspace: Workspace; schema: never; rowsOf?: Database; onChange(next: ButtonStep): void }) {
+export function StepPage({ step, problem, canOpenMade, workspace, schema, rowsOf, databaseId, variables, onChange }: { step: ButtonStep; problem: string | null; canOpenMade: boolean; workspace: Workspace; schema: never; rowsOf?: Database; /** The row's database, or '' with no row for a formula to read. */ databaseId: string; variables: VariableTypes; onChange(next: ButtonStep): void }) {
   const said = problem && <p className="button-step-problem" role="status">{problem}</p>
+  const world = worldOf(workspace)
   switch (step.kind) {
-    case 'edit-property': return <>{said}{rowsOf && <SetList database={rowsOf} set={step.set} onChange={set => onChange({ ...step, set })} />}</>
+    case 'variables': {
+      const put = (i: number, next: Partial<ButtonVariable>) => onChange({ ...step, vars: step.vars.map((v, j) => (j === i ? { ...v, ...next } : v)) })
+      const seen = new Map(variables)
+      return <>{said}
+        {step.vars.map((v, i) => {
+          // Each reads the ones above it.
+          const above = new Map(seen)
+          const program = stepProgram(v.formula, world, databaseId, seen)
+          if (v.name) seen.set(v.name, program.error ? 'any' : program.type)
+          return <div key={v.id} className="button-variable">
+            <div className="database-rule">
+              <input className="button-variable-name" aria-label="Variable name" placeholder="Name" maxLength={60} autoFocus={i === step.vars.length - 1 && !v.name} autoCapitalize="off" autoCorrect="off" value={v.name} onChange={e => put(i, { name: e.target.value })} />
+              <button type="button" className="database-rule-remove" aria-label={`Remove ${v.name || 'this variable'}`} onClick={() => onChange({ ...step, vars: step.vars.filter((_, j) => j !== i) })}>×</button>
+            </div>
+            <StepFormula label={`${v.name || 'Variable'} is`} stored={v.formula} world={world} databaseId={databaseId} variables={above} onChange={formula => put(i, { formula })} />
+          </div>
+        })}
+        <button type="button" role="menuitem" onClick={() => onChange({ ...step, vars: [...step.vars, { id: crypto.randomUUID(), name: '', formula: '' }] })}>+ Add a variable</button>
+      </>
+    }
+    case 'edit-property': return <>{said}{rowsOf && <SetList database={rowsOf} set={step.set} world={world} reads={databaseId} variables={variables} onChange={set => onChange({ ...step, set })} />}</>
     case 'confirm': return <>{said}<textarea className="button-editor-field" aria-label="Confirmation words" rows={3} autoFocus value={step.text} onChange={e => onChange({ ...step, text: e.target.value })} /></>
     case 'insert': return <>{said}
       <label className="database-menu-row">Where
@@ -161,9 +191,14 @@ export function StepPage({ step, problem, canOpenMade, workspace, schema, rowsOf
           </select>
         </label>
         {step.databaseId && !target && <p className="button-step-problem" role="status">{step.databaseName || 'That database'} was deleted</p>}
-        {target && step.kind === 'add-row' && <input className="button-editor-field" aria-label="Row name" placeholder="Name" value={step.title} onChange={e => onChange({ ...step, title: e.target.value })} />}
+        {target && step.kind === 'add-row' && <label className="database-menu-row">Its name
+          <select aria-label="How it's named" value={step.titleFormula === undefined ? 'fixed' : 'formula'} onChange={e => { const { titleFormula: _was, ...rest } = step; onChange(e.target.value === 'formula' ? { ...rest, titleFormula: '' } : rest) }}><option value="fixed">A value</option><option value="formula">Formula</option></select>
+        </label>}
+        {target && step.kind === 'add-row' && (step.titleFormula === undefined
+          ? <input className="button-editor-field" aria-label="Row name" placeholder="Name" value={step.title} onChange={e => onChange({ ...step, title: e.target.value })} />
+          : <StepFormula label="Row name formula" stored={step.titleFormula} world={world} databaseId={databaseId} variables={variables} onChange={titleFormula => onChange({ ...step, titleFormula })} />)}
         {target && step.kind === 'edit-rows' && <Rules database={target.database} filter={step.filter} any={Boolean(step.any)} onChange={(filter, any) => onChange({ ...step, filter, ...(any ? { any } : { any: false }) })} />}
-        {target && <SetList database={target.database} set={step.set} onChange={set => onChange({ ...step, set } as ButtonStep)} />}
+        {target && <SetList database={target.database} set={step.set} world={world} reads={step.kind === 'edit-rows' ? step.databaseId : databaseId} variables={variables} onChange={set => onChange({ ...step, set } as ButtonStep)} />}
       </>
     }
   }
@@ -190,7 +225,7 @@ function Rules({ database, filter, any, onChange }: { database: Database; filter
   </>
 }
 
-function SetList({ database, set, onChange }: { database: Database; set: ButtonSet[]; onChange(set: ButtonSet[]): void }) {
+function SetList({ database, set, world, reads, variables, onChange }: { database: Database; set: ButtonSet[]; world: FormulaWorld; /** Whose properties its formulas read: the row being edited, on Edit rows. */ reads: string; variables: VariableTypes; onChange(set: ButtonSet[]): void }) {
   const can = settable(database), free = can.filter(p => !set.some(s => s.id === p.id))
   const firstValue = (p: Property): ButtonValue => { const tap = tapValues(p)[0]; return p.type === 'date' || p.type === 'relation' ? { kind: tap! } as ButtonValue : { kind: 'fixed', raw: null } }
   return <>
@@ -198,17 +233,22 @@ function SetList({ database, set, onChange }: { database: Database; set: ButtonS
     {set.map((s, i) => {
       const property = can.find(p => p.id === s.id)
       const put = (value: ButtonValue) => onChange(set.map((x, j) => (j === i ? { ...x, value } : x)))
-      return <div key={s.id} className="database-rule">
+      const takesFormula = property && property.type !== 'files'
+      return <div key={s.id} className="button-set">
+      <div className="database-rule">
         <span className="button-set-name">{s.name}</span>
         {property ? <>
-          {tapValues(property).length > 0 && <select aria-label={`${s.name} from`} value={s.value.kind} onChange={e => put(e.target.value === 'fixed' ? { kind: 'fixed', raw: null } : { kind: e.target.value } as ButtonValue)}>
+          {(tapValues(property).length > 0 || takesFormula) && <select aria-label={`${s.name} from`} value={s.value.kind} onChange={e => put(e.target.value === 'fixed' ? { kind: 'fixed', raw: null } : e.target.value === 'formula' ? { kind: 'formula', text: '' } : { kind: e.target.value } as ButtonValue)}>
             {tapValues(property).map(k => <option key={k} value={k}>{tapValueName[k as keyof typeof tapValueName]}</option>)}
             {property.type !== 'relation' && <option value="fixed">A value</option>}
+            {takesFormula && <option value="formula">Formula</option>}
           </select>}
           {s.value.kind === 'fixed' && <FixedValue property={property} raw={s.value.raw} onChange={raw => put({ kind: 'fixed', raw })} />}
           {(property.type === 'multiSelect' || property.type === 'relation') && <select aria-label={`${s.name} how`} value={s.mode ?? 'set'} onChange={e => onChange(set.map((x, j) => { if (j !== i) return x; const { mode: _mode, ...rest } = x; return e.target.value === 'set' ? rest : { ...rest, mode: e.target.value as 'add' | 'remove' } }))}><option value="set">Replace</option><option value="add">Add</option><option value="remove">Remove</option></select>}
         </> : <span className="database-rule-deleted">(deleted)</span>}
         <button type="button" className="database-rule-remove" aria-label={`Stop setting ${s.name}`} onClick={() => onChange(set.filter((_, j) => j !== i))}>×</button>
+      </div>
+      {s.value.kind === 'formula' && property && <StepFormula key={s.id} label={`${s.name} formula`} stored={s.value.text} world={world} databaseId={reads} variables={variables} property={property} onChange={text => put({ kind: 'formula', text })} />}
       </div>
     })}
     {free.length > 0 && <select aria-label="Set a property" value="" onChange={e => { const p = free.find(x => x.id === e.target.value); if (p) onChange([...set, { id: p.id, name: p.name, type: p.type, value: firstValue(p) }]) }}><option value="">+ Set a property…</option>{free.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}

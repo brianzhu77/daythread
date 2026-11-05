@@ -1123,7 +1123,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
       </select>
     </label>
     <LinkSettings db={db} property={property} update={fields => update(fields, true)} change={change} />
-    {property.type === 'button' && <button type="button" role="menuitem" onClick={e => { const anchor = e.currentTarget.closest('.database-menu'); setOpenMenu(null); openButtonEditor({ pageId: null, initial: { label: property.button?.label ?? '', steps: property.button?.steps ?? '' }, anchor, rowsOf: db.database, onDone: draft => update({ button: draft }, true) }) }}>Edit button</button>}
+    {property.type === 'button' && <button type="button" role="menuitem" onClick={e => { const anchor = e.currentTarget.closest('.database-menu'); setOpenMenu(null); openButtonEditor({ pageId: null, initial: { label: property.button?.label ?? '', steps: property.button?.steps ?? '' }, anchor, rowsOf: db.database, rowsOfId: db.id, onDone: draft => update({ button: draft }, true) }) }}>Edit button</button>}
     {isFormula(property) && <>
       <button type="button" role="menuitem" onClick={() => go({ formula: propertyId })}>Edit formula</button>
       {property.formulaError && <p className="database-menu-quiet is-error" role="status">{property.formulaError}</p>}

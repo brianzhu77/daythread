@@ -1,6 +1,8 @@
 // Rules on a database (docs/design/automations.md): when something happens to a row, do these steps, inside the command that made the change. Nothing here writes:
 // `applyCommand` stages each rule on its own copy, so a rule's failure can't touch his edit. A database with no rules costs one look at its field.
-import { readSteps, writeSteps, type ButtonStep } from './buttons.ts'
+import { readSteps, usesFormulas, writeSteps, type ButtonStep } from './buttons.ts'
+import { freshWorldOf } from './formula.ts'
+import { stepFormulaProblems } from './step-formulas.ts'
 import { dueDates, nextDate } from './repeats.ts'
 import type { Repeat } from './database.ts'
 import { conditionHolds, cellValue, databaseRows, inView, isDatabase, opsFor, propertyOf, titleId, type Condition, type Database, type ViewContext } from './database.ts'

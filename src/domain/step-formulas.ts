@@ -1,8 +1,8 @@
 // Variables and formula values in a button's or a rule's steps (buttons.md §2, G3-10). They're read at the tap, on the server, at the tap's own time, so a retry gives the same answer.
 import type { ButtonStep } from './buttons.ts'
 import { parseFormula } from './formula-parse.ts'
-import { format, type Value, type ValueType } from './formula-functions.ts'
-import { freshWorldOf, clockIn, stepFormulaFits, stepProgram, type FormulaProgram, type FormulaWorld, type WorkedCells } from './formula.ts'
+import type { Value, ValueType } from './formula-functions.ts'
+import { clockIn, freshWorldOf, notBare, stepFormulaFits, stepProgram, type FormulaProgram, type FormulaWorld, type WorkedCells } from './formula.ts'
 import { cellsReading } from './relations.ts'
 import type { Page, Workspace } from './types.ts'
 
@@ -12,6 +12,7 @@ export type StepVariables = Map<string, { type: ValueType; value: Value }>
 /** A variable's name has to read back as one: it's the formula parser that says so, so what it refuses here can't turn up later. */
 export function variableNameProblem(name: string): string | null {
   if (!name) return 'Needs a name'
+  if (notBare.has(name.toLocaleLowerCase())) return `"${name}" can't be a name`
   try {
     const { tree } = parseFormula(name, { names: [], memberNames: [], stored: true, idOf: () => null, locals: [name] })
     if (tree?.k === 'var') return null
@@ -83,4 +84,3 @@ export class StepReading {
     return { ...this.cells.stepValue(program.tree, row, new Map([...variables].map(([name, v]) => [name, v.value]))), type: program.type }
   }
 }
-export const formulaText = (value: Value): string => format(value)
