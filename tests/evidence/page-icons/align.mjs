@@ -8,7 +8,8 @@ execSync(`rm -f ${S} ${S}-wal ${S}-shm && node --no-warnings tests/evidence/page
 const browser = await pw[engine].launch({ headless: true })
 let fails = 0
 const check = (ok, what, extra) => { if (!ok) fails++; console.log(ok ? 'PASS' : 'FAIL', what, extra === undefined ? '' : JSON.stringify(extra)) }
-const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' }).format(new Date())
+// The day seed.ts wrote, by Node's clock, so it's there whatever a browser thinks today is from midnight to 1 AM Pacific.
+const today = new Intl.DateTimeFormat('en-CA').format(new Date())
 const open = async (width, url) => { const c = await browser.newContext({ viewport: { width, height: 800 }, serviceWorkers: 'block', ...(width < 500 ? { hasTouch: true } : {}) }), p = await c.newPage(); await p.goto(base + url); await p.waitForTimeout(2000); return { c, p, wait: ms => p.waitForTimeout(ms) } }
 const treeX = p => p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.tree-row')].map(r => { const t = r.querySelector('.tree-title'), words = document.createTreeWalker(t, NodeFilter.SHOW_TEXT), texts = []; while (words.nextNode()) if (!words.currentNode.parentElement.closest('.page-emoji')) texts.push(words.currentNode); const range = document.createRange(); range.selectNodeContents(texts.at(-1)); return [texts.at(-1).textContent.trim(), Math.round(range.getBoundingClientRect().x)] })))
 const setIcon = async (p, pageId, icon) => { const url = await p.evaluate(() => location.href); void url; execSync(`node --no-warnings tests/evidence/page-icons/set-icon.ts ${S} ${pageId} ${icon}`, { stdio: 'ignore' }); await p.reload(); await p.waitForTimeout(2000) }
