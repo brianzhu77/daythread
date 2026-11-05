@@ -125,6 +125,25 @@ await scenario('Every…: chosen, on its own, with no Edit property offered, its
   const says = offered.join()
   return { ok: /^Next: .+, 09:00$/.test(nextLine) && noMore === 0 && cleared === '' && typed === '2' && back === '2' && dayShown.length === 1 && stillOn.join() === dayShown.join() && noUntil === 0 && /never run/.test(early) && !says.includes('Edit property') && rule.name === 'Weekly' && one === 1 && still === 1 && Boolean(last) && !/Weekly/.test(words), nextLine, noMore, cleared, typed, back, dayShown, stillOn, noUntil, early, says, name: rule.name, one, still, last, words }
 })
+await scenario('A schedule that fails pauses and says so, its editor says the fix will run, and saving the fix runs that period once', 'rules', async page => {
+  const steps = JSON.stringify({ v: 1, steps: [{ id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Fixed', set: [{ id: 'n', name: 'N', type: 'number', value: { kind: 'fixed', raw: 'invalid' } }] }] })
+  const seed = `node --no-warnings --input-type=module -e "import('${process.cwd()}/src/server/sqlite-repository.ts').then(async ({SqliteWorkspaceRepository:R})=>{const r=new R('${S}',undefined,{allowMissingLegacy:true});const w=await r.load();const a=w.pages.find(p=>p.id==='runs').database.automations[0];await r.execute({operationId:crypto.randomUUID(),expectedRevision:w.revision,action:{type:'change-database',pageId:'runs',change:{kind:'updateAutomation',automation:{...a,steps:process.argv[1],triggers:[{kind:'every',repeat:{every:'day',interval:1,start:'2026-01-05',time:'00:00',notBefore:'2026-01-05T00:00'}}]}}}})})" '${steps}'`
+  execSync(seed, { stdio: 'ignore' })
+  await page.reload(); await wait(2600)
+  const failedWords = await notices(page), rule = () => db().automations[0], pausedBy = rule().paused?.reason
+  await openSheet(page)
+  await sheet(page).getByRole('button', { name: new RegExp(`^${rule().name}`) }).first().click(); await wait(250)
+  const line = await sheet(page).locator('p[role=status]').first().textContent()
+  await sheet(page).locator('.button-step-open').first().click(); await wait(250)
+  await sheet(page).getByLabel('N', { exact: true }).fill('5'); await wait(80)
+  await sheet(page).getByRole('button', { name: 'Back' }).click(); await wait(150)
+  await sheet(page).getByRole('button', { name: 'Done' }).click(); await wait(900)
+  await page.reload(); await wait(2600)
+  const after = rows().filter(r => r.title === 'Fixed').length, on = rule().active && !rule().paused
+  await page.reload(); await wait(2600)
+  const still = rows().filter(r => r.title === 'Fixed').length
+  return { ok: /Runs once when saved, for today\. Next: tomorrow, 00:00/.test(line) && Boolean(pausedBy) && failedWords.includes(rule().name) && after === 1 && still === 1 && on, line, pausedBy, failedWords: failedWords.slice(0, 160), after, still, on }
+})
 await scenario('390: a sheet that fits, with 16 px fields', '', async page => {
   await page.locator('.database-more-button').first().tap(); await wait(300); await page.locator('.database-menu').getByRole('menuitem', { name: /^Automations/ }).tap(); await wait(400)
   await sheet(page).getByRole('menuitem', { name: '+ New automation' }).tap(); await wait(250)

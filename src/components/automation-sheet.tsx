@@ -1,7 +1,7 @@
 // A database's rules (docs/design/automations.md §2): a list, and each rule's editor, in Buttons' shell. Popover-sized at 1280, a sheet at 390. It's on the database, so every view shares it.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
-import { automationProblem, automationSteps, everyOf, everyProblem, nextRun, stepBroken, withLiveNames, type Automation, type AutomationTrigger } from '../domain/automations'
+import { automationProblem, automationSteps, everyOf, everyProblem, nextRun, runsOnFix, stepBroken, withLiveNames, type Automation, type AutomationTrigger } from '../domain/automations'
 import { readSteps, stepKinds, stepTitle, writeSteps, type ButtonStep } from '../domain/buttons'
 import { isDatabase, propertyOf, titleId, type Condition, type Database, type DatabaseChange, type Property } from '../domain/database'
 import type { Page } from '../domain/types'
@@ -159,7 +159,8 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
       {every && (() => {
         const now = new Date(), clock = wallClock(now), repeat = { ...every.repeat, notBefore: every.repeat.notBefore && JSON.stringify(rule.triggers[0]) === JSON.stringify(every) ? every.repeat.notBefore : clock }
         const next = nextRun({ ...every, repeat }, clock.slice(0, 10), clock.slice(11), workspace?.weekStart ?? 0)
-        return <p className="button-editor-label" role="status">{next ? `Next: ${nextWords(next, clock.slice(0, 10))}, ${repeat.time ?? '00:00'}` : 'No more runs'}</p>
+        const fix = runsOnFix(rule, every, clock.slice(0, 10), clock.slice(11), workspace?.weekStart ?? 0)
+        return <p className="button-editor-label" role="status">{fix ? `Runs once when saved, for ${nextWords(fix, clock.slice(0, 10))}. ` : ''}{next ? `Next: ${nextWords(next, clock.slice(0, 10))}, ${repeat.time ?? '00:00'}` : 'No more runs'}</p>
       })()}
       {!every && <button type="button" role="menuitem" onClick={() => setTriggers(list => [...list, { kind: 'row-added' }])}>+ Add trigger</button>}
       <p className="button-editor-label">In</p>
