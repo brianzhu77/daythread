@@ -342,7 +342,7 @@ function runAutomations(start: Workspace, fired: FiredRule[], operationId: strin
       paused.push({ name: rule.name, reason });
     }
   }
-  return { state, automations: { ran, paused } };
+  return { state, automations: { databaseId: fired[0]!.databaseId, ran, paused } };
 }
 /** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
 export function isBlankTask(t: Task): boolean {

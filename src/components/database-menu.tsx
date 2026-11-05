@@ -3,6 +3,8 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { automationProblem } from '../domain/automations'
+import { openAutomations } from './automation-sheet'
 import { openButtonEditor } from './button-editor'
 import { filterTree, hasFilter, limits, ruleCount, rulesIn, type FilterGroup, tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View, type Repeat } from '../domain/database.ts'
 import { addGroup, atPath, canHoldGroup, moveIntoGroup, moveIntoNewGroup, moveOutOfGroup, moveRulesOut, removeGroup, treeFields, withoutRule, type FilterPath } from '../domain/filter-tree'
@@ -163,7 +165,7 @@ function Head({ title, back }: { title: string; back?: () => void }) {
 }
 
 function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; blockId: string; go: (p: Panel) => void }) {
-  const { run } = useWorkspace()
+  const { run, workspace } = useWorkspace()
   const navigate = useNavigate()
   const inline = !blockId.startsWith('page:') && db.database.homeBlockId === blockId
   const linked = isLinkedBlock(blockId)
@@ -182,6 +184,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
       <button type="button" onClick={() => go('sort')}>Sort</button>
       {view.layout !== 'calendar' && <button type="button" onClick={() => go('group')}>Group</button>}
     </div>
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={() => { setOpenMenu(null); openAutomations(db.id) }}>Automations{(() => { const n = workspace ? db.database.automations?.filter(r => r.paused || automationProblem(workspace, db.database, r)).length ?? 0 : 0; return n ? ` · ${n} paused` : '' })()}</button>}
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
     {view.layout !== 'calendar' && view.layout !== 'timeline' && !wide && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}

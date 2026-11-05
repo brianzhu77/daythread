@@ -63,7 +63,7 @@ export interface Receipt {
   /** save-editor: synced blocks that changed elsewhere meanwhile, where his version went below them. */
   conflicted?: string[];
   /** What rules this command set off did, for its notice (automations.md §5). */
-  automations?: { ran: string[]; paused: { name: string; reason: string }[] };
+  automations?: { databaseId: string; ran: string[]; paused: { name: string; reason: string }[] };
   /** run-repeats: what it left out, for one notice. */
   skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>;
   /** save-editor: lines left a synced block shown on this many pages. */

@@ -231,3 +231,39 @@ test('real Postgres: a button\'s steps in one operation, all or none, one Undo, 
     await a.end()
   }
 })
+
+test('real Postgres: a rule inside his edit, one Undo over both, a failed rule dropped whole with his edit kept, and a retry not evaluating again', { skip }, async () => {
+  const schema = `daythread_test_rules_${process.pid}`, a = connect()
+  try {
+    const repo = new PostgresWorkspaceRepository(postgresClient(a), schema)
+    let ws = await repo.load()
+    const run = async (operationId: string, action: unknown) => { const r = await repo.execute({ operationId, expectedRevision: ws.revision, action: action as never }); ws = r.workspace; return r }
+    const at = '2026-11-05T10:00:00.000Z', C = (id: string, change: unknown) => run(id, { type: 'change-database', pageId: 'runs', change })
+    await run('db', { type: 'create-database', pageId: 'runs', homeBlockId: null, title: 'Runs' })
+    await C('n', { kind: 'addProperty', property: { id: 'n', name: 'N', type: 'number' } })
+    await C('m', { kind: 'addProperty', property: { id: 'm', name: 'M', type: 'number' } })
+    await run('r1', { type: 'add-row', databaseId: 'runs', pageId: 'r1', title: 'One', values: { n: 1 }, at })
+    const set = (raw: unknown) => writeSteps([{ id: 'a', kind: 'edit-property', set: [{ id: 'm', name: 'M', value: { kind: 'fixed', raw: 5 } }] }, ...(raw === null ? [] : [{ id: 'b', kind: 'edit-property', set: [{ id: 'm', name: 'M', value: { kind: 'fixed', raw } }] }])] as never)
+    await C('good', { kind: 'addAutomation', automation: { id: 'good', name: 'Good', active: true, triggers: [{ kind: 'property-edited', propertyId: 'n', name: 'N' }], steps: set(null) } })
+    const row = () => ws.pages.find(p => p.id === 'r1')!
+    const edit = { type: 'set-values', pageId: 'r1', values: { n: 2 }, expected: { n: 1 }, at }
+    const first = await run('edit', edit)
+    assert.equal(row().values?.m, 5)
+    assert.deepEqual(first.receipt.automations?.ran, ['Good'])
+    await repo.execute({ operationId: 'edit', expectedRevision: ws.revision, action: edit as never })
+    ws = await repo.load()
+    assert.equal(ws.pages.find(p => p.id === 'runs')!.database!.automations![0]!.lastRanAt !== undefined, true)
+    await run('back', { type: 'undo', targetOperationId: 'edit' })
+    assert.deepEqual([row().values?.n, row().values?.m ?? null], [1, null], 'one Undo over both')
+    await C('swap', { kind: 'updateAutomation', automation: { id: 'good', name: 'Good', active: true, triggers: [{ kind: 'property-edited', propertyId: 'n', name: 'N' }], steps: set('words') } })
+    const failed = await run('edit2', { ...edit })
+    assert.equal(row().values?.n, 2, 'his edit stands')
+    assert.equal(row().values?.m ?? null, null, 'the first step of the failed rule is gone too')
+    assert.equal(failed.receipt.automations?.paused[0]?.name, 'Good')
+    const stored = await repo.load()
+    assert.equal(stored.pages.find(p => p.id === 'runs')!.database!.automations![0]!.active, false, 'the pause is stored with his edit')
+  } finally {
+    await a.unsafe(`drop schema if exists ${schema} cascade`)
+    await a.end()
+  }
+})

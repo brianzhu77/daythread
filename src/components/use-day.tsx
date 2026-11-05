@@ -10,6 +10,7 @@ import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
+import { openAutomations } from './automation-sheet'
 import { flushAllEditors } from './editor-flush'
 import { offlineCopy } from './offline-copy'
 import { HOLD_MS, heldWorkspace, isSaving, settleTick, shownStatus, tapTarget, withTick, type Tick, type Ticks, type TickStatus } from './task-ticks'
@@ -106,6 +107,13 @@ interface WorkspaceContextValue {
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
+
+function withRules(spec: Notice, rules: NonNullable<Receipt['automations']>, operationId: string): Notice {
+  const short = (name: string) => (name.length > 28 ? `${name.slice(0, 27)}…` : name)
+  const paused = rules.paused.length === 1 ? `${short(rules.paused[0]!.name)} paused` : rules.paused.length ? `${rules.paused.length} paused` : ''
+  const said = [spec.text, ...rules.ran.map(short), paused].filter(Boolean).join(' · ')
+  return { ...spec, text: said, undoOperationId: operationId, ...(rules.paused.length ? { extra: { label: 'Edit', run: () => openAutomations(rules.databaseId) } } : {}) }
+}
 
 export function WorkspaceProvider({ children, transport = serverTransport }: { children: ReactNode; transport?: Transport }) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
@@ -232,7 +240,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           setSaveError(null)
           setLastFailed(null)
           const spec = typeof notice === 'function' ? notice(result.receipt) : notice
-          if (spec) push(spec)
+          const rules = result.receipt.automations
+          // What rules did goes on the notice his change already has, with its one Undo: "Moved to Done · Log finish · Undo" (automations.md §5).
+          if (rules && (rules.ran.length || rules.paused.length)) push(withRules(spec ?? { text: result.receipt.message }, rules, result.receipt.operationId))
+          else if (spec) push(spec)
           return result.receipt
         } catch (e) {
           const message = e instanceof Error ? e.message : String(e)

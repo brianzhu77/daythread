@@ -29,7 +29,7 @@ test('a rule runs inside his edit, with one Undo over both, and the receipt says
   const { h } = setup([rule()])
   const { receipt } = edit(h, 'r1', { st: 'done' }, { st: 'todo' })
   assert.equal(val(h, 'r1'), 5)
-  assert.deepEqual(receipt.automations, { ran: ['Log finish'], paused: [] })
+  assert.deepEqual(receipt.automations, { databaseId: 'runs', ran: ['Log finish'], paused: [] })
   assert.ok(rules(h)[0]!.lastRanAt)
   h.run({ type: 'undo', targetOperationId: receipt.operationId })
   assert.equal(val(h, 'r1'), 1)
