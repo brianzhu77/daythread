@@ -152,6 +152,39 @@ await scenario('a failed save keeps the words with Retry; a save whose answer wa
   const once = threads().length, comments = threads()[0].comments.length, cleared = await field(page).inputValue()
   return { ok: kept === 'Through a dead line' && said === 1 && none === 0 && landed === 1 && stillSaid === 1 && once === 1 && comments === 1 && cleared === '', kept, said, none, landed, stillSaid, once, comments, cleared }
 })
+await scenario('words typed during a send stay as the next draft, in a new comment, a reply and an edit (Ratchet)', async page => {
+  const holds = []
+  await page.route('**/_serverFn/**', async route => { const body = decodeURIComponent(route.request().postData() ?? ''); if (/add-comment|edit-comment/.test(body)) await new Promise(res => holds.push(res)); await route.continue().catch(() => {}) })
+  const release = async () => { await wait(300); holds.shift()?.(); await wait(800) }
+  await fromMenu(page)
+  // A new comment, with new words in place of the old.
+  await field(page).fill('First sent'); await field(page).press(send); await wait(150)
+  await field(page).fill('NEW WORDS typed while sending'); await release()
+  const replaced = await field(page).inputValue(), first = threads()[0].comments.map(c => c.body)
+  await page.reload(); await wait(1800); await page.locator('.comment-count').click(); await wait(250)
+  const reloaded = await field(page).inputValue()
+  // Words added after those sent: only the addition is left.
+  await field(page).fill('Second sent'); await field(page).press(send); await wait(150)
+  await field(page).pressSequentially(' and more'); await release()
+  const added = await field(page).inputValue(), two = threads().length
+  await field(page).fill(''); await wait(100)
+  // A reply: it stays open with what's left.
+  await pane(page).getByRole('button', { name: 'Reply', exact: true }).first().click()
+  const reply = page.getByRole('textbox', { name: 'Reply' })
+  await reply.fill('Reply sent'); await reply.press(send); await wait(150)
+  await reply.fill('Reply still typing'); await release()
+  const replyLeft = await reply.inputValue(), replied = threads().flatMap(t => t.comments.map(c => c.body)).includes('Reply sent')
+  await pane(page).getByRole('button', { name: 'Cancel' }).click(); await wait(100)
+  // An edit: it stays open with what's there, and its next send isn't refused by its own save.
+  await pane(page).getByRole('button', { name: 'Edit' }).first().click()
+  const edit = page.getByRole('textbox', { name: 'Edit comment' })
+  await edit.fill('Edit one'); await edit.press(send); await wait(150)
+  await edit.fill('Edit two'); await release()
+  const editLeft = await edit.inputValue()
+  await edit.press(send); await release()
+  const closed = await edit.count(), bodies = threads().flatMap(t => t.comments.map(c => c.body)), refused = await page.getByText('Changed in another tab').count()
+  return { ok: replaced === 'NEW WORDS typed while sending' && first.join() === 'First sent' && reloaded === replaced && added === 'and more' && two === 2 && replyLeft === 'Reply still typing' && replied && editLeft === 'Edit two' && closed === 0 && bodies.includes('Edit two') && !bodies.includes('Edit one') && refused === 0, replaced, first, reloaded, added, two, replyLeft, replied, editLeft, closed, bodies, refused }
+})
 await scenario('over 2,000 says so and won\'t send, with the words kept; at 2,000 it saves', async page => {
   await fromMenu(page)
   await field(page).fill('x'.repeat(2001)); await field(page).press(send); await wait(400)

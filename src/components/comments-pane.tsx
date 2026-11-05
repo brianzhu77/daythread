@@ -56,24 +56,34 @@ async function send(run: Run, action: Parameters<Run>[0], { operationId = newOpe
 }
 
 /** A field that keeps its words until they're saved. ⌘Enter sends at 1280; on a phone Enter is a new line and the button sends. */
-function CommentField({ draftKey, initial = '', label, action, placeholder, onDone, onCancel, autoFocus }: { draftKey: string; initial?: string; label: string; action: string; placeholder: string; onDone(body: string, stamp: Stamp): Promise<Sent>; onCancel?: () => void; autoFocus?: boolean }) {
+function CommentField({ draftKey, initial = '', label, action, placeholder, onDone, onSaved, replaces, onCancel, autoFocus }: { draftKey: string; initial?: string; label: string; action: string; placeholder: string; onDone(body: string, stamp: Stamp): Promise<Sent>; /** After a save, with what was typed during it, if anything. */ onSaved?: (left: string) => void; /** It rewrites the whole comment, so what's in the field stays whole. */ replaces?: boolean; onCancel?: () => void; autoFocus?: boolean }) {
   const [body, setBody] = useState(drafts.get(draftKey) ?? initial), [state, setState] = useState<'idle' | 'saving' | 'failed'>('idle')
+  // What's in the field now, for a reply to read when it arrives, as typing goes on during a send.
+  const typed = useRef(body)
   const field = useRef<HTMLTextAreaElement>(null)
   const attempt = useRef<{ words: string; stamp: Stamp } | null>(null)
   useEffect(() => { if (autoFocus) field.current?.focus({ preventScroll: true }) }, [autoFocus])
   const over = body.trim().length > commentLimit
   const send = async () => {
-    const words = body.trim()
-    if (!words || over || state === 'saving') return
+    const sent = typed.current, words = sent.trim()
+    if (!words || sent.trim().length > commentLimit || state === 'saving') return
     setState('saving')
     if (attempt.current?.words !== words) attempt.current = { words, stamp: { operationId: newOperationId(), threadId: crypto.randomUUID(), commentId: crypto.randomUUID(), at: new Date().toISOString() } }
     const result = await onDone(words, attempt.current.stamp)
-    if (result === 'saved') { drafts.delete(draftKey); attempt.current = null; setBody('') }
+    if (result === 'saved') {
+      // Only what went: anything typed since is the next draft.
+      const now = typed.current, left = now === sent ? '' : !replaces && now.startsWith(sent) ? now.slice(sent.length).trimStart() : now
+      attempt.current = null
+      typed.current = left
+      setBody(left)
+      if (left) drafts.set(draftKey, left); else drafts.delete(draftKey)
+      onSaved?.(left)
+    }
     // A refusal says why by itself, and a Retry could only be refused again.
     setState(result === 'failed' ? 'failed' : 'idle')
   }
   return <div className="comment-field">
-    <textarea ref={field} aria-label={label} placeholder={placeholder} rows={2} value={body} onChange={e => { setBody(e.target.value); drafts.set(draftKey, e.target.value); setState('idle') }}
+    <textarea ref={field} aria-label={label} placeholder={placeholder} rows={2} value={body} onChange={e => { typed.current = e.target.value; setBody(e.target.value); drafts.set(draftKey, e.target.value); setState('idle') }}
       onKeyDown={e => {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send() }
         // Esc cancels, keeping the draft if there are words (§2).
@@ -106,14 +116,14 @@ function ThreadView({ thread, focused }: { thread: CommentThread; focused: boole
         </span>
       </div>
       {editing?.id === comment.id
-        ? <CommentField draftKey={`edit:${comment.id}`} initial={comment.body} label="Edit comment" action="Save" placeholder="" autoFocus onCancel={() => setEditing(null)} onDone={async (body, { operationId, at }) => { const r = await send(run, { type: 'edit-comment', threadId: thread.id, commentId: comment.id, body, version: editing.version, at }, { operationId, quiet: true }); if (r === 'saved') setEditing(null); return r }} />
+        ? <CommentField draftKey={`edit:${comment.id}`} initial={comment.body} label="Edit comment" action="Save" placeholder="" autoFocus replaces onCancel={() => setEditing(null)} onDone={(body, { operationId, at }) => send(run, { type: 'edit-comment', threadId: thread.id, commentId: comment.id, body, version: editing.version, at }, { operationId, quiet: true })} onSaved={left => setEditing(left ? { id: comment.id, version: editing.version + 1 } : null)} />
         : <p className="comment-body">{comment.body}</p>}
     </div>)}
     <div className="comment-thread-actions">
       <button type="button" className="app-link" onClick={() => setReplying(!replying)}>Reply</button>
       <button type="button" className="app-link" onClick={() => act({ type: 'resolve-thread', threadId: thread.id, resolved: !thread.resolvedAt, version: thread.version, at: new Date().toISOString() })}>{thread.resolvedAt ? 'Reopen' : 'Resolve'}</button>
     </div>
-    {replying && <CommentField draftKey={`reply:${thread.id}`} label="Reply" action="Reply" placeholder="Reply" autoFocus onCancel={() => setReplying(false)} onDone={async (body, { operationId, commentId, at }) => { const r = await send(run, { type: 'add-comment', pageId: thread.pageId, threadId: thread.id, commentId, body, at }, { operationId, quiet: true }); if (r === 'saved') setReplying(false); return r }} />}
+    {replying && <CommentField draftKey={`reply:${thread.id}`} label="Reply" action="Reply" placeholder="Reply" autoFocus onCancel={() => setReplying(false)} onDone={(body, { operationId, commentId, at }) => send(run, { type: 'add-comment', pageId: thread.pageId, threadId: thread.id, commentId, body, at }, { operationId, quiet: true })} onSaved={left => { if (!left) setReplying(false) }} />}
   </div>
 }
 
