@@ -1,0 +1,2 @@
+PASS webkit image handle outline; Backspace removes; one Undo restores same file address
+PASS webkit file handle outline; Backspace removes; one Undo restores same file address

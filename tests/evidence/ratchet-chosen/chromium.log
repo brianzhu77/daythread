@@ -1,0 +1,34 @@
+PASS a table: drawn as nothing until it's chosen {"drawn":false,"ring":false,"events":"auto","height":224}
+PASS a table: chosen, it's tinted and outlined, and clicks go through {"drawn":true,"ring":true,"events":"none","height":224}
+PASS a table: and the bar says so 
+PASS a table: no page errors []
+PASS a card: drawn as nothing until it's chosen {"drawn":false,"ring":false,"events":"auto","height":38}
+PASS a card: chosen, it's tinted and outlined, and clicks go through {"drawn":true,"ring":true,"events":"none","height":38}
+PASS a card: and the bar says so 
+PASS a card: no page errors []
+PASS a line in a synced block: drawn as nothing until it's chosen {"drawn":false,"ring":false,"events":"auto","height":30}
+PASS a line in a synced block: chosen, it's tinted and outlined, and clicks go through {"drawn":true,"ring":true,"events":"none","height":30}
+PASS a line in a synced block: and the bar says so 
+PASS a line in a synced block: no page errors []
+PASS a divider: drawn as nothing until it's chosen {"drawn":false,"ring":false,"events":"auto","height":23}
+PASS a divider: chosen, it's tinted and outlined, and clicks go through {"drawn":true,"ring":true,"events":"none","height":23}
+PASS a divider: and the bar says so 
+PASS a divider: no page errors []
+PASS a line: drawn as nothing until it's chosen {"drawn":false,"ring":false,"events":"auto","height":30}
+PASS a line: chosen, it's tinted and outlined, and clicks go through {"drawn":true,"ring":true,"events":"none","height":30}
+PASS a line: and the bar says so 
+PASS a line: no page errors []
+PASS a line chosen 
+PASS choosing another moves it, with the same words in the bar 
+PASS several: a tint over each, with no box round each [{"drawn":true,"ring":false,"events":"none","height":30},{"drawn":true,"ring":false,"events":"none","height":224},{"drawn":true,"ring":false,"events":"none","height":30}]
+PASS Esc lets go 
+PASS a click elsewhere lets go 
+PASS an arrow lets go 
+PASS no page errors []
+PASS opening a page holding only a database draws nothing 
+PASS Esc from the table draws it as chosen 
+PASS and Backspace removes it, with nothing left drawn 
+PASS no page errors []
+PASS dark: drawn too 
+PASS 390: drawn as nothing until chosen 
+ALL PASS
