@@ -4,7 +4,7 @@ import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyT
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
-import { commentLimit, type CommentThread } from "./comments.ts";
+import { commentLimit, leavesUndoAlone, type CommentThread } from "./comments.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { hasDependencyLoop, loopRefusal, shiftDependents, spanOf } from "./dependencies.ts";
 import { descendantsOf, hasLoop, parentIdOf } from "./sub-items.ts";
@@ -1336,6 +1336,9 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
+    // Taking away a page made by that change would take the notes written on it since.
+    const pagesBack = new Set(previous.before.pages.map((p) => p.id));
+    if (input.threads?.some((t) => !pagesBack.has(t.pageId))) throw new DomainError("Cannot undo after later changes; current values kept");
     state = expandedWorkspace({ ...structuredClone(previous.before), revision: input.revision, receipts: structuredClone(input.receipts) });
     keepRowNumbers(input, state);
     result = { message: "Previous operation restored" };
@@ -1349,7 +1352,13 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   // A page gone for good takes its threads with it. In Trash they wait for it.
   if (state.threads?.length) { const held = new Set(state.pages.map((p) => p.id)); state.threads = state.threads.filter((t) => held.has(t.pageId)); }
   if (state.threads && !state.threads.length) delete state.threads;
-  if (!["undo", "ensure-day", "run-repeats"].includes(command.action.type)) state.undo = { operationId: command.operationId, revision: state.revision, before };
+  if (leavesUndoAlone(command.action.type)) {
+    // A note isn't worth Undo, and shouldn't cost the Undo of a table deleted before it (comments.md §2). That Undo brings back what it changed and leaves the note.
+    // If what it changed was comments, it would bring back a thread from before the note, so it goes.
+    const previous = input.undo;
+    if (previous && (!previous.before || JSON.stringify(previous.before.threads ?? []) === JSON.stringify(input.threads ?? []))) state.undo = { ...previous, revision: state.revision, ...(previous.before ? { before: { ...previous.before, threads: state.threads } } : {}) };
+    else delete state.undo;
+  } else if (!["undo", "ensure-day", "run-repeats"].includes(command.action.type)) state.undo = { operationId: command.operationId, revision: state.revision, before };
   else delete state.undo;
   return { workspace: state, receipt };
 }

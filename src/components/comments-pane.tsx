@@ -8,7 +8,7 @@ import { commentLimit, threadsOn, type Comment, type CommentThread } from '../do
 import type { Page } from '../domain/types'
 import { CloseIcon, CommentIcon } from './icons'
 import { useKeyboardTop } from './keyboard'
-import { newOperationId, useWorkspace } from './use-day'
+import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
 type Open = { pageId: string; composing: boolean; threadId: string | null }
 let open: Open | null = null
@@ -27,8 +27,13 @@ export const placeOf = (location: { pathname: string; search: unknown }) => { co
 const closeComments = () => { open = null; changed() }
 const when = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
-/** What's typed and not sent, for as long as this tab lives, so closing the pane or Esc loses nothing (§2). */
-const drafts = new Map<string, string>()
+/** What's typed and not sent, so closing the pane, Esc or a phone discarding the tab loses nothing (§2). Kept under the account, as a day's id is the same in every account. */
+const draftAt = (key: string) => `daythread.comment-draft.${workspaceOwner() ?? ''}.${key}`
+const drafts = {
+  get(key: string): string | null { try { return sessionStorage.getItem(draftAt(key)) } catch { return null } },
+  set(key: string, words: string) { try { sessionStorage.setItem(draftAt(key), words) } catch { /* It stays on screen, which is the most that can be done. */ } },
+  delete(key: string) { try { sessionStorage.removeItem(draftAt(key)) } catch { /* As above. */ } },
+}
 type Sent = 'saved' | 'refused' | 'failed'
 /** One send of some words. A Retry of them is the same operation with the same input, so a save that landed with its answer lost isn't made twice. */
 type Stamp = { operationId: string; threadId: string; commentId: string; at: string }

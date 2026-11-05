@@ -2,6 +2,7 @@
 // `deleted_tasks` and `operations`, every row carrying its workspace id. A command locks the workspace row, applies
 // the domain command and writes only the rows that changed, in one transaction; the operation's receipt (for replay)
 // and the rows as they were (its inverse, for Undo) go to `operations`. Shot 1's single row is migrated on first start.
+import { leavesUndoAlone, noteCommands } from '../domain/comments.ts'
 import { applyCommand, createEmptyWorkspace } from '../domain/workspace.ts'
 import { changesBetween, type WorkspaceChanges } from '../domain/workspace-changes.ts'
 import { upgradeWorkspace } from '../domain/convert-v1.ts'
@@ -222,10 +223,17 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     ])
     return { revision: scope.revision, timezone: scope.timezone, weekStart: scope.weekStart, pages, tasks, deleted, threads }
   }
-  /** The Undo marker: the newest operation, when it has an inverse and nothing came after it. */
+  /** The Undo marker: the newest operation, when it has an inverse and nothing but notes came after it. A build without comments looks only at the very newest, so it offers none past a note. */
   private async undoMarker(tx: SqlClient, scope: Scope): Promise<Workspace['undo']> {
-    const [op] = await tx.query<{ operation_id: string }>(`select operation_id from ${this.t('operations')} where workspace_id = $1::uuid and revision = $2 and inverse is not null`, [scope.id, scope.revision])
-    return op ? { operationId: op.operation_id, revision: scope.revision } : undefined
+    const [op] = await tx.query<{ operation_id: string; revision: number; has_inverse: boolean }>(`select operation_id, revision, inverse is not null as has_inverse from ${this.t('operations')} where workspace_id = $1::uuid and type <> all($2::text[]) order by revision desc limit 1`, [scope.id, noteCommands])
+    if (!op?.has_inverse) return undefined
+    if (Number(op.revision) !== scope.revision && await this.changedComments(tx, scope.id, op.operation_id)) return undefined
+    return { operationId: op.operation_id, revision: scope.revision }
+  }
+  /** Whether an operation's Undo would write comments, which a note since rules out. Asked only when a note is involved, as inverses can be large. */
+  private async changedComments(tx: SqlClient, workspaceId: string, operationId: string): Promise<boolean> {
+    const [op] = await tx.query<{ changed: boolean }>(`select coalesce(json_array_length(inverse->'threads'->'upsert'), 0) + coalesce(json_array_length(inverse->'threads'->'remove'), 0) > 0 as changed from ${this.t('operations')} where workspace_id = $1::uuid and operation_id = $2`, [workspaceId, operationId])
+    return Boolean(op?.changed)
   }
   private async read(tx: SqlClient, lock: boolean): Promise<{ scope: Scope; rows: Rows; workspace: Workspace }> {
     const scope = await this.scope(tx, lock), rows = await this.readRows(tx, scope)
@@ -276,6 +284,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
         const [op] = await tx.query<{ inverse: string | null }>(`select inverse::text as inverse from ${this.t('operations')} where workspace_id = $1::uuid and operation_id = $2`, [scope.id, command.action.targetOperationId])
         if (op?.inverse) { const { undo: _undo, receipts: _receipts, ...before } = workspaceOf(applyDiff(rows, JSON.parse(op.inverse) as RowDiff)); workspace.undo = { ...workspace.undo, before: { ...before, receipts: {} } } }
       }
+      if (leavesUndoAlone(command.action.type) && workspace.undo && await this.changedComments(tx, scope.id, workspace.undo.operationId)) delete workspace.undo
       const result = applyCommand(workspace, expected === 'latest' ? { ...command, expectedRevision: workspace.revision } : command)
       const after = result.workspace
       if (after.revision !== workspace.revision) {

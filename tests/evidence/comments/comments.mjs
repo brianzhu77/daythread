@@ -170,6 +170,37 @@ await scenario('Esc keeps the words, in a field and across closing the pane, and
   const back = await field(page).inputValue()
   return { ok: open === 1 && left && closed === 0 && back === 'Half a thought' && threads().length === 0, open, left, closed, back }
 })
+await scenario('a draft survives a reload, and is gone once it\'s sent or cancelled; a reply\'s too', async page => {
+  await fromMenu(page)
+  await field(page).fill('Half a thought'); await wait(100)
+  await page.reload(); await wait(1800)
+  await fromMenu(page)
+  const back = await field(page).inputValue()
+  await field(page).press(send); await wait(500)
+  await page.reload(); await wait(1800)
+  await page.locator('.comment-count').click(); await wait(250)
+  const sent = await field(page).inputValue()
+  await pane(page).getByRole('button', { name: 'Reply', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Reply' }).fill('A reply half written'); await wait(100)
+  await page.reload(); await wait(1800)
+  await page.locator('.comment-count').click(); await wait(250)
+  await pane(page).getByRole('button', { name: 'Reply', exact: true }).click()
+  const reply = await page.getByRole('textbox', { name: 'Reply' }).inputValue()
+  await pane(page).getByRole('button', { name: 'Cancel' }).click(); await wait(100)
+  await pane(page).getByRole('button', { name: 'Reply', exact: true }).click()
+  const cancelled = await page.getByRole('textbox', { name: 'Reply' }).inputValue()
+  return { ok: back === 'Half a thought' && sent === '' && reply === 'A reply half written' && cancelled === '', back, sent, reply, cancelled }
+})
+await scenario('a comment leaves the notice\'s Undo of what came before, and that Undo leaves the comment', async page => {
+  await page.getByRole('button', { name: 'Page actions' }).first().click(); await page.getByRole('menuitem', { name: 'Delete' }).click(); await wait(500)
+  const trashed = Boolean(store().pages.find(p => p.id === 'other').trashedAt)
+  await page.locator('.tree-title', { hasText: 'Notes' }).first().click(); await wait(500)
+  await fromMenu(page); await addComment(page, 'Jotted after')
+  const undo = page.getByRole('button', { name: 'Undo' }), shown = await undo.count()
+  if (shown) { await undo.first().click(); await wait(700) }
+  const back = !store().pages.find(p => p.id === 'other').trashedAt, note = threads()[0]?.comments[0]?.body
+  return { ok: trashed && shown === 1 && back && note === 'Jotted after', trashed, shown, back, note }
+}, big, '/pages?page=other')
 await scenario('going to another page closes the pane, so nothing is written to a page out of sight', async page => {
   await fromMenu(page)
   await page.goto(`${base}/pages?page=notes`); await wait(1500)

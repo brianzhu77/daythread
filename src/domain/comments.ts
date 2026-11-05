@@ -1,6 +1,9 @@
 // Comments (docs/design/comments.md): a note attached to a page or row, kept out of its words. In a table of their own, never in a document, so a save can't touch one and a comment causes no save.
 // Each thread has its own version: an edit, a delete or a resolve from a tab that hadn't seen the newest change to it is refused, and says so.
 export const commentLimit = 2000
+/** Commands that write a note and leave the one Undo where it was. */
+export const noteCommands = ['add-comment', 'edit-comment']
+export const leavesUndoAlone = (type: string): boolean => noteCommands.includes(type)
 export interface Comment { id: string; body: string; at: string; editedAt?: string }
 export interface CommentThread {
   id: string
