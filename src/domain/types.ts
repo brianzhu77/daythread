@@ -14,6 +14,9 @@ export interface Page {
   url?: string | null;
   /** An emoji shown wherever the page's name is (icons-covers.md). The title stays words. */
   icon?: string;
+  /** An image link shown above the head, fetched by the browser (icons-covers.md §7.5), and how far along its crop it sits, 0 to 1; absent is the middle. */
+  cover?: string;
+  coverPosition?: number;
   /** The page it was created in; null or absent = top level. Day pages never have one. */
   parentId?: string | null;
   /** Set while the page is in the trash (ISO time of the delete); null or absent = live. */
@@ -138,6 +141,7 @@ export type Action =
   | { type: "apply-link-preview"; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }
   | { type: "set-page-icon"; pageId: string; icon: string | null }
+  | { type: "set-page-cover"; pageId: string; cover: string | null; position?: number }
   /** `beforeId`: the sibling it goes just before (a drag); absent or null, the end of the parent (Move to…). */
   | { type: "move-page"; pageId: string; parentId: string | null; beforeId?: string | null }
   | { type: "delete-page"; pageId: string; at: string }

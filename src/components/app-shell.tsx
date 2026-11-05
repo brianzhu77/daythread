@@ -12,6 +12,7 @@ import { DatabaseCellEditor } from './database-block'
 import { CsvImportHost } from './csv-import'
 import { PeekHost } from './peek'
 import { IconPickerHost } from './icon-picker'
+import { CoverPanelHost } from './page-cover'
 import { DatabaseMenuHost } from './database-menu'
 import { flushAllEditors } from './editor-flush'
 import { useMoveToNewBuild } from './new-build'
@@ -95,6 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <CsvImportHost />
         <PeekHost />
         <IconPickerHost />
+        <CoverPanelHost />
         <GlobalSearch />
         <div className="safe-top" aria-hidden="true" />
       </div>

@@ -190,6 +190,8 @@ await scenario('The data can\'t load: it says so with Try again, and a typed emo
   return r
 })
 await scenario('A written day takes one; an empty day has no ⋯', async page => {
+  // The seed's day, whichever a browser's own time zone data calls today.
+  await page.goto(`${base}/day/${store().pages.find(p => p.type === 'daily' && p.document.includes('Written today')).date}`); await wait(1800)
   const r = { more: await page.locator('.day-head .page-more').count() }
   await openPicker(page); await page.locator('.icon-picker-search').fill('koala'); await wait(150); await page.locator('.icon-picker-cell').first().click(); await wait(1000)
   r.head = await page.locator('.page-icon').innerText(); r.sidebar = await page.locator('.tree-row[data-kind="day"] .page-emoji').count()

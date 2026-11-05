@@ -76,3 +76,42 @@ test('it survives the database: written, read back, and a save that doesn\'t tou
   })
   await db.close()
 })
+test('a cover is an http or https link; added, changed, moved and removed each say so, with one Undo; a changed link starts in the middle', () => {
+  const h = page(), a = 'https://example.com/a.png', b = 'https://example.com/b.png'
+  for (const bad of ['javascript:alert(1)', 'data:image/png;base64,AA', 'not a link', 'file:///x']) assert.throws(() => h.run({ type: 'set-page-cover', pageId: 'p', cover: bad }), /image link/, bad)
+  assert.equal(h.run({ type: 'set-page-cover', pageId: 'p', cover: a }).receipt.message, 'Cover added')
+  const moved = h.run({ type: 'set-page-cover', pageId: 'p', cover: a, position: 0.25 })
+  assert.equal(moved.receipt.message, 'Cover moved')
+  assert.equal(h.page('p').coverPosition, 0.25)
+  h.run({ type: 'undo', targetOperationId: moved.receipt.operationId })
+  assert.equal('coverPosition' in h.page('p'), false, 'back to exactly where it was')
+  h.run({ type: 'set-page-cover', pageId: 'p', cover: a, position: 0.25 })
+  assert.equal(h.run({ type: 'set-page-cover', pageId: 'p', cover: b }).receipt.message, 'Cover changed')
+  assert.equal('coverPosition' in h.page('p'), false, 'a new picture has its own crop')
+  assert.equal(h.run({ type: 'set-page-cover', pageId: 'p', cover: null }).receipt.message, 'Cover removed')
+  assert.equal('cover' in h.page('p'), false)
+})
+test('a cover goes with a copy and a template, export writes it at the top, and it survives the database', async () => {
+  const h = harness(), url = 'https://example.com/a.png', at = '2026-11-05T00:00:00.000Z'
+  h.run({ type: 'create-database', pageId: 'db', homeBlockId: null, title: 'Books' })
+  h.run({ type: 'add-row', databaseId: 'db', pageId: 'r1', title: 'One', values: {}, at } as never)
+  h.run({ type: 'set-page-cover', pageId: 'r1', cover: url, position: 0.75 })
+  h.run({ type: 'add-row', databaseId: 'db', pageId: 'r2', title: '', copyOf: 'r1', at } as never)
+  assert.deepEqual([h.page('r2').cover, h.page('r2').coverPosition], [url, 0.75])
+  assert.match(pageMarkdown(h.page('r1'), h.ws, new Map([['r1', 'One']])), /!\[\]\(https:\/\/example\.com\/a\.png\)\n\n# One/)
+  const db = await PGlite.create(), repo = new PostgresWorkspaceRepository(pgliteClient(db), undefined, { today: '2026-11-05' })
+  await repo.prepare()
+  const owner = '11111111-1111-4111-8111-111111111111'
+  await repo.workspaceIdFor(owner)
+  await asOwner(owner, async () => {
+    let w = await repo.load()
+    const run = async (action: never) => { w = (await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action })).workspace as typeof w }
+    await run({ type: 'create-document', title: 'Trip', body: '', pageId: 'p' } as never)
+    await run({ type: 'set-page-cover', pageId: 'p', cover: url, position: 0.3 } as never)
+    await run({ type: 'rename-page', pageId: 'p', title: 'Trip 2' } as never)
+    const back = (await repo.load()).pages.find(p => p.id === 'p')!
+    assert.deepEqual([back.cover, back.coverPosition], [url, 0.3])
+  })
+  await db.close()
+})
+

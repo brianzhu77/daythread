@@ -59,6 +59,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("apply-link-preview"), pageId: id, url: z.string().min(1).max(10_000), title: z.string().max(2000).nullable(), description: z.string().max(5000).nullable() }),
   z.object({ type: z.literal("rename-page"), pageId: id, title }),
   z.object({ type: z.literal("set-page-icon"), pageId: id, icon: z.string().max(32).nullable() }),
+  z.object({ type: z.literal("set-page-cover"), pageId: id, cover: z.string().max(2000).nullable(), position: z.number().min(0).max(1).optional() }),
   z.object({ type: z.literal("move-page"), pageId: id, parentId: id.nullable(), beforeId: id.nullable().optional() }),
   z.object({ type: z.literal("delete-page"), pageId: id, at: z.string().max(40) }),
   z.object({ type: z.literal("restore-page"), pageId: id }),

@@ -17,6 +17,7 @@ import { NewPageMenu } from './new-page-menu'
 import { databaseOfRow, isDatabase } from '../domain/database'
 import { RowMenu } from './row-menu'
 import { openIconPicker, PageIconLine } from './icon-picker'
+import { openCoverPanel, PageCover } from './page-cover'
 import { flushEditor } from './editor-flush'
 import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, rowTemplateDatabaseId, templates, templateTarget, topLevelTarget } from '../domain/day-template'
 
@@ -56,7 +57,7 @@ export function PagesScreen() {
   if (p && isTrashed(p)) return <TrashedPage key={p.id} page={p} workspace={workspace} />
   // A day page opened from the trash and just restored (B16): its home is its date.
   if (p?.type === 'daily' && p.date) return <Navigate to="/day/$date" params={{ date: p.date }} replace />
-  if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} {...(search.from === 'bookmarks' ? { fromBookmarks: true } : {})} /><PageContent page={p} workspace={workspace} focus={search.focus} /></div>
+  if (p) return <div className="doc-screen"><PageCover page={p} place="page" /><PageHeaderRow page={p} workspace={workspace} {...(search.from === 'bookmarks' ? { fromBookmarks: true } : {})} /><PageContent page={p} workspace={workspace} focus={search.focus} /></div>
   // Top-level pages, then pages made inside day pages by day (Lead 02cbc559); deeper pages are reached through each
   // page's Subpages list (layout §6).
   const documents = childPages(workspace, null)
@@ -215,7 +216,7 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
             : <PageLink className="crumb" href="/pages?view=templates">Templates</PageLink>}
         </nav>
         {/* Delete sits in the ⋯ where a document page has it (Jazz dbb8b038). */}
-        <RowMenu label="Template actions" triggerClass="page-more" groups={[{ items: [{ label: page.icon ? 'Change icon' : 'Add icon', onSelect: () => openIconPicker(page.id, document.querySelector('.page-more')) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void remove() }] }]} />
+        <RowMenu label="Template actions" triggerClass="page-more" groups={[{ items: [{ label: page.icon ? 'Change icon' : 'Add icon', onSelect: () => openIconPicker(page.id, document.querySelector('.page-more')) }, { label: page.cover ? 'Change cover' : 'Add cover', onSelect: () => openCoverPanel(page.id, document.querySelector('.page-more')) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void remove() }] }]} />
       </div>
       <PageIconLine page={page} />
       <div className="page-head">
