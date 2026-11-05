@@ -38,7 +38,7 @@ Notion runs these some time after the edit. **I'd run row and property triggers 
 
 - **One Undo for both:** "Moved to Done · Undo" undoes the move and what it set off, with no leftovers to chase.
 - **Same from anywhere:** old tabs, the phone and other tabs all set it off, because it's on the server.
-- **No queue and no running cost.**
+- **No queue and no new service.** It isn't free of CPU or latency, which §5.3 measures (Ratchet 2dcbd199).
 - **What he sees:** the usual notice, plus the rule's name when it did something: "Moved to Done · Log finish · Undo".
 
 **Rules that protect his data:**
@@ -46,22 +46,29 @@ Notion runs these some time after the edit. **I'd run row and property triggers 
 1. **His own edit always stands.** If a rule fails, his edit is kept, the rule's steps are dropped whole, and the rule pauses. The notice says "Log finish paused · Status was deleted · Edit", and the rule's line shows the same. Notion pauses too, but doesn't always say. We always do.
 2. **Limits:** "Edit rows in" stops at a stated number of rows (for Roadbuster to set from what a Worker request can do), and refuses rather than doing part of it. The refusal pauses the rule as in point 1.
 3. **Typing speed:** a property edit isn't slowed noticeably. A database with no rules pays nothing, which is R1-18's bar. Measure with rules on.
-4. **A rename or delete of something a rule uses** shows the rule as broken at once, not on its next run.
+4. **A rename of something a rule uses** keeps working, as targets are held by id, and updates its label. **A delete or an incompatible type change** shows the rule as broken at once, not on its next run (corrected, Ratchet 2dcbd199).
+
+**Contracts before building (Ratchet 2dcbd199, a read of the code, nothing built or run):**
+
+5. **Save his edit, stage each rule separately.** Apply his action first, and run each rule on a disposable copy of that state, accepting the copy only if all its steps succeed. His edit, the successful rules and the failed rules' pauses commit in one transaction with one Undo. `execute` mutates its cloned workspace today, so catching an exception without a fresh copy per rule could leave partial steps. **"His edit always stands" covers a rule's failure, not a failed database:** an outage fails the whole commit.
+6. **Freeze what fired, then run in order.** Matches come from his action's before and after rows, ahead of any rule's writes, and matched rules run in their saved list order. "All" needs at least one watched property to have changed, with all its conditions true afterwards, so an unrelated edit doesn't repeat a Done rule. A rule can read what an earlier rule wrote, but those writes never add matches.
+7. **No chains by provenance.** A rule's own steps are marked as coming from an automation, and Undo, restore, import and repeat-made rows are excluded by name. A button's direct changes can fire rules once, and those rules' changes can't. Bulk edits and property conversions are covered explicitly. A retry of the original operation doesn't evaluate rules again, and keeps its generated ids and date.
+8. **Bound the whole command.** Limits count across all rules and steps, rather than each rule getting a fresh allowance, and it's stated whether hitting the limit pauses the remaining rules.
 
 ## 6. Scheduled rules
 
-**Decided (Lead f5362d4f): A, catch-up on open, for scheduled rules and repeating templates.** A paid cron is looked at only if being on time matters in use, and then the Lead checks our plan and tells Brian. The comparison stays below as the reason.
+**Decided (Lead f5362d4f): A, catch-up on open, for scheduled rules and repeating templates.** **Corrected 2026-11-05 (Ratchet 2dcbd199, Lead 7b6bbb77's question):** since B60 the Worker's cron runs every minute on Workers Paid, so price and "nothing runs without a request" are no longer the reason. **Catch-up stays for the first scheduled release, because of Undo and unattended writes:** repeating rows wait for a visible, idle tab, as `run-repeats` clears Undo, and a cron would run past that protection every minute. The cron also only walks workspaces with a push subscription today, so scheduled rules can't simply join that loop. Whether to change this is decided separately at that step, and a step reaching outside the app is the likely reason to. **Either way:** a rule and period's key, its effects and its progress marker commit together under the workspace lock, and cron and open share them. Time zone and period rules are fixed, and the schedule has a version, changed on an edit or a resume, so a late tick can't run an old schedule. Reaching outside the app needs its own delivery design, as the push lease isn't exactly-once.
 
-Today nothing runs on the server unless a request comes in: days are made by his open tab at midnight (`ensure-day`). So **"Every Monday" and repeating templates (R4-6) need a way to wake up.**
+Days are made by an open tab at midnight (`ensure-day`), and **"Every Monday" and repeating templates (R4-6) need a way to wake up.**
 
 | | A. Catch up when he opens the app | B. A Worker cron |
 | --- | --- | --- |
 | On time? | Only if a tab is open at that time; otherwise at his next open | Yes, within the minute |
-| Running cost | None | Cloudflare's limits page gives 5 crons on the free plan at 10 ms of CPU, which is unlikely to be enough for this, so I'd expect the paid plan. I haven't checked our plan or current price. |
+| Running cost | None | Workers Paid, already ours, with the cron already running (B60): about 0.7 M CPU-ms a month of the 30 M included, by the Lead's arithmetic, before any rule work |
 | Mail, webhook or Slack at a set time | Not honest: it would send late | Works |
-| New failure mode | None beyond today's | A run with nobody watching, needing its own logging and alert |
+| New failure mode | None beyond today's | A run with nobody watching, needing its own logging and alert, that can clear the Undo of someone working |
 
-**Why A:** it uses the path his days already use, and it's enough for rows in his own databases, since he only sees them when he opens the app anyway. Move to B when a scheduled step reaches outside the app.
+**Why A:** it uses the path Brian's days already use, and it's enough for rows in a person's own databases, since they're only seen when the app is opened. Look at B again when a scheduled step reaches outside the app.
 
 **With A:**
 
