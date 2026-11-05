@@ -195,9 +195,10 @@ await scenario('To-dos: Add row is its + New, with Open and one Undo', async pag
 await scenario('390: a sheet with Done in its head; a tap raises no keyboard and takes no caret; ⋯ edits', async page => {
   await pill(page, 'Log a run').tap(); await wait(800)
   const active = await page.evaluate(() => document.activeElement?.tagName), line = await page.locator('.bn-block-outer[data-id="b-add"] .editor-button-line').boundingBox(), drawn = await pill(page, 'Log a run').boundingBox()
+  const long = page.locator('.editor-button-pill', { hasText: 'A very long label' }), longBox = await long.boundingBox(), more = await page.locator('.editor-button-more').last().boundingBox(), ell = await long.locator('span').evaluate(n => n.scrollWidth > n.clientWidth)
   await page.getByRole('button', { name: 'Log a run actions' }).tap(); await wait(250); await page.getByRole('menuitem', { name: 'Edit' }).tap(); await wait(350)
   const sheet = await editor(page).boundingBox(), size = await editor(page).getByLabel('Name').evaluate(n => getComputedStyle(n).fontSize)
-  return { ok: active !== 'INPUT' && !/TEXTAREA/.test(active) && line.height >= 44 && drawn.height === 36 && sheet.width === 390 && Math.round(sheet.y + sheet.height) >= 778 && size === '16px', active, line, drawn, sheet, size }
+  return { ok: active !== 'INPUT' && !/TEXTAREA/.test(active) && line.height >= 44 && drawn.height === 36 && sheet.width === 390 && Math.round(sheet.y + sheet.height) >= 778 && size === '16px' && ell && longBox.x + longBox.width <= more.x + 1 && more.x + more.width <= 390, active, line, drawn, sheet, size, longBox, more, ell }
 }, phone)
 await browser.close()
 console.log(failed ? `${failed} failed` : 'all passed')
