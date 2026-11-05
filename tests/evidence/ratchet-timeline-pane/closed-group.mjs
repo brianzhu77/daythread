@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import * as pw from '@playwright/test';
+import {execFileSync} from 'node:child_process';
+const engine=process.argv[2]??'chromium', S='/tmp/ratchet143.sqlite';
+const browser=await pw[engine].launch(),page=await browser.newPage({viewport:{width:1280,height:850},serviceWorkers:'block'}),errors=[];
+page.on('pageerror',e=>errors.push(e.message));
+const wait=ms=>page.waitForTimeout(ms),store=()=>JSON.parse(execFileSync('sqlite3',[S,'select data from workspace']).toString());
+await page.goto('http://127.0.0.1:3719/pages?page=plans');await wait(1800);
+await page.locator('.database-more-button').click();await wait(250);const menu=page.locator('.database-menu');await menu.getByRole('button',{name:'Group',exact:true}).click();await wait(250);await menu.locator('label.database-menu-row',{hasText:'Group by'}).first().locator('select').selectOption({label:'Kind'});await wait(600);await page.keyboard.press('Escape');await wait(300);if(await menu.count())await page.locator('.database-menu-scrim').click({position:{x:5,y:5}});await wait(300);
+const lane=id=>page.locator(`.database-bar-lane[data-row="${id}"]`),move=async()=>{await lane('trip').hover();const g=await lane('trip').locator('.database-pane-handle').boundingBox(),to=await lane('call').boundingBox();await page.mouse.move(g.x+g.width/2,g.y+g.height/2);await page.mouse.down();await page.mouse.move(g.x+2,to.y+4,{steps:6});await page.mouse.up();await wait(1400)};
+assert.equal(await page.locator('.database-pane').count(),0);await move();assert.equal(store().pages.find(p=>p.id==='trip').values.kind,'work');await page.getByRole('button',{name:'Undo',exact:true}).first().click();await wait(1100);assert.equal(store().pages.find(p=>p.id==='trip').values.kind,'home');
+let abort=true;await page.route('**/_serverFn/**',r=>abort&&/set-values/.test(r.request().postData()??'')?r.abort():r.continue());const before=store().revision;await move();const failed={revision:store().revision,kind:store().pages.find(p=>p.id==='trip').values.kind,notice:await page.locator('[role=alert],[role=status]').allInnerTexts()};assert.equal(failed.revision,before);assert.equal(failed.kind,'home');assert.ok(failed.notice.join().length);abort=false;await page.unroute('**/_serverFn/**');console.log(JSON.stringify({groupMoveUndo:'PASS',failed,errors}));assert.deepEqual(errors,[]);await browser.close();

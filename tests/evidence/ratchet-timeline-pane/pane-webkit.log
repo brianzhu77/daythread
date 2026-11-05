@@ -1,0 +1,30 @@
+PASS the table starts closed 
+PASS hovering a line shows its handle, with the table closed 
+PASS at the left of what is in view [421,420]
+PASS and it stays there when the bars scroll [421,421]
+PASS dragging shows where it would land 
+PASS and letting go moves the row ["b","a","c","far"]
+PASS one Undo puts it back ["a","b","c","far"]
+PASS a bar in the middle is clear of the handle [862,421]
+PASS a bar far off still has its jump 
+PASS closed: no page errors []
+PASS open: every column is there ["Col one","Col two","Col three","Col four","Col five","Col six","Col seven"]
+PASS and the table leaves the bars their room [501,836]
+PASS a fade says there is more 
+PASS a row's jump to its bar off-screen stays on the row's own line 
+PASS and adds no line under it 
+PASS a sideways scroll over the table moves its columns [860,710]
+PASS Name stays 
+PASS head and rows stay in step [710,710,710]
+PASS and the bars stay where they were [2832,2832]
+PASS a sideways scroll over the bars moves the bars, not the columns [2832,2952]
+PASS at the end of the columns the fade goes 
+PASS and the last column ends at its edge [920,920]
+PASS a cell reached by a key comes into sight [620,620]
+PASS a tap on a scrolled column edits that column "Edited far along"
+PASS and it shows there "Edited far along\n"
+PASS with the table open, the handle is in the table 
+PASS open: no page errors []
+PASS a sorted view has no handle, closed or open 0
+PASS sorted: no page errors []
+ALL PASS
