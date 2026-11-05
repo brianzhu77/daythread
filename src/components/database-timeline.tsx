@@ -8,7 +8,7 @@ import { columnCalc, databaseRows, inView, isEmptyValue, isReadOnly, propertyOf,
 import { dayWidth, daysBetween, draggedBar, endAt, linkPath, snapMinutes, startAt, timelineBars, timelineUnits, timelineWeeks, viewDateEnd, type BarPart, type BarWrite, type TimelineBar, type TimelineUnit } from '../domain/timeline.ts'
 import { taskIdOfRow } from '../domain/todos-source'
 import type { LocalDate, Page, WeekStart, Workspace } from '../domain/types'
-import { rowTint, SubItemParent, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { rowTint, SubItemLead, SubItemParent, subFoldKey, subItemTree, treeUpTo, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { addDays, fromIso, todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
@@ -179,6 +179,11 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
   const { limitOf, showMore } = useGroupLimits(`${blockId}|${view.id}`, cap)
   const { folded, toggle } = useFolds(blockId, view.id)
   const moveRow = useMoveRow(db, view, context, groups)
+  // Nested, the rows draw as a tree. The scale still runs over every bar, so opening a toggle doesn't move it. A row with no date stays on the No date line, unless it's in the tree: a sub-item under its parent, or a parent its sub-items need (sub-items design §2).
+  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded)
+  const treeOf = new Map(tree?.map(e => [e.row.id, e]))
+  const undatedElsewhere = tree ? undated.filter(r => { const e = treeOf.get(r.id); return e && !e.depth && !e.hasChildren }) : undated
+  const toggleLead = (row: Page) => { const entry = treeOf.get(row.id); return entry ? <SubItemLead entry={entry} label={row.title || 'Untitled'} onToggle={() => toggle(subFoldKey(row.id))} /> : null }
   // The scale runs over the rows and today, as far as a page can.
   const days = bars.flatMap(b => [day(b.start), day(b.end)])
   const span = Math.floor(widest / width / 2)
@@ -303,8 +308,9 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
     </button>
   }
   const paneRow = (row: Page, group?: string) => <div className="database-pane" style={{ width: pane }}>
-    {!view.sort.length && !db.database.fixed && <span className="database-pane-handle" role="button" aria-label={`Drag ${row.title || 'Untitled'}`} onPointerDown={e => startReorder(e, row.id, group ?? null)}>⋮⋮</span>}
-    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth }} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}{groups && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
+    {!view.sort.length && !db.database.fixed && !treeOf.get(row.id)?.depth && <span className="database-pane-handle" role="button" aria-label={`Drag ${row.title || 'Untitled'}`} onPointerDown={e => startReorder(e, row.id, group ?? null)}>⋮⋮</span>}
+    {toggleLead(row)}
+    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth - (treeOf.has(row.id) ? 28 + Math.min(treeOf.get(row.id)!.depth, 4) * 16 : 0) }} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}{groups && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
     {columns.map(c => cell(row, c.property, group))}
   </div>
 
@@ -413,8 +419,8 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
     const drawnHere = left + barWidth > seen.left - pad && left < seen.left + seen.width + pad
     const title = bar.row.title || 'Untitled'
     const tint = rowTint(db.database, view, bar.row, context)
-    return <div key={`${group ?? ''}:${bar.row.id}`} className={`database-bar-lane${returned === bar.row.id ? ' is-returned' : ''}${reorder?.before === bar.row.id ? ' is-drop-before' : ''}${reorder?.rowId === bar.row.id ? ' is-dragging' : ''}`} data-row={bar.row.id} {...(group !== undefined ? { 'data-group': group } : {})} style={{ height: rowHeight }}>
-      {paneOn && paneRow(bar.row, group)}
+    return <div key={`${group ?? ''}:${bar.row.id}`} className={`database-bar-lane${treeOf.get(bar.row.id)?.context ? ' is-context' : ''}${returned === bar.row.id ? ' is-returned' : ''}${reorder?.before === bar.row.id ? ' is-drop-before' : ''}${reorder?.rowId === bar.row.id ? ' is-dragging' : ''}`} data-row={bar.row.id} {...(group !== undefined ? { 'data-group': group } : {})} style={{ height: rowHeight }}>
+      {paneOn ? paneRow(bar.row, group) : treeOf.get(bar.row.id)?.hasChildren && <span className="database-lane-lead">{toggleLead(bar.row)}</span>}
       {drawnHere && <button type="button" className={`database-bar is-${at.shape}${tint?.className ?? ''}${bar.readOnly ? ' is-read-only' : ''}${live ? ' is-dragging' : ''}${linking?.over === bar.row.id ? ' is-link-target' : ''}`} style={{ ...tint?.style, left: left + pane, width: barWidth }}
         {...(deps ? { onPointerEnter: () => showLinks(bar.row.id, true), onPointerLeave: () => showLinks(bar.row.id, false) } : {})}
         data-nav={index === 0 ? '0:0' : undefined} data-cell={cellKey({ blockId, databaseId, rowId: bar.row.id, columnId: titleId })} aria-label={`${title}, ${datesOf(at)}`}
@@ -442,10 +448,11 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
       if (endProperty && first !== last) write(row, [{ id: startProperty.id, value: { start: first } as unknown as Json }, { id: endProperty.id, value: { start: last } as unknown as Json }], `Set to ${short(first)} – ${short(last)}`)
       else write(row, [{ id: startProperty.id, value: (first === last ? { start: first } : { start: first, end: last }) as unknown as Json }], first === last ? `Set to ${short(first)}` : `Set to ${short(first)} – ${short(last)}`)
     }
-    return <div key={row.id} className="database-bar-lane is-undated" data-row={row.id} style={{ height: rowHeight }}
+    return <div key={row.id} className={`database-bar-lane is-undated${treeOf.get(row.id)?.context ? ' is-context' : ''}`} data-row={row.id} style={{ height: rowHeight }}
       onPointerMove={e => { if (canSet && e.pointerType === 'mouse') setHover(dayAtX(e.clientX)) }} onPointerLeave={() => setHover(null)}
       onPointerDown={e => { if (canSet && e.button === 0 && !(e.target as Element).closest('.database-bar-off, .database-pane')) pressed.current = dayAtX(e.clientX) }}
       onPointerUp={e => { if (pressed.current) { const from = pressed.current; pressed.current = null; set(from, dayAtX(e.clientX)) } }}>
+      {!paneOn && treeOf.get(row.id)?.hasChildren && <span className="database-lane-lead">{toggleLead(row)}</span>}
       {paneOn ? paneRow(row) : <button type="button" {...(rowTint(db.database, view, row, context) ? { style: rowTint(db.database, view, row, context)!.style } : {})} className={`database-bar-off is-before is-name${rowTint(db.database, view, row, context)?.className ?? ''}${row.title ? '' : ' is-placeholder'}`} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}</button>}
       {hover && canSet && <span className="database-bar is-ghost" aria-hidden="true" style={{ left: pane + daysBetween(origin, hover) * width, width: Math.max(width, 10) }} />}
     </div>
@@ -499,11 +506,15 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
               {hasFoot && foot(group.rows)}
             </>}
           </Fragment>
-        }) : drawn.map((b, i) => barLine(b, i))}
-        {!groups && bars.length > limit && lineLane(<button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>)}
+        }) : tree ? (() => {
+          // Its own bars, as what only sits above a match isn't among the view's rows.
+          const shown = treeUpTo(tree, limit), own = new Map(timelineBars(db.database, view, shown.map(e => e.row), shownRaw).bars.map(b => [b.row.id, b]))
+          return shown.filter(e => own.has(e.row.id) || e.depth || e.hasChildren).map((e, i) => { const bar = own.get(e.row.id); return bar ? barLine(bar, i) : undatedLane(e.row) })
+        })() : drawn.map((b, i) => barLine(b, i))}
+        {!groups && (tree ? tree.filter(e => !e.depth).length : bars.length) > limit && lineLane(<button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>)}
         {!groups && hasFoot && foot(rows)}
-        {undated.length > 0 && lineLane(<button type="button" className="database-undated-head" aria-expanded={undatedOpen} onClick={() => setUndatedOpen(!undatedOpen)}>No date · {undated.length} ›</button>)}
-        {undatedOpen && undated.map(undatedLane)}
+        {undatedElsewhere.length > 0 && lineLane(<button type="button" className="database-undated-head" aria-expanded={undatedOpen} onClick={() => setUndatedOpen(!undatedOpen)}>No date · {undatedElsewhere.length} ›</button>)}
+        {undatedOpen && undatedElsewhere.map(undatedLane)}
       </div>
     </div>
   </>

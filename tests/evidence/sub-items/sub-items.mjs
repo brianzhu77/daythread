@@ -79,6 +79,37 @@ await scenario('In a group a sub-item says whose it is, on every layout; a row w
   r.ok = ['table', 'list', 'board', 'gallery', 'timeline'].every(k => r[k].join() === 'in top')
   return r
 })
+const lanes = page => page.locator('.database-bar-lane[data-row]').evaluateAll(l => l.map(n => [n.dataset.row, Boolean(n.querySelector('.database-bar:not(.is-ghost)')), Boolean(n.querySelector('.database-sub-toggle'))]))
+const laneIds = async page => (await lanes(page)).map(l => l[0]).join()
+const openLane = async (page, row) => { await page.locator(`.database-bar-lane[data-row="${row}"] .database-sub-toggle`).click(); await wait(250) }
+await scenario('Timeline: nested in a toggle, with a dateless sub-item under its parent and a dateless parent kept for its sub-item; a loner stays on No date', 'timeline', async page => {
+  const r = { closed: await laneIds(page) }
+  const left = await page.locator('.database-scale-label').first().boundingBox()
+  await openLane(page, 'top'); r.top = await laneIds(page)
+  await openLane(page, 'kid'); r.kid = await laneIds(page)
+  await openLane(page, 'great'); r.great = await laneIds(page)
+  r.bars = (await lanes(page)).filter(l => l[1]).map(l => l[0]).join()
+  r.indent = await page.locator('.database-bar-lane[data-row="grand"] .database-pane-name').evaluate(n => n.getBoundingClientRect().x) - await page.locator('.database-bar-lane[data-row="top"] .database-pane-name').evaluate(n => n.getBoundingClientRect().x)
+  r.handles = [await page.locator('.database-bar-lane[data-row="top"] .database-pane-handle').count(), await page.locator('.database-bar-lane[data-row="kid"] .database-pane-handle').count()]
+  r.noDate = await page.locator('.database-undated-head').innerText()
+  r.scaleStill = Math.abs((await page.locator('.database-scale-label').first().boundingBox()).x - left.x) < 1
+  r.ok = r.closed === 'top,great,kid2,other' && r.top === 'top,kid,great,kid2,other' && r.kid === 'top,kid,grand,great,kid2,other' && r.great === 'top,kid,grand,great,deep,kid2,other' && r.bars.split(',').includes('deep') && !r.bars.split(',').includes('grand') && r.indent > 20 && r.handles[0] === 1 && r.handles[1] === 0 && /No date · 1/.test(r.noDate) && r.scaleStill
+  return r
+})
+await scenario('Timeline: with the table closed a parent\'s toggle still opens it; Flattened lists every row with no toggle; Sub-items only lists no parents', 'timeline', async page => {
+  await page.locator('.database-timeline-toggle').click(); await wait(400)
+  const r = { closedToggle: await page.locator('.database-lane-lead .database-sub-toggle').count() }
+  await page.locator('.database-bar-lane[data-row="top"] .database-sub-toggle').click(); await wait(300)
+  r.opened = await page.locator('.database-bar-lane[data-row="kid"] .database-bar').count()
+  await page.locator('.database-timeline-toggle').click(); await wait(300)
+  await more(page)
+  await menu(page).getByLabel('Show sub-items').selectOption('flat'); await wait(900)
+  r.flat = await laneIds(page); r.flatToggles = await page.locator('.database-timeline .database-sub-toggle').count()
+  await menu(page).getByLabel('Which rows').selectOption('subs'); await wait(900)
+  r.subs = await laneIds(page)
+  r.ok = r.closedToggle >= 2 && r.opened === 1 && r.flat.split(',').includes('deep') && r.flat.split(',').includes('kid') && r.flatToggles === 0 && !r.subs.split(',').includes('top') && r.subs.split(',').includes('kid')
+  return r
+})
 await scenario('A new sub-item from a parent\'s +', 'on', async page => {
   const r = {}
   await page.locator('.database-row[data-row="other"]').hover(); await wait(150)
