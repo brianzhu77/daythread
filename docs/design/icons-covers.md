@@ -129,6 +129,13 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 
 **I recommend it keeps its place:** the band stays in `--fill`, with "Can't load this cover" in small grey words, or "Offline", and Change and Remove reachable as usual. There's no broken-image mark. The words on the page don't jump a second after he starts reading, and he can see why the cover's gone. **The other way:** the band closes when it fails, which leaves no sign but moves every word up 200 px while he's reading.
 
+### 7.7 Contracts before building (Ratchet f18d4910, a review of the document and sketches)
+
+- **The preview belongs to the current link.** Load A, change to B before A finishes, then A succeeds: Add stays unavailable until B loads. Closing the panel or removing cancels late replies. The existing cover stays until its replacement is committed. Having loaded once checks that preview, and doesn't promise the link will stay alive.
+- **Reposition's rule.** Stored as a normalized position within the vertical travel the crop allows, not as a share of the picture's height (this replaces §7.5's wording). Tested with one portrait and one wide picture across a full page, center peek and side peek. Cancel or Esc restores the exact earlier position with no command, and Done makes one Undo. Arrow keys move it while the mode is open, so there's a keyboard way.
+- **Icon and cover edits live alongside typing.** Rapid Random presses, a failed icon save, and changing or removing a cover while the body is saving keep both the newest choice and the words. A refused or failed change shows a state, and an older reply never replaces a newer choice. Tested with a held save and a late Undo, as well as an ordinary pick and Undo.
+- **The 390 picker sketch** still shows the editor toolbar. §7.4's written rule, toolbar hidden, is the target.
+
 ## 8. Later releases, as far as the design goes
 
 - **Upload (P1-5)** uses the states in `body-files.md` §4 on the band or the icon: a progress track, "Not uploaded · Retry", "Too large · 25 MB at most". An uploaded icon draws in the same box as an emoji, with its corners slightly rounded.
