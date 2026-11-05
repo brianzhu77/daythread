@@ -4,7 +4,7 @@ import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, 
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
-import { automationProblem, firedRules, type FiredRule } from "./automations.ts";
+import { automationProblem, dueRules, firedRules, type FiredRule } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, valueAtTap, type ButtonStep } from "./buttons.ts";
 import { commentLimit, leavesUndoAlone, type CommentThread } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
@@ -346,6 +346,44 @@ function runAutomations(start: Workspace, fired: FiredRule[], operationId: strin
     }
   }
   return { state, automations: { databaseId: fired[0]!.databaseId, ran, paused } };
+}
+/**
+ * Scheduled rules, in the command that catches up on opening (automations.md §6). The period's marker commits with what it did, so two tabs, a retry or a rollback can't run it twice.
+ * Each is taken whole, as on a change, here by writing the copy's result back over this command's state, which `execute` holds by reference.
+ */
+function runScheduledRules(state: Workspace, action: Extract<Action, { type: "run-repeats" }>, operationId: string): NonNullable<Receipt["automations"]> | null {
+  const due = dueRules(state, action.today, action.time);
+  if (!due.length) return null;
+  const budget = newBudget(), ran: string[] = [], paused: { name: string; reason: string }[] = [], at = isoTime(action.at);
+  let spent = false;
+  const stop = (databaseId: string, ruleId: string, reason: string, limit: boolean, name: string) => {
+    const db = state.pages.find((p) => p.id === databaseId)!.database!;
+    db.automations = db.automations!.map((r) => (r.id === ruleId ? { ...r, active: false, paused: { reason, ...(limit ? { limit: true as const } : {}) } } : r));
+    paused.push({ name, reason });
+  };
+  for (const { database, rule, date } of due) {
+    if (spent) { stop(database.id, rule.id, "Not run · command limit reached", true, rule.name); continue; }
+    const live = state.pages.find((p) => p.id === database.id)!;
+    const problem = automationProblem(state, live.database!, rule);
+    if (problem) { stop(database.id, rule.id, problem, false, rule.name); continue; }
+    const copy = structuredClone(state), before = { ...budget };
+    try {
+      // A row dates itself to its period through @today (§6), and its id to the rule and period.
+      const result = runSteps(copy, readSteps(rule.steps), copy.pages.find((p) => p.id === database.id)!, { at, today: date }, `every:${rule.id}:${date}`, null, budget);
+      const db = copy.pages.find((p) => p.id === database.id)!.database!;
+      db.automations = db.automations!.map((r) => (r.id === rule.id ? { ...r, ...(result.message !== null ? { lastRanAt: at } : {}), triggers: r.triggers.map((t) => (t.kind === "every" ? { ...t, repeat: { ...t.repeat, last: date, lastRan: at } } : t)) } : r));
+      settleSynced(copy);
+      Object.assign(state, copy);
+      if (result.message !== null) ran.push(rule.name);
+    } catch (error) {
+      if (!(error instanceof DomainError)) throw error;
+      Object.assign(budget, before);
+      const limit = / at most$/.test(error.message);
+      if (limit) spent = true;
+      stop(database.id, rule.id, limit ? "Not run · command limit reached" : error.message, limit, rule.name);
+    }
+  }
+  return { databaseId: due[0]!.database.id, ran, paused, scheduled: true };
 }
 /** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
 export function isBlankTask(t: Task): boolean {
@@ -1312,7 +1350,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (noRoom) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, noRoom, ""), full: true });
         if (missed) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, missed) });
       }
-      return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}) };
+      const rules = runScheduledRules(state, action, operationId);
+      return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}), ...(rules ? { automations: rules } : {}) };
     }
     case "run-button": return runButton(state, action, operationId);
     case "run-row-button": return runRowButton(state, action, operationId);

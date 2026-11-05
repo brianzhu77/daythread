@@ -267,3 +267,28 @@ test('real Postgres: a rule inside his edit, one Undo over both, a failed rule d
     await a.end()
   }
 })
+
+test('real Postgres: a scheduled rule\'s period commits with its marker, once, across a retry and a second tab, and takes no Undo', { skip }, async () => {
+  const schema = `daythread_test_every_${process.pid}`, a = connect(), b = connect()
+  try {
+    const repo = new PostgresWorkspaceRepository(postgresClient(a), schema), other = new PostgresWorkspaceRepository(postgresClient(b), schema)
+    let ws = await repo.load()
+    const run = async (operationId: string, action: unknown) => { const r = await repo.execute({ operationId, expectedRevision: ws.revision, action: action as never }); ws = r.workspace; return r }
+    await run('db', { type: 'create-database', pageId: 'runs', homeBlockId: null, title: 'Runs' })
+    await run('rule', { type: 'change-database', pageId: 'runs', change: { kind: 'addAutomation', automation: { id: 'wk', name: 'Weekly', active: true, triggers: [{ kind: 'every', repeat: { every: 'week', interval: 1, start: '2026-11-02', notBefore: '2026-11-02T00:00' } }], steps: writeSteps([{ id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Review', set: [] }]) } } })
+    const tick = { type: 'run-repeats', today: '2026-11-03', time: '09:00', at: '2026-11-03T09:00:00.000Z' }
+    const count = () => a.unsafe(`select count(*)::int as n from ${schema}.pages where title = 'Review'`).then(r => r[0]!.n)
+    const results = await Promise.allSettled([repo.execute({ operationId: 'tab-1', expectedRevision: ws.revision, action: tick as never }), other.execute({ operationId: 'tab-2', expectedRevision: ws.revision, action: tick as never })])
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, 1, 'two tabs at once: one wins')
+    assert.equal(await count(), 1)
+    ws = await repo.load()
+    await repo.execute({ operationId: 'tab-3', expectedRevision: ws.revision, action: tick as never })
+    assert.equal(await count(), 1, 'the other tab, now up to date, finds it done')
+    ws = await repo.load()
+    assert.equal((ws.pages.find(p => p.id === 'runs')!.database!.automations![0]!.triggers[0] as { repeat: { last: string } }).repeat.last, '2026-11-02')
+    assert.equal(ws.undo, undefined)
+  } finally {
+    await a.unsafe(`drop schema if exists ${schema} cascade`)
+    await Promise.all([a.end(), b.end()])
+  }
+})
