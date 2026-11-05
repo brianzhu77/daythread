@@ -1469,6 +1469,9 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .editor-row-menu { flex:none; display:inline-flex; order:0; }
 .editor-row-more { width:28px; height:24px; padding:0; border:0; border-radius:var(--radius-control); background:transparent; color:var(--ink-3); font-size:var(--text-row); line-height:1; opacity:0; }
 .editor-row-more:hover, .editor-row-more:focus-visible { background:var(--app-surface); color:var(--ink); }
+/* B88: a page holding only a card or a database opens with that block selected, since the editor has nothing else to select. No key reaches it until the editor has focus, so it isn't drawn as chosen until then. */
+.bn-editor:not(.ProseMirror-focused) .bn-block-content.ProseMirror-selectednode > ::after,
+.bn-editor:not(.ProseMirror-focused) .ProseMirror-selectednode > .bn-block-content > ::after { content: none; }
 .editor-task:focus-within .editor-row-more, .bn-block-outer:has(.ProseMirror-selectednode, [data-is-empty-and-focused]) .editor-row-more,
 .editor-row-more:focus-visible, .editor-row-more[aria-expanded='true'] { opacity:1; }
 .editor-row-menu .app-menu { font-size:var(--text-small); }

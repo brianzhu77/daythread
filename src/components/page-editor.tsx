@@ -1835,6 +1835,35 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     selectionFocus.current?.focus()
     window.getSelection()?.removeAllRanges()
   }
+  /**
+   * B88, B89: a key never takes out a block holding more than its own line: a table, a card, a synced block. Its handle is how
+   * it's chosen. A divider holds nothing and comes back with Undo, so it's as before. Selected whole by arriving at it, the block
+   * stays. So does a line beside it, at that end. An empty one goes, leaving no caret to run on into the block, and not on a held
+   * key, which clearing a line would carry straight on to here. True when this has dealt with the key.
+   */
+  function keptBlock(key: 'Backspace' | 'Delete', held: boolean) {
+    const { selection } = editor.prosemirrorState
+    if (selection instanceof NodeSelection) {
+      const inner = selection.node.type.name === 'blockContainer' ? selection.node.firstChild! : selection.node
+      return inner.isBlock && !inner.inlineContent && inner.type.name !== 'divider' && inner.type.name !== 'table'
+    }
+    const { $from } = selection, length = $from.parent.content.size
+    if (!selection.empty || (key === 'Backspace' ? $from.parentOffset > 0 : $from.parentOffset < length)) return false
+    const { block, prevBlock, parentBlock } = editor.getTextCursorPosition()
+    // Backspace at the start of a bullet, a heading or a to-do makes it a plain line first.
+    if (key === 'Backspace' && block.type !== 'paragraph') return false
+    const holds = (b?: { type: string; content?: unknown }) => Boolean(b) && !Array.isArray(b!.content) && b!.type !== 'divider' && b!.type !== 'table'
+    const flat = deepNodes(nodes()), at = flat.findIndex(n => n.id === block.id)
+    const before = holds(prevBlock) ? prevBlock : flat[at - 1], after = flat[at + 1]
+    const [beside, other] = key === 'Backspace' ? [before, after] : [after, before]
+    if (length > 0 || block.type !== 'paragraph') return holds(beside)
+    if (!holds(beside) && (beside || !holds(other))) return false
+    if (held || holds(parentBlock)) return true
+    editor.removeBlocks([block.id])
+    if (other && Array.isArray(other.content)) { editor.setTextCursorPosition(other.id, other === after ? 'start' : 'end'); editor.focus() }
+    else editor.domElement?.blur()
+    return true
+  }
   /** B33: the save's own decision, on the document as it is after the delete: a task with no row left anywhere goes. */
   const goesWithLine = (taskId: unknown, after: readonly EditorNode[]) => {
     if (typeof taskId !== 'string') return false
@@ -2028,8 +2057,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (!block || !isDatabase(source)) return
       editor.insertBlocks([{ type: 'database', props: { pageId: source.id, view: linkedViewJson(linkedViewOf(source.database, (block.props as { view?: string }).view)) } } as never], blockId, 'after')
     },
-    // Esc from the table: the block selected whole again, in the page editor (design §10).
-    select: blockId => { if (editor.getBlock(blockId)) { editor.setTextCursorPosition(blockId); editor.focus() } },
+    // Esc from the table: the block selected whole again, in the page editor (design §10). Chosen, as by its handle.
+    select: blockId => { if (editor.getBlock(blockId)) select(blockId) },
   }), [editor, page.id])
   const syncedActions = useMemo<SyncedActions>(() => ({
     hostPageId: page.id,
@@ -2037,6 +2066,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     unsync: (blockId, all) => { void endPlaceRef.current({ type: 'unsync-block', pageId: page.id, blockId, ...(all ? { all: true as const } : {}) }) },
     remove: blockId => { void endPlaceRef.current({ type: 'delete-synced-place', pageId: page.id, blockId }) },
   }), [page.id])
+  // With no caret a Backspace lands on the page itself, and a browser can take that as going back a page (Playwright's WebKit does), where the next key edits what it went back to.
+  useEffect(() => {
+    const stay = (e: KeyboardEvent) => { if (e.key === 'Backspace' && e.target === document.body) e.preventDefault() }
+    document.addEventListener('keydown', stay)
+    return () => document.removeEventListener('keydown', stay)
+  }, [])
   const [dock, setDock] = useState<HTMLElement | null>(null)
   const [picker, setPicker] = useState<{ top: number; left: number } | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
@@ -2046,7 +2081,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const nextHeading = blocks.findIndex((b, i) => i > firstHeading && b.type === 'heading')
     const firstSection = blocks.slice(firstHeading + 1, nextHeading < 0 ? blocks.length : nextHeading)
     // Only a line takes the caret: a card or a database block has no text, and would be selected whole instead.
-    const target = firstSection.find(b => Array.isArray(b.content) && !inlineText(b.content)) ?? blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
+    // Where the end isn't a line, there's no caret at all (B88): not the whole block, which a key would remove, and not a line further up, whose text they can't see going.
+    const line = (b: (typeof blocks)[number] | undefined) => Array.isArray(b?.content)
+    const end = blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
+    const target = firstSection.find(b => line(b) && !inlineText(b.content as never)) ?? (line(end) ? end : undefined)
     // Desktop opens ready to type; on touch screens focusing would raise the keyboard over a page that is read as often as written.
     // Arriving at a block from a tag focuses nothing, so the view stays on that block.
     // A page just made with `/page` opens to name it: the title field has the cursor (Jazz f69dd341).
@@ -2509,7 +2547,18 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   return <div className={`continuous-editor ${keyboardShown ? 'is-keyboard-up' : ''} ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''} ${pausedFor ? 'is-paused' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
-    onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
+    onMouseDownCapture={e => {
+      const target = e.target as Element
+      if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') }
+      // The space below a last block with no text gives a line, as the strip just under it does. Left alone, the press goes to the nearest text, a line further up, or selects the block whole, and a key then removes it (B88).
+      const last = editor.document.at(-1), lastEl = last && !Array.isArray(last.content) ? editor.domElement?.querySelector(`.bn-block[data-id="${last.id}"]`) : null
+      if (target === editor.domElement && e.button === 0 && last && lastEl && e.clientY > lastEl.getBoundingClientRect().bottom) {
+        e.preventDefault()
+        const [line] = editor.insertBlocks([{ type: 'paragraph' }], last.id, 'after')
+        editor.setTextCursorPosition(line!, 'start')
+        editor.focus()
+      }
+    }}
     onMouseUpCapture={e => {
       const target = e.target instanceof Element ? e.target : null
       const view = editor.prosemirrorView
@@ -2714,6 +2763,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.current.length) {
         e.preventDefault(); e.stopPropagation()
         deleteSelected()
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !e.nativeEvent.isComposing && e.target === editor.domElement && keptBlock(e.key, e.repeat)) {
+        e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && caretAtDocumentStart() && plainFirstLine()) {
         e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && page.type === 'document' && caretAtDocumentStart()) {
