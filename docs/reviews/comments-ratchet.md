@@ -4,7 +4,7 @@ Candidate 05354a5c, containing the icon stack at 4691f591. Changes requested. No
 
 ## New unsent words are erased by an earlier successful send
 
-On the built app with a throwaway SQLite store:
+Confirmed in both Chromium and WebKit on the built app with a throwaway SQLite store:
 
 1. Open Comments on Notes and type `First sent`.
 2. Send and hold the add-comment request.
@@ -15,4 +15,4 @@ The stored comment is `First sent`, but the field is empty and no session draft 
 
 Clear only a matching submitted generation or make the field noneditable during its request; retain failure/retry and lost-answer operation identity behavior. No live-account writes.
 
-Build and all 10 Comments unit tests pass independently. Source review confirms a separate comment_threads table, owner-scoped workspace queries, thread versions on destructive changes and preservation of the normal Undo slot on adding/editing. This does not replace an adversarial account test or a real Postgres/Worker run. Full browser baseline and native-device checks have not run by this reviewer; the confirmed words loss is the current handoff.
+Build and all 10 Comments unit tests pass independently. Source review confirms a separate comment_threads table, owner-scoped workspace queries, thread versions on destructive changes and preservation of the normal Undo slot on adding/editing. This does not replace an adversarial account test or a real Postgres/Worker run. The normal browser baseline passes all 18 scenarios in each engine, including stale edits, lost-answer retry, draft reload, Undo, search/export, phone width and a pane beside a peek. Those baseline cases do not type new words during the send. Native-device checks have not run by this reviewer; the confirmed words loss is the current handoff.

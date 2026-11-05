@@ -1,0 +1,19 @@
+PASS nothing shows on a page until there is a comment, then a count opens the pane; add, reply and edit write nothing to the page {"ok":true,"none":0,"focused":true,"side":{"x":920,"y":0,"width":360,"height":800},"added":true,"cleared":true,"noNotice":true,"edited":true,"count":"1","shown":["First note, changed","A reply"],"errors":[]}
+PASS a row page offers it too, and its count is on the row {"ok":true,"on":"one","count":"1","errors":[]}
+PASS a day: from its menu, in the day's head {"ok":true,"day":"2026-11-05","errors":[]}
+PASS resolve moves it to Resolved with an Undo, the count drops, and it reopens; delete has an Undo that brings it back {"ok":true,"empty":"No open comments · 1 resolved","gone":0,"undone":["A note"],"inResolved":["A note"],"noField":0,"reopened":true,"deleted":true,"back":["A note"],"errors":[]}
+PASS a newer reply takes the Undo away here; in a tab that hadn't heard of it, Undo reads Can't undo and the reply stands {"ok":true,"shown":1,"retired":0,"had":1,"said":1,"comments":["A note","Reply here","Newer reply"],"resolved":false,"errors":[]}
+PASS two tabs: the one that hadn't seen a change to this thread is refused with its words kept, and the change stands {"ok":true,"toast":1,"kept":"Old view","noRetry":0,"comments":["A note","Newer reply"],"still":"A note","errors":[]}
+PASS two tabs: a change to another page gets in nobody's way, for an edit, a new comment or a resolve {"ok":true,"edited":"Edited here","threads":2,"resolved":1,"refused":0,"failed":0,"errors":[]}
+PASS a failed save keeps the words with Retry; a save whose answer was lost isn't made twice {"ok":true,"kept":"Through a dead line","said":1,"none":0,"landed":1,"stillSaid":1,"once":1,"comments":1,"cleared":"","errors":[]}
+PASS over 2,000 says so and won't send, with the words kept; at 2,000 it saves {"ok":true,"said":1,"off":true,"none":0,"kept":2001,"errors":[]}
+PASS Esc keeps the words, in a field and across closing the pane, and closes it from outside the field {"ok":true,"open":1,"left":true,"closed":0,"back":"Half a thought","errors":[]}
+PASS a draft survives a reload, and is gone once it's sent or cancelled; a reply's too {"ok":true,"back":"Half a thought","sent":"","reply":"A reply half written","cancelled":"","errors":[]}
+PASS a comment leaves the notice's Undo of what came before, and that Undo leaves the comment {"ok":true,"trashed":true,"shown":1,"back":true,"note":"Jotted after","errors":[]}
+PASS going to another page closes the pane, so nothing is written to a page out of sight {"ok":true,"open":0,"errors":[]}
+PASS search finds a comment's words and opens its thread, resolved ones under Resolved {"ok":true,"group":1,"at":"?page=notes","tab":"true","shown":["Findable words"],"focused":1,"errors":[]}
+PASS a trashed page takes them along and restoring brings them back {"ok":true,"waits":1,"trashed":true,"closed":0,"errors":[]}
+PASS 390: a sheet with a 16 px field; Enter is a new line and the button sends {"ok":true,"sheet":{"x":0,"y":234,"width":390,"height":546},"size":"16px","focused":false,"none":0,"value":"one\ntwo","errors":[]}
+PASS At 1280 the pane sits beside what it is about: the page makes room, a side peek moves over and stays in sight, and Esc closes the pane first {"page":[280,900],"pane":920,"overflow":0,"peek":[320,920],"pane2":920,"behind":34,"esc":[0,1],"ok":true,"errors":[]}
+PASS A comment reads first: its Edit and Delete wait for the pointer, and Reply and Resolve are quiet {"hidden":"0","weight":"none","shown":"1","ok":true,"errors":[]}
+all passed
