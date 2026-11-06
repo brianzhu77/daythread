@@ -160,3 +160,15 @@ test('the export writes what blocks a to-do on its line, as the mark reads', asy
   assert.match(text, /- \[ \] Alpha · Blocked by Bravo\n/)
   assert.match(text, /- \[ \] Bravo\n/)
 })
+
+test('a line pasted as the same to-do holds its links; Make a copy makes a new one with none', () => {
+  const h = setup()
+  link(h, 'Alpha', ['Bravo'])
+  const alpha = id(h, 'Alpha')
+  h.run({ type: 'create-document', title: 'Notes', body: '', pageId: 'notes' })
+  // The same task: its id kept (B22). Make a copy: a new line's identity, so a new task.
+  h.save('notes', () => [{ ...todo('n-same', 'Alpha', 'reference'), props: { taskId: alpha, role: 'reference', planDate: '' } }, todo('n-copy', 'Alpha copy', 'reference')])
+  assert.deepEqual(marks(h), { Alpha: ['Bravo'] })
+  assert.equal(h.ws.links?.length, 1)
+  assert.ok(!h.ws.links!.some(l => l.blockedId === id(h, 'Alpha copy')))
+})

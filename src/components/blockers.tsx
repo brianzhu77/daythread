@@ -23,7 +23,7 @@ export const linkedBlockers = (ws: Workspace, taskId: string): Task[] => blocker
 /** What would make a loop as this to-do's blocker, by To-dos row id, with why: greyed in a picker rather than refused after (Jazz). */
 export function loopsFor(ws: Workspace, taskId: string): Map<string, string> {
   const linked = blockersOf(ws, taskId)
-  return new Map(ws.tasks.filter(t => !linked.includes(t.id) && makesLoop(ws.links ?? [], taskId, t.id)).map(t => [todoRowId(t.id), t.id === taskId ? 'This one' : 'Waits on this one']))
+  return new Map(ws.tasks.filter(t => t.id !== taskId && !linked.includes(t.id) && makesLoop(ws.links ?? [], taskId, t.id)).map(t => [todoRowId(t.id), 'Waits on this one']))
 }
 export const blockedByLabel = (ws: Workspace, taskId: string): string => { const n = linkedBlockers(ws, taskId).length; return n ? `Blocked by ${n}…` : 'Blocked by…' }
 

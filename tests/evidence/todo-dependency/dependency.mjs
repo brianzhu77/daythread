@@ -127,6 +127,20 @@ await scenario('Tasks: the mark under its words, and Blocked by… in its menu',
   const offered = await page.getByRole('menuitem', { name: 'Blocked by 1…' }).count()
   return { ok: texts.includes('Blocked by Bravo') && texts.includes('Blocked by 2') && offered === 1, texts, offered }
 }, wide, '/tasks')
+await scenario('To-dos: Blocked by and Blocking shown under Properties, read both sides, and the cell sets one, greying a loop', async page => {
+  const headsBefore = await page.locator('.database-table th, [role=columnheader]').allTextContents()
+  await page.locator('.database-more-button').first().click(); await wait(250)
+  await page.locator('.database-menu').getByRole('menuitem', { name: /^Properties/ }).click(); await wait(250)
+  await page.getByLabel('Show Blocked by').check(); await page.getByLabel('Show Blocking').check(); await wait(800)
+  await page.keyboard.press('Escape'); await wait(300)
+  const cell = (title, column) => page.locator(`tr[data-row="todo:${task(title).id}"] [data-cell*="${column}"]`).first()
+  const alpha = (await cell('Alpha', 'blockedBy').textContent())?.trim(), bravo = (await page.locator(`tr[data-row="todo:${task('Bravo').id}"]`).textContent())?.replace(/\s+/g, ' ').trim()
+  await cell('Delta', 'blockedBy').click(); await wait(400)
+  const greyed = await page.locator('.property-options [role=option][aria-disabled=true]').allTextContents(), offered = await page.locator('.property-options [role=option]').allTextContents()
+  await page.locator('.property-options [role=option]', { hasText: /^Echo/ }).click(); await wait(100)
+  await page.keyboard.press('Escape'); await wait(1200)
+  return { ok: !headsBefore.some(t => /Blocked by|Blocking/.test(t)) && alpha === 'Bravo' && /^Bravo.*Alpha/.test(bravo) && greyed.some(t => t.startsWith('Charlie')) && !offered.some(t => t.startsWith('Delta')) && links().includes('Delta<Echo'), headsBefore, offered, alpha, bravo, greyed, links: links() }
+}, wide, '/pages?page=lists')
 await browser.close()
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

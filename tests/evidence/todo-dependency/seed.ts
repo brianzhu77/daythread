@@ -1,5 +1,5 @@
 // A disposable store for to-do links (todo-dependency.md): today's page with five to-dos, Alpha blocked by Bravo, Charlie by Alpha and Delta,
-// and a long one, Echo, blocked by a to-do with long words.
+// and a long one, Echo, blocked by a to-do with long words; Lists, a page with a To-dos view.
 // Usage: node --no-warnings tests/evidence/todo-dependency/seed.ts <store-path> <today>
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { editorSeed, pageContentKey } from '../../../src/domain/editor-document.ts'
@@ -20,4 +20,6 @@ const at = new Date().toISOString()
 await run({ type: 'link-tasks', taskId: id('Alpha'), add: [id('Bravo')], remove: [], at })
 await run({ type: 'link-tasks', taskId: id('Charlie'), add: [id('Alpha'), id('Delta')], remove: [], at })
 await run({ type: 'link-tasks', taskId: id('Echo'), add: [id('Send')], remove: [], at })
+await run({ type: 'create-document', title: 'Lists', body: '', pageId: 'lists' })
+await run({ type: 'save-editor', pageId: 'lists', expectedContent: pageContentKey(ws.pages.find(x => x.id === 'lists')!), document: JSON.stringify([{ id: 'todos', type: 'database', props: { pageId: 'source:tasks', view: '' }, children: [] }]), today })
 console.log('seeded', path)

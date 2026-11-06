@@ -420,7 +420,7 @@ export function DatabaseCellEditor() {
   // A to-do's blockers: one that would make a loop is greyed, with why.
   const loopTask = db.id === todosSourceId && cell.columnId === blockedByColumn ? taskIdOfRow(row.id) : null, ws = stored
   return <PropertyEditor key={cellKey(cell)}
-    property={property} value={value as CellValue} rowTitle={displayPageTitle(row)} anchor={anchor}
+    property={loopTask ? { ...property, options: property.options?.filter(o => o.id !== row.id) } : property} value={value as CellValue} rowTitle={displayPageTitle(row)} anchor={anchor}
     unavailable={loopTask && ws ? loopsFor(ws, loopTask) : undefined}
     onDraft={keeps ? text => keepDraft({ databaseId: db.id, rowId: row.id, columnId: cell.columnId, value: text, expected }) : undefined}
     onCommit={(raw, info) => {

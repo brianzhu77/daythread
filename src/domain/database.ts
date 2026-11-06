@@ -828,7 +828,8 @@ const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "char
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
   if (layout === "calendar") return [];
-  return db.properties.filter((p) => groupsBy(p, layout));
+  // To-dos' Board goes straight to Status, as it did before its link columns (todo-dependency.md): a Board of who blocks whom isn't one he'd want.
+  return db.properties.filter((p) => groupsBy(p, layout) && !(db.fixed && layout === "board" && p.type === "relation"));
 }
 /** The property a view groups by now; null when it was deleted or its type can't group any more. */
 /** A section of a view with two layers has both keys in one: `+ New` under it, a drag to it and its fold all read this. */
