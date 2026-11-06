@@ -384,7 +384,10 @@ function todoSources(before: Workspace, after: Workspace): RuleSource[] {
   const was = todosNow(before), now = todosNow(after), returned = new Set(before.deletedTasks.map((t) => todoRowId(t.id)));
   const rows = (ws: Workspace) => ws.pages.filter((p) => p.parentId === todosSourceId);
   const wasRows = rows(was), known = new Set(wasRows.map((r) => r.id));
-  return [{ page: { ...now.pages.find((p) => p.id === todosSourceId)!, database: ruleDatabase(after, todosSourceId) } as Page & { database: Database }, before: wasRows, after: rows(now).filter((r) => known.has(r.id) || !returned.has(r.id)) }];
+  // A blank box that's never had words is version 1; one whose words were cleared has moved on. Only the first is new (Ratchet).
+  const wasBlank = new Map(before.tasks.map((t) => [todoRowId(t.id), t.version]));
+  const isNew = (r: Page) => !returned.has(r.id) && (!wasBlank.has(r.id) || wasBlank.get(r.id) === 1);
+  return [{ page: { ...now.pages.find((p) => p.id === todosSourceId)!, database: ruleDatabase(after, todosSourceId) } as Page & { database: Database }, before: wasRows, after: rows(now).filter((r) => known.has(r.id) || isNew(r)) }];
 }
 function runAutomations(start: Workspace, fired: FiredRule[], operationId: string): { state: Workspace; automations: NonNullable<Receipt["automations"]> } {
   let state = start;
