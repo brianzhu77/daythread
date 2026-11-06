@@ -69,7 +69,8 @@ const projected = new WeakMap<Workspace, Workspace>()
 export function withTodos(ws: Workspace): Workspace {
   const known = projected.get(ws)
   if (known) return known
-  const source = { id: todosSourceId, type: 'document', date: null, title: todosTitle, document: '[]', database: todosDatabase } as Page
+  // Its rules are the workspace's, as To-dos isn't stored (automations.md §7).
+  const source = { id: todosSourceId, type: 'document', date: null, title: todosTitle, document: '[]', database: ws.todoAutomations?.length ? { ...todosDatabase, automations: ws.todoAutomations } : todosDatabase } as Page
   const next = { ...ws, pages: [...ws.pages, source, ...ws.tasks.filter(t => !isBlankTask(t)).map(t => rowOf(ws, t))] }
   projected.set(ws, next)
   return next
