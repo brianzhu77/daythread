@@ -1764,7 +1764,8 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .property-row.is-unavailable { color: var(--ink-3); cursor: default; }
 .property-row.is-unavailable .property-chip { opacity: .55; }
 .property-why { flex: none; margin-left: auto; color: var(--ink-3); font-size: var(--text-meta); }
-.property-row.is-unavailable .property-chip { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* A long name ends in … rather than mid-letter, in any picker (Jazz). */
+.property-row .property-chip { display: inline-block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 @media (hover: hover) { .property-row:hover { background: var(--fill); } }
 .property-row.checked::after { content: '✓'; margin-left: auto; padding-left: 12px; color: var(--ink); }
 .property-row.is-quiet { color: var(--ink-2); }
