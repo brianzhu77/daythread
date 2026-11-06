@@ -1,0 +1,9 @@
+# PR167 cap review at 93837cc6
+
+Button-step sharing and atomic refusal pass independently. Two slow steps over 50 picked rows consume exactly 100 readings and succeed. Over 51 rows, with an earlier Add row, refusal leaves the complete workspace byte-for-byte unchanged: no partial row changes and no added row. Author's 101/100/cheap-101 boundary test also passes.
+
+One reproduced scope gap remains against buttons.md's “a tap may do that 100 times at most”: root button steps use one newBudget, then triggered rules receive another newBudget in runAutomations. A root property button over 100 rows using prop("twice")+1 consumes 100 whole-workspace readings; a property-edited rule writing format(prop("twice")) over those same 100 rows also runs, reports Follow in ran and no pause. Thus the tap gets 200 readings. The independent fixture expects the triggered rule to pause after the root has exhausted the command allowance, keeping the root edit and dropping that rule's staged effects, matching the existing automation limit semantics.
+
+Share the remaining reading allowance across root and triggered-rule execution, or obtain an explicit separate-budget decision and adjust the contract. No partial-data-loss defect is claimed; this is the scope of the CPU cap used to settle the earlier cost concern.
+
+Run node --test tests/ratchet-variable-cap.test.ts tests/button-variables.test.ts: 13 pass, one root/rule cap failure. Synthetic in-memory only, no new Worker, real Postgres, browser or native run.
