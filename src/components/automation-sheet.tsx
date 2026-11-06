@@ -171,7 +171,7 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
       })()}
       {!every && <button type="button" role="menuitem" onClick={() => setTriggers(list => [...list, { kind: 'row-added' }])}>+ Add trigger</button>}
       <p className="button-editor-label">In</p>
-      <select className="button-editor-field" aria-label="In" value={viewId} onChange={e => setViewId(e.target.value)}><option value="">The whole database</option>{db.database.views.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
+      <select className="button-editor-field" aria-label="In" value={viewId} onChange={e => setViewId(e.target.value)}><option value="">{db.id === todosSourceId ? 'All to-dos' : 'The whole database'}</option>{db.database.views.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
       <p className="button-editor-label">Do</p>
       {steps.map((step, i) => {
         const problem = stepIssue(i)

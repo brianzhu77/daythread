@@ -135,3 +135,15 @@ test('"A to-do is added" doesn\'t fire on planning one to another day, a day mad
   h.run({ type: 'undo', targetOperationId: made.receipt.operationId })
   assert.deepEqual(logged(h), [])
 })
+
+test('a to-do whose words are cleared and typed again isn\'t added again (Ratchet)', () => {
+  const added = rule({ id: 'n', name: 'Note new', triggers: [{ kind: 'row-added' }], steps: writeSteps([{ ...log, titleFormula: '"New: " + prop("title")' }]) })
+  const h = setup([added])
+  const words = (text: string) => h.save(dayId(today), doc => doc.map(n => (n.id === 'l-c' ? { ...n, content: text ? [{ type: 'text', text, styles: {} }] : [] } : n)))
+  h.save(dayId(today), doc => [...doc, todo('l-c', '')])
+  words('Charlie')
+  assert.deepEqual(logged(h), ['New: Charlie'])
+  words('')
+  words('Charlie again')
+  assert.deepEqual(logged(h), ['New: Charlie'])
+})
