@@ -1,5 +1,6 @@
 // The domain: commands over the workspace (pure, one at a time, with receipts for replay and one Undo slot) and the
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
+import { linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
@@ -80,6 +81,12 @@ function task(state: Workspace, id: string): Task {
 /** The date's live page; one in the trash doesn't hold the date (B16). */
 const dayPage = (state: Workspace, day: string): Page | undefined => state.pages.find((p) => p.type === "daily" && p.date === day && !isTrashed(p));
 // A template's rows are never a task's place (B70): only live, ordinary pages hold tasks.
+/** Tasks with a line on a live page: one in Trash, on a template or in a draft isn't one, a copied line elsewhere is (todo-dependency.md §3). */
+export function liveTaskIds(state: Workspace): Set<string> {
+  const out = new Set<string>();
+  for (const p of livePages(state)) for (const n of flatNodes(pageNodes(p))) { const id = rowTaskId(n); if (id) out.add(id); }
+  return out;
+}
 const livePages = (state: Workspace): Page[] => state.pages.filter((p) => !isTrashed(p) && !isTemplate(p) && !isDraft(p));
 const docOf = (p: Page): EditorNode[] => structuredClone(pageNodes(p));
 const setDocument = (p: Page, nodes: EditorNode[]): void => { p.document = JSON.stringify(nodes); };
@@ -939,6 +946,37 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     case "add-task": {
       const t = addTask(state, ordinaryPage(state, action.pageId), action);
       return { message: "Task added", entityId: t.id };
+    }
+    case "link-tasks": {
+      const t = state.tasks.find((x) => x.id === action.taskId);
+      if (!t) throw new DomainError("That to-do was deleted");
+      const add = [...new Set(action.add)], remove = new Set(action.remove);
+      if (add.some((id) => remove.has(id))) throw new DomainError("Invalid links");
+      // Taking one off needs neither end to be there: a link to a deleted to-do is kept, and this is how it goes.
+      let links = (state.links ?? []).filter((l) => !(l.blockedId === t.id && remove.has(l.blockerId)));
+      const removed = (state.links?.length ?? 0) - links.length;
+      const live = add.length ? liveTaskIds(state) : new Set<string>();
+      if (add.length && !live.has(t.id)) throw new DomainError("That to-do is in Trash");
+      let added = 0, named: string | undefined;
+      for (const id of add) {
+        if (links.some((l) => l.blockedId === t.id && l.blockerId === id)) continue;
+        const blocker = state.tasks.find((x) => x.id === id);
+        if (!blocker) throw new DomainError("That to-do was deleted");
+        if (!live.has(id)) throw new DomainError(`${blocker.title.trim() || "That to-do"} is in Trash`);
+        // Under the workspace's lock, against every link, in force or not (Ratchet).
+        const loop = loopReason({ links, tasks: state.tasks, deletedTasks: state.deletedTasks }, t.id, id);
+        if (loop) throw new DomainError(loop === "Waits on this one" ? `${blocker.title.trim() || "That to-do"} already waits on this one` : loop);
+        links.push({ blockedId: t.id, blockerId: id, createdAt: isoTime(action.at) });
+        added++;
+        named = blocker.title.trim() || undefined;
+      }
+      // Over a limit, the whole change is refused rather than some of it made.
+      const standing = standingLinks({ links, tasks: state.tasks });
+      if (standing.filter((l) => l.blockedId === t.id).length > linkLimits.perTask) throw new DomainError(`${linkLimits.perTask} blockers at most`);
+      if (standing.length > linkLimits.total) throw new DomainError(`${linkLimits.total.toLocaleString("en-US")} links at most`);
+      if (!added && !removed) throw new DomainError("Nothing to change");
+      if (links.length) state.links = links; else delete state.links;
+      return { message: added === 1 && !removed && named ? `Blocked by ${named}` : !added ? (removed === 1 ? "Unblocked" : `${removed} blockers taken off`) : "Blockers changed", entityId: t.id };
     }
     case "task-status": {
       const t = task(state, action.taskId);

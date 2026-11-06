@@ -55,6 +55,8 @@ export interface EditorProps {
   onDraft?(text: string): void
   /** Tab / Shift-Tab in an in-cell field (≥ 900): called after the commit, to move the cell cursor along the row. */
   onMove?(direction: 'next' | 'previous'): void
+  /** Options that can't be picked, each with why, greyed in the list rather than refused after the pick (todo-dependency.md §2). */
+  unavailable?: ReadonlyMap<string, string>
 }
 type Dismiss = 'done' | 'escape' | 'outside'
 
@@ -393,6 +395,7 @@ function OptionsEditor(p: EditorProps) {
       withOptions = { ...property, options: [...options, option] }
     }
     if (!option) return
+    if (p.unavailable?.has(option.id) && !picked.includes(option.id)) return
     if (!multi) { finish(p, option.id, withOptions); return }
     const id = option.id
     const one = relation && p.property.limit === 1
@@ -427,7 +430,7 @@ function OptionsEditor(p: EditorProps) {
             <button type="button" aria-label={`Remove ${nameOf(id)}`} onMouseDown={e => e.preventDefault()} onClick={() => setPicked(list => list.filter(x => x !== id))}>×</button>
           </span>
         ))}
-        <input className="property-field" value={query} autoFocus={focusField} placeholder={options.length ? 'Search or create' : 'Type to create an option'}
+        <input className="property-field" value={query} autoFocus={focusField} placeholder={!p.onCreateOption ? 'Search' : options.length ? 'Search or create' : 'Type to create an option'}
           aria-label={`Search ${p.property.name}`} aria-controls="property-options" aria-activedescendant={choices[active] ? `property-choice-${active}` : undefined}
           onChange={e => search(e.target.value)} onKeyDown={onKeyDown} />
       </div>
@@ -438,14 +441,15 @@ function OptionsEditor(p: EditorProps) {
             ? statusGroups.find(g => g.group === ((choice.option.group ?? 'todo')))!.title : null
           if (choice.kind === 'option') lastGroup = choice.option.group ?? 'todo'
           const selected = choice.kind === 'option' && picked.includes(choice.option.id)
+          const why = choice.kind === 'option' && !selected ? p.unavailable?.get(choice.option.id) : undefined
           return (
             <div key={choice.kind === 'option' ? choice.option.id : 'create'} role="presentation">
               {heading && <p className="menu-title" role="presentation">{heading}</p>}
-              <button type="button" role="option" id={`property-choice-${i}`} aria-selected={selected}
-                className={`property-row ${i === active ? 'active' : ''} ${selected ? 'checked' : ''}`}
+              <button type="button" role="option" id={`property-choice-${i}`} aria-selected={selected} aria-disabled={why ? true : undefined}
+                className={`property-row ${i === active ? 'active' : ''} ${selected ? 'checked' : ''} ${why ? 'is-unavailable' : ''}`}
                 onMouseDown={e => e.preventDefault()} onMouseEnter={() => wide && setActive(i)} onClick={() => choose(choice)}>
                 {choice.kind === 'option'
-                  ? <OptionLabel option={choice.option} status={status} />
+                  ? <>{<OptionLabel option={choice.option} status={status} />}{why && <small className="property-why">{why}</small>}</>
                   : toTodos ? <span className="property-create">New to-do: <span className="property-chip">{choice.name}</span></span>
                   : relation ? <span className="property-create">New row in {p.property.targetTitle}{choice.name ? <>: <span className="property-chip">{choice.name}</span></> : '…'}</span>
                   : <span className="property-create">Create <span className="property-chip">{choice.name}</span></span>}
