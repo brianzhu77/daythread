@@ -31,6 +31,12 @@ export function worldOf(ws: Workspace): FormulaWorld {
   }
   return world
 }
+/** As `worldOf`, for a command part-way through changing the workspace in place, which that one's cache wouldn't see. */
+export function freshWorldOf(ws: Workspace): FormulaWorld {
+  const databases = new Map<string, Database>()
+  for (const p of withTodos(ws).pages) if (isDatabase(p)) databases.set(p.id, p.database)
+  return { databases, programs: new Map() }
+}
 /** The world as it would be with this property changed, so a loop through it shows. */
 function trialWorld(world: FormulaWorld, databaseId: string, property: Property): FormulaWorld {
   const db = world.databases.get(databaseId) ?? { properties: [] } as unknown as Database
@@ -45,13 +51,13 @@ const withText = (world: FormulaWorld, databaseId: string, propertyId: string, s
 }
 
 // ---------------------------------------------------------------- names and ids
-function typedNames(world: FormulaWorld, databaseId: string): FormulaNames {
+function typedNames(world: FormulaWorld, databaseId: string, locals: readonly string[] = []): FormulaNames {
   const ids = new Map<string, string>([[titleName, titleId]])
   for (const p of world.databases.get(databaseId)?.properties ?? []) ids.set(p.name, p.id)
   const lower = new Map([...ids].map(([name, id]) => [name.toLocaleLowerCase(), id]))
   const elsewhere = new Set<string>([titleName])
   for (const db of world.databases.values()) for (const p of db.properties) elsewhere.add(p.name)
-  return { names: [...ids.keys()], memberNames: [...elsewhere], stored: false, idOf: name => ids.get(name) ?? lower.get(name.toLocaleLowerCase()) ?? null }
+  return { names: [...ids.keys()], memberNames: [...elsewhere], stored: false, idOf: name => ids.get(name) ?? lower.get(name.toLocaleLowerCase()) ?? null, locals }
 }
 const storedNames: FormulaNames = { names: [], memberNames: [], stored: true, idOf: () => null }
 const deletedName = 'Deleted property'
@@ -215,6 +221,7 @@ function rollupSource(world: FormulaWorld, databaseId: string, r: Property): { s
   return { ...(source ? { source } : {}), ...(sourceIn ? { sourceIn } : {}) }
 }
 
+const noVariables: ReadonlyMap<string, ValueType> = new Map()
 const failedProgram = (error: string): FormulaProgram => ({ tree: null, type: 'any', error, layers: 1, usesClock: false })
 /**
  * A property's formula, checked, its type following the formulas and rollups it reads. Kept with the world, whichever path reached
@@ -230,16 +237,16 @@ export function programOf(world: FormulaWorld, databaseId: string, propertyId: s
   world.programs.set(key, program)
   return program
 }
-function compile(stored: string, world: FormulaWorld, databaseId: string, through: readonly string[]): FormulaProgram {
+function compile(stored: string, world: FormulaWorld, databaseId: string, through: readonly string[], variables: ReadonlyMap<string, ValueType> = noVariables): FormulaProgram {
   let tree: FormulaNode | null
-  try { tree = parseFormula(stored, storedNames).tree } catch (error) {
+  try { tree = parseFormula(stored, variables.size ? { ...storedNames, locals: [...variables.keys()] } : storedNames).tree } catch (error) {
     if (error instanceof FormulaSyntaxError) return failedProgram(error.message)
     throw error
   }
   if (!tree) return { tree: null, type: 'empty', layers: 1, usesClock: false }
   const checker = new Checker(world, databaseId, through, false)
   try {
-    const type = checker.typeOf(tree, new Map())
+    const type = checker.typeOf(tree, variables)
     if (checker.layers > maxLayers) return failedProgram(`This goes through more than ${maxLayers} formulas and rollups`)
     return { tree, type, layers: checker.layers, usesClock: checker.usesClock }
   } catch (error) {
@@ -249,24 +256,24 @@ function compile(stored: string, world: FormulaWorld, databaseId: string, throug
 }
 
 /** The text as it's kept. Throws what's wrong with it, if the syntax or a type is. */
-export function storedFormula(typed: string, world: FormulaWorld, databaseId: string): string {
-  const { tree, refs } = parseFormula(typed, typedNames(world, databaseId))
+export function storedFormula(typed: string, world: FormulaWorld, databaseId: string, variables: ReadonlyMap<string, ValueType> = noVariables): string {
+  const { tree, refs } = parseFormula(typed, typedNames(world, databaseId, [...variables.keys()]))
   if (!tree) return typed
   const checker = new Checker(world, databaseId, [], true)
-  try { checker.typeOf(tree, new Map()) } catch (error) {
+  try { checker.typeOf(tree, variables) } catch (error) {
     if (error instanceof CheckError) throw new FormulaSyntaxError(error.message)
     throw error
   }
   return rewriteRefs(typed, [...refs, ...checker.memberRefs], id => `prop(${quoted(id)})`)
 }
 /** Where properties sit in the text as typed, in order: what the field draws as tokens (G2-7). Never an error: text that doesn't read yet just has fewer. */
-export function propertyTokens(typed: string, world: FormulaWorld, databaseId: string): readonly { from: number; to: number }[] {
-  const { tree, refs } = partialRefs(typed, typedNames(world, databaseId))
+export function propertyTokens(typed: string, world: FormulaWorld, databaseId: string, variables: ReadonlyMap<string, ValueType> = noVariables): readonly { from: number; to: number }[] {
+  const { tree, refs } = partialRefs(typed, typedNames(world, databaseId, [...variables.keys()]))
   const members: PropRef[] = []
   if (tree) {
     // After a dot, which database a name is in takes the types. If they don't work out yet, those wait.
     const checker = new Checker(world, databaseId, [], true)
-    try { checker.typeOf(tree, new Map()); members.push(...checker.memberRefs) } catch (error) { if (!(error instanceof CheckError)) throw error }
+    try { checker.typeOf(tree, variables); members.push(...checker.memberRefs) } catch (error) { if (!(error instanceof CheckError)) throw error }
   }
   return [...refs, ...members].sort((a, b) => a.from - b.from)
 }
@@ -274,12 +281,12 @@ export function propertyTokens(typed: string, world: FormulaWorld, databaseId: s
  * A property as he writes it: its bare name, as he'd type it, or `prop("…")` where a bare name wouldn't read back as that property.
  * It stays text, as the field's composition and phone keyboard are its riskiest parts (design §2). `propertyTokens` is how it reads as a token.
  */
-const notBare = new Set(['true', 'false', 'not', 'and', 'or', 'mod', 'current', 'index', 'let', 'lets', 'prop', ...functionList.map(f => f.name)].map(n => n.toLocaleLowerCase()))
+export const notBare = new Set(['true', 'false', 'not', 'and', 'or', 'mod', 'current', 'index', 'let', 'lets', 'prop', ...functionList.map(f => f.name)].map(n => n.toLocaleLowerCase()))
 export const writtenName = (name: string): string => (/^[\p{L}_][\p{L}\p{N}_ ]*$/u.test(name) && !name.endsWith(' ') && !notBare.has(name.toLocaleLowerCase()) && name !== deletedName ? name : `prop(${quoted(name)})`)
 /** The text as he reads it: names as they are now. */
-export function shownFormula(stored: string, world: FormulaWorld, databaseId: string): string {
+export function shownFormula(stored: string, world: FormulaWorld, databaseId: string, variables: ReadonlyMap<string, ValueType> = noVariables): string {
   try {
-    const { tree, refs } = parseFormula(stored, storedNames)
+    const { tree, refs } = parseFormula(stored, variables.size ? { ...storedNames, locals: [...variables.keys()] } : storedNames)
     const here = world.databases.get(databaseId)
     const members: PropRef[] = []
     const walk = (node: FormulaNode | null | undefined): void => {
@@ -308,9 +315,12 @@ export function shownFormula(stored: string, world: FormulaWorld, databaseId: st
     }
     // Bare names only if the whole text reads back as what's stored: next to each other they can make another property's name, and a `let` can take one for its own.
     const bare = text(false)
-    try { if (storedFormula(bare, world, databaseId) === stored) return bare } catch { /* A deleted property, say: spelled out below. */ }
+    try { if (storedFormula(bare, world, databaseId, variables) === stored) return bare } catch { /* A deleted property, say: spelled out below. */ }
     return text(true)
-  } catch { return stored }
+  } catch {
+    // It doesn't read, as a button's does once its variable has moved below it. Its properties can still read as he wrote them.
+    return stored.replace(/prop\("((?:[^"\\]|\\.)*)"\)/g, (whole, id: string) => { const name = propertyIn(world.databases.get(databaseId), id)?.name; return name ? writtenName(name) : whole })
+  }
 }
 
 /** What the field says while typing: what's wrong, or what it'll be saved as and what kind of value it gives. */
@@ -326,6 +336,60 @@ export function checkTyped(typed: string, world: FormulaWorld, databaseId: strin
 /** Refused at Done, on the server as in the field: no text that doesn't work replaces one that does (design §4). */
 export function formulaProblem(stored: string, world: FormulaWorld, databaseId: string, propertyId: string): string | null {
   return programOf(withText(world, databaseId, propertyId, stored), databaseId, propertyId).error ?? null
+}
+/**
+ * A formula in a button's or a rule's step (buttons.md §2). It's no column's: it reads the row it runs on, and the variables above it.
+ * On a page with no database, `databaseId` is '', and all it can read is the page's name.
+ */
+export function checkStepTyped(typed: string, world: FormulaWorld, databaseId: string, variables: ReadonlyMap<string, ValueType>): { stored: string; type: ValueType } | { error: string } {
+  let stored: string
+  try { stored = storedFormula(typed, world, databaseId, variables) } catch (error) {
+    if (error instanceof FormulaSyntaxError) return { error: error.message }
+    throw error
+  }
+  const program = stepProgram(stored, world, databaseId, variables)
+  return program.error ? { error: program.error } : { stored, type: program.type }
+}
+export const stepProgram = (stored: string, world: FormulaWorld, databaseId: string, variables: ReadonlyMap<string, ValueType>): FormulaProgram => compile(stored, world, databaseId, [], variables)
+const needsWord: Partial<Record<Property['type'], string>> = { number: 'a number', date: 'a date', checkbox: 'true or false', relation: 'pages', url: 'text', email: 'text', phone: 'text' }
+/** Can this property take what the formula gives? Asked of the types, so Done can say so, and again of the value at the tap, as `any` can be anything. */
+export function stepFormulaFits(type: ValueType, property: Pick<Property, 'type' | 'name' | 'target'>): string | null {
+  if (type === 'any' || type === 'empty') return null
+  const refused = `${property.name} needs ${needsWord[property.type] ?? 'text'}, and this gives ${wordFor(type)}`
+  switch (property.type) {
+    case 'number': return type === 'number' ? null : refused
+    case 'date': return type === 'date' ? null : refused
+    case 'checkbox': return type === 'boolean' ? null : refused
+    case 'relation': { const target = pageTarget(type); return target === null ? refused : target === property.target ? null : `${property.name} holds pages from another database` }
+    case 'text': return null
+    case 'multiSelect': return type === 'text' || type === 'list:text' ? null : refused
+    default: return type === 'text' ? null : refused
+  }
+}
+/** A formula's value as a property's own stored form, or what's wrong with it. Empty clears the property. */
+export function stepCell(value: Value, property: Property): { cell: Json } | { error: string } {
+  if (value === null || value === '') return { cell: null }
+  const refused = { error: `${property.name} needs ${needsWord[property.type] ?? 'text'}` }
+  const optionId = (name: string) => property.options?.find(o => o.name === name)?.id ?? property.options?.find(o => o.name.toLocaleLowerCase() === name.toLocaleLowerCase())?.id
+  const noOption = (name: string) => ({ error: `"${name}" isn't one of ${property.name}'s options` })
+  switch (property.type) {
+    case 'number': return typeof value === 'number' && Number.isFinite(value) ? { cell: value } : refused
+    case 'checkbox': return typeof value === 'boolean' ? { cell: value } : refused
+    case 'date': { if (!(value instanceof FormulaDate)) return refused; const cell = toCell(value, 'date'); return cell === undefined ? refused : { cell: typeof cell === 'string' ? { start: cell } : cell } }
+    case 'relation': {
+      const list = Array.isArray(value) ? value : [value]
+      if (!list.every((v): v is FormulaPage => v instanceof FormulaPage)) return refused
+      return list.every(p => p.row.parentId === property.target) ? { cell: list.map(p => p.row.id) } : { error: `${property.name} holds pages from another database` }
+    }
+    case 'select': case 'status': { if (typeof value !== 'string') return refused; const id = optionId(value); return id ? { cell: id } : noOption(value) }
+    case 'multiSelect': {
+      const names = Array.isArray(value) ? value : [value], ids: string[] = []
+      for (const name of names) { const id = typeof name === 'string' ? optionId(name) : undefined; if (!id) return noOption(format(name)); ids.push(id) }
+      return { cell: ids }
+    }
+    case 'text': case 'url': case 'email': case 'phone': return { cell: format(value) || null }
+    default: return { error: `A formula can't set ${property.name}` }
+  }
 }
 /** A rollup that reads a formula counts as a layer on its way, and a formula that reads it back is a loop (design §3, §5). */
 export function rollupProblem(world: FormulaWorld, databaseId: string, rollup: Property): string | null {
@@ -564,6 +628,17 @@ export class WorkedCells {
     try { return { value: this.runFormula(row, db, p) } } catch (error) {
       if (error instanceof FormulaTooLong) { this.overran.set(p.id, (this.overran.get(p.id) ?? 0) + 1); return { value: null, error: tooLongError } }
       if (error instanceof FormulaRowError) return { value: null, error: this.failed.get(`${row.id}\0${p.id}`) ?? error.message }
+      throw error
+    }
+  }
+  /** A step's formula on a row, with a row's budget of its own. Its variables were worked out when their step ran. */
+  stepValue(tree: FormulaNode | null, row: Page, variables: ReadonlyMap<string, Value>): { value: Value; error?: string } {
+    this.left = stepsPerRow
+    let vars: Vars = null
+    for (const [name, value] of variables) vars = { name, value, next: vars }
+    try { return { value: tree ? evaluate(tree, vars, { row, rowId: row.id, spend: this.spend, clock: this.sources.clock, read: this.read }) : null } } catch (error) {
+      if (error instanceof FormulaTooLong) return { value: null, error: tooLongError }
+      if (error instanceof FormulaRowError) return { value: null, error: error.message }
       throw error
     }
   }
