@@ -5,9 +5,10 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createPortal } from 'react-dom'
-import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type ComponentType, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback, lazy, Suspense } from 'react'
+import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
+import { flushAllEditors } from './editor-flush'
 import { descendantsOf, parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
 import { filterTree, hasFilter, limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import { loopRefusal } from '../domain/dependencies.ts'
@@ -868,13 +869,32 @@ function DatabaseView(props: DatabaseViewProps) {
   const changeView = useViewChange(props.db.id, view.id)
   return <LaidOutView {...props} view={view} changeView={changeView} />
 }
-// Its code loads only when a chart is on screen, so a day with none pays nothing (chart.md §7). A fetch that fails (offline, or a
-// build replaced since the tab opened) leaves the chart's place with a Retry rather than breaking the page around it.
-const DatabaseChart = lazy(() => import('./database-chart').catch(() => ({ default: ChartUnavailable })))
-function ChartUnavailable(props: LaidOutProps) {
-  const [Loaded, setLoaded] = useState<ComponentType<LaidOutProps> | null>(null)
-  if (Loaded) return <Loaded {...props} />
-  return <div className="database-chart-unavailable">Chart unavailable<button type="button" className="app-link" onClick={() => void import('./database-chart').then(m => setLoaded(() => m.default), () => undefined)}>Retry</button></div>
+// Its code loads only when a chart is on screen, so a day with none pays nothing (chart.md §7). Not `lazy`: Suspense holds content back
+// about 300 ms after its placeholder shows, most of R2-7's bar on a day, where a state update shows the chart as soon as its code is here.
+// A fetch that fails (offline, or a build replaced since the tab opened) leaves the chart's place with a Retry, not the page broken.
+type ChartModule = typeof import('./database-chart')
+let chartModule: ChartModule | null = null, chartLoading: Promise<ChartModule> | null = null
+const loadChart = () => {
+  if (!chartLoading) {
+    chartLoading = import('./database-chart').then(m => (chartModule = m), (e: unknown) => { chartLoading = null; throw e })
+    chartLoading.catch(() => undefined)
+  }
+  return chartLoading
+}
+function ChartView(props: LaidOutProps) {
+  const [, setLoaded] = useState(chartModule)
+  const [failed, setFailed] = useState(false)
+  if (!chartModule && !failed) void loadChart()
+  useEffect(() => {
+    if (chartModule) return
+    let live = true
+    loadChart().then(m => { if (live) setLoaded(m) }, () => { if (live) setFailed(true) })
+    return () => { live = false }
+  }, [])
+  if (chartModule) return <chartModule.default {...props} />
+  // The browser remembers a module that failed to load, so asking again takes a fresh page, with his edits saved first.
+  if (failed) return <div className="database-chart-unavailable">Chart unavailable<button type="button" className="app-link" onClick={() => void flushAllEditors().then(saved => { if (saved) location.reload() })}>Retry</button></div>
+  return <div className={`database-chart-loading${props.view.chart?.form === 'number' ? ' is-number' : ''}`} />
 }
 type LaidOutProps = DatabaseViewProps & { view: View; changeView: ChangeView }
 /** A view in its layout, for a home block and a linked view alike. */
@@ -887,7 +907,7 @@ export function LaidOutView(props: LaidOutProps) {
   // The header first, and a placeholder about the height of what's drawn, so the lines below don't jump when the chart arrives.
   if (props.view.layout === 'chart') return <>
     <DatabaseHeader db={props.db} view={props.view} changeView={props.changeView} blockId={props.blockId} showTitle={props.showTitle ?? true} linked={props.linked} onTitleEnter={() => {}} />
-    <Suspense fallback={<div className={`database-chart-loading${props.view.chart?.form === 'number' ? ' is-number' : ''}`} />}><DatabaseChart {...props} /></Suspense>
+    <ChartView {...props} />
   </>
   return <DatabaseTable {...props} />
 }
