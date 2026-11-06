@@ -95,11 +95,11 @@ function stackOf(p: ChartPoint): { key: string; from: number; to: number }[] {
 }
 /** One side-by-side bar's width in a band, as `.database-chart-side` lays them out: 70% of the band up to 48 px, 1 px apart. */
 const sideBarWidth = (band: number, parts: number) => (Math.min(band * 0.7, 48) - (parts - 1)) / parts
-function VerticalBars({ points, series, sideBySide, focus, dateAxis, line: asLine, opened, onOpen, textOf }: { points: ChartPoint[]; series?: ChartSeries[]; sideBySide?: boolean; focus?: string | null; dateAxis: boolean; line?: boolean; opened: string | null; onOpen: (key: string) => void; textOf: (r: CalcResult) => string }) {
+function VerticalBars({ points, series, sideBySide, focus, dateAxis, line, opened, onOpen, textOf }: { points: ChartPoint[]; series?: ChartSeries[]; sideBySide?: boolean; focus?: string | null; dateAxis: boolean; line?: boolean; opened: string | null; onOpen: (key: string) => void; textOf: (r: CalcResult) => string }) {
   const { ref, width } = useWidth()
   const band = width ? (width - plotLeft) / Math.max(points.length, 1) : 0
-  // Side-by-side bars too thin to tell apart read as a line for each series, for this width only.
-  const line = asLine || Boolean(sideBySide && series && band && sideBarWidth(band, Math.max(...points.map(p => p.parts?.length ?? 1))) < 4)
+  // Side-by-side bars that would be under 4 px take their whole band, less a gap, as one series' bars do when dense. Still bars: the form is the person's.
+  const tight = Boolean(sideBySide && !line && band && sideBarWidth(band, Math.max(...points.map(p => p.parts?.length ?? 1))) < 4)
   // A stack's reach is its bands', a line's is each series' own.
   const values = points.flatMap(p => (p.parts && (line || sideBySide) ? p.parts.flatMap(x => (x.value === null ? [] : [x.value])) : p.parts ? stackOf(p).flatMap(b => [b.from, b.to]) : p.value === null ? [] : [p.value]))
   const ticks = chartTicks(values), low = ticks[0]!, high = ticks.at(-1)!, span = high - low || 1
@@ -112,7 +112,7 @@ function VerticalBars({ points, series, sideBySide, focus, dateAxis, line: asLin
   const paths = line && series ? series.map(sr => { let open = false; return { sr, d: points.map((p, i) => { const v = p.parts?.find(x => x.key === sr.key)?.value ?? null; if (v === null) { open = false; return '' } const piece = `${open ? 'L' : 'M'}${((i + 0.5) / points.length) * 100} ${100 - at(v)}`; open = true; return piece }).join('') } }) : []
   if (line && !series) { let run = ''; points.forEach((p, i) => { if (p.value === null) { if (run) runs.push(run); run = ''; return } run += `${run ? 'L' : 'M'}${((i + 0.5) / points.length) * 100} ${100 - at(p.value)}` }); if (run) runs.push(run) }
   const shown = axisLabels(points, step, dateAxis)
-  return <div className={`database-chart-vertical${band && band < 6 ? ' is-dense' : ''}`} ref={ref}>
+  return <div className={`database-chart-vertical${band && band < 6 ? ' is-dense' : ''}${tight ? ' is-tight' : ''}`} ref={ref}>
     <div className="database-chart-plot">
       {ticks.map(t => <div key={t} className={`database-chart-tick${t === 0 ? ' is-zero' : ''}`} style={{ bottom: `${at(t)}%` }}><span>{shortNumber(t)}</span></div>)}
       {line && <svg className="database-chart-line-path" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', minWidth: 0, maxWidth: 'none' }}>{runs.map(d => <path key={d} d={d} vectorEffect="non-scaling-stroke" />)}{paths.map(({ sr, d }) => <path key={sr.key} d={d} className={`${greyOf(sr)}${focus && focus !== sr.key ? ' is-dim' : ''}`} vectorEffect="non-scaling-stroke" />)}</svg>}

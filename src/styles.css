@@ -2161,6 +2161,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-chart-side { position: absolute; inset: 0; left: 50%; display: flex; width: min(70%, 48px); gap: 1px; transform: translateX(-50%); }
 .database-chart-side-slot { position: relative; flex: 1 1 0; min-width: 0; height: 100%; }
 .database-chart-bar .database-chart-side-slot i { left: 0; right: 0; width: auto; transform: none; }
+.database-chart-vertical.is-tight .database-chart-side { width: calc(100% - 2px); }
 /* Across, each series a bar of its own height, and the rows further apart than the bars inside one. */
 .database-chart-line-track.is-side { display: flex; flex-direction: column; justify-content: center; gap: 2px; height: auto; padding: 4px 0; }
 .database-chart-line-track.is-side i { position: static; display: block; height: 10px; min-height: 0; box-shadow: none; }
