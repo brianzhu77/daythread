@@ -117,3 +117,21 @@ test('a rule on an ordinary database whose step adds a to-do runs, rather than r
   assert.ok(h.ws.tasks.some(t => t.title === 'Follow up'))
   assert.equal(h.page('runs').database!.automations![0]!.paused, undefined)
 })
+
+test('"A to-do is added" doesn\'t fire on planning one to another day, a day made from its template, or an Undo', () => {
+  const added = rule({ id: 'n', name: 'Note new', triggers: [{ kind: 'row-added' }], steps: writeSteps([{ ...log, titleFormula: '"New: " + prop("title")' }]) })
+  const h = setup([added])
+  h.run({ type: 'plan-task', taskId: h.task('Alpha').id, date: '2026-10-25', from: today, today })
+  assert.deepEqual(logged(h), [], 'planned to another day: the same to-do')
+  // The day template holds a to-do: each day made from it is a repeat (G3-13), and its to-do starts empty.
+  h.run({ type: 'create-template', title: 'Day', pageId: 'tpl', dayPage: true } as never)
+  h.save('tpl', doc => [...doc, todo('t-1', 'Stretch')])
+  h.run({ type: 'ensure-day', date: '2026-10-24' })
+  assert.ok(JSON.parse(h.page(dayId('2026-10-24')).document ?? '[]').some((n: { type: string }) => n.type === 'task'), 'the day has its to-do line')
+  assert.deepEqual(logged(h), [], 'a day made from its template sets off nothing')
+  // A to-do added, and that undone: the Undo sets off nothing either.
+  const made = h.save(dayId(today), doc => [...doc, todo('l-d', 'Delta')])
+  assert.deepEqual(logged(h), ['New: Delta'])
+  h.run({ type: 'undo', targetOperationId: made.receipt.operationId })
+  assert.deepEqual(logged(h), [])
+})
