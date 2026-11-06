@@ -1334,7 +1334,7 @@ export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, de
   return <div className={`database-picked-bar${picking ? ' is-picking' : floating ? ' is-floating' : ''}`} role="toolbar" aria-label="Selected rows" onMouseDown={keepEditorFocus}>
     <span role="status">{changing ?? (picked.length === 1 ? '1 row' : `${picked.length} rows`)}</span>
     {picked.length > 0 && <EditPickedButton db={db} rowIds={picked} editing={editing} setEditing={setEditing} track={track} />}
-    {picked.length > 0 && db.database.properties.filter(p => p.type === 'button').map(p => <button key={p.id} type="button" className="app-link" onClick={() => track(`Changing ${picked.length === 1 ? '1 row' : `${picked.length} rows`}…`, runRowButton(db.id, p.id, p.button?.steps ?? '', picked))}>{p.button?.label || p.name}</button>)}
+    {picked.length > 0 && <PickedButtons db={db} picked={picked} track={track} runRowButton={runRowButton} />}
     {picked.length > 0 && <button type="button" className="app-link is-danger" onClick={deletePicked}>Delete</button>}
     {picking && (() => { const all = pickable(); return picked.length < all.length && <button type="button" className="app-link" onClick={() => setPicked(all)}>All</button> })()}
     <button type="button" className="app-link" onClick={stopPicking}>Done</button>
@@ -1384,6 +1384,24 @@ export function useCardPicking(picks: RowPicking, db: Page & { database: Databas
   const onMouseDown = (e: ReactMouseEvent) => { if (wide && onEmptySpace(e)) e.preventDefault() }
   const boxDrawn = box ? createPortal(<div className="database-pick-box" style={box} aria-hidden="true" />, document.body) : null
   return { props: { onClickCapture, onPointerDown, onMouseDown }, boxDrawn }
+}
+
+/** A Button property's run on every picked row. Inline while they fit; on a phone, or past two, in one menu, so the bar keeps its own actions in reach. */
+function PickedButtons({ db, picked, track, runRowButton }: { db: Page & { database: Database }; picked: string[]; track(words: string, work: Promise<unknown>): void; runRowButton: ReturnType<typeof useRunRowButton> }) {
+  const wide = useWide()
+  const [open, setOpen] = useState(false)
+  const anchor = useRef<HTMLButtonElement>(null)
+  const buttons = db.database.properties.filter(p => p.type === 'button')
+  if (!buttons.length) return null
+  const runOn = (p: Property) => { setOpen(false); track(`Changing ${picked.length === 1 ? '1 row' : `${picked.length} rows`}…`, runRowButton(db.id, p.id, p.button?.steps ?? '', picked)) }
+  const label = (p: Property) => p.button?.label || p.name
+  if (wide && buttons.length <= 2) return <>{buttons.map(p => <button key={p.id} type="button" className="app-link database-picked-run" onClick={() => runOn(p)}><span>{label(p)}</span></button>)}</>
+  return <>
+    <button type="button" ref={anchor} className="app-link" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>Run ▾</button>
+    {open && <div className="app-menu database-picked-menu" role="menu" style={{ left: Math.max(0, Math.min(anchor.current?.offsetLeft ?? 0, (anchor.current?.parentElement?.clientWidth ?? 0) - 260)) }}>
+      {buttons.map(p => <button key={p.id} type="button" role="menuitem" onClick={() => runOn(p)}><span>{label(p)}</span></button>)}
+    </div>}
+  </>
 }
 
 function EditPickedButton({ db, rowIds, editing, setEditing, track }: { db: Page & { database: Database }; rowIds: string[]; editing: string | null; setEditing(id: string | null): void; track(words: string, work: Promise<unknown>): void }) {

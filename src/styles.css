@@ -2353,6 +2353,13 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-picked-bar.is-picking { position: fixed; z-index: 40; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); min-height: 44px; padding: 4px 14px; border-radius: var(--radius-control); background: var(--bg-doc); box-shadow: var(--shadow-float); }
 .database-picked-bar.is-picking .database-picked-menu { top: auto; bottom: 100%; left: 0; }
 .database-picked-bar.is-picking .app-link { min-height: 36px; }
+/* The count and Done never wrap or leave the bar: the actions between them give way first. */
+.database-picked-bar > [role=status] { flex: none; white-space: nowrap; }
+.database-picked-bar > .app-link:last-child { flex: none; margin-left: auto; }
+.database-picked-bar .database-picked-run { min-width: 0; max-width: 160px; }
+.database-picked-menu:has(> button[role=menuitem]) { width: max-content; max-width: 260px; }
+.database-picked-menu > button { max-width: 100%; overflow: hidden; }
+.database-picked-run > span, .database-picked-menu > button > span { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .database-row-tick { flex: none; width: 16px; height: 16px; margin: 0 0 0 8px; pointer-events: none; }
 /* A long press on a Name starts picking: no callout or text selection on top of it. */
 @media (max-width: 899px) { .database-title-cell { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
