@@ -1,6 +1,6 @@
 // Chart, a layout of a view (docs/design/chart.md): the view's own rows in its own groups, so a filter, a group and a column
 // calculation all agree with what's drawn. The axis is the view's `groupBy` and `groupDateBy`; only what's new is in `chart`.
-import { calcChoices, columnCalc, dateGroupName, propertyOf, viewGroups, type CalcKind, type CalcResult, type Database, type Property, type View } from './database.ts'
+import { calcChoices, columnCalc, dateGroupName, propertyOf, viewGroups, viewSubGroups, type CalcKind, type CalcResult, type Database, type Property, type View } from './database.ts'
 import type { WeekStart } from './types.ts'
 import type { Page } from './types.ts'
 
@@ -29,8 +29,12 @@ export interface ChartPoint {
   result: CalcResult
   /** Its place along the axis before any sort, so a value keeps its grey (§4). */
   order: number
+  /** With Group by, its value in each series, by the series' key. */
+  parts?: { key: string; value: number | null }[]
 }
-export interface ChartData { property: Property; points: ChartPoint[]; dateAxis: boolean; tooMany: boolean }
+/** One value of Group by, drawn in its own grey. Other has none, as an outline can't pass for a value. */
+export interface ChartSeries { key: string; name: string; grey: number | null; total: number }
+export interface ChartData { property: Property; points: ChartPoint[]; dateAxis: boolean; tooMany: boolean; series?: ChartSeries[]; /** A row sits in more than one series, so the parts don't add up to a whole: side by side, not stacked. */ overlapping?: boolean }
 
 export const chartSettings = (view: Pick<View, 'chart'>): ChartSettings => view.chart ?? { form: 'bar' }
 /** What's measured: null for a count. `gone` when its property was deleted or stopped being a number, so it asks again rather than counting instead. */
@@ -98,8 +102,10 @@ export function chartData(db: Database, view: View, rows: readonly Page[], weekS
     let total = 0, any = false
     points = points.map(p => { if (p.key === noValue) return p; if (p.value !== null) { total += p.value; any = true } const value = any ? total : null; return { ...p, value, result: measure ? { type: 'number', value } : { type: 'count', value: value ?? 0 } } })
   }
+  const series = chartHasSeries(view) && !settings.cumulative ? withSeries(db, view, rows, points, measure, weekStart) : undefined
+  if (series) points = series.points
   if (settings.sortByValue) points = [...points].sort((a, b) => (b.value ?? -Infinity) - (a.value ?? -Infinity))
-  return { property: groups.property, points, dateAxis, tooMany: tooMany || points.length > chartLimit }
+  return { property: groups.property, points, dateAxis, tooMany: tooMany || points.length > chartLimit, ...(series ? { series: series.series, overlapping: series.overlapping } : {}) }
 }
 
 /**
@@ -122,6 +128,26 @@ export function donutSlices(points: readonly ChartPoint[]): Donut {
     slices.push({ key: otherKey, name: `Other (${rest.length})`, rows: [...new Map(rest.flatMap(p => p.rows).map(r => [r.id, r])).values()], value, share: value / total, grey: null, result: { type: 'number', value }, from })
   }
   return { slices, total, undrawn }
+}
+
+/** Whether this chart can take a second property: forms with an axis, measuring what adds up, as a stack of averages would mean nothing (§3). */
+export function chartHasSeries(view: Pick<View, 'chart' | 'subGroupBy'>): boolean {
+  const settings = chartSettings(view), kind = settings.measure?.kind
+  return Boolean(view.subGroupBy) && (settings.form === 'bar' || settings.form === 'barHorizontal' || settings.form === 'line') && (!kind || kind === 'sum')
+}
+/** The four largest series by total, in greys following their order, and the rest in Other (§4, as a donut's slices). */
+function withSeries(db: Database, view: View, rows: readonly Page[], points: ChartPoint[], measure: { property: Property; kind: ChartKind } | null, weekStart: WeekStart): { series: ChartSeries[]; points: ChartPoint[]; overlapping: boolean } | undefined {
+  const groups = viewSubGroups(db, view, rows, undefined, weekStart)
+  if (!groups) return undefined
+  // A blank stays a blank in each series too: a Count's empty period is zero, and a Sum's has no value (§3).
+  const valueIn = (p: ChartPoint, held: ReadonlySet<string>) => numberOf(chartValue(db, p.rows.filter(r => held.has(r.id)), measure))
+  const all = groups.shown.filter(g => g.rows.length).map((g, order) => { const held = new Set(g.rows.map(r => r.id)); return { key: g.key, name: g.name, order, held, total: points.reduce((n, p) => n + (valueIn(p, held) ?? 0), 0) } })
+  const named = [...all].sort((a, b) => Math.abs(b.total) - Math.abs(a.total) || a.order - b.order).slice(0, donutGreys).sort((a, b) => a.order - b.order), kept = new Set(named.map(g => g.key)), rest = all.filter(g => !kept.has(g.key))
+  const series: ChartSeries[] = [...named.map((g, grey) => ({ key: g.key, name: g.name, grey, total: g.total })), ...(rest.length ? [{ key: otherKey, name: `Other (${rest.length})`, grey: null, total: rest.reduce((n, g) => n + g.total, 0) }] : [])]
+  const seen = new Set<string>(); let overlapping = false
+  for (const g of all) for (const id of g.held) { if (seen.has(id)) overlapping = true; seen.add(id) }
+  const otherIn = (p: ChartPoint) => { const values = rest.map(g => valueIn(p, g.held)).filter((v): v is number => v !== null); return values.length ? values.reduce((n, v) => n + v, 0) : null }
+  return { series, overlapping, points: points.map(p => ({ ...p, parts: [...named.map(g => ({ key: g.key, value: valueIn(p, g.held) })), ...(rest.length ? [{ key: otherKey, value: otherIn(p) }] : [])] })) }
 }
 
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
