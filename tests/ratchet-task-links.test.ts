@@ -36,7 +36,7 @@ test('independent: a pasted deleted line cannot resurrect a dependency cycle',()
  const h=setup();link(h,'A','B');link(h,'B','C');
  const b=h.task('B').id, saved=h.page(dayId(today)).document;
  h.save(dayId(today),doc=>doc.filter(n=>n.id!=='b'));
- try {link(h,'C','A')} catch(e) {assert.match(String(e),/already waits/)}
+ assert.throws(()=>link(h,'C','A'),/Would make a loop through B \(deleted\)/)
  h.run({type:'create-document',pageId:'pasted',title:'Pasted',body:''});
  h.save('pasted',()=>[{...todo('pasted-b','B','reference'),props:{taskId:b,role:'reference',planDate:''}}]);
  const live=liveTaskIds(h.ws), edges=(h.ws.links??[]).filter(l=>live.has(l.blockedId)&&live.has(l.blockerId));

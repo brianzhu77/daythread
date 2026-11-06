@@ -21,3 +21,9 @@ Fixture: `tests/ratchet-task-links.test.ts`, last case. Combined run against 44c
 ## Limits
 
 No independent browser, Worker, real Postgres, native phone, Timeline-arrow, or performance run. Mark/picker visual review belongs to Jazz. Candidate limits (50 blockers / 5,000 links) were not independently measured. Product accepted retaining deleted-endpoint links, with counts/allowances treated separately from cycle safety. A repaired candidate still needs the resurrection regression rerun.
+
+## Repaired candidate a406565e
+
+**Clear on the four reviewed contracts.** The deleted endpoint once again participates in the cycle check. The saved resurrection scenario now refuses C→A before B returns, with `Would make a loop through B (deleted)`, and pasting B back leaves an acyclic graph. The fixture's expected refusal text was updated for that accepted copy change; its restoration and acyclicity assertions remain.
+
+All 15 domain checks pass (four independent, eleven author), and the ten-check actual-floor/PGlite repository rerun passes again. The storage, occurrence, atomicity and stale-Undo conclusions above stand. No runtime code changed in this evidence branch. Browser/picker visuals, real Postgres, Worker and measured limits remain outside this independent retest.
