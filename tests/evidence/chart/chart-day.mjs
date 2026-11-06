@@ -73,11 +73,14 @@ for (const [date, mine, other] of [['2026-12-20', 'Due the 20th', 'Due the 21st'
   let saved = false
   for (let i = 0; i < 30 && typed && !saved; i++) { await page.waitForTimeout(300); saved = ws().pages.find(p => p.date === '2026-12-21').document.includes('still here') }
   const shown = await page.locator('.database-block').evaluateAll(l => l.map(e => e.innerText.replace(/\s+/g, ' ').slice(-30)))
+  // Failed, each keeps the height it holds while loading, so nothing below moves (Jazz).
+  const failedHeights = await page.locator('.database-chart-loading.is-unavailable').evaluateAll(l => l.map(e => Math.round(e.getBoundingClientRect().height)))
+  check(failedHeights.join() === (wide ? '304,106' : '272,106'), 'failed, each keeps the height it held', failedHeights)
   check(!broken && typed && saved && shown.every(t => t.includes('Chart unavailable')), "a chart whose code can't load says so in its place, and the day still takes typing and saves", { broken, typed, saved, shown })
   if (shots) await page.screenshot({ path: `${shots}/${engine}-${width}-no-chart-code.png` })
   // Back online: Reload saves and reloads (a browser won't fetch a failed module twice), the charts draw, and the words are kept.
   await v.context.unroute(chunk)
-  await Promise.all([page.waitForEvent('load', { timeout: 20000 }).catch(() => null), tap(page, page.locator('.database-chart-unavailable button').first())])
+  await Promise.all([page.waitForEvent('load', { timeout: 20000 }).catch(() => null), tap(page, page.locator('.database-chart-loading.is-unavailable button').first())])
   await page.locator('.database-chart').nth(1).waitFor({ timeout: 20000 }).catch(() => {})
   const kept = (await page.locator('.bn-editor').first().innerText()).includes('still here')
   check((await page.locator('.database-chart').count()) === 2 && kept, 'and Reload, once the code can be fetched, draws them with the words kept', { charts: await page.locator('.database-chart').count(), kept, fetched: v.fetched() })

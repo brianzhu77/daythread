@@ -893,8 +893,10 @@ function ChartView(props: LaidOutProps) {
   }, [])
   if (chartModule) return <chartModule.default {...props} />
   // The browser remembers a module that failed to load, so asking again takes a fresh page, with his edits saved first.
-  if (failed) return <div className="database-chart-unavailable">Chart unavailable<button type="button" className="app-link" onClick={() => void flushAllEditors().then(saved => { if (saved) location.reload() })}>Reload</button></div>
-  return <div className={`database-chart-loading${props.view.chart?.form === 'number' ? ' is-number' : ''}`} />
+  // It keeps the chart's height, failed or not, so a fetch that fails late doesn't move the lines below.
+  const held = `database-chart-loading${props.view.chart?.form === 'number' ? ' is-number' : ''}`
+  if (failed) return <div className={`${held} is-unavailable`}><span className="is-warn">Chart unavailable</span><span className="sep"> · </span><button type="button" onClick={() => void flushAllEditors().then(saved => { if (saved) location.reload() })}>Reload</button></div>
+  return <div className={held} />
 }
 type LaidOutProps = DatabaseViewProps & { view: View; changeView: ChangeView }
 /** A view in its layout, for a home block and a linked view alike. */
