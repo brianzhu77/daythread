@@ -88,6 +88,8 @@ export interface Workspace {
   synced?: import("./synced.ts").SyncedRecord[];
   /** Comments, in a table of their own (comments.ts). Absent until there's one. */
   threads?: import("./comments.ts").CommentThread[];
+  /** To-dos' rules (automations.md §7): To-dos isn't a stored database, so they're kept with the workspace. Absent until there's one. */
+  todoAutomations?: import("./automations.ts").Automation[];
   receipts: Record<string, Receipt>;
   undo?: {
     operationId: string;

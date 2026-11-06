@@ -4,7 +4,7 @@ import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, 
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
-import { automationProblem, dueRules, firedRules, type FiredRule } from "./automations.ts";
+import { automationProblem, dueRules, firedRules, type Automation, type FiredRule, type RuleSource } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, usesFormulas, valueAtTap, type ButtonStep, type ButtonValue } from "./buttons.ts";
 import { format } from "./formula-functions.ts";
 import { stepCell } from "./formula.ts";
@@ -204,7 +204,7 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
     if (step.kind === "open" && step.target.kind === "url" && !safeUrl(step.target.url)) throw new DomainError("That link can't be opened");
   }
   // A formula reads the row it's on; with none, as for a schedule, only a page's name. Each is checked first too, so a broken one drops the tap before anything's written.
-  const formulas = usesFormulas(steps), scopeId = formulas ? databaseOfRow(state, on)?.id ?? "" : "";
+  const formulas = usesFormulas(steps), scopeId = formulas ? (taskIdOfRow(on.id) ? todosSourceId : databaseOfRow(state, on)?.id ?? "") : "";
   const ready = formulas ? preparedSteps(steps, state, scopeId) : null;
   ready?.problems.forEach((problem, i) => { if (problem) throw new DomainError(`${stepTitle(steps[i]!)}: ${problem}`); });
   const variables: StepVariables = new Map();
@@ -279,6 +279,23 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
       message = `Added to ${db.title.trim() || step.databaseName}`;
     });
     else if (step.kind === "edit-property") named(step, () => {
+      // A to-do's rule: each value through the command the day page and Tasks use, so a tick and its rule are one Undo (automations.md §7).
+      const taskId = taskIdOfRow(on.id);
+      if (taskId) {
+        spend(1, true);
+        let changed = false;
+        for (const set of step.set) {
+          const property = todosDatabase.properties.find((p: Property) => p.id === set.id);
+          if (!property) throw new DomainError(`${set.name} was deleted`);
+          const change = todoChange(state, taskId, set.id, tap(set.value, property), today);
+          if (!change) continue;
+          if ("refused" in change) throw new DomainError(change.refused);
+          execute(state, change.action, operationId);
+          changed = true;
+        }
+        message = changed ? "1 to-do changed" : message;
+        return;
+      }
       const owner = databaseOfRow(state, on);
       if (!owner) throw new DomainError("That row moved");
       spend(1, false);
@@ -297,7 +314,8 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
     else if (step.kind === "edit-rows") named(step, () => {
       const context = { today, pageDate: on.date };
       if (isTodosTarget(step.databaseId)) {
-        const rows = databaseRows(withTodos(state), todosSourceId).filter((r) => inView(todosDatabase, r, { filter: step.filter, ...(step.any ? { filterAny: true } : {}) }, context));
+        // A copy's projection: the one kept for `state` itself can be from before an earlier step changed it.
+        const rows = databaseRows(withTodos({ ...state }), todosSourceId).filter((r) => inView(todosDatabase, r, { filter: step.filter, ...(step.any ? { filterAny: true } : {}) }, context));
         if (!rows.length) { matchedNothing = true; return; }
         spend(rows.length, true);
         const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: tap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? ({ type: "text", id: set.id, name: set.name } as Property), r, todosSourceId) })) }] : []; });
@@ -341,16 +359,45 @@ const lookOf = (from: Page | undefined): Pick<Page, "icon" | "cover" | "coverPos
  * The rules a command set off, in order. Each runs on its own copy and is taken whole or not at all, so his edit stands whatever a rule does (automations.md §5.1, §5.5).
  * The allowance is the command's, across them all. Once it's spent, the rest pause, and those that already ran stay (§5.8).
  */
+/** Where a database's rules are kept: on its page, or To-dos' on the workspace, as To-dos isn't stored (automations.md §7). */
+function rulesIn(state: Workspace, databaseId: string): Automation[] {
+  return databaseId === todosSourceId ? state.todoAutomations ?? [] : state.pages.find((p) => p.id === databaseId)!.database!.automations ?? [];
+}
+function setRulesIn(state: Workspace, databaseId: string, rules: Automation[]): void {
+  if (databaseId !== todosSourceId) { state.pages.find((p) => p.id === databaseId)!.database!.automations = rules; return; }
+  if (rules.length) state.todoAutomations = rules; else delete state.todoAutomations;
+}
+/** To-dos as its rules read it: its rows worked out from a copy, as `withTodos` keeps one projection for each workspace object and this one changes in place. */
+const todosNow = (state: Workspace): Workspace => withTodos({ ...state });
+function ruleDatabase(state: Workspace, databaseId: string): Database {
+  if (databaseId !== todosSourceId) return state.pages.find((p) => p.id === databaseId)!.database!;
+  return { ...todosNow(state).pages.find((p) => p.id === todosSourceId)!.database!, automations: state.todoAutomations ?? [] };
+}
+/** A row a rule runs on: a page, or a to-do's row. */
+const ruleRow = (state: Workspace, databaseId: string, rowId: string): Page | undefined =>
+  (databaseId === todosSourceId ? todosNow(state).pages : state.pages).find((p) => p.id === rowId);
+/**
+ * To-dos' rows before and after a command, when it has rules. A to-do is added the first time it's saved with words, as only then is it a row,
+ * and one coming back from the deleted ones, a cut line pasted back, isn't new (Bumblebee).
+ */
+function todoSources(before: Workspace, after: Workspace): RuleSource[] {
+  const was = todosNow(before), now = todosNow(after), returned = new Set(before.deletedTasks.map((t) => todoRowId(t.id)));
+  const rows = (ws: Workspace) => ws.pages.filter((p) => p.parentId === todosSourceId);
+  const wasRows = rows(was), known = new Set(wasRows.map((r) => r.id));
+  // A blank box that's never had words is version 1; one whose words were cleared has moved on. Only the first is new (Ratchet).
+  const wasBlank = new Map(before.tasks.map((t) => [todoRowId(t.id), t.version]));
+  const isNew = (r: Page) => !returned.has(r.id) && (!wasBlank.has(r.id) || wasBlank.get(r.id) === 1);
+  return [{ page: { ...now.pages.find((p) => p.id === todosSourceId)!, database: ruleDatabase(after, todosSourceId) } as Page & { database: Database }, before: wasRows, after: rows(now).filter((r) => known.has(r.id) || isNew(r)) }];
+}
 function runAutomations(start: Workspace, fired: FiredRule[], operationId: string): { state: Workspace; automations: NonNullable<Receipt["automations"]> } {
   let state = start;
   const budget = newBudget(), ran: string[] = [], paused: { name: string; reason: string }[] = [], at = isoTime(undefined), today = localDay(state, at);
   let spent = false;
   const pause = (on: Workspace, databaseId: string, ruleId: string, reason: string, limit: boolean) => {
-    const db = on.pages.find((p) => p.id === databaseId)!.database!;
-    db.automations = db.automations!.map((r) => (r.id === ruleId ? { ...r, active: false, paused: { reason, ...(limit ? { limit: true as const } : {}) } } : r));
+    setRulesIn(on, databaseId, rulesIn(on, databaseId).map((r) => (r.id === ruleId ? { ...r, active: false, paused: { reason, ...(limit ? { limit: true as const } : {}) } } : r)));
   };
   for (const { databaseId, ruleId, rowIds } of fired) {
-    const database = state.pages.find((p) => p.id === databaseId)!.database!, rule = database.automations!.find((r) => r.id === ruleId)!;
+    const database = ruleDatabase(state, databaseId), rule = rulesIn(state, databaseId).find((r) => r.id === ruleId)!;
     if (spent) { pause(state, databaseId, ruleId, "Not run · command limit reached", true); paused.push({ name: rule.name, reason: "Not run · command limit reached" }); continue; }
     const problem = automationProblem(state, database, rule, databaseId);
     if (problem) { pause(state, databaseId, ruleId, problem, false); paused.push({ name: rule.name, reason: problem }); continue; }
@@ -358,13 +405,12 @@ function runAutomations(start: Workspace, fired: FiredRule[], operationId: strin
     try {
       let changed = false;
       for (const rowId of rowIds) {
-        const row = copy.pages.find((p) => p.id === rowId);
+        const row = ruleRow(copy, databaseId, rowId);
         if (row && runSteps(copy, steps, row, { at, today }, `${operationId}:${rule.id}:${rowId}`, null, budget).message !== null) changed = true;
       }
       settleSynced(copy);
       if (changed) {
-        const db = copy.pages.find((p) => p.id === databaseId)!.database!;
-        db.automations = db.automations!.map((r) => (r.id === ruleId ? { ...r, lastRanAt: at } : r));
+        setRulesIn(copy, databaseId, rulesIn(copy, databaseId).map((r) => (r.id === ruleId ? { ...r, lastRanAt: at } : r)));
         state = copy;
         ran.push(rule.name);
       }
@@ -390,21 +436,18 @@ function runScheduledRules(state: Workspace, action: Extract<Action, { type: "ru
   const budget = newBudget(), ran: string[] = [], paused: { name: string; reason: string }[] = [], at = isoTime(action.at);
   let spent = false;
   const stop = (databaseId: string, ruleId: string, reason: string, limit: boolean, name: string) => {
-    const db = state.pages.find((p) => p.id === databaseId)!.database!;
-    db.automations = db.automations!.map((r) => (r.id === ruleId ? { ...r, active: false, paused: { reason, ...(limit ? { limit: true as const } : {}) } } : r));
+    setRulesIn(state, databaseId, rulesIn(state, databaseId).map((r) => (r.id === ruleId ? { ...r, active: false, paused: { reason, ...(limit ? { limit: true as const } : {}) } } : r)));
     paused.push({ name, reason });
   };
   for (const { database, rule, date } of due) {
     if (spent) { stop(database.id, rule.id, "Not run · command limit reached", true, rule.name); continue; }
-    const live = state.pages.find((p) => p.id === database.id)!;
-    const problem = automationProblem(state, live.database!, rule, database.id);
+    const problem = automationProblem(state, ruleDatabase(state, database.id), rule, database.id);
     if (problem) { stop(database.id, rule.id, problem, false, rule.name); continue; }
     const copy = structuredClone(state), before = { ...budget };
     try {
       // A row dates itself to its period through @today (§6), and its id to the rule and period.
-      const result = runSteps(copy, readSteps(rule.steps), copy.pages.find((p) => p.id === database.id)!, { at, today: date }, `every:${rule.id}:${date}`, null, budget);
-      const db = copy.pages.find((p) => p.id === database.id)!.database!;
-      db.automations = db.automations!.map((r) => (r.id === rule.id ? { ...r, ...(result.message !== null ? { lastRanAt: at } : {}), triggers: r.triggers.map((t) => (t.kind === "every" ? { ...t, repeat: { ...t.repeat, last: date, lastRan: at } } : t)) } : r));
+      const result = runSteps(copy, readSteps(rule.steps), ruleRow(copy, database.id, database.id)!, { at, today: date }, `every:${rule.id}:${date}`, null, budget);
+      setRulesIn(copy, database.id, rulesIn(copy, database.id).map((r) => (r.id === rule.id ? { ...r, ...(result.message !== null ? { lastRanAt: at } : {}), triggers: r.triggers.map((t) => (t.kind === "every" ? { ...t, repeat: { ...t.repeat, last: date, lastRan: at } } : t)) } : r)));
       settleSynced(copy);
       Object.assign(state, copy);
       if (result.message !== null) ran.push(rule.name);
@@ -1358,6 +1401,12 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       return { message: "Database made", entityId: id };
     }
     case "change-database": {
+      // To-dos' rules: the same changes, on the workspace (automations.md §7). Nothing else of To-dos is stored.
+      if (action.pageId === todosSourceId) {
+        if (!/Automation/.test(action.change?.kind ?? "")) throw new DomainError("To-dos can't change that");
+        const page = { id: todosSourceId, database: ruleDatabase(state, todosSourceId) } as Page & { database: Database };
+        try { const message = changeDatabase(state, page, action.change); setRulesIn(state, todosSourceId, page.database.automations ?? []); return { message, entityId: todosSourceId }; } catch (error) { throw new DomainError((error as Error).message); }
+      }
       const p = databasePage(state, action.pageId);
       try { return { message: changeDatabase(state, p, action.change), entityId: p.id }; } catch (error) { throw new DomainError((error as Error).message); }
     }
@@ -1655,7 +1704,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   } else {
     result = execute(state, command.action, command.operationId);
     result = { ...result, ...settleSynced(state) };
-    const fired = firedRules(input, state, command.action, { today: localDay(state, isoTime(undefined)), pageDate: null });
+    const fired = firedRules(input, state, command.action, { today: localDay(state, isoTime(undefined)), pageDate: null }, () => todoSources(input, state));
     if (fired.length) { const run = runAutomations(state, fired, command.operationId); state = run.state; result = { ...result, automations: run.automations }; }
   }
   state.revision = input.revision + 1;

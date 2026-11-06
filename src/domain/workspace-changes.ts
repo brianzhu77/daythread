@@ -3,6 +3,7 @@
 // by the server, which makes it, and the browser, which applies it to the copy the command was sent from.
 import { expandedWorkspace, strippedWorkspace, type SyncedRecord } from './synced.ts'
 import type { CommentThread } from './comments.ts'
+import type { Automation } from './automations.ts'
 import type { Page, Task, Workspace } from './types.ts'
 
 export interface ListChanges<T> {
@@ -27,6 +28,8 @@ export interface WorkspaceChanges {
   synced?: SyncedRecord[]
   /** Comments, whole, when any changed. A person's notes stay small, and a tab that doesn't know them ignores this. */
   threads?: CommentThread[]
+  /** To-dos' rules, whole, when they changed; null when the last went. */
+  todoAutomations?: Automation[] | null
 }
 
 /** Existing entries replaced where they are, removed ones dropped, new ones appended in the new list's order. */
@@ -54,9 +57,10 @@ export function changesBetween(before: Workspace, after: Workspace): WorkspaceCh
   const deleted = JSON.stringify(before.deletedTasks) === JSON.stringify(after.deletedTasks) ? {} : { deletedTasks: after.deletedTasks }
   const synced = JSON.stringify(before.synced ?? []) === JSON.stringify(after.synced ?? []) ? {} : { synced: after.synced ?? [] }
   const threads = JSON.stringify(before.threads ?? []) === JSON.stringify(after.threads ?? []) ? {} : { threads: after.threads ?? [] }
+  const rules = JSON.stringify(before.todoAutomations ?? []) === JSON.stringify(after.todoAutomations ?? []) ? {} : { todoAutomations: after.todoAutomations?.length ? after.todoAutomations : null }
   return {
     from: before.revision, revision: after.revision, timezone: after.timezone, ...(after.weekStart === 1 ? { weekStart: 1 as const } : {}), undo: undoMarker(after),
-    pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced, ...threads,
+    pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced, ...threads, ...rules,
   }
 }
 
@@ -72,14 +76,15 @@ function applyList<T extends { id: string }>(before: readonly T[], changes: List
 export function applyChanges(ws: Workspace, changes: WorkspaceChanges): Workspace | null {
   if (ws.revision !== changes.from) return null
   const pages = applyList(ws.pages, changes.pages), tasks = applyList(ws.tasks, changes.tasks)
-  const synced = changes.synced ?? ws.synced, threads = changes.threads ?? ws.threads
+  const synced = changes.synced ?? ws.synced, threads = changes.threads ?? ws.threads, rules = changes.todoAutomations !== undefined ? changes.todoAutomations : ws.todoAutomations
   if (!pages || !tasks) return null
-  const { undo: _undo, weekStart: _weekStart, threads: _threads, ...rest } = ws
+  const { undo: _undo, weekStart: _weekStart, threads: _threads, todoAutomations: _rules, ...rest } = ws
   return expandedWorkspace({
     ...rest, revision: changes.revision, timezone: changes.timezone, ...(changes.weekStart === 1 ? { weekStart: 1 as const } : {}), pages, tasks,
     deletedTasks: changes.deletedTasks ?? ws.deletedTasks, receipts: {},
     ...(synced ? { synced } : {}),
     ...(threads?.length ? { threads } : {}),
+    ...(rules?.length ? { todoAutomations: rules } : {}),
     ...(changes.undo ? { undo: changes.undo } : {}),
   })
 }

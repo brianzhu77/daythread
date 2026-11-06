@@ -1,11 +1,11 @@
 // Rules on a database (docs/design/automations.md): when something happens to a row, do these steps, inside the command that made the change. Nothing here writes:
 // `applyCommand` stages each rule on its own copy, so a rule's failure can't touch his edit. A database with no rules costs one look at its field.
-import { readSteps, usesFormulas, writeSteps, type ButtonStep } from './buttons.ts'
+import { isTodosTarget, readSteps, usesFormulas, writeSteps, type ButtonStep } from './buttons.ts'
 import { freshWorldOf } from './formula.ts'
 import { stepFormulaProblems } from './step-formulas.ts'
 import { dueDates, nextDate } from './repeats.ts'
 import type { Repeat } from './database.ts'
-import { conditionHolds, cellValue, databaseRows, inView, isDatabase, opsFor, propertyOf, titleId, type Condition, type Database, type ViewContext } from './database.ts'
+import { conditionHolds, cellValue, databaseRows, inView, isDatabase, opsFor, propertyOf, titleId, todosSourceId, type Condition, type Database, type ViewContext } from './database.ts'
 import type { Action, Page, WeekStart, Workspace } from './types.ts'
 
 export type AutomationTrigger =
@@ -58,6 +58,8 @@ const stepDatabase = (ws: Pick<Workspace, 'pages'>, db: Database, step: Extract<
 /** What's gone from under one step, so its row can say so. */
 export function stepBroken(ws: Pick<Workspace, 'pages'>, db: Database, step: ButtonStep): string | null {
   if (step.kind !== 'edit-property' && step.kind !== 'add-row' && step.kind !== 'edit-rows') return null
+  // To-dos can't be deleted, and its columns are fixed: a step adding or editing to-dos has nothing to lose (it isn't a page, so it would read as deleted).
+  if (step.kind !== 'edit-property' && isTodosTarget(step.databaseId)) return null
   const target = stepDatabase(ws, db, step)
   if (!target) return `${step.kind === 'edit-property' ? 'That database' : step.databaseName || 'That database'} was deleted`
   for (const set of step.set) {
@@ -118,9 +120,13 @@ export function runsOnFix(rule: Automation, every: Extract<AutomationTrigger, { 
 }
 export interface DueRule { database: Page & { database: Database }; rule: Automation; date: string; skipped: number }
 /** What's due by the wall clock it's asked at: the latest missed period only, as five rows at once on his return is clutter (§6). */
+/** To-dos' rules as a page holds a database's: what a schedule needs of it, its id and its rules. */
+export const todosRules = (ws: Pick<Workspace, 'todoAutomations'>): (Page & { database: Database }) | null =>
+  ws.todoAutomations?.length ? { id: todosSourceId, type: 'document', date: null, title: 'To-dos', document: '[]', database: { homeBlockId: null, properties: [], views: [], fixed: true, automations: ws.todoAutomations } } as Page & { database: Database } : null
 export function dueRules(ws: Workspace, today: string, time: string): DueRule[] {
   const out: DueRule[] = []
-  for (const database of ws.pages) {
+  const todos = todosRules(ws)
+  for (const database of todos ? [...ws.pages, todos] : ws.pages) {
     if (!isDatabase(database) || database.trashedAt || !database.database.automations) continue
     for (const rule of database.database.automations) {
       const every = everyOf(rule)
@@ -134,15 +140,16 @@ export function dueRules(ws: Workspace, today: string, time: string): DueRule[] 
 
 export interface FiredRule { databaseId: string; ruleId: string; rowIds: string[] }
 /** The rules this command sets off, in each database's list order, frozen before any of them runs. */
-export function firedRules(before: Workspace, after: Workspace, action: Pick<Action, 'type'>, context: ViewContext): FiredRule[] {
+/** A database whose rows aren't pages of the workspace: To-dos, its rows worked out from his tasks, before and after (§7). */
+export interface RuleSource { page: Page & { database: Database }; before: Page[]; after: Page[] }
+export function firedRules(before: Workspace, after: Workspace, action: Pick<Action, 'type'>, context: ViewContext, sources: () => RuleSource[] = () => []): FiredRule[] {
   if (!firesRules(action)) return []
   const out: FiredRule[] = []
-  for (const page of after.pages) {
-    const rules = page.database?.automations
-    if (!rules?.length || page.trashedAt) continue
-    const live = rules.filter(r => r.active && !r.paused)
+  const stored = after.pages.filter(p => p.database?.automations?.length && !p.trashedAt).map(page => ({ page: page as Page & { database: Database }, before: databaseRows(before, page.id), after: databaseRows(after, page.id) }))
+  for (const { page, before: was, after: now } of [...stored, ...(after.todoAutomations?.some(r => r.active && !r.paused) ? sources() : [])]) {
+    const live = page.database.automations!.filter(r => r.active && !r.paused)
     if (!live.length) continue
-    const rowsNow = databaseRows(after, page.id), rowsWas = new Map(databaseRows(before, page.id).map(r => [r.id, r]))
+    const rowsNow = now, rowsWas = new Map(was.map(r => [r.id, r]))
     // What didn't change needs no more than this.
     const moved = rowsNow.filter(r => { const was = rowsWas.get(r.id); return !was || !same(was.values, r.values) || was.title !== r.title })
     if (!moved.length) continue
