@@ -20,10 +20,11 @@ import { applyRowMove, movesIntoItself, rowMoveTree } from "./move-row.ts";
 import { importRefusal } from "./csv.ts";
 import { dueRepeats, periodWord, repeatRowId } from "./repeats.ts";
 import { newTodo, taskIdOfRow, todoBarColumns, todoChange, todoMoves, todoRowId, todosDatabase, todosTitle, withTodos } from "./todos-source.ts";
-import { inView, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
+import { inView, titleId, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
+import { formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -1356,6 +1357,25 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (action.homeBlockId !== null && (typeof action.homeBlockId !== "string" || !action.homeBlockId || parentId === null)) throw new DomainError("Invalid database block");
       state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000).trim(), ...(parentId ? { parentId } : {}), document: "[]", database: newDatabase(action.homeBlockId) });
       return { message: "Database made", entityId: id };
+    }
+    case "answer-form": {
+      const p = state.pages.find((x) => x.id === action.databaseId);
+      const view = p && isDatabase(p) && !isTrashed(p) ? p.database.views.find((v) => v.id === action.viewId) : undefined;
+      const form = view ? formOf(view) : null;
+      // Closed, deleted, in Trash or never there all read the same (forms.md §2, G7-7).
+      if (!p?.database || !view || !form || form.closed) throw new DomainError("This form is closed");
+      const questions = liveQuestions(p.database, form, titleId), asked = new Set(questions.map((q) => q.propertyId));
+      // A question removed while it was open: the others are sent. One made required since: it's asked for (§4).
+      const values = Object.fromEntries(Object.entries(action.values).filter(([id]) => asked.has(id) && id !== titleId));
+      const title = asked.has(titleId) ? text(action.title, 1000).trim() : "";
+      const missing = questions.find((q) => q.required && (q.propertyId === titleId ? !title : isEmptyAnswer(values[q.propertyId])));
+      if (missing) throw new DomainError(`Needs an answer: ${missing.wording.trim() || "a question"}`);
+      const over = questions.find((q) => q.max && Array.isArray(values[q.propertyId]) && (values[q.propertyId] as Json[]).length > q.max);
+      if (over) throw new DomainError(`${over.wording.trim() || "A question"}: ${over.max} at most`);
+      // An add-row, so it fires Row added and shows in every view (§4).
+      execute(state, { type: "add-row", databaseId: p.id, pageId: action.pageId, title, values, at: action.at }, operationId);
+      view.form = { ...form, responses: (form.responses ?? 0) + 1 };
+      return { message: "Sent", entityId: action.pageId };
     }
     case "change-database": {
       const p = databasePage(state, action.pageId);

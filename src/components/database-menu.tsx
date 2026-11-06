@@ -509,7 +509,7 @@ function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () 
 // ---------------------------------------------------------------- group and layout (design §7.2, §7.3)
 
 const unitLabels: Record<TimelineUnit, string> = { hours: 'Hours', day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' }
-const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', chart: 'Chart' }
+const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', chart: 'Chart', form: 'Form' }
 /** "Status", "Status 2", …: never a name the database already has. */
 function newPropertyName(db: Database, base: string): string {
   const taken = new Set(['name', ...db.properties.map(p => p.name.toLocaleLowerCase())])
