@@ -49,7 +49,7 @@ I ran the dataviz skill's palette validator on four greys, `#111111, #555555, #8
 - **Bands in a stack (Jazz, Lead f9bab535):** no 2 px gap. A 1 px line in the page's colour inside the upper band's own space, skipping bands under 4 px, so nothing moves. Across, only the last band is rounded.
 - **A blank stays a blank per series (Ratchet, Lead f9bab535):** a Sum with no numbers in a period breaks that series, as §3 says, and Count stays zero.
 - **Tap to focus:** tapping a series or legend entry dims the rest, since greys are hardest to follow on a line chart.
-- **Always:** a legend for 2 or more series, direct labels where they fit, and a 2 px gap between fills. A donut's lightest slice needs its label outside.
+- **Always:** a legend for 2 or more series, which with tap to focus names every series. **No direct labels in the first version (Lead, 2026-11-06):** a label inside a stacked band rarely fits, almost never at 390, and nothing checks collisions. Fills are separated by the 1 px line above, not a 2 px gap (Jazz accepted). A donut's lightest slice needs its label outside.
 - **No two y-axes,** ever.
 - **If he later wants colour:** it's the per-option setting §6.1 already allows, and charts read it. No separate chart palette.
 

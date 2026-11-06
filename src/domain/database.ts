@@ -178,6 +178,7 @@ export interface Repeat {
 }
 export type { Automation } from './automations.ts'
 import { everyOf, sameSchedule, type Automation } from './automations.ts'
+import { todosSourceId } from "./todos-id.ts";
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
   homeBlockId: string | null;
@@ -214,7 +215,8 @@ const isFileValue = (x: unknown): x is FileValue => {
 /** The column id of a row's title, in views, sorts, filters and `set-values`. */
 export const titleId = "title";
 /** The `pageId` of a block showing To-dos, and a relation's target when it links tasks. No real page has it. */
-export const todosSourceId = "source:tasks";
+// Its own module, with no imports, so a module read part-way through a cycle can still use it (To-dos' columns do).
+export { todosSourceId };
 /** Where a row keeps its number, among its values: under no property, so changing a property's type never touches it. */
 export const rowNumberKey = "@id";
 /** The types the app fills in: they can't be typed, pasted, or set by a filter's `+ New` (R3-9). */
@@ -826,7 +828,8 @@ const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "char
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
   if (layout === "calendar") return [];
-  return db.properties.filter((p) => groupsBy(p, layout));
+  // To-dos' Board goes straight to Status, as it did before its link columns (todo-dependency.md): a Board of who blocks whom isn't one he'd want.
+  return db.properties.filter((p) => groupsBy(p, layout) && !(db.fixed && layout === "board" && p.type === "relation"));
 }
 /** The property a view groups by now; null when it was deleted or its type can't group any more. */
 /** A section of a view with two layers has both keys in one: `+ New` under it, a drag to it and its fold all read this. */

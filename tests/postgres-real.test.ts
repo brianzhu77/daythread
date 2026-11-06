@@ -292,3 +292,28 @@ test('real Postgres: a scheduled rule\'s period commits with its marker, once, a
     await Promise.all([a.end(), b.end()])
   }
 })
+
+test('real Postgres: two tabs making two to-dos block each other get one link, and the other is refused as a loop', { skip }, async () => {
+  const schema = `daythread_test_links_${process.pid}`
+  const [a, b] = [connect(), connect()]
+  try {
+    const [ra, rb] = [new PostgresWorkspaceRepository(postgresClient(a), schema), new PostgresWorkspaceRepository(postgresClient(b), schema)]
+    let ws = await ra.load()
+    ws = (await ra.execute({ operationId: 'day', expectedRevision: ws.revision, action: { type: 'ensure-day', date: '2026-11-05' } })).workspace
+    const line = (id: string, title: string) => ({ id, type: 'task', props: { taskId: `editor-task:${id}`, role: 'plan', planDate: '2026-11-05' }, content: [{ type: 'text', text: title, styles: {} }], children: [] })
+    const day = ws.pages[0]!
+    ws = (await ra.execute({ operationId: 'lines', expectedRevision: ws.revision, action: { type: 'save-editor', pageId: day.id, expectedContent: pageContentKey(day), document: JSON.stringify([line('a', 'Alpha'), line('b', 'Bravo')]), today: '2026-11-05' } })).workspace
+    const [A, B] = ['Alpha', 'Bravo'].map(t => ws.tasks.find(x => x.title === t)!.id)
+    const at = '2026-11-05T10:00:00.000Z', revision = ws.revision
+    const tries = [{ r: ra, taskId: A, add: [B] }, { r: rb, taskId: B, add: [A] }]
+    const results = await Promise.allSettled(tries.map((x, i) => x.r.execute({ operationId: `link-${i}`, expectedRevision: revision, action: { type: 'link-tasks', taskId: x.taskId, add: x.add, remove: [], at } })))
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, 1)
+    // The other tab, finding it saved elsewhere, sends again on the new revision: now it's a loop.
+    const lost = tries[results.findIndex(r => r.status === 'rejected')]!, now = await lost.r.load()
+    await assert.rejects(lost.r.execute({ operationId: 'again', expectedRevision: now.revision, action: { type: 'link-tasks', taskId: lost.taskId, add: lost.add, remove: [], at } }), /already waits on this one/)
+    assert.equal((await rb.load()).links?.length, 1)
+  } finally {
+    await a.unsafe(`drop schema if exists ${schema} cascade`)
+    await Promise.all([a.end(), b.end()])
+  }
+})
