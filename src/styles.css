@@ -2114,7 +2114,15 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (hover: hover) { .database-rule-remove:hover, .database-menu-back:hover { background: var(--hover-dim); color: var(--ink); } }
 /* Chart (docs/design/chart.md): bars in the page's ink, one series, no colour. */
 .database-chart { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 4px; }
-.database-chart-loading { height: 240px; }
+.database-chart-loading { height: 304px; }
+.database-chart-loading.is-number { height: 106px; }
+/* As the day's "Couldn't draft · Retry" line reads. */
+.database-chart-loading.is-unavailable { display: flex; align-items: center; justify-content: center; color: var(--ink-2); font-size: var(--text-small); }
+.database-chart-loading.is-unavailable .is-warn { color: var(--warn); }
+.database-chart-loading.is-unavailable .sep { color: var(--ink-3); white-space: pre; }
+.database-chart-loading.is-unavailable button { padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+@media (hover: hover) { .database-chart-loading.is-unavailable button:hover { color: var(--ink); } }
+@media (max-width: 599px) { .database-chart-loading.is-unavailable button { min-height: 44px; } }
 .database-chart-number { display: flex; flex-direction: column; gap: 2px; padding: 12px 0; }
 .database-chart-number strong { min-width: 0; overflow-wrap: anywhere; color: var(--ink); font-size: 40px; font-weight: var(--weight-semibold); line-height: 1.1; font-variant-numeric: tabular-nums; }
 .database-chart-number span { color: var(--ink-2); font-size: var(--text-ui); }
@@ -2207,6 +2215,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (hover: hover) { .database-chart-row:hover { text-decoration: underline; } }
 @media (max-width: 899px) {
   .database-chart-plot { height: 180px; }
+  .database-chart-loading:not(.is-number) { height: 272px; }
   .database-chart-line { min-height: 36px; }
   .database-chart-legend-item { min-height: 36px; }
   .database-chart-toggle { min-height: 36px; }
