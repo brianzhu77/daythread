@@ -1,4 +1,4 @@
-// R2-6 on a copy of his data: the same day with and without views in his Day template, of a database and of To-dos. The model is sent the same words,
+// R2-6 on a copy of his data: the same day with and without views in his Day template, of a database, of To-dos and as charts (G4-7). The model is sent the same words,
 // a draft lands in the same slots, and Apply, Undo and carry-over come out the same.
 // Usage: node tests/evidence/databases/template-draft.ts <copy-store-path> <scratch-dir>  (reads the copy, writes only in the scratch dir)
 import { copyFileSync } from 'node:fs'
@@ -15,7 +15,7 @@ const anyIds = (s: string) => s.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, 'ID')
 const lineIds = (nodes: EditorNode[]) => new Set(nodes.filter(n => n.type === 'syncedBlock').flatMap(n => flatNodes(n.children ?? []).map(c => c.id)))
 const shape = (nodes: EditorNode[]) => { const inside = lineIds(nodes); return nodes.filter(n => n.type !== 'database' && n.type !== 'syncedBlock' && !inside.has(n.id)).map(n => `${n.type}:${inlineText(n.content).trim()}`) }
 
-async function run(variant: 'plain' | 'viewed' | 'todos' | 'block') {
+async function run(variant: 'plain' | 'viewed' | 'todos' | 'block' | 'chart') {
   const path = `${scratch}/draft-${variant}.sqlite`
   execSync(`rm -f ${path} ${path}-wal ${path}-shm`)
   copyFileSync(copy, path)
@@ -49,7 +49,7 @@ async function run(variant: 'plain' | 'viewed' | 'todos' | 'block') {
 
 const plain = await run('plain')
 let allOk = true
-for (const variant of ['viewed', 'todos', 'block'] as const) {
+for (const variant of ['viewed', 'todos', 'block', 'chart'] as const) {
 const viewed = await run(variant)
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const checks = {

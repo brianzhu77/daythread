@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createPortal } from 'react-dom'
-import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback, lazy, Suspense } from 'react'
+import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type ComponentType, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback, lazy, Suspense } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { descendantsOf, parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
@@ -868,16 +868,27 @@ function DatabaseView(props: DatabaseViewProps) {
   const changeView = useViewChange(props.db.id, view.id)
   return <LaidOutView {...props} view={view} changeView={changeView} />
 }
-// Its code loads only when a chart is on screen, so a day with none pays nothing (chart.md §7).
-const DatabaseChart = lazy(() => import('./database-chart'))
+// Its code loads only when a chart is on screen, so a day with none pays nothing (chart.md §7). A fetch that fails (offline, or a
+// build replaced since the tab opened) leaves the chart's place with a Retry rather than breaking the page around it.
+const DatabaseChart = lazy(() => import('./database-chart').catch(() => ({ default: ChartUnavailable })))
+function ChartUnavailable(props: LaidOutProps) {
+  const [Loaded, setLoaded] = useState<ComponentType<LaidOutProps> | null>(null)
+  if (Loaded) return <Loaded {...props} />
+  return <div className="database-chart-unavailable">Chart unavailable<button type="button" className="app-link" onClick={() => void import('./database-chart').then(m => setLoaded(() => m.default), () => undefined)}>Retry</button></div>
+}
+type LaidOutProps = DatabaseViewProps & { view: View; changeView: ChangeView }
 /** A view in its layout, for a home block and a linked view alike. */
-export function LaidOutView(props: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+export function LaidOutView(props: LaidOutProps) {
   if (props.view.layout === 'board') return <DatabaseBoard {...props} />
   if (props.view.layout === 'list') return <DatabaseList {...props} />
   if (props.view.layout === 'gallery') return <DatabaseGallery {...props} />
   if (props.view.layout === 'calendar') return <DatabaseCalendar {...props} />
   if (props.view.layout === 'timeline') return <DatabaseTimeline {...props} />
-  if (props.view.layout === 'chart') return <Suspense fallback={<div className="database-chart-loading" />}><DatabaseChart {...props} /></Suspense>
+  // The header first, and a placeholder about the height of what's drawn, so the lines below don't jump when the chart arrives.
+  if (props.view.layout === 'chart') return <>
+    <DatabaseHeader db={props.db} view={props.view} changeView={props.changeView} blockId={props.blockId} showTitle={props.showTitle ?? true} linked={props.linked} onTitleEnter={() => {}} />
+    <Suspense fallback={<div className={`database-chart-loading${props.view.chart?.form === 'number' ? ' is-number' : ''}`} />}><DatabaseChart {...props} /></Suspense>
+  </>
   return <DatabaseTable {...props} />
 }
 

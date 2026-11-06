@@ -2099,7 +2099,10 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (hover: hover) { .database-rule-remove:hover, .database-menu-back:hover { background: var(--hover-dim); color: var(--ink); } }
 /* Chart (docs/design/chart.md): bars in the page's ink, one series, no colour. */
 .database-chart { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 4px; }
-.database-chart-loading { height: 240px; }
+.database-chart-loading { height: 304px; }
+.database-chart-loading.is-number { height: 106px; }
+.database-chart-unavailable { display: flex; align-items: center; gap: 8px; min-height: 40px; color: var(--ink-2); font-size: var(--text-meta); }
+.database-chart-unavailable .app-link { font: inherit; }
 .database-chart-number { display: flex; flex-direction: column; gap: 2px; padding: 12px 0; }
 .database-chart-number strong { min-width: 0; overflow-wrap: anywhere; color: var(--ink); font-size: 40px; font-weight: var(--weight-semibold); line-height: 1.1; font-variant-numeric: tabular-nums; }
 .database-chart-number span { color: var(--ink-2); font-size: var(--text-ui); }
@@ -2192,6 +2195,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (hover: hover) { .database-chart-row:hover { text-decoration: underline; } }
 @media (max-width: 899px) {
   .database-chart-plot { height: 180px; }
+  .database-chart-loading:not(.is-number) { height: 272px; }
   .database-chart-line { min-height: 36px; }
   .database-chart-legend-item { min-height: 36px; }
   .database-chart-toggle { min-height: 36px; }
