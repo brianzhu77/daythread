@@ -430,7 +430,7 @@ function OptionsEditor(p: EditorProps) {
             <button type="button" aria-label={`Remove ${nameOf(id)}`} onMouseDown={e => e.preventDefault()} onClick={() => setPicked(list => list.filter(x => x !== id))}>×</button>
           </span>
         ))}
-        <input className="property-field" value={query} autoFocus={focusField} placeholder={options.length ? 'Search or create' : 'Type to create an option'}
+        <input className="property-field" value={query} autoFocus={focusField} placeholder={!p.onCreateOption ? 'Search' : options.length ? 'Search or create' : 'Type to create an option'}
           aria-label={`Search ${p.property.name}`} aria-controls="property-options" aria-activedescendant={choices[active] ? `property-choice-${active}` : undefined}
           onChange={e => search(e.target.value)} onKeyDown={onKeyDown} />
       </div>
