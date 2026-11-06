@@ -33,6 +33,7 @@ import { LinkedDatabase } from './database-linked'
 import { DatabaseList } from './database-list'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 import { useRunRowButton } from './button-run'
+import { DatabaseForm } from './database-form'
 
 const newId = (): string => crypto.randomUUID()
 /** Rows drawn before "Show 25 more" (design §13): inline, and on the full page. */
@@ -872,6 +873,7 @@ function DatabaseView(props: DatabaseViewProps) {
 const DatabaseChart = lazy(() => import('./database-chart'))
 /** A view in its layout, for a home block and a linked view alike. */
 export function LaidOutView(props: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+  if (props.view.layout === 'form') return <DatabaseForm {...props} />
   if (props.view.layout === 'board') return <DatabaseBoard {...props} />
   if (props.view.layout === 'list') return <DatabaseList {...props} />
   if (props.view.layout === 'gallery') return <DatabaseGallery {...props} />

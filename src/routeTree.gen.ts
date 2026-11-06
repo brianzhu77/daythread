@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CalendarRouteImport } from './routes/calendar'
+import { Route as FormRouteImport } from './routes/form'
 import { Route as PagesRouteImport } from './routes/pages'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as SignInRouteImport } from './routes/sign-in'
@@ -43,6 +44,11 @@ const IndexRoute = IndexRouteImport.update({
 const CalendarRoute = CalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FormRoute = FormRouteImport.update({
+  id: '/form',
+  path: '/form',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PagesRoute = PagesRouteImport.update({
@@ -164,6 +170,7 @@ const ApiPushUnsubscribeRoute = ApiPushUnsubscribeRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
+  '/form': typeof FormRoute
   '/pages': typeof PagesRoute
   '/review': typeof ReviewRoute
   '/sign-in': typeof SignInRoute
@@ -191,6 +198,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
+  '/form': typeof FormRoute
   '/pages': typeof PagesRoute
   '/review': typeof ReviewRoute
   '/sign-in': typeof SignInRoute
@@ -219,6 +227,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
+  '/form': typeof FormRoute
   '/pages': typeof PagesRoute
   '/review': typeof ReviewRoute
   '/sign-in': typeof SignInRoute
@@ -248,6 +257,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/calendar'
+    | '/form'
     | '/pages'
     | '/review'
     | '/sign-in'
@@ -275,6 +285,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/calendar'
+    | '/form'
     | '/pages'
     | '/review'
     | '/sign-in'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/calendar'
+    | '/form'
     | '/pages'
     | '/review'
     | '/sign-in'
@@ -330,6 +342,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CalendarRoute: typeof CalendarRoute
+  FormRoute: typeof FormRoute
   PagesRoute: typeof PagesRoute
   ReviewRoute: typeof ReviewRoute
   SignInRoute: typeof SignInRoute
@@ -369,6 +382,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/calendar'
       preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/form': {
+      id: '/form'
+      path: '/form'
+      fullPath: '/form'
+      preLoaderRoute: typeof FormRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pages': {
@@ -538,6 +558,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CalendarRoute: CalendarRoute,
+  FormRoute: FormRoute,
   PagesRoute: PagesRoute,
   ReviewRoute: ReviewRoute,
   SignInRoute: SignInRoute,

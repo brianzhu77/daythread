@@ -128,7 +128,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'views' && <ViewsPanel db={db} blockId={open.blockId} />}
     {open.panel === 'root' && <RootPanel db={db} view={view} blockId={open.blockId} go={go} />}
     {open.panel === 'group' && <GroupPanel db={db} view={view} back={() => go('root')} />}
-    {open.panel === 'layout' && <LayoutPanel db={db} view={view} back={() => go('root')} go={go} />}
+    {open.panel === 'layout' && <LayoutPanel db={db} view={view} back={() => go('root')} go={go} formOk={!db.database.fixed && !isLinkedBlock(open.blockId)} />}
     {open.panel === 'templates' && <TemplatesPanel db={db} view={view} go={go} close={() => setOpenMenu(null)} {...(open.pick ? { pick: open.pick } : {})} />}
     {typeof open.panel === 'object' && 'template' in open.panel && <TemplatePanel db={db} view={view} templateId={open.panel.template} go={go} close={() => setOpenMenu(null)} />}
     {open.panel === 'calculate' && <CalculatePanel db={db} view={view} back={() => go('root')} />}
@@ -667,7 +667,8 @@ function ChartSettingsRows({ db, view }: { db: DatabasePage; view: View }) {
     </label>}
   </>
 }
-function LayoutPanel({ db, view, back, go }: { db: DatabasePage; view: View; back: () => void; go: (p: Panel) => void }) {
+/** `formOk`: a form is a view of the database itself, as its answers find it there; not To-dos, nor a linked view (forms.md). */
+function LayoutPanel({ db, view, back, go, formOk }: { db: DatabasePage; view: View; back: () => void; go: (p: Panel) => void; formOk: boolean }) {
   const wrapsAll = view.columns.some(c => c.wrap) && viewColumns(db.database, view).every(c => c.wrap || !canWrap(c.property.type)) && (view.layout !== 'table' || Boolean(view.wrapName))
   const changeView = useViewChange(db.id, view.id)
   const [asking, setAsking] = useState(false)
@@ -700,7 +701,7 @@ function LayoutPanel({ db, view, back, go }: { db: DatabasePage; view: View; bac
   if (askingDate) return <><Head title={layoutLabels[askingDate]} back={() => setAskingDate(null)} /><CalendarDateChoices db={db} label={`Show ${askingDate} by`} onPick={id => toDated(askingDate, id)} /></>
   return <>
     <Head title="Layout" back={back} />
-    {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline', 'chart'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline', 'chart', ...(formOk || view.layout === 'form' ? ['form' as const] : [])] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
     {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
     </label>}
@@ -1195,6 +1196,8 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id)
   }
   const addChart = () => { const only = groupableProperties(db.database, 'chart'); if (only.length > 1) setAdding('chart'); else addChartBy(only[0]?.id) }
+  // Its questions and a Responses view come with it (forms.md §3, §4).
+  const addForm = () => { const id = newId(); change({ kind: 'addView', view: { id, name: 'Form', layout: 'form', columns: [], sort: [], filter: [] } }); setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id) }
   const addCalendar = () => { const only = dateProperties(db.database); if (only.length === 1) add(undefined, undefined, 'calendar', only[0]!.id); else setAdding('calendar') }
   if (adding === 'chart') return <><Head title="New chart" back={() => setAdding('type')} /><ChartAxisChoices db={db} onPick={id => addChartBy(id)} /></>
   if (adding === 'timeline') return <><Head title="New timeline" back={() => setAdding('type')} /><CalendarDateChoices db={db} label="Show timeline by" onPick={id => add(undefined, undefined, 'timeline', id)} /></>
@@ -1209,6 +1212,7 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     <button type="button" role="menuitem" onClick={addCalendar}>Calendar</button>
     <button type="button" role="menuitem" onClick={addTimeline}>Timeline</button>
     <button type="button" role="menuitem" onClick={addChart}>Chart</button>
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={addForm}>Form</button>}
   </>
   return <>
     <Head title="Views" />
