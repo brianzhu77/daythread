@@ -872,6 +872,16 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
    being typed in, so the blank space is under the keyboard, and through a link form's field taking focus from it. */
 @media (max-width: 899px) { .continuous-editor .bn-editor:focus, .continuous-editor.is-keyboard-up .bn-editor { min-height: 80vh; } }
 .editor-task-title { flex:1; min-width:40px; outline:none; }
+.blocked-mark { display:block; box-sizing:border-box; max-width:100%; height:16px; min-height:0; margin:0; padding:0; border:0; background:none; color:var(--ink-2); font:inherit; font-size:var(--text-meta); line-height:16px; text-align:left; cursor:pointer; }
+.blocked-mark-words { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.blocked-mark.is-held { visibility:hidden; }
+.blocked-mark-menu, .blocked-mark-menu .row-menu { display:block; min-width:0; }
+/* On its own line under the words, from their left edge, 35 px in. The line grows 16 px, from 32 to 48, and 44 to 60 where rows are 44 (Jazz). */
+.editor-task:has(> .blocked-mark, > .blocked-mark-menu) { flex-wrap:wrap; align-content:center; row-gap:0; }
+.editor-task > .blocked-mark, .editor-task > .blocked-mark-menu { order:10; flex:0 0 calc(100% - 35px); min-width:0; margin:-6px 0 14px 35px; }
+@media (hover:hover) { .editor-task > .blocked-mark, .editor-task > .blocked-mark-menu { margin-bottom:6px; } }
+.task-row .task-title > .blocked-mark, .task-row .task-title > .blocked-mark-menu { margin:-4px 0 6px; }
+@media (hover:hover) { .blocked-mark:hover { color:var(--ink); } }
 /* B19: done rows grey out so open ones stand out. The strikethrough is one value, pending Brian's pick (2ea283a3). */
 :root { --done-decoration: line-through; }
 .continuous-editor .editor-task-title.task-done, .continuous-editor .editor-task-title.task-done * { color:var(--ink-3); text-decoration:var(--done-decoration); }
@@ -1746,11 +1756,16 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 
 .property-search { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .property-search .property-field { flex: 1 1 120px; width: auto; }
-.property-options { display: grid; gap: 2px; max-height: calc(8 * 36px); overflow-y: auto; }
+.property-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; max-height: calc(8 * 36px); overflow-y: auto; }
 .property-sheet .property-options { max-height: none; }
 .property-row { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 44px; padding: 4px 10px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; font-size: var(--text-ui); text-align: left; text-decoration: none; cursor: pointer; }
 @media (min-width: 900px) { .property-row { min-height: 36px; } }
 .property-row.active { background: var(--fill); }
+.property-row.is-unavailable { color: var(--ink-3); cursor: default; }
+.property-row.is-unavailable .property-chip { opacity: .55; }
+.property-why { flex: none; margin-left: auto; color: var(--ink-3); font-size: var(--text-meta); }
+/* A long name ends in … rather than mid-letter, in any picker (Jazz). */
+.property-row .property-chip { display: inline-block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 @media (hover: hover) { .property-row:hover { background: var(--fill); } }
 .property-row.checked::after { content: '✓'; margin-left: auto; padding-left: 12px; color: var(--ink); }
 .property-row.is-quiet { color: var(--ink-2); }

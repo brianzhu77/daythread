@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { chartForms, chartKinds } from "./chart.ts";
+import { linkLimits } from "./task-links.ts";
 import { calcKinds, rollupFunctions, filterOpList, limits, propertyTypes, viewLayouts, type Json } from "./database.ts";
 const id = z.string().min(1).max(200);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -54,6 +55,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ensure-day"), date: day }),
   z.object({ type: z.literal("add-task"), pageId: id, title: title.min(1), plannedOn: day.nullable().optional(), attentionOn: day.nullable().optional(), deadlineOn: day.nullable().optional() }),
   z.object({ type: z.literal("task-status"), taskId: id, status, today: day.optional() }),
+  z.object({ type: z.literal("link-tasks"), taskId: id, add: z.array(id).max(linkLimits.perTask), remove: z.array(id).max(linkLimits.perTask), at: z.string().max(40) }),
   z.object({ type: z.literal("rename-task"), taskId: id, title: z.string().max(1000) }),
   z.object({ type: z.literal("unsync-block"), pageId: id, blockId: id, all: z.literal(true).optional() }),
   z.object({ type: z.literal("delete-synced-place"), pageId: id, blockId: id }),
