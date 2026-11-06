@@ -20,6 +20,11 @@ export function blockedIn(ws: Workspace): Map<string, Blocked> {
 }
 /** Its blockers that are still to-dos, in force or not: what the picker ticks, and the menu counts. */
 export const linkedBlockers = (ws: Workspace, taskId: string): Task[] => blockersOf(ws, taskId).flatMap(id => ws.tasks.find(t => t.id === id) ?? [])
+/** What would make a loop as this to-do's blocker, by To-dos row id, with why: greyed in a picker rather than refused after (Jazz). */
+export function loopsFor(ws: Workspace, taskId: string): Map<string, string> {
+  const linked = blockersOf(ws, taskId)
+  return new Map(ws.tasks.filter(t => !linked.includes(t.id) && makesLoop(ws.links ?? [], taskId, t.id)).map(t => [todoRowId(t.id), t.id === taskId ? 'This one' : 'Waits on this one']))
+}
 export const blockedByLabel = (ws: Workspace, taskId: string): string => { const n = linkedBlockers(ws, taskId).length; return n ? `Blocked by ${n}…` : 'Blocked by…' }
 
 // A tap is only a tap: it mustn't put the caret in the line, or raise the phone's keyboard.
@@ -74,7 +79,7 @@ export function BlockerPickerHost() {
   // Not itself; one that's in Trash only while it's linked, so it can be taken off.
   const offered = workspace.tasks.filter(t => t.id !== task.id && t.title.trim() && (live.has(t.id) || linked.includes(t.id)))
   const property: Property = { id: 'blockedBy', name: 'Blocked by', type: 'relation', target: todosSourceId, targetTitle: 'To-dos', options: offered.map(t => ({ id: todoRowId(t.id), name: t.title })) }
-  const unavailable = new Map(offered.filter(t => !linked.includes(t.id) && makesLoop(workspace.links ?? [], task.id, t.id)).map(t => [todoRowId(t.id), 'Waits on this one']))
+  const unavailable = loopsFor(workspace, task.id)
   const commit = (raw: unknown) => {
     close()
     const ids = (Array.isArray(raw) ? raw as string[] : []).flatMap(id => taskIdOfRow(id) ?? [])

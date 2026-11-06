@@ -133,3 +133,30 @@ test('links go through the rows and back, an inverse from before links leaves th
   const changes = changesBetween(before, h.ws)
   assert.deepEqual(applyChanges(before, changes)!.links, h.ws.links)
 })
+
+test('To-dos: Blocked by and Blocking read both sides, hidden until asked for, and the Blocked by cell sets links', async () => {
+  const { withTodos, todoChange, todoRowId, todosDatabase, blockedByColumn, blockingColumn } = await import('../src/domain/todos-source.ts')
+  const h = setup()
+  link(h, 'Alpha', ['Bravo', 'Charlie'])
+  const rows = withTodos(h.ws).pages, row = (title: string) => rows.find(p => p.title === title && p.id.startsWith('todo:'))!
+  assert.deepEqual(row('Alpha').values?.[blockedByColumn], [todoRowId(id(h, 'Bravo')), todoRowId(id(h, 'Charlie'))])
+  assert.deepEqual(row('Bravo').values?.[blockingColumn], [todoRowId(id(h, 'Alpha'))])
+  assert.ok(!todosDatabase.views[0]!.columns!.some(c => c.id === blockedByColumn || c.id === blockingColumn))
+  assert.equal(todosDatabase.properties.find(p => p.id === blockingColumn)!.readOnly, true)
+  const change = todoChange(h.ws, id(h, 'Alpha'), blockedByColumn, [todoRowId(id(h, 'Charlie')), todoRowId(id(h, 'Delta'))], today)
+  assert.ok(change && 'action' in change)
+  const { at: _at, ...action } = change.action as { at: string }
+  assert.deepEqual(action, { type: 'link-tasks', taskId: id(h, 'Alpha'), add: [id(h, 'Delta')], remove: [id(h, 'Bravo')] })
+  h.run(change.action)
+  assert.deepEqual(marks(h), { Alpha: ['Charlie', 'Delta'] })
+})
+
+test('the export writes what blocks a to-do on its line, as the mark reads', async () => {
+  const { pageMarkdown, fileNames } = await import('../src/domain/export.ts')
+  const h = setup()
+  link(h, 'Alpha', ['Bravo', 'Charlie'])
+  h.run({ type: 'task-status', taskId: id(h, 'Charlie'), status: 'done', today })
+  const text = pageMarkdown(h.page(dayId(today)), h.ws, fileNames(h.ws))
+  assert.match(text, /- \[ \] Alpha · Blocked by Bravo\n/)
+  assert.match(text, /- \[ \] Bravo\n/)
+})

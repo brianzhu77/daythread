@@ -22,7 +22,7 @@ import { defaultRowTemplate } from '../domain/day-template'
 import { useTaskTick, useWorkspace } from './use-day'
 import { announceSave } from './draft-slots'
 import { taskRows } from '../domain/workspace'
-import { newTodo, newTodoRowId, taskIdOfRow, todoBarColumns, todoChange, todoLine, todoRowId, todosSourceId, readingWorkspace, withTodos } from '../domain/todos-source'
+import { blockedByColumn, newTodo, newTodoRowId, taskIdOfRow, todoBarColumns, todoChange, todoLine, todoRowId, todosSourceId, readingWorkspace, withTodos } from '../domain/todos-source'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseTimeline } from './database-timeline'
@@ -33,6 +33,7 @@ import { LinkedDatabase } from './database-linked'
 import { DatabaseList } from './database-list'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 import { useRunRowButton } from './button-run'
+import { loopsFor } from './blockers'
 
 const newId = (): string => crypto.randomUUID()
 /** Rows drawn before "Show 25 more" (design §13): inline, and on the full page. */
@@ -416,8 +417,11 @@ export function DatabaseCellEditor() {
   const keeps = !db.database.fixed && (property.type === 'text' || property.type === 'url' || property.type === 'email' || property.type === 'phone')
 
   const value = cell.columnId === titleId ? ((inFlight ? String(inFlight.raw ?? '') : row.title) || null) : inFlight ? readValue(property, inFlight.raw) : cellValue(db.database, row, cell.columnId)
+  // A to-do's blockers: one that would make a loop is greyed, with why.
+  const loopTask = db.id === todosSourceId && cell.columnId === blockedByColumn ? taskIdOfRow(row.id) : null, ws = stored
   return <PropertyEditor key={cellKey(cell)}
     property={property} value={value as CellValue} rowTitle={displayPageTitle(row)} anchor={anchor}
+    unavailable={loopTask && ws ? loopsFor(ws, loopTask) : undefined}
     onDraft={keeps ? text => keepDraft({ databaseId: db.id, rowId: row.id, columnId: cell.columnId, value: text, expected }) : undefined}
     onCommit={(raw, info) => {
       setOpenCell(null)

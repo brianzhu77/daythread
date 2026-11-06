@@ -178,6 +178,7 @@ export interface Repeat {
 }
 export type { Automation } from './automations.ts'
 import { everyOf, sameSchedule, type Automation } from './automations.ts'
+import { todosSourceId } from "./todos-id.ts";
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
   homeBlockId: string | null;
@@ -214,7 +215,8 @@ const isFileValue = (x: unknown): x is FileValue => {
 /** The column id of a row's title, in views, sorts, filters and `set-values`. */
 export const titleId = "title";
 /** The `pageId` of a block showing To-dos, and a relation's target when it links tasks. No real page has it. */
-export const todosSourceId = "source:tasks";
+// Its own module, with no imports, so a module read part-way through a cycle can still use it (To-dos' columns do).
+export { todosSourceId };
 /** Where a row keeps its number, among its values: under no property, so changing a property's type never touches it. */
 export const rowNumberKey = "@id";
 /** The types the app fills in: they can't be typed, pasted, or set by a filter's `+ New` (R3-9). */
