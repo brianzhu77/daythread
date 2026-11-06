@@ -7,3 +7,11 @@ One reproduced scope gap remains against buttons.md's “a tap may do that 100 t
 Share the remaining reading allowance across root and triggered-rule execution, or obtain an explicit separate-budget decision and adjust the contract. No partial-data-loss defect is claimed; this is the scope of the CPU cap used to settle the earlier cost concern.
 
 Run node --test tests/ratchet-variable-cap.test.ts tests/button-variables.test.ts: 13 pass, one root/rule cap failure. Synthetic in-memory only, no new Worker, real Postgres, browser or native run.
+
+## Retest after Lead decision f0cda13c
+
+The accepted contract is now 100 readings for the root button plus 100 shared by all rules it triggers. The previous expectation of one shared root/rule allowance is superseded.
+
+On candidate 93837cc6, the updated independent regression and author variable tests pass: 15 tests, zero failures. Independent checks cover the button's exact limit across steps, whole-button rollback over the limit including an earlier Add row, a button consuming 100 followed by a rule consuming another 100, a second rule receiving no fresh allowance, and a failing rule rolling back its earlier Add row and property changes while preserving the successful button.
+
+Conclusion: clear against the revised allowance contract. No runtime code changed. These are domain tests in Node; combined Worker/Postgres timing and the browser refusal notice remain the Lead's gate, not independently verified here.

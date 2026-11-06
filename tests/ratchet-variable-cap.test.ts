@@ -46,7 +46,26 @@ test('independent: slow allowance is shared by steps and refusal drops earlier w
  const steps=[addRow([], {title:'Early'}),slow('one'),slow('two')];const over=many(steps,51),before=JSON.stringify(over.h.ws);assert.throws(over.press,/100 at most/);assert.equal(JSON.stringify(over.h.ws),before,'whole tap including Early rolls back');
  const exact=many([slow('one'),slow('two')],50);exact.press();assert.equal(exact.h.page('x49').values?.n,7);
 });
-test('independent: triggered rules share the root tap reading allowance',()=>{
- const root=many([slow('one')],100);root.C({kind:'addAutomation',automation:{id:'follow',name:'Follow',active:true,triggers:[{kind:'property-edited',propertyId:'n',name:'N'}],steps:writeSteps([{id:'note',kind:'edit-property',set:[formula('t','Note','format(prop("twice"))')]}])}});
- const result=root.press();console.log('ROOT_RULE_BUDGET',result.receipt.automations);assert.ok(root.h.page('runs').database!.automations![0]!.paused,'rule must not get a second 100 whole-workspace reads');assert.equal(root.h.page('x0').values?.n,3,'root tap stands');assert.equal(root.h.page('x0').values?.t,undefined);
+test('independent: root and triggered rules have separate allowances; rules share theirs',()=>{
+ const root=many([slow('one')],100);
+ const rule=(id:string,set:ButtonSet[])=>root.C({kind:'addAutomation',automation:{id,name:id,active:true,triggers:[{kind:'property-edited',propertyId:'n',name:'N'}],steps:writeSteps([{id:'write',kind:'edit-property',set}])}});
+ rule('follow',[formula('t','Note','format(prop("twice"))')]);
+ rule('overflow',[formula('c','Done','prop("twice") > 0')]);
+ const result=root.press();
+ assert.deepEqual(result.receipt.automations?.ran,['follow']);
+ assert.equal(root.h.page('runs').database!.automations!.find(a=>a.id==='follow')!.paused,undefined);
+ assert.ok(root.h.page('runs').database!.automations!.find(a=>a.id==='overflow')!.paused);
+ for(let i=0;i<100;i++){
+  assert.equal(root.h.page('x'+i).values?.n,3,'root tap stands at its own 100 limit');
+  assert.equal(root.h.page('x'+i).values?.t,'6','first rule gets all 100 additional readings');
+  assert.equal(root.h.page('x'+i).values?.c,undefined,'next rule receives no new allowance');
+ }
+});
+test('independent: an over-budget rule rolls back its earlier writes but preserves root',()=>{
+ const root=many([slow('one')],100);
+ root.C({kind:'addAutomation',automation:{id:'follow',name:'Follow',active:true,triggers:[{kind:'property-edited',propertyId:'n',name:'N'}],steps:writeSteps([addRow([], {title:'Rule early'}),{id:'note',kind:'edit-property',set:[formula('t','Note','format(prop("twice"))')]},{id:'done',kind:'edit-property',set:[formula('c','Done','prop("twice") > 0')]}])}});
+ root.press();
+ assert.ok(root.h.page('runs').database!.automations![0]!.paused);
+ assert.equal(root.h.ws.pages.some(p=>p.title==='Rule early'),false);
+ for(let i=0;i<100;i++){assert.equal(root.h.page('x'+i).values?.n,3);assert.equal(root.h.page('x'+i).values?.t,undefined);assert.equal(root.h.page('x'+i).values?.c,undefined);}
 });
