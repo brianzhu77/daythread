@@ -20,3 +20,11 @@ Independent fixture `tests/ratchet-todo-rules.test.ts` asserts the identity stay
 ## Limits
 
 The independent repository run uses **PGlite, not real Postgres**. No independent Worker, browser, migration rehearsal, tick/render budget, native phone or real-data template run. Those remain author/Lead evidence. The author owns the runtime fix; the saved trigger fixture should be rerun on that repaired head.
+
+## Retest at 134154be
+
+**The duplicate-trigger finding is fixed.** The original saved regression passes unchanged. Fifteen domain checks now pass (five independent, ten author), and the seven-check actual-floor/PGlite rerun passes again. A synthetic existing version-one blank task still fires when its first words arrive.
+
+Product's version caveat is real for a stored blank record: set its deadline before any words, and its version rises above one; later words do not fire “added.” A separate fixture records this behavior. This is a limitation of the version heuristic, rather than a claim that a fresh empty editor box follows that path: current `save-editor` skips task creation while its words are empty. Product said this missed-trigger edge should be recorded rather than hold the release (message 20693793). No native/browser claim is made about legacy blank records.
+
+No runtime fixes here. Prior independent evidence limits remain: PGlite is not real Postgres; Worker, browser, migration and performance are not independently rerun.

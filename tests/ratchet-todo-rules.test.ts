@@ -46,3 +46,19 @@ test('independent: copy, planning, Trash restore, Undo and template creation do 
  h.run({type:'create-template',title:'Day',pageId:'tpl',dayPage:true});h.save('tpl',()=>[todo('template-task','Template words')]);h.day('2026-10-24');
  assert.deepEqual(logged(h),[]);
 });
+test('independent: an existing version-one blank box can still fire on first words',()=>{
+ const h=setup([rule({id:'new',triggers:[{kind:'row-added'}]})]);
+ // An older stored blank box, before any words or edit; current editor normally creates the task with its first words.
+ const a=h.task('Alpha');a.title='';a.version=1;
+ h.save(dayId(today),doc=>doc.map(n=>n.id==='l-a'?{...n,content:[]}:n));assert.equal(logged(h).length,0);
+ h.save(dayId(today),doc=>doc.map(n=>n.id==='l-a'?{...n,content:[{type:'text',text:'First words',styles:{}}]}:n));
+ assert.equal(h.task('First words').id,a.id);assert.equal(logged(h).length,1);
+});
+test('independent: a stored blank task edited before first words is not considered new',()=>{
+ const h=setup([rule({id:'new',triggers:[{kind:'row-added'}]})]);const a=h.task('Alpha');a.title='';a.version=1;
+ h.save(dayId(today),doc=>doc.map(n=>n.id==='l-a'?{...n,content:[]}:n));
+ h.run({type:'set-task-dates',taskId:a.id,deadlineOn:'2026-10-25'});
+ assert.ok(h.ws.tasks.find(t=>t.id===a.id)!.version>1);
+ h.save(dayId(today),doc=>doc.map(n=>n.id==='l-a'?{...n,content:[{type:'text',text:'First words after date',styles:{}}]}:n));
+ assert.equal(logged(h).length,0,'current heuristic treats the edited blank identity as already seen');
+});
