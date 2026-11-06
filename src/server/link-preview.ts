@@ -6,6 +6,7 @@ import { lookup as dnsLookup, type LookupAddress } from 'node:dns'
 import http from 'node:http'
 import https from 'node:https'
 import { isIP } from 'node:net'
+import { onHostingPlatform, onWorkers } from './hosting.ts'
 
 export interface LinkPreview { title: string | null; description: string | null }
 
@@ -15,7 +16,7 @@ export const previewLimits = { redirects: 3, timeoutMs: 4000, maxBytes: 256 * 10
  * Loopback for local tests only: set by the test harness, never honoured on Vercel. Even then, only 127.0.0.1 and ::1
  * (on any port); every other private range stays refused.
  */
-const testLoopback = () => process.env.DAYTHREAD_LINK_PREVIEW_TEST_LOOPBACK === '1' && !process.env.VERCEL
+const testLoopback = () => process.env.DAYTHREAD_LINK_PREVIEW_TEST_LOOPBACK === '1' && !onHostingPlatform()
 
 const v4 = (ip: string) => ip.split('.').map(Number)
 /** True for an address on the public internet. */
@@ -92,6 +93,17 @@ export function decodeHtml(bytes: Buffer, contentType: string): string | null {
   try { return new TextDecoder(declared.toLowerCase(), { fatal: true }).decode(bytes) } catch { return null }
 }
 
+/** The bytes read so far as a hop. A page cut at the cap may end mid-character; keep what's before </head>, or drop
+ * the last bytes, rather than fail the strict decode. */
+function htmlHop(chunks: Uint8Array[], cut: boolean, type: string): Hop {
+  let bytes = Buffer.concat(chunks)
+  if (cut) { const head = /<\/head>/i.exec(bytes.toString('latin1')); bytes = head ? bytes.subarray(0, head.index) : bytes.subarray(0, Math.max(0, bytes.length - 4)) }
+  const html = decodeHtml(bytes, type)
+  return html === null ? null : { html }
+}
+
+const userAgent = 'Daythread link preview (+title and description only)'
+
 /**
  * One request. Every way it ends goes through `end`, which settles once and destroys the response and the request, so
  * no body keeps downloading after we've stopped reading it (a redirect, a refused type, the cap; Ratchet 778e5e0d), and
@@ -112,7 +124,7 @@ function request(url: URL, signal: AbortSignal): Promise<Hop> {
       const get = url.protocol === 'https:' ? https.get : http.get
       req = get(url, {
         lookup: checkedLookup as never, signal,
-        headers: { 'user-agent': 'Daythread link preview (+title and description only)', accept: 'text/html,application/xhtml+xml', 'accept-encoding': 'identity' },
+        headers: { 'user-agent': userAgent, accept: 'text/html,application/xhtml+xml', 'accept-encoding': 'identity' },
       }, guard((response: http.IncomingMessage) => {
         res = response
         response.on('error', guard(() => (chunks.length ? finish(true) : end(null))))
@@ -125,14 +137,7 @@ function request(url: URL, signal: AbortSignal): Promise<Hop> {
         const type = String(response.headers['content-type'] ?? '')
         if (status < 200 || status >= 300 || !/text\/html|application\/xhtml\+xml/i.test(type)) return end(null)
         const chunks: Buffer[] = []; let size = 0
-        const finish = (cut: boolean) => {
-          let bytes = Buffer.concat(chunks)
-          // A page cut at the cap may end mid-character; keep what's before </head>, or drop the last bytes, rather than
-          // fail the strict decode.
-          if (cut) { const head = /<\/head>/i.exec(bytes.toString('latin1')); bytes = head ? bytes.subarray(0, head.index) : bytes.subarray(0, Math.max(0, bytes.length - 4)) }
-          const html = decodeHtml(bytes, type)
-          end(html === null ? null : { html })
-        }
+        const finish = (cut: boolean) => end(htmlHop(chunks, cut, type))
         // Only the start of the page is read: the head is where the title and description are.
         response.on('data', guard((chunk: Buffer) => {
           const room = previewLimits.maxBytes - size
@@ -147,6 +152,43 @@ function request(url: URL, signal: AbortSignal): Promise<Hop> {
   })
 }
 
+/**
+ * The same request on a Cloudflare Worker, where node:http can't make it: through fetch, one hop per call (redirects
+ * come back to the loop, so each is checked again). A Worker has no private network or loopback to reach, so the
+ * connection-time DNS check has nothing to guard there; `fetchable` still refuses private literals on every hop.
+ */
+async function fetchHop(url: URL, signal: AbortSignal): Promise<Hop> {
+  let response: Response
+  try {
+    response = await fetch(url, { redirect: 'manual', signal, headers: { 'user-agent': userAgent, accept: 'text/html,application/xhtml+xml' } })
+  } catch { return null }
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  try {
+    const status = response.status, location = response.headers.get('location')
+    if (status >= 300 && status < 400 && location) {
+      try { return { redirect: new URL(location, url).toString() } } catch { return null } // a malformed Location
+    }
+    const type = response.headers.get('content-type') ?? ''
+    if (status < 200 || status >= 300 || !/text\/html|application\/xhtml\+xml/i.test(type) || !response.body) return null
+    reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let size = 0
+    // Only the start of the page is read: the head is where the title and description are.
+    while (size < previewLimits.maxBytes) {
+      const { done, value } = await reader.read()
+      if (done) return htmlHop(chunks, false, type)
+      const room = previewLimits.maxBytes - size
+      chunks.push(room < value.length ? value.subarray(0, room) : value); size += Math.min(room, value.length)
+    }
+    return htmlHop(chunks, true, type)
+  } catch {
+    return null
+  } finally {
+    // Nothing more is downloaded once we've stopped reading: a redirect, a refused type, the cap.
+    void (reader ? reader.cancel() : response.body?.cancel())?.catch(() => undefined)
+  }
+}
+
 /** The page's title and description, or nulls; never throws. */
 export async function fetchLinkPreview(raw: string): Promise<LinkPreview> {
   const none = { title: null, description: null }
@@ -158,7 +200,7 @@ export async function fetchLinkPreview(raw: string): Promise<LinkPreview> {
     for (let hop = 0; hop <= previewLimits.redirects; hop++) {
       const url = fetchable(next)
       if (!url) return none
-      const result = await request(url, controller.signal)
+      const result = await (onWorkers() ? fetchHop : request)(url, controller.signal)
       if (!result || controller.signal.aborted) return none
       if ('html' in result) return readPreview(result.html)
       next = result.redirect

@@ -3,7 +3,9 @@
 import { createMiddleware } from '@tanstack/react-start'
 
 export const authGate = createMiddleware().server(async ({ request, handlerType, next }) => {
-  const [{ checkRequest }, { asOwner }] = await Promise.all([import('./server.ts'), import('./request-owner.ts')])
-  const checked = await checkRequest(request, handlerType)
-  return checked instanceof Response ? checked : asOwner(checked.owner, () => next())
+  const [{ checkRequest }, { asOwner }, { withRequestDatabase }] = await Promise.all([import('./server.ts'), import('./request-owner.ts'), import('../storage.ts')])
+  return withRequestDatabase(async () => {
+    const checked = await checkRequest(request, handlerType)
+    return checked instanceof Response ? checked : asOwner(checked.owner, () => next())
+  })
 })

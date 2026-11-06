@@ -18,3 +18,6 @@ dist/
 
 # Vercel build output (DAYTHREAD_TARGET=vercel) and the Vercel CLI link
 .vercel/
+
+# Cloudflare build state (DAYTHREAD_TARGET=cloudflare writes .output/ and .wrangler/deploy/config.json)
+.wrangler/
