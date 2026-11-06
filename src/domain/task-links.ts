@@ -48,5 +48,14 @@ export function makesLoop(links: readonly Pick<TaskLink, 'blockedId' | 'blockerI
   }
   return false
 }
+/**
+ * Links whose two to-dos both exist. A deleted to-do's are kept for Undo but count for nothing he can do: no loop, no limit (Bumblebee).
+ * In Trash, paused or done still count, as he can bring those back himself.
+ */
+export const standingLinks = (ws: Pick<Workspace, 'links' | 'tasks'>): TaskLink[] => {
+  if (!ws.links?.length) return []
+  const ids = new Set(ws.tasks.map(t => t.id))
+  return ws.links.filter(l => ids.has(l.blockedId) && ids.has(l.blockerId))
+}
 export const blockersOf = (ws: Pick<Workspace, 'links'>, taskId: string): string[] => (ws.links ?? []).filter(l => l.blockedId === taskId).map(l => l.blockerId)
 export const blockingOf = (ws: Pick<Workspace, 'links'>, taskId: string): string[] => (ws.links ?? []).filter(l => l.blockerId === taskId).map(l => l.blockedId)

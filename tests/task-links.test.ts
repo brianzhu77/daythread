@@ -172,3 +172,17 @@ test('a line pasted as the same to-do holds its links; Make a copy makes a new o
   assert.equal(h.ws.links?.length, 1)
   assert.ok(!h.ws.links!.some(l => l.blockedId === id(h, 'Alpha copy')))
 })
+
+test('a deleted to-do\'s links count for nothing he can do: no loop through it, and not toward the limit', () => {
+  const h = setup()
+  link(h, 'Alpha', ['Bravo'])
+  link(h, 'Bravo', ['Charlie'])
+  // Bravo deleted: Charlie blocked by Alpha would be a loop only through Bravo, which he can't see.
+  h.save(dayId(today), doc => doc.filter(n => n.id !== 'l-b'))
+  link(h, 'Charlie', ['Alpha'])
+  assert.deepEqual(marks(h), { Charlie: ['Alpha'] })
+  // Paused, done or in Trash still count.
+  link(h, 'Delta', ['Charlie'])
+  h.run({ type: 'task-status', taskId: id(h, 'Delta'), status: 'done', today })
+  assert.throws(() => link(h, 'Charlie', ['Delta']), /already waits on this one/)
+})
