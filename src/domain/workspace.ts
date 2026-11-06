@@ -1,6 +1,6 @@
 // The domain: commands over the workspace (pure, one at a time, with receipts for replay and one Undo slot) and the
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
-import { linkLimits, makesLoop, standingLinks } from "./task-links.ts";
+import { linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
@@ -963,7 +963,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (!blocker) throw new DomainError("That to-do was deleted");
         if (!live.has(id)) throw new DomainError(`${blocker.title.trim() || "That to-do"} is in Trash`);
         // Under the workspace's lock, against every link, in force or not (Ratchet).
-        if (makesLoop(standingLinks({ links, tasks: state.tasks }), t.id, id)) throw new DomainError(id === t.id ? "A to-do can't block itself" : `${blocker.title.trim() || "That to-do"} already waits on this one`);
+        const loop = loopReason({ links, tasks: state.tasks, deletedTasks: state.deletedTasks }, t.id, id);
+        if (loop) throw new DomainError(loop === "Waits on this one" ? `${blocker.title.trim() || "That to-do"} already waits on this one` : loop);
         links.push({ blockedId: t.id, blockerId: id, createdAt: isoTime(action.at) });
         added++;
         named = blocker.title.trim() || undefined;

@@ -32,7 +32,22 @@ export function blockedNow(ws: Workspace, liveIds: ReadonlySet<string>): Map<str
   return out
 }
 
-/** Would `blockedId` blocked by `blockerId` close a loop? Every link counts, in force or not, so reopening or restoring one can't complete a loop. */
+/**
+ * Would `blockedId` blocked by `blockerId` close a loop? Every link counts, in force or not, a deleted to-do's too, as a cut line pasted back
+ * brings one back, on the floor build as well (Ratchet). The to-dos it goes through, from the blocker; null if none.
+ */
+export function loopThrough(links: readonly Pick<TaskLink, 'blockedId' | 'blockerId'>[], blockedId: string, blockerId: string): string[] | null {
+  if (blockedId === blockerId) return []
+  const blockersOf = new Map<string, string[]>()
+  for (const l of links) { const list = blockersOf.get(l.blockedId); if (list) list.push(l.blockerId); else blockersOf.set(l.blockedId, [l.blockerId]) }
+  const from = new Map<string, string | null>([[blockerId, null]]), queue = [blockerId]
+  while (queue.length) {
+    const at = queue.shift()!
+    if (at === blockedId) { const path: string[] = []; for (let x: string | null = at; x !== null; x = from.get(x)!) path.unshift(x); return path }
+    for (const next of blockersOf.get(at) ?? []) if (!from.has(next)) { from.set(next, at); queue.push(next) }
+  }
+  return null
+}
 export function makesLoop(links: readonly Pick<TaskLink, 'blockedId' | 'blockerId'>[], blockedId: string, blockerId: string): boolean {
   if (blockedId === blockerId) return true
   const blockersOf = new Map<string, string[]>()
@@ -48,14 +63,19 @@ export function makesLoop(links: readonly Pick<TaskLink, 'blockedId' | 'blockerI
   }
   return false
 }
-/**
- * Links whose two to-dos both exist. A deleted to-do's are kept for Undo but count for nothing he can do: no loop, no limit (Bumblebee).
- * In Trash, paused or done still count, as he can bring those back himself.
- */
+/** Links whose two to-dos both exist: what the limits count. A deleted to-do's are kept for Undo and for the loop check, but use up no allowance he can't see (Bumblebee). */
 export const standingLinks = (ws: Pick<Workspace, 'links' | 'tasks'>): TaskLink[] => {
   if (!ws.links?.length) return []
   const ids = new Set(ws.tasks.map(t => t.id))
   return ws.links.filter(l => ids.has(l.blockedId) && ids.has(l.blockerId))
+}
+/** Why this blocker would make a loop, in his words: a to-do he can't find is named as deleted (Bumblebee). */
+export function loopReason(ws: Pick<Workspace, 'links' | 'tasks' | 'deletedTasks'>, blockedId: string, blockerId: string): string | null {
+  const path = loopThrough(ws.links ?? [], blockedId, blockerId)
+  if (!path) return null
+  if (blockedId === blockerId) return "A to-do can't block itself"
+  const gone = path.map(id => ws.tasks.some(t => t.id === id) ? null : ws.deletedTasks.find(t => t.id === id)).find(Boolean)
+  return gone ? `Would make a loop through ${gone.title.trim() || 'a to-do'} (deleted)` : 'Waits on this one'
 }
 export const blockersOf = (ws: Pick<Workspace, 'links'>, taskId: string): string[] => (ws.links ?? []).filter(l => l.blockedId === taskId).map(l => l.blockerId)
 export const blockingOf = (ws: Pick<Workspace, 'links'>, taskId: string): string[] => (ws.links ?? []).filter(l => l.blockerId === taskId).map(l => l.blockedId)
