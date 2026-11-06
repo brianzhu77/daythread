@@ -7,9 +7,10 @@ import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useHeldWorkspace, useTaskTick, useWorkspace } from './use-day'
 import { getDayView, plannedOn } from '../domain/workspace'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { TagText } from './tag-text'
 import { ParentLine, treeIndent, useTaskTree } from './task-tree'
+import { BlockedMark, blockedByLabel, openBlockerPicker } from './blockers'
 
 export const taskViews = ['today', 'upcoming', 'open', 'paused'] as const
 export type TaskView = (typeof taskViews)[number]
@@ -105,10 +106,11 @@ function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Ta
   const plannedToday = Boolean(workspace) && plannedOn(workspace!, task.id) === today
   // Ticked, the row stays a moment (B72) and reads as done, like a done row elsewhere.
   const done = useTaskTick(task.id).status === 'done'
+  const row = useRef<HTMLDivElement>(null)
   return (
-    <div className={`task-row list ${paused ? 'is-paused' : ''} ${done ? 'is-done' : ''}`} data-task-id={task.id}>
+    <div ref={row} className={`task-row list ${paused ? 'is-paused' : ''} ${done ? 'is-done' : ''}`} data-task-id={task.id}>
       <input type="checkbox" className="check" checked={done} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
-      <span className="task-title"><ParentLine parentId={parentId} /><TagText text={task.title} /></span>
+      <span className="task-title"><ParentLine parentId={parentId} /><TagText text={task.title} /><BlockedMark taskId={task.id} /></span>
       <DateTag task={task} today={today} label={label} />
       {/* Upcoming keeps set-aside rows' dates (02 Not today) but they must not read as commitments; the Not today tab needs no marker. */}
       {paused && label !== undefined && <span className="app-tag paused">Not today</span>}
@@ -122,6 +124,7 @@ function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Ta
             ],
           },
           { title: 'Another day', items: anotherDayItems(task, today, (t, d) => planOn(t, d)) },
+          ...(workspace ? [{ items: [{ label: blockedByLabel(workspace, task.id), onSelect: () => openBlockerPicker(task.id, row.current) }] }] : []),
         ]}
       />
     </div>

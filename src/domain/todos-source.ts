@@ -1,10 +1,12 @@
 // To-dos as a source (design §11, model §7): a built-in database whose rows are his tasks. Nothing here is stored: the
 // layouts read a workspace with this database added (`withTodos`, only ever handed to them, so Pages, search and the
 // export never see it), and an edit becomes the task command the day page uses (`todoChange`).
-import { inView, newRowValues, titleId, todosSourceId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
+import { inView, newRowValues, titleId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
 import type { LineTarget } from './page-refs.ts'
+import { todosSourceId } from './todos-id.ts'
 import type { Action, LocalDate, Page, Task, Workspace } from './types.ts'
 import { withLinks } from './relations.ts'
+import { blockersOf, blockingOf } from './task-links.ts'
 import { canRenameTask, isBlankTask, plannedOn, taskRows } from './workspace.ts'
 
 export { canRenameTask }
@@ -20,6 +22,8 @@ export const newTodoRowId = todoRowId('new')
 
 export const todoStatus = { id: 'status', open: 'open', done: 'done', paused: 'paused', cancelled: 'cancelled' } as const
 const planned = 'planned', start = 'start', deadline = 'deadline', page = 'page'
+/** Two sides of one link (todo-dependency.md §1). Blocking is read from the other side; only Blocked by is set. */
+export const blockedByColumn = 'blockedBy', blockingColumn = 'blocking'
 /** What several to-dos can change at once (R4-17, §11). Their words are each their own. */
 export const todoBarColumns: ReadonlySet<string> = new Set([todoStatus.id, planned, start, deadline])
 const properties: Property[] = [
@@ -33,14 +37,19 @@ const properties: Property[] = [
   { id: start, name: 'Start', type: 'date', dayOnly: true },
   { id: deadline, name: 'Deadline', type: 'date', dayOnly: true },
   { id: page, name: 'Page', type: 'text', readOnly: true },
+  { id: blockedByColumn, name: 'Blocked by', type: 'relation', target: todosSourceId, targetTitle: 'To-dos' },
+  { id: blockingColumn, name: 'Blocking', type: 'relation', target: todosSourceId, targetTitle: 'To-dos', readOnly: true },
 ]
+/** Not shown until asked for, under Properties (§2). */
+const offered = new Set([blockedByColumn, blockingColumn])
 /** The first view: what's open, with the chip showing (Bumblebee, R2-8); the rest is a tap on the chip away. */
 const firstView: View = {
   id: 'todos-open', name: 'Table', layout: 'table',
-  columns: properties.map(p => ({ id: p.id })), sort: [],
+  columns: properties.filter(p => !offered.has(p.id)).map(p => ({ id: p.id })), sort: [],
   filter: [{ by: todoStatus.id, op: 'isAnyOf', value: [todoStatus.open] }],
 }
-export const todosDatabase: Database = { homeBlockId: null, properties, views: [firstView], fixed: true }
+// Its arrows on a Timeline are drawn as a database's are. Nothing shifts: a to-do's edit is its task's command, never a row's (§3).
+export const todosDatabase: Database = { homeBlockId: null, properties, views: [firstView], fixed: true, dependencies: { blockedBy: blockedByColumn, blocking: blockingColumn, date: planned, mode: 'none' } }
 
 // Noon, so the day doesn't move with the time zone.
 const dayLabel = (d: LocalDate) => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -61,6 +70,10 @@ function rowOf(ws: Workspace, t: Task): Page {
   set(deadline, day(t.deadlineOn))
   const label = home ? (home.date ? dayLabel(home.date) : home.title) : ''
   if (label) values[page] = label
+  const ids = (list: string[]) => list.filter(id => ws.tasks.some(x => x.id === id && !isBlankTask(x))).map(todoRowId)
+  const by = ids(blockersOf(ws, t.id)), blocks = ids(blockingOf(ws, t.id))
+  if (by.length) values[blockedByColumn] = by
+  if (blocks.length) values[blockingColumn] = blocks
   return { id: todoRowId(t.id), type: 'document', date: null, title: t.title, document: '[]', parentId: todosSourceId, values } as Page
 }
 
@@ -69,8 +82,11 @@ const projected = new WeakMap<Workspace, Workspace>()
 export function withTodos(ws: Workspace): Workspace {
   const known = projected.get(ws)
   if (known) return known
+  // The two link columns name their rows, as a relation's options do.
+  const options = ws.tasks.filter(t => !isBlankTask(t)).map(t => ({ id: todoRowId(t.id), name: t.title }))
   // Its rules are the workspace's, as To-dos isn't stored (automations.md §7).
-  const source = { id: todosSourceId, type: 'document', date: null, title: todosTitle, document: '[]', database: ws.todoAutomations?.length ? { ...todosDatabase, automations: ws.todoAutomations } : todosDatabase } as Page
+  const database = { ...todosDatabase, properties: todosDatabase.properties.map(p => (offered.has(p.id) ? { ...p, options } : p)), ...(ws.todoAutomations?.length ? { automations: ws.todoAutomations } : {}) }
+  const source = { id: todosSourceId, type: 'document', date: null, title: todosTitle, document: '[]', database } as Page
   const next = { ...ws, pages: [...ws.pages, source, ...ws.tasks.filter(t => !isBlankTask(t)).map(t => rowOf(ws, t))] }
   projected.set(ws, next)
   return next
@@ -105,6 +121,13 @@ export function todoChange(ws: Workspace, taskId: string, columnId: string, raw:
   if (columnId === start || columnId === deadline) {
     const field = columnId === start ? 'attentionOn' : 'deadlineOn', value = dateOf(raw)
     return value === t[field] ? null : { action: { type: 'set-task-dates', taskId, [field]: value }, notice: `${columnId === start ? 'Start' : 'Deadline'} ${value ? 'set' : 'cleared'}` }
+  }
+  if (columnId === blockedByColumn) {
+    const now = blockersOf(ws, taskId), next = (Array.isArray(raw) ? raw as string[] : []).flatMap(id => taskIdOfRow(id) ?? [])
+    const add = next.filter(id => !now.includes(id)), remove = now.filter(id => !next.includes(id))
+    if (!add.length && !remove.length) return null
+    const one = add.length === 1 && !remove.length ? ws.tasks.find(x => x.id === add[0])?.title : undefined
+    return { action: { type: 'link-tasks', taskId, add, remove, at: new Date().toISOString() }, notice: one ? `Blocked by ${one}` : 'Blockers changed' }
   }
   const was = plannedOn(ws, taskId)
   if (columnId === planned) {

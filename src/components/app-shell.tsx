@@ -20,6 +20,7 @@ import { DatabaseMenuHost } from './database-menu'
 import { flushAllEditors } from './editor-flush'
 import { useMoveToNewBuild } from './new-build'
 import { dueRules } from '../domain/automations'
+import { BlockerPickerHost } from './blockers'
 
 /** Files nothing holds any more go from the store when the app opens, at most once a day (R3-11). It can't hurt to miss one: the next open asks again. */
 function SweepFiles() {
@@ -103,6 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <ButtonEditorHost pageId={null} schema={null as never} />
         <AutomationsHost />
         <IconPickerHost />
+        <BlockerPickerHost />
         <CoverPanelHost />
         <GlobalSearch />
         <div className="safe-top" aria-hidden="true" />
