@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {harness,todo,today,dayId} from './v2-helpers.ts'
-import {blockedNow} from '../src/domain/task-links.ts'
+import {blockedNow,makesLoop} from '../src/domain/task-links.ts'
 import {liveTaskIds} from '../src/domain/workspace.ts'
 const at='2026-11-06T00:00:00Z';
 function setup(){const h=harness();h.day(today);h.save(dayId(today),()=>[todo('a','A'),todo('b','B'),todo('c','C')]);return h}
@@ -31,4 +31,14 @@ test('independent: stale Undo cannot restore an edge into a newer reverse edge',
  const h=setup();link(h,'A','B');const off=h.run({type:'link-tasks',taskId:h.task('A').id,add:[],remove:[h.task('B').id],at});
  link(h,'B','A');const before=JSON.stringify(h.ws);
  assert.throws(()=>h.run({type:'undo',targetOperationId:off.receipt.operationId}),/Cannot undo/);assert.equal(JSON.stringify(h.ws),before);
+});
+test('independent: a pasted deleted line cannot resurrect a dependency cycle',()=>{
+ const h=setup();link(h,'A','B');link(h,'B','C');
+ const b=h.task('B').id, saved=h.page(dayId(today)).document;
+ h.save(dayId(today),doc=>doc.filter(n=>n.id!=='b'));
+ try {link(h,'C','A')} catch(e) {assert.match(String(e),/already waits/)}
+ h.run({type:'create-document',pageId:'pasted',title:'Pasted',body:''});
+ h.save('pasted',()=>[{...todo('pasted-b','B','reference'),props:{taskId:b,role:'reference',planDate:''}}]);
+ const live=liveTaskIds(h.ws), edges=(h.ws.links??[]).filter(l=>live.has(l.blockedId)&&live.has(l.blockerId));
+ assert.equal(edges.some((e,i)=>makesLoop(edges.filter((_,j)=>i!==j),e.blockedId,e.blockerId)),false,'restoring B must not reactivate A→B→C→A');
 });
