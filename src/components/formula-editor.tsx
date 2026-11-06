@@ -14,7 +14,7 @@ const groups = ['Logic and text', 'Numbers', 'Dates', 'Lists', 'Other'] as const
  * The same text behind the field, with each property as a token (G2-7). The field stays a plain textarea on top, so typing, Pinyin, paste and a phone's delete key are
  * what they always were, and a token is only drawn: stored text and what's typed don't know about it. So it has to wrap and scroll exactly as the field does.
  */
-function TokenBacking({ text, tokens, field }: { text: string; tokens: readonly { from: number; to: number }[]; field: RefObject<HTMLTextAreaElement | null> }) {
+export function TokenBacking({ text, tokens, field }: { text: string; tokens: readonly { from: number; to: number }[]; field: RefObject<HTMLTextAreaElement | null> }) {
   const backing = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const el = field.current, behind = backing.current
@@ -42,17 +42,19 @@ function TokenBacking({ text, tokens, field }: { text: string; tokens: readonly 
   return <div ref={backing} className="formula-backing" aria-hidden="true">{parts}</div>
 }
 
-type FunctionDoc = (typeof functionList)[number]
-const Doc = ({ of }: { of: FunctionDoc }) => <div className="formula-doc">
+export type FunctionDoc = (typeof functionList)[number]
+export const Doc = ({ of }: { of: FunctionDoc }) => <div className="formula-doc">
   <p className="formula-doc-name">{of.name}</p>
   <p>{of.doc}</p>
   {of.example && <code>{of.example}</code>}
 </div>
 
-function Reference({ db, propertyId, picked, setPicked, insert, wide }: { db: Database; propertyId: string; picked: FunctionDoc | null; setPicked(f: FunctionDoc): void; insert(text: string, caretBack?: number): void; wide: boolean }) {
+export function Reference({ db, propertyId, picked, setPicked, insert, wide, variables = [] }: { db: Database; propertyId: string; picked: FunctionDoc | null; setPicked(f: FunctionDoc): void; insert(text: string, caretBack?: number): void; wide: boolean; variables?: readonly string[] }) {
   const names = [{ id: titleId, name: 'Name' }, ...db.properties.filter(p => p.id !== propertyId)]
   return <div className="formula-reference">
     <div className="formula-list" role="list" aria-label="Properties and functions">
+      {variables.length > 0 && <p className="formula-group">Variables</p>}
+      {variables.map(name => <button key={name} type="button" className="formula-item" onClick={() => insert(name)}>{name}</button>)}
       <p className="formula-group">Properties</p>
       {names.map(p => <button key={p.id} type="button" className="formula-item" onClick={() => insert(writtenName(p.name))}>{p.name}</button>)}
       {groups.map(group => <div key={group}>

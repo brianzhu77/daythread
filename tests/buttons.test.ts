@@ -187,9 +187,9 @@ test('limits count across steps, and steps from a newer build don\'t run', () =>
   const h = setup([editAll('a'), editAll('b')])
   assert.equal(tap(h).receipt.message, '2 rows changed')
   assert.deepEqual(readSteps('[{"kind":"addRow"}]'), [])
-  assert.deepEqual(readSteps(JSON.stringify({ v: 2, steps: [{ kind: 'new' }] })), [])
+  assert.deepEqual(readSteps(JSON.stringify({ v: 3, steps: [{ kind: 'new' }] })), [])
   const newer = setup([])
-  newer.save('p', () => [{ id: 'btn', type: 'button', props: { label: 'Go', steps: JSON.stringify({ v: 2, steps: [{ kind: 'new' }] }) }, children: [] }])
+  newer.save('p', () => [{ id: 'btn', type: 'button', props: { label: 'Go', steps: JSON.stringify({ v: 3, steps: [{ kind: 'new' }] }) }, children: [] }])
   assert.throws(() => tap(newer), /Nothing to do/)
 })
 test('what a step needs, and links that can\'t run script', () => {

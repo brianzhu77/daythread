@@ -2,7 +2,7 @@
 // its target's rows, so it reads, sorts and filters as a multi-select does; a rollup becomes a read-only column of the type it
 // works out to, with its value on each row, so its cell, sort and filter can't disagree. With neither, this is the workspace.
 import { isDatabase, isEmptyValue, propertyOf, titleId, todosSourceId, valueText, type CellValue, type Database, type DateValue, type Json, type Option, type Property, type Rollup, type RollupFunction } from './database.ts'
-import { clockIn, formulaShape, isFormula, noteRowErrors, noteRowRuns, usesClock, WorkedCells, worldOf } from './formula.ts'
+import { clockIn, formulaShape, isFormula, noteRowErrors, noteRowRuns, usesClock, WorkedCells, worldOf, type FormulaWorld } from './formula.ts'
 import type { Clock, RichRun } from './formula-functions.ts'
 import { withTodos } from './todos-source.ts'
 import type { Page, Workspace } from './types.ts'
@@ -73,7 +73,30 @@ export function withLinks(ws: Workspace, clock?: Clock): Workspace {
   // today() has to turn over with the day page, with nothing else having changed.
   if (known && (known.day === null || known.day === localDay())) return known.next
   if (!ws.pages.some(p => p.database?.properties.some(shows))) { projected.set(ws, { next: ws, day: null }); return ws }
-  const reading = clock ?? clockIn(undefined)
+  const world = worldOf(ws)
+  const { next, databases, cells } = reader(ws, clock ?? clockIn(undefined), world)
+  next.pages = next.pages.map(row => {
+    const db = row.parentId ? databases.get(row.parentId) : undefined
+    const worked = db?.properties.filter(p => p.rollup || isFormula(p))
+    if (!db || !worked?.length) return row
+    const values: Record<string, Json> = { ...row.values }
+    const errors: Record<string, string> = {}, runs: Record<string, readonly RichRun[]> = {}
+    for (const p of worked) {
+      const { cell, error, runs: styled } = isFormula(p) ? cells.columnCell(row, db, p) : { cell: cells.rollupColumn(row, db, p), error: undefined, runs: undefined }
+      if (cell === undefined) delete values[p.id]; else values[p.id] = cell
+      if (error) errors[p.id] = error
+      if (styled) runs[p.id] = styled
+    }
+    const read = { ...row, values }
+    if (Object.keys(errors).length) noteRowErrors(read, errors)
+    if (Object.keys(runs).length) noteRowRuns(read, runs)
+    return read
+  })
+  if (!clock) projected.set(ws, { next, day: usesClock(world) ? localDay() : null })
+  return next
+}
+
+function reader(ws: Workspace, reading: Clock, world: FormulaWorld): { next: Workspace; databases: Map<string, Database>; cells: WorkedCells } {
   const byId = new Map(ws.pages.map(p => [p.id, p]))
   const rowsOf = new Map<string, Page[]>()
   const optionsOf = new Map<string, Option[]>()
@@ -104,7 +127,6 @@ export function withLinks(ws: Workspace, clock?: Clock): Workspace {
       return x.type === 'relation' ? { ...x, ...relationShape(x.target) } : x
     }) })
   }
-  const world = worldOf(ws)
   const pages = ws.pages.map(page => {
     const database = linked.get(page.id)
     if (!database) return page
@@ -117,33 +139,17 @@ export function withLinks(ws: Workspace, clock?: Clock): Workspace {
     })
     return { ...page, database: { ...database, properties } }
   })
-  const next = { ...ws, pages }
+  const next: Workspace = { ...ws, pages }
   const databases = new Map<string, Database>()
   for (const p of tasks.pages) if (isDatabase(p)) databases.set(p.id, p.database)
   for (const p of pages) if (isDatabase(p)) databases.set(p.id, p.database)
   const allPages = new Map(tasks.pages.map(p => [p.id, p]))
   // Formulas and rollups read each other, across databases, so each is worked out when first asked for.
   const cells: WorkedCells = new WorkedCells({ world, pages: allPages, databases, clock: reading, rollup: (r, row, db) => (r.rollup ? rollupOf(r.rollup, row, db, allPages, databases, cells) : undefined) })
-  next.pages = pages.map(row => {
-    const db = row.parentId ? databases.get(row.parentId) : undefined
-    const worked = db?.properties.filter(p => p.rollup || isFormula(p))
-    if (!db || !worked?.length) return row
-    const values: Record<string, Json> = { ...row.values }
-    const errors: Record<string, string> = {}, runs: Record<string, readonly RichRun[]> = {}
-    for (const p of worked) {
-      const { cell, error, runs: styled } = isFormula(p) ? cells.columnCell(row, db, p) : { cell: cells.rollupColumn(row, db, p), error: undefined, runs: undefined }
-      if (cell === undefined) delete values[p.id]; else values[p.id] = cell
-      if (error) errors[p.id] = error
-      if (styled) runs[p.id] = styled
-    }
-    const read = { ...row, values }
-    if (Object.keys(errors).length) noteRowErrors(read, errors)
-    if (Object.keys(runs).length) noteRowRuns(read, runs)
-    return read
-  })
-  if (!clock) projected.set(ws, { next, day: usesClock(world) ? localDay() : null })
-  return next
+  return { next, databases, cells }
 }
+/** Cells worked out as they're asked for, for a formula that's no column's: a button step's, at the tap's own time. */
+export const cellsReading = (ws: Workspace, clock: Clock, world: FormulaWorld): WorkedCells => reader(ws, clock, world).cells
 
 function rollupOf(rollup: Rollup, row: Page, database: Database, pages: ReadonlyMap<string, Page>, databases: ReadonlyMap<string, Database>, cells: WorkedCells): Json | undefined {
   const relation = propertyOf(database, rollup.relation)

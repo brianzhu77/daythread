@@ -24,9 +24,21 @@ Example: a "Log a run" button in his Day template adds a row to Runs with today'
 | **Edit rows in** | yes | yes | Edits the rows of a database that match a filter. In To-dos it uses the same task commands (R2-9). |
 | **Open page or URL** | yes | yes | Opens a page, the row just made, or a link. |
 | **Show confirmation** | yes | yes | Shows his own text with Continue and Cancel. It's a step he adds, so the default is no dialog. |
-| **Define variables** | yes | yes | Named values for later steps. Waits for Formula (R4-3). |
+| **Define variables** | yes | yes | Named values for later steps. |
 
-**Values in a step:** a fixed value, `@today`, `@this page`, `@this page's day` and, on a property, this row's values. `@this page's day` is read at the click, so a button on a template or on an old day does what the page shows. Formula values wait for R4-3.
+**Values in a step:** a fixed value, `@today`, `@this page`, `@this page's day` and, on a property, this row's values. `@this page's day` is read at the click, so a button on a template or on an old day does what the page shows. A value can also be a formula, and so can the name of a row a step adds.
+
+**What a formula reads (G3-10):**
+
+- **The row:** Edit rows reads the row being edited. Every other step and every variable reads the row tapped, or the row that set off a rule. On a page outside a database it reads only the page's name, and on a schedule the same, as there's no row.
+- **Variables:** a formula reads the variables of the steps above it, and those above it in its own step. Each is worked out once, when its step runs, so a variable can carry the tapped row's value into Edit rows. A later step defining the same name replaces it for the steps after.
+- **Time:** `now()` and `today()` are the tap's, in the workspace's zone, on the server. A retry gets the same answer.
+- **Order:** a step reads what the steps before it wrote. Edit rows works out every row before writing any, so rows don't depend on each other's order.
+- **Fit:** the field says what it gives, or why it can't. Done is off until each fits its property. A select takes an option's name, ignoring case; a name that isn't an option refuses the tap rather than adding one. Empty clears the property.
+- **Cost:** a formula reading only its row's own stored values costs about nothing. One reading a formula, rollup or relation property reads the whole workspace again for each row tapped, so a tap may do that 100 times at most. Over that the whole tap is refused, "Too many rows for N's formula · 100 at most", rather than the first rows changed (Ratchet, Bumblebee).
+- **Failing:** one that can't work drops the whole tap and names its step, as any other step's failure does (§4). On a rule that pauses the rule.
+- **Renaming a variable** doesn't rewrite the formulas that use it. They show the error, and Done stays off until they're changed.
+- **Rollback:** a list with a formula or a variable is written as version 2, which a floor build reads as no steps, so it can't run a formula as something else. A list without either stays version 1.
 
 **Steps that reach outside the app:** Send webhook, Send mail, Send Slack message and Send notification. They stay in scope, but none has what it needs yet: credentials, outgoing requests from the server, or notifications. **For the Lead:** each is its own decision with its own risk, so they aren't in the first release. Webhook is the likely first, since it needs no account, and it must refuse private addresses.
 
@@ -97,7 +109,7 @@ There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
 
 1. A release with the block spec only, to set the floor (§5). Then the page button: Insert blocks, Add row, Edit rows, Open, Confirmation.
 2. Button property: Edit property, plus those that apply.
-3. Variables and formula values, after R4-3.
+3. Variables and formula values.
 4. Steps that reach outside, one at a time, once the Lead has decided each.
 
 No running cost until step 4.
