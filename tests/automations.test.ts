@@ -5,6 +5,7 @@ import { readSteps, stepsKey, writeSteps, type ButtonStep } from '../src/domain/
 import { automationProblem, nextRun, withLiveNames, type Automation, runsOnFix } from '../src/domain/automations.ts'
 import { pageContentKey } from '../src/domain/editor-document.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
+import { todosSourceId } from '../src/domain/database.ts'
 import { harness } from './v2-helpers.ts'
 
 const at = '2026-11-05T10:00:00.000Z', today = '2026-11-05'
@@ -312,4 +313,13 @@ test('saving a fix to a failed schedule runs its latest missed period once; a re
   assert.equal(reviews(hand.h).length, 0, 'turning it on counts from then')
   tick(hand.h, '2026-11-07', '09:00')
   assert.equal(reviews(hand.h).length, 1)
+})
+
+test('a rule whose step adds or edits to-dos runs, rather than reading To-dos as deleted', () => {
+  const steps = writeSteps([{ id: 's', kind: 'add-row', databaseId: todosSourceId, databaseName: 'To-dos', title: 'Follow up', set: [] }])
+  const { h } = setup([rule({ id: 'm', name: 'Make a to-do', triggers: [{ kind: 'row-added' }], steps })])
+  assert.equal(automationProblem(h.ws, h.page('runs').database!, rules(h)[0]!, 'runs'), null)
+  h.run({ type: 'add-row', databaseId: 'runs', pageId: 'r3', title: 'Three', values: {}, at } as never)
+  assert.ok(h.ws.tasks.some(t => t.title === 'Follow up'))
+  assert.equal(rules(h)[0]!.paused, undefined)
 })
