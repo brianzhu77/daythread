@@ -1,11 +1,13 @@
 // A database's rules (docs/design/automations.md §2): a list, and each rule's editor, in Buttons' shell. Popover-sized at 1280, a sheet at 390. It's on the database, so every view shares it.
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { automationProblem, automationSteps, everyOf, everyProblem, nextRun, runsOnFix, stepBroken, withLiveNames, type Automation, type AutomationTrigger } from '../domain/automations'
 import { readSteps, stepKinds, stepTitle, writeSteps, type ButtonStep } from '../domain/buttons'
 import { isDatabase, propertyOf, titleId, type Condition, type Database, type DatabaseChange, type Property } from '../domain/database'
 import type { Page } from '../domain/types'
-import { newStep, problemOf, StepPage } from './button-editor'
+import { newStep, problemOf, StepPage, useFormulaIssues } from './button-editor'
+import { worldOf } from '../domain/formula'
+import { variablesBefore } from '../domain/step-formulas'
 import { opLabels, opsFor, RuleValue } from './database-menu'
 import { todayIso } from './dates'
 import { useKeyboardTop } from './keyboard'
@@ -61,7 +63,7 @@ function Sheet({ db, at }: { db: Page & { database: Database }; at: { top: numbe
         <div className="database-menu-head button-editor-head"><span>Automations</span></div>
         {rules.length === 0 && <p className="database-menu-quiet">No automations</p>}
         {rules.map((rule, i) => {
-          const problem = automationProblem(workspace!, db.database, rule), status = statusLine(rule, problem)
+          const problem = automationProblem(workspace!, db.database, rule, db.id), status = statusLine(rule, problem)
           return <div key={rule.id} className="automation-row">
             <button type="button" className="automation-open" onClick={() => { setIsNew(false); setEditing(withLiveNames(workspace!, db.database, rule)) }}><span>{rule.name}</span><small className={status.broken ? 'is-broken' : ''}>{status.text}</small></button>
             <button type="button" aria-label={`Move ${rule.name} up`} disabled={i === 0} onClick={() => change({ kind: 'moveAutomation', automationId: rule.id, beforeId: rules[i - 1]!.id }, false)}>↑</button>
@@ -107,10 +109,12 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
   const [steps, setSteps] = useState<ButtonStep[]>(() => readSteps(rule.steps)), [at, setAt] = useState<number | 'kinds' | null>(null), [asking, setAsking] = useState(false)
   const draft = (): Automation => { const { any: _any, viewId: _view, ...rest } = rule; return { ...rest, /* From now, if this edit changes the schedule. */ name: name.trim() || (steps[0] ? stepTitle(steps[0]) : 'Automation'), triggers: triggers.map(t => (t.kind === 'every' ? { ...t, repeat: { ...t.repeat, notBefore: wallClock(new Date()) } } : t)), ...(any ? { any: true as const } : {}), ...(viewId ? { viewId } : {}), steps: writeSteps(steps) } }
   const start = useRef(JSON.stringify({ ...rule, any: Boolean(rule.any), viewId: rule.viewId ?? '' })), changedYet = JSON.stringify({ ...rule, name, triggers, any, viewId, steps: writeSteps(steps) }) !== start.current
-  const stepIssue = (i: number) => problemOf(steps, i) ?? (everyOf({ triggers }) ? everyProblem(steps[i]!) : null) ?? (workspace ? stepBroken(workspace, db.database, steps[i]!) : null)
+  const world = useMemo(() => (workspace ? worldOf(workspace) : null), [workspace]), reads = everyOf({ triggers }) ? '' : db.id
+  const formulaIssues = useFormulaIssues(steps, world, reads)
+  const stepIssue = (i: number) => problemOf(steps, i) ?? formulaIssues[i] ?? (everyOf({ triggers }) ? everyProblem(steps[i]!) : null) ?? (workspace ? stepBroken(workspace, db.database, steps[i]!) : null)
   const firstProblem = steps.findIndex((_, i) => stepIssue(i))
   // A step or trigger whose target is gone is what a paused rule needs fixed, so saving it as it is wouldn't turn it back on.
-  const broken = workspace ? automationProblem(workspace, db.database, draft()) : null
+  const broken = workspace ? automationProblem(workspace, db.database, draft(), db.id) : null
   const every = everyOf({ triggers }), endsEarly = every?.until && every.until < every.repeat.start ? 'It ends before it starts, so it would never run' : null
   const ready = steps.length > 0 && firstProblem < 0 && triggers.length > 0 && !broken && !endsEarly
   const done = () => { if (!steps.length) { setAt('kinds'); return } if (firstProblem >= 0) { setAt(firstProblem); return } if (!broken && !endsEarly) onDone(draft()) }
@@ -179,6 +183,6 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
       {onDelete && <button type="button" role="menuitem" className="is-danger" onClick={onDelete}>Delete</button>}
     </>}
     {at === 'kinds' && stepKinds.filter(k => automationSteps.includes(k.kind) && !(everyOf({ triggers }) && k.kind === 'edit-property')).map(({ kind, name: label }) => <button key={kind} type="button" role="menuitem" onClick={() => { setSteps(list => [...list, newStep(kind)]); setAt(steps.length) }}>{label}</button>)}
-    {typeof at === 'number' && steps[at] && workspace && <StepPage key={steps[at]!.id} step={steps[at]!} problem={problemOf(steps, at)} canOpenMade={false} workspace={workspace} schema={null as never} rowsOf={db.database} onChange={next => setSteps(list => list.map((s, j) => (j === at ? next : s)))} />}
+    {typeof at === 'number' && steps[at] && workspace && <StepPage key={steps[at]!.id} step={steps[at]!} problem={stepIssue(at)} canOpenMade={false} workspace={workspace} schema={null as never} databaseId={reads} variables={variablesBefore(steps, at, world!, reads)} rowsOf={db.database} onChange={next => setSteps(list => list.map((s, j) => (j === at ? next : s)))} />}
   </>
 }
