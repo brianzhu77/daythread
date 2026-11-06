@@ -871,7 +871,7 @@ function DatabaseView(props: DatabaseViewProps) {
 }
 // Its code loads only when a chart is on screen, so a day with none pays nothing (chart.md §7). Not `lazy`: Suspense holds content back
 // about 300 ms after its placeholder shows, most of R2-7's bar on a day, where a state update shows the chart as soon as its code is here.
-// A fetch that fails (offline, or a build replaced since the tab opened) leaves the chart's place with a Retry, not the page broken.
+// A fetch that fails (offline, or a build replaced since the tab opened) leaves the chart's place with a Reload, not the page broken.
 type ChartModule = typeof import('./database-chart')
 let chartModule: ChartModule | null = null, chartLoading: Promise<ChartModule> | null = null
 const loadChart = () => {
@@ -893,7 +893,7 @@ function ChartView(props: LaidOutProps) {
   }, [])
   if (chartModule) return <chartModule.default {...props} />
   // The browser remembers a module that failed to load, so asking again takes a fresh page, with his edits saved first.
-  if (failed) return <div className="database-chart-unavailable">Chart unavailable<button type="button" className="app-link" onClick={() => void flushAllEditors().then(saved => { if (saved) location.reload() })}>Retry</button></div>
+  if (failed) return <div className="database-chart-unavailable">Chart unavailable<button type="button" className="app-link" onClick={() => void flushAllEditors().then(saved => { if (saved) location.reload() })}>Reload</button></div>
   return <div className={`database-chart-loading${props.view.chart?.form === 'number' ? ' is-number' : ''}`} />
 }
 type LaidOutProps = DatabaseViewProps & { view: View; changeView: ChangeView }
