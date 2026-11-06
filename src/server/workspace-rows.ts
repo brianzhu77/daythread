@@ -3,6 +3,7 @@
 // with the rows as they were as the operation's inverse (what Undo puts back). The domain never sees positions.
 import { expandedWorkspace, storedDocument, type SyncedRecord } from '../domain/synced.ts'
 import type { CommentThread, CommentAnchor } from '../domain/comments.ts'
+import { linkId, type TaskLink } from '../domain/task-links.ts'
 import type { Page, Task, Workspace, WeekStart } from '../domain/types.ts'
 
 export interface PageRow {
@@ -20,10 +21,13 @@ export interface DeletedRow { id: string; position: number; data: string }
 /** A thread of comments: its own table, which no save of a page touches and an older build never reads. */
 export interface ThreadRow { id: string; page_id: string; version: number; created_at: string; resolved_at: string | null; comments: string; /** Absent in a row from before anchors. */ anchor?: string | null }
 
-export interface Rows { revision: number; timezone: string; /** Absent or 0: Sunday. */ weekStart?: WeekStart; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[]; threads: ThreadRow[] }
+/** A to-do blocked by another: its own table, keyed on both tasks, which an older build never reads, so its saves and deletes leave it alone (todo-dependency.md §4). */
+export interface LinkRow { id: string; blocked_id: string; blocker_id: string; created_at: string }
+
+export interface Rows { revision: number; timezone: string; /** Absent or 0: Sunday. */ weekStart?: WeekStart; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[]; threads: ThreadRow[]; /** Absent from a store before links. */ links?: LinkRow[] }
 export interface RowSet<R extends { id: string }> { upsert: R[]; remove: string[] }
 /** What a save writes, or what an Undo puts back: rows whole, by id, plus the time zone when it changed. */
-export interface RowDiff { timezone?: string; weekStart?: WeekStart; pages: RowSet<PageRow>; tasks: RowSet<TaskRow>; deleted: RowSet<DeletedRow>; /** Absent in an inverse written by a build before comments. */ threads?: RowSet<ThreadRow> }
+export interface RowDiff { timezone?: string; weekStart?: WeekStart; pages: RowSet<PageRow>; tasks: RowSet<TaskRow>; deleted: RowSet<DeletedRow>; /** Absent in an inverse written by a build before comments. */ threads?: RowSet<ThreadRow>; /** Absent in one written before links, which then leaves them as they are. */ links?: RowSet<LinkRow> }
 
 /** A text column refuses U+0000; the domain drops it on the way in, and rows written from older data drop it here. */
 const clean = (s: string): string => s.includes('\u0000') ? s.replace(/\u0000/g, '') : s
@@ -59,6 +63,8 @@ const byPosition = <R extends { position: number }>(rows: R[]): R[] => [...rows]
 // In the table's order: rows are compared by their JSON, so a thread that hasn't changed must read as it does coming back.
 const threadRow = (t: CommentThread): ThreadRow => ({ id: t.id, page_id: t.pageId, version: t.version, created_at: t.createdAt, resolved_at: t.resolvedAt ?? null, comments: JSON.stringify(t.comments), anchor: t.anchor ? JSON.stringify(t.anchor) : null })
 const threadOf = (r: ThreadRow): CommentThread => ({ ...(r.anchor ? { anchor: JSON.parse(r.anchor) as CommentAnchor } : {}), id: r.id, pageId: r.page_id, version: r.version, createdAt: r.created_at, ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}), comments: JSON.parse(r.comments) as CommentThread['comments'] })
+const linkRow = (l: TaskLink): LinkRow => ({ id: linkId(l), blocked_id: l.blockedId, blocker_id: l.blockerId, created_at: l.createdAt })
+const linkOf = (r: LinkRow): TaskLink => ({ blockedId: r.blocked_id, blockerId: r.blocker_id, createdAt: r.created_at })
 export function workspaceOf(rows: Rows): Workspace {
   const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)
   return expandedWorkspace({
@@ -67,6 +73,7 @@ export function workspaceOf(rows: Rows): Workspace {
     pages: sorted.filter(r => r.type !== 'synced').map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
     deletedTasks: byPosition(rows.deleted).map(r => JSON.parse(r.data) as Task), receipts: {},
     ...(rows.threads.length ? { threads: [...rows.threads].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(threadOf) } : {}),
+    ...(rows.links?.length ? { links: [...rows.links].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(linkOf) } : {}),
   })
 }
 
@@ -90,7 +97,7 @@ export function rowsOf(ws: Workspace): Rows {
   return {
     revision: ws.revision, timezone: ws.timezone, weekStart: ws.weekStart ?? 0,
     pages: pageEntities(ws).map((e, i) => e.row(i)), tasks: ws.tasks.map((t, i) => taskRow(t, i)), deleted: ws.deletedTasks.map((t, i) => deletedRow(t, i)),
-    threads: (ws.threads ?? []).map(threadRow),
+    threads: (ws.threads ?? []).map(threadRow), links: (ws.links ?? []).map(linkRow),
   }
 }
 
@@ -135,14 +142,14 @@ export function planWrites(before: Rows, after: Workspace): { write: RowDiff; in
   }
   const rows: Rows = {
     revision: after.revision, timezone: after.timezone, weekStart: after.weekStart ?? 0,
-    pages: positions(pageEntities(after), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow), threads: (after.threads ?? []).map(threadRow),
+    pages: positions(pageEntities(after), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow), threads: (after.threads ?? []).map(threadRow), links: (after.links ?? []).map(linkRow),
   }
-  const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted), threads = diffSet(before.threads, rows.threads)
+  const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted), threads = diffSet(before.threads, rows.threads), links = diffSet(before.links ?? [], rows.links ?? [])
   const timezone = before.timezone !== after.timezone
   const weekStart = (before.weekStart ?? 0) !== (after.weekStart ?? 0)
   return {
-    write: { ...(timezone ? { timezone: after.timezone } : {}), ...(weekStart ? { weekStart: after.weekStart ?? 0 } : {}), pages: pages.write, tasks: tasks.write, deleted: deleted.write, threads: threads.write },
-    inverse: { ...(timezone ? { timezone: before.timezone } : {}), ...(weekStart ? { weekStart: before.weekStart ?? 0 } : {}), pages: pages.inverse, tasks: tasks.inverse, deleted: deleted.inverse, threads: threads.inverse },
+    write: { ...(timezone ? { timezone: after.timezone } : {}), ...(weekStart ? { weekStart: after.weekStart ?? 0 } : {}), pages: pages.write, tasks: tasks.write, deleted: deleted.write, threads: threads.write, links: links.write },
+    inverse: { ...(timezone ? { timezone: before.timezone } : {}), ...(weekStart ? { weekStart: before.weekStart ?? 0 } : {}), pages: pages.inverse, tasks: tasks.inverse, deleted: deleted.inverse, threads: threads.inverse, links: links.inverse },
     rows,
   }
 }
@@ -157,5 +164,6 @@ export function applyDiff(rows: Rows, diff: RowDiff): Rows {
   return {
     revision: rows.revision, timezone: diff.timezone ?? rows.timezone, weekStart: diff.weekStart ?? rows.weekStart ?? 0,
     pages: applySet(rows.pages, diff.pages), tasks: applySet(rows.tasks, diff.tasks), deleted: applySet(rows.deleted, diff.deleted), threads: diff.threads ? applySet(rows.threads, { ...diff.threads, upsert: diff.threads.upsert.map((t) => (t.anchor !== undefined ? t : { ...t, anchor: rows.threads.find((held) => held.id === t.id)?.anchor ?? null })) }) : rows.threads,
+    links: diff.links ? applySet(rows.links ?? [], diff.links) : rows.links ?? []
   }
 }
