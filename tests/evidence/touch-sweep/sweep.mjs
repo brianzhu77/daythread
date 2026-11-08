@@ -52,6 +52,24 @@ await check('Tap the link: it opens, and the caret and keyboard stay as they wer
   const after = await state(), pages = page.context().pages().length
   return { ok: !after.editing && pages === 2 && after.url === '/', after, pages }
 })
+for (const id of ['url1', 'url2']) await check(`A line that's only a link (${id}): a tap in the space after its last row puts the caret at its end, and opens nothing`, async ({ page, press, state }) => {
+  const rects = await page.locator(`.bn-block-outer[data-id="${id}"] a`).first().evaluate(a => [...a.getClientRects()].map(r => ({ right: r.right, top: r.top, bottom: r.bottom })))
+  const last = rects.at(-1), column = await page.locator(`.bn-block-outer[data-id="${id}"] .bn-inline-content`).first().boundingBox()
+  const room = Math.round(column.x + column.width - last.right)
+  await press(Math.min(last.right + 12, column.x + column.width - 2), (last.top + last.bottom) / 2, 60); await wait(600)
+  const after = await state(), pages = page.context().pages().length
+  const at = await page.evaluate(() => { const s = getSelection(); const node = s?.anchorNode; return { id: node?.parentElement?.closest('.bn-block-outer')?.getAttribute('data-id'), end: node ? s.anchorOffset === (node.textContent ?? '').length : false } })
+  return { ok: pages === 1 && after.editing && at.id === id && at.end, rows: rects.length, room, pages, at, after }
+})
+await check('A line that\'s only a link, its last row full: a tap in the margin past the text puts the caret at its end, and opens nothing', async ({ page, press, state }) => {
+  const column = await page.locator('.bn-block-outer[data-id="url2"] .bn-inline-content').first().boundingBox(), editor = await page.locator('.bn-editor').boundingBox()
+  const rects = await page.locator('.bn-block-outer[data-id="url2"] a').first().evaluate(a => [...a.getClientRects()].map(r => ({ top: r.top, bottom: r.bottom })))
+  const last = rects.at(-1), margin = Math.round(editor.x + editor.width - (column.x + column.width))
+  await press(column.x + column.width + Math.max(2, margin / 2), (last.top + last.bottom) / 2, 60); await wait(600)
+  const after = await state(), pages = page.context().pages().length
+  const at = await page.evaluate(() => { const s = getSelection(); const node = s?.anchorNode; return { id: node?.parentElement?.closest('.bn-block-outer')?.getAttribute('data-id'), end: node ? s.anchorOffset === (node.textContent ?? '').length : false } })
+  return { ok: pages === 1 && after.editing && at.id === 'url2' && at.end, margin, pages, at }
+})
 await check('Tap a line\'s words: caret there, keyboard up, nothing else', async ({ page, centre, press, state }) => {
   const [x, y] = await centre(line(page, 'p1'))
   await press(x, y, 60); await wait(500)
@@ -110,6 +128,7 @@ await check('Tap the heading: caret in it, no drag', async ({ page, centre, pres
   return { ok: after.editing && !after.chip, after }
 })
 await check('Tap the nested line: caret in it, not its parent', async ({ page, centre, press }) => {
+  await line(page, 'p1a').evaluate(e => e.scrollIntoView({ block: 'center' })); await wait(300)
   const [x, y] = await centre(line(page, 'p1a'))
   await press(x, y, 60); await wait(500)
   const where = await page.evaluate(() => getSelection()?.anchorNode?.parentElement?.closest('.bn-block-outer')?.getAttribute('data-id'))
