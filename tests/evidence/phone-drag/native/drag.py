@@ -8,7 +8,7 @@ def seed(): subprocess.run(f'rm -f {STORE} {STORE}-wal {STORE}-shm && node --no-
 def order():
     data = json.loads(subprocess.check_output(['sqlite3', STORE, 'select data from workspace']))
     doc = json.loads(next(p for p in data['pages'] if p['id'] == f'day:{today}')['document'])
-    return ' '.join(f"{n['id']}({' '.join(c['id'] for c in n['children'])})" if n.get('children') else n['id'] for n in doc if not n['id'].startswith('z'))
+    return ' '.join(f"{n['id']}({' '.join(c['id'] for c in n['children'])})" if n.get('children') else n['id'] for n in doc if not n['id'].startswith('z') and n['id'] != 'p')
 fails = 0
 def check(ok, what, extra=None):
     global fails

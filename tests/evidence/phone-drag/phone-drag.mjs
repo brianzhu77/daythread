@@ -9,7 +9,7 @@ const [base, S, engine = 'chromium', shots] = process.argv.slice(2)
 if (!base || !S) { console.error('Usage: node tests/evidence/phone-drag/phone-drag.mjs <base-url> <store-path> [chromium|webkit] [shots-dir]'); process.exit(2) }
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const store = () => JSON.parse(execSync(`sqlite3 ${S} "select data from workspace"`, { maxBuffer: 1 << 26 }).toString())
-const order = () => { const flat = l => l.flatMap(n => [n.children?.length ? `${n.id}(${n.children.map(c => c.id).join(' ')})` : n.id]); return flat(JSON.parse(store().pages.find(p => p.id === `day:${today}`).document)).filter(id => !id.startsWith('z')).join(' ') }
+const order = () => { const flat = l => l.flatMap(n => [n.children?.length ? `${n.id}(${n.children.map(c => c.id).join(' ')})` : n.id]); return flat(JSON.parse(store().pages.find(p => p.id === `day:${today}`).document).filter(n => n.id !== 'p')).filter(id => !id.startsWith('z')).join(' ') }
 const wait = ms => new Promise(r => setTimeout(r, ms))
 const browser = await pw[engine].launch({ headless: true })
 let fails = 0
@@ -72,6 +72,16 @@ const edge = async (page, id, which) => { const b = await page.locator(`.bn-bloc
   check(order() === 'ha t1 a1 a2 hb b1 b2(a3 b21)', 'a line goes in under another, above the line it was let go on', order())
   await finger(await mid(page, 'hb'), await edge(page, 'ha', 'top'), 550); await wait(1800)
   check(order() === 'hb b1 b2(a3 b21) ha t1 a1 a2', 'a heading takes its section', order())
+  await context.close()
+}
+// 2b. Three deep (Roadbuster): a line lands beside the deeply nested line under the finger, not its ancestor.
+{
+  const { context, page, finger } = await open()
+  const deep = () => { const walk = l => l.map(n => n.children?.length ? `${n.id}(${walk(n.children)})` : n.id).join(' '); return walk(JSON.parse(store().pages.find(p => p.id === `day:${today}`).document).filter(n => n.id === 'p')) }
+  await finger(await mid(page, 'a1'), await edge(page, 'd2', 'top'), 550); await wait(1800)
+  check(deep() === 'p(c1(g1(d1 a1 d2) g2))', 'three deep: it lands just above the line let go on', deep())
+  await finger(await mid(page, 'a2'), await edge(page, 'g2', 'bottom'), 550); await wait(1800)
+  check(deep() === 'p(c1(g1(d1 a1 d2) g2 a2))', 'and just below one', deep())
   await context.close()
 }
 // 3. A tap places the caret and moves nothing; a swipe scrolls and moves nothing.

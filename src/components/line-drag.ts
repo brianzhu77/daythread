@@ -28,6 +28,12 @@ export function dropAt(root: HTMLElement, x: number, y: number, held: ReadonlySe
     outer = all.find(o => o.getBoundingClientRect().bottom > y) ?? all.at(-1) ?? null
   }
   if (!outer) return null
+  // The probe hits a deeply nested line's ancestor, whose indented group runs under it: go down to the line at the finger's height.
+  for (;;) {
+    const inner: HTMLElement | undefined = [...outer.querySelectorAll<HTMLElement>(':scope > .bn-block > .bn-block-group > .bn-block-outer[data-id]')].find(c => { const r = c.getBoundingClientRect(); return y >= r.top && y < r.bottom })
+    if (!inner) break
+    outer = inner
+  }
   outer = landingOf(outer)
   for (let at: HTMLElement | null = outer; at; at = outerOf(at.parentElement)) if (held.has(at.dataset.id!)) return null
   const line = ownLine(outer), box = outer.getBoundingClientRect(), right = column?.right ?? box.right
@@ -85,7 +91,8 @@ export function useLineHold(root: () => HTMLElement | null, handlers: {
         started = true
         // No text selection or loupe from here on: this press is a drag.
         document.body.classList.add('is-line-held')
-        // A selection made by the press goes; a caret stays, as taking it would drop the keyboard and move the page mid-drag.
+        // A selection made by the press goes. (The editor also stops being editable while a line is held, so if he was
+        // typing in another line the keyboard goes down; the drop is read under the finger, so it follows the page.)
         const selection = window.getSelection()
         if (selection && !selection.isCollapsed) selection.collapseToStart()
         navigator.vibrate?.(10)
@@ -105,9 +112,11 @@ export function useLineHold(root: () => HTMLElement | null, handlers: {
         window.removeEventListener('contextmenu', noMenu, true); document.removeEventListener('selectstart', noSelect, true); document.removeEventListener('selectionchange', unselect)
         gesture = null
         if (!started) return
+        // The release's click goes nowhere, however late iOS sends it: until the next press, or 400 ms.
         const swallow = (ev: MouseEvent) => { ev.preventDefault(); ev.stopPropagation() }
-        window.addEventListener('click', swallow, true)
-        setTimeout(() => window.removeEventListener('click', swallow, true), 0)
+        const unswallow = () => { window.removeEventListener('click', swallow, true); window.removeEventListener('pointerdown', unswallow, true); clearTimeout(timer) }
+        const timer = window.setTimeout(unswallow, 400)
+        window.addEventListener('click', swallow, true); window.addEventListener('pointerdown', unswallow, true)
         h.current.end(commit)
       }
       // A held finger is followed by its touch events: Chromium stops a touch's pointer events once it would pan, even when

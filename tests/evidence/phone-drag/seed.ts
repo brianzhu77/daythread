@@ -17,6 +17,7 @@ const day = ws.pages.find(p => p.id === `day:${today}`)!
 await run({ type: 'save-editor', pageId: day.id, expectedContent: pageContentKey(day), today, document: JSON.stringify([
   heading('ha', 'Morning'), line('a1', 'Alpha one'), line('a2', 'Alpha two'), line('a3', 'Alpha three'),
   heading('hb', 'Evening'), line('b1', 'Bravo one'), line('b2', 'Bravo two', [line('b21', 'Bravo two inner')]), task('t1', 'Call the bank'),
+  line('p', 'Parent', [line('c1', 'Child one', [line('g1', 'Grandchild one', [line('d1', 'Deep one'), line('d2', 'Deep two')]), line('g2', 'Grandchild two')])]),
   ...Array.from({ length: 14 }, (_, i) => line(`z${i}`, `Filler line ${i}`)),
 ]) })
 console.log('seeded', today)
