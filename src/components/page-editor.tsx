@@ -2067,8 +2067,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     sheet.textContent = `${ids.map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"] > .bn-block`).join(', ')} { opacity: .35; }`
   }
   /** What a press on `id` holds: a heading's section, as on a desktop, or the line with what's nested under it; and its words. */
-  const holdOf = (id: string): { ids: string[]; label: string } | null => {
+  const holdOf = (id: string, pressed = false): { ids: string[]; label: string } | null => {
     if (!editor.isEditable) return null
+    // In the line he's typing in, a long press keeps iOS's own: selecting words, and the caret's loupe. The grip drags it.
+    if (pressed && editor.isFocused() && editor.getTextCursorPosition().block.id === id) return null
     const held = sectionRange(nodes(), id)
     if (!held.length) return null
     const first = held[0]!, words = inlineText(first.content).trim() || (first.type === 'image' ? 'Image' : first.type === 'syncedBlock' ? 'Synced block' : 'Empty line')
@@ -2111,7 +2113,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     markHeld([]); dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
   const editorRoot = useCallback(() => editor.domElement?.closest<HTMLElement>('.continuous-editor') ?? null, [editor])
-  useLineHold(editorRoot, { pick: holdOf, begin: beginHold, move: updateDrop, end: endDrag })
+  useLineHold(editorRoot, { pick: id => holdOf(id, true), begin: beginHold, move: updateDrop, end: endDrag })
   // The grip beside the caret's line drags at once, with the same chip and landing.
   const gripChip = useRef<ReturnType<typeof dragChip> | null>(null)
   const gripStart = useRef<{ x: number; y: number } | null>(null)
