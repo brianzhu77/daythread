@@ -414,7 +414,7 @@ Text in a bordered rounded rectangle; the words do the work, the shape only hold
 
 ### Navigation
 - **Sidebar (≥ 900 px):** sticky, 260 px, Paper with a 1 px Hairline right edge, 12 px padding, UI type. One row
-  geometry for everything in it (after Tally, Nov 8): 30 px tall, 0 by 8 px padding, 8 px corners, a 16 px icon in
+  geometry for everything in it (Nov 8): 30 px tall, 0 by 8 px padding, 8 px corners, a 16 px icon in
   Ink-soft, 10 px to the words in Ink. Hover is Paper-tint; the current row Paper-fill with Ink at weight 500 and its
   icon in Ink. Rows sit 1 px apart. The lockup (mark, 8 px, wordmark at UI size) heads the column in the same
   geometry, one row tall with 12 px below. Group labels are Meta size, weight 500, sentence case, Ink-soft, with

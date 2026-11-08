@@ -6,7 +6,7 @@ import { useReminders } from './reminders'
 import { holdsFiles } from '../domain/database'
 
 /**
- * The sidebar's last row (Brian, Nov 8, after Tally): the address, or "Account" with sign-in off, with a chevron. It
+ * The sidebar's last row (Brian, Nov 8): the address, or "Account" with sign-in off, with a chevron. It
  * opens a menu above it holding what the account row used to spell out as links: Templates, Export, reminders, the
  * time zone, the week start, Sign out and Delete account. Delete account asks for the password under the row.
  */

@@ -1,7 +1,7 @@
-# The sidebar, after Tally
+# The sidebar, Nov 8
 
 Status: **built Nov 8** on `design/sidebar`. Brian (2026-11-08): "the current side bar looks cheap"; align it with
-Tally's (his screenshot), with leave to change what it does. Three decisions he made when asked:
+the reference he sent (a screenshot of another app's sidebar), with leave to change what it does. Three decisions he made when asked:
 
 | Question | Brian's answer |
 | --- | --- |
@@ -12,7 +12,7 @@ Tally's (his screenshot), with leave to change what it does. Three decisions he 
 ## Why it looked cheap
 
 Row text in the secondary grey instead of ink; tiny uppercase group labels; three text sizes within a few rows (15,
-14, 13); icons a size larger than Tally's; a shortcut drawn as a boxed key; a footer of 13 px grey links (the address,
+14, 13); icons a size larger than the reference's; a shortcut drawn as a boxed key; a footer of 13 px grey links (the address,
 the time zone, "Week starts", Templates, Export, Sign out, Delete account) that read as fine print.
 
 ## What changed
