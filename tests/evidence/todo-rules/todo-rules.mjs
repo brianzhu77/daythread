@@ -54,7 +54,7 @@ await scenario('Made from To-dos\' menu, kept on the workspace; a tick on the da
   const after = logged(), said = await notices(page)
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1500)
   const undone = logged(), alpha = store().tasks.find(t => t.title === 'Alpha').status
-  return { ok: offered.join() === 'A to-do is added,Every…,Name is edited,Status is edited,Planned is edited,Start is edited,Deadline is edited' && kinds.join().includes('Edit property') && !kinds.join().includes('Insert') && rules.length === 1 && after.join() === 'Log: Alpha' && /Log/.test(said) && undone.length === 0 && alpha === 'open', offered, kinds, rules: rules.length, after, said, undone, alpha }
+  return { ok: offered.join() === 'A to-do is added,Every…,Name is edited,Status is edited,Planned is edited,Start is edited,Deadline is edited,Blocked by is edited' && kinds.join().includes('Edit property') && !kinds.join().includes('Insert') && rules.length === 1 && after.join() === 'Log: Alpha' && /Log/.test(said) && undone.length === 0 && alpha === 'open', offered, kinds, rules: rules.length, after, said, undone, alpha }
 })
 
 await scenario('When a to-do is added: once, on its first words, typed on the day page', async page => {

@@ -147,3 +147,10 @@ test('a to-do whose words are cleared and typed again isn\'t added again (Ratche
   words('Charlie again')
   assert.deepEqual(logged(h), ['New: Charlie'])
 })
+
+test('a link made between to-dos sets off a rule on Blocked by', () => {
+  const blocked = rule({ id: 'b', name: 'Note a block', triggers: [{ kind: 'property-edited', propertyId: 'blockedBy', name: 'Blocked by' } as never], steps: writeSteps([{ ...log, titleFormula: '"Blocked: " + prop("title")' }]) })
+  const h = setup([blocked])
+  h.run({ type: 'link-tasks', taskId: h.task('Alpha').id, add: [h.task('Bravo').id], remove: [], at: '2026-10-22T10:00:00.000Z' })
+  assert.deepEqual(logged(h), ['Blocked: Alpha'])
+})
