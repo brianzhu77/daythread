@@ -66,13 +66,15 @@ await scenario('A send that fails keeps every answer; words typed meanwhile stay
   await page.route('**/*', async route => { if (lose && isPost(route.request())) { lose = false; await route.fetch().catch(() => {}); await route.abort(); return } await route.continue() })
   await page.getByRole('button', { name: 'Send' }).click(); await wait(1500)
   const notSent = await page.locator('.form-failed').textContent().catch(() => ''), afterFirst = rows().length
+  // Seen, not only there: nothing covers its middle (Jazz).
+  const seen = await page.locator('.form-failed').evaluate(e => { const r = e.getBoundingClientRect(); const at = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return Boolean(at && e.contains(at)) })
   await page.getByLabel('Note').fill('typed while it failed')
   await page.getByRole('button', { name: 'Try again' }).click(); await wait(1500)
   const held = rows().filter(r => r.title === 'Held'), sent = await page.locator('.form-title').textContent()
   await page.getByRole('button', { name: 'Send another' }).click(); await wait(300)
   const kept = await page.getByLabel('Note').inputValue()
   void context
-  return { ok: /Not sent · Try again/.test(notSent) && afterFirst === 1 && held.length === 1 && held[0].values.note === undefined && sent === 'Sent' && kept === 'typed while it failed', notSent, afterFirst, held: held.length, note: held[0]?.values?.note, kept }
+  return { ok: /Not sent · Try again/.test(notSent) && seen && afterFirst === 1 && held.length === 1 && held[0].values.note === undefined && sent === 'Sent' && kept === 'typed while it failed', notSent, seen, afterFirst, held: held.length, note: held[0]?.values?.note, kept }
 })
 
 await scenario('Offline: answers stay on the screen and through a reload, and go once it\'s back', async (page, context) => {

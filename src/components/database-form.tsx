@@ -88,10 +88,10 @@ function QuestionEditor({ q, property, first, last, onPut, onMove, onRemove, onC
   return <div className="form-question-edit" data-question={q.propertyId}>
     <input className="form-input form-wording-field" aria-label="Question" value={wording} placeholder={property.name} onChange={e => setWording(e.target.value)} onBlur={keep} />
     <input className="form-input" aria-label="Description" placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} onBlur={keep} />
-    <p className="form-property-name">{property.name}</p>
+    <p className="form-property-name">Property: {property.name}</p>
     <div className="form-question-tools">
       <label className="form-required-switch"><input type="checkbox" role="switch" aria-label="Required" checked={required} onChange={e => { setRequired(e.target.checked); onPut({ required: e.target.checked ? true : undefined }) }} />Required</label>
-      {choiceTypes.has(property.type) && property.type !== 'multiSelect' && property.type !== 'relation' && <select aria-label="Shown as" value={q.display ?? ''} onChange={e => onPut({ display: (e.target.value || undefined) as FormQuestion['display'] })}><option value="">Fits the choices</option><option value="list">A list</option><option value="dropdown">A dropdown</option></select>}
+      {choiceTypes.has(property.type) && property.type !== 'multiSelect' && property.type !== 'relation' && <select aria-label="Shown as" value={q.display ?? ''} onChange={e => onPut({ display: (e.target.value || undefined) as FormQuestion['display'] })}><option value="">Automatic</option><option value="list">A list</option><option value="dropdown">A dropdown</option></select>}
       {text && <select aria-label="Answer" value={q.display ?? 'short'} onChange={e => onPut({ display: e.target.value === 'long' ? 'long' : undefined })}><option value="short">Short answer</option><option value="long">Long answer</option></select>}
       {(property.type === 'multiSelect' || property.type === 'relation') && <input className="form-max" aria-label="At most" inputMode="numeric" placeholder="Any number" value={q.max ?? ''} onChange={e => { const n = Number(e.target.value); onPut({ max: e.target.value && Number.isInteger(n) && n >= 1 && n <= 100 ? n : undefined }) }} />}
       <span className="form-question-moves">

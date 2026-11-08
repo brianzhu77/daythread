@@ -3054,10 +3054,20 @@ textarea.form-input { resize: vertical; }
 .form-choices { display: grid; gap: 2px; border: 1px solid transparent; border-radius: var(--radius-control); }
 .form-choice, .form-check { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 8px; border-radius: var(--radius-row); cursor: pointer; }
 .form-check { padding: 0; }
+/* 18 px boxes an --ink-3 line can be seen by, filled with the accent once picked, in light and dark (Jazz). */
+.form-choice > input, .form-check > input { appearance: none; -webkit-appearance: none; display: inline-grid; place-content: center; flex: none; box-sizing: border-box; width: 18px; height: 18px; margin: 0; border: 1.5px solid var(--ink-3); border-radius: 4px; background: transparent; cursor: pointer; }
+.form-choice > input[type=radio] { border-radius: 50%; }
+.form-choice > input:checked, .form-check > input:checked { border-color: var(--blue); background: var(--blue); }
+.form-choice > input[type=checkbox]::after, .form-check > input::after { content: ''; width: 9px; height: 5px; border: 2px solid var(--ink-on-blue); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg) scale(0); }
+.form-choice > input[type=checkbox]:checked::after, .form-check > input:checked::after { transform: translateY(-1px) rotate(-45deg) scale(1); }
+.form-choice > input[type=radio]::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-on-blue); transform: scale(0); }
+.form-choice > input[type=radio]:checked::after { transform: scale(1); }
+.form-choice > input:focus-visible, .form-check > input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .form-empty { margin: 0; color: var(--ink-3); font-size: var(--text-meta); }
 .form-question.is-missing .form-input, .form-question.is-missing .form-choices { border-color: var(--formula-red); }
-.form-missing, .form-failed { margin: 4px 0 0; color: var(--formula-red); font-size: var(--text-meta); }
-.form-actions { position: sticky; bottom: 0; display: flex; align-items: center; gap: 16px; padding: 12px 0; background: var(--paper); }
+.form-missing { margin: 4px 0 0; color: var(--formula-red); font-size: var(--text-meta); }
+.form-failed { flex: 1 1 160px; margin: 0; color: var(--formula-red); font-size: var(--text-meta); }
+.form-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; background: var(--paper); }
 .form-send { min-height: 40px; padding: 0 18px; border: 0; border-radius: var(--radius-control); background: var(--ink); color: var(--paper); font: inherit; font-weight: var(--weight-medium); cursor: pointer; }
 .form-send:disabled { background: var(--fill); color: var(--ink-3); cursor: default; }
 .form-back { color: var(--ink-2); font-size: var(--text-meta); }

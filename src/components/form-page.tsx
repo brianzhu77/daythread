@@ -126,10 +126,11 @@ export function FormPage({ databaseId, viewId, preview }: { databaseId: string; 
     {preview && <p className="form-preview-mark">Preview · nothing is sent</p>}
     <h1 className="form-title">{view.name}</h1>
     {questions.map(({ q, property }, i) => <FormField key={q.propertyId} q={q} property={property} value={draft.answers[q.propertyId]} missing={missing.includes(q.propertyId)} onChange={v => put(q.propertyId, v)} onNext={i < questions.length - 1 ? () => focusNext(i) : undefined} />)}
-    {refused && <p className="form-failed" role="alert">{refused}</p>}
-    {state === 'failed' && held && <p className="form-failed" role="alert">Not sent · <button type="button" className="app-link" onClick={() => void send(held)}>Try again</button></p>}
     <div className="form-actions">
       <button type="button" className="form-send" disabled={state === 'sending'} onClick={() => void send()}>{state === 'sending' ? 'Sending…' : form.submit?.button || 'Send'}</button>
+      {/* Beside Send, in its bar, so it can't be under it (Jazz). */}
+      {refused && <p className="form-failed" role="alert">{refused}</p>}
+      {state === 'failed' && held && <p className="form-failed" role="alert">Not sent · <button type="button" className="app-link" onClick={() => void send(held)}>Try again</button></p>}
       <Link to="/pages" search={{ page: databaseId }} className="form-back">Back to {page.title.trim() || 'the database'}</Link>
     </div>
   </div>
