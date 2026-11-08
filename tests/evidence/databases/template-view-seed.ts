@@ -1,5 +1,5 @@
 // On a throwaway copy with seed-table.ts applied: two linked views in the Day template, one under its first heading and one
-// under its last, filtered to "this page's day", and two rows due on the days template-view.mjs opens.
+// under its last, filtered to "this page's day", and two rows due on the days template-view.mjs opens. Usage: ... <store> [plain|todos|chart]
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../../../src/domain/editor-document.ts'
 import { linkedViewJson } from '../../../src/domain/linked-view.ts'
@@ -19,10 +19,14 @@ const list = ws.pages.find(p => p.id === 'list')!
 const view = (id: string) => ({ id, type: 'database', props: { pageId: 'list', view: JSON.stringify({ ...JSON.parse(linkedViewJson(list.database!.views[0]!)), filter: [{ by: 'due', op: 'is', value: { relative: 'pageDate' } }] }) }, children: [] })
 // `todos`: the same two places, showing To-dos.
 const todosView = (id: string) => ({ id, type: 'database', props: { pageId: todosSourceId, view: linkedViewJson(todosDatabase.views[0]!) }, children: [] })
+// `chart` (G4-7): the same, as charts by Status: bars in the first place and a Number in the second.
+const chartView = (id: string) => ({ id, type: 'database', props: { pageId: 'list', view: JSON.stringify({ ...JSON.parse(linkedViewJson(list.database!.views[0]!)), layout: 'chart', groupBy: 'status', chart: { form: id === 'tv1' ? 'bar' : 'number' }, filter: [{ by: 'due', op: 'is', value: { relative: 'pageDate' } }] }) }, children: [] })
 const doc = JSON.parse(template.document) as { id: string; type: string }[]
 const headings = doc.flatMap((n, i) => (n.type === 'heading' ? [i] : []))
 const out = [...doc]
-const make = process.argv[3] === 'todos' ? todosView : view
+const make = process.argv[3] === 'todos' ? todosView : process.argv[3] === 'chart' ? chartView : view
+// A day made before the template had charts, which a chart check opens as a day with none.
+if (process.argv[3] === 'chart') await run({ type: 'ensure-day', date: '2026-12-19' })
 out.splice(headings.at(-1)! + 1, 0, make('tv2'))
 out.splice(headings[0]! + 1, 0, make('tv1'))
 // `plain` leaves the template alone, for comparing a day with the views against one without (template-draft.ts).
