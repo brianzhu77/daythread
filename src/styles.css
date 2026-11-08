@@ -3058,14 +3058,14 @@ textarea.form-input { resize: vertical; }
 .form-choice, .form-check { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 8px; border-radius: var(--radius-row); cursor: pointer; }
 .form-check { padding: 0; }
 /* 18 px boxes an --ink-3 line can be seen by, filled with the accent once picked, in light and dark (Jazz). */
-.form-choice > input, .form-check > input { appearance: none; -webkit-appearance: none; display: inline-grid; place-content: center; flex: none; box-sizing: border-box; width: 18px; height: 18px; margin: 0; border: 1.5px solid var(--ink-3); border-radius: 4px; background: transparent; cursor: pointer; }
+.form-choice > input, .form-check > input, .form-required-switch > input, .form-ask-values input[type=checkbox] { appearance: none; -webkit-appearance: none; display: inline-grid; place-content: center; flex: none; box-sizing: border-box; width: 18px; height: 18px; margin: 0; border: 1.5px solid var(--ink-3); border-radius: 4px; background: transparent; cursor: pointer; }
 .form-choice > input[type=radio] { border-radius: 50%; }
-.form-choice > input:checked, .form-check > input:checked { border-color: var(--blue); background: var(--blue); }
-.form-choice > input[type=checkbox]::after, .form-check > input::after { content: ''; width: 9px; height: 5px; border: 2px solid var(--ink-on-blue); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg) scale(0); }
-.form-choice > input[type=checkbox]:checked::after, .form-check > input:checked::after { transform: translateY(-1px) rotate(-45deg) scale(1); }
+.form-choice > input:checked, .form-check > input:checked, .form-required-switch > input:checked, .form-ask-values input[type=checkbox]:checked { border-color: var(--blue); background: var(--blue); }
+.form-choice > input[type=checkbox]::after, .form-check > input::after, .form-required-switch > input::after, .form-ask-values input[type=checkbox]::after { content: ''; width: 9px; height: 5px; border: 2px solid var(--ink-on-blue); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg) scale(0); }
+.form-choice > input[type=checkbox]:checked::after, .form-check > input:checked::after, .form-required-switch > input:checked::after, .form-ask-values input[type=checkbox]:checked::after { transform: translateY(-1px) rotate(-45deg) scale(1); }
 .form-choice > input[type=radio]::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-on-blue); transform: scale(0); }
 .form-choice > input[type=radio]:checked::after { transform: scale(1); }
-.form-choice > input:focus-visible, .form-check > input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.form-choice > input:focus-visible, .form-check > input:focus-visible, .form-required-switch > input:focus-visible, .form-ask-values input[type=checkbox]:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .form-empty { margin: 0; color: var(--ink-3); font-size: var(--text-meta); }
 .form-files { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .form-file { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; color: var(--ink); overflow-wrap: anywhere; }
@@ -3096,12 +3096,14 @@ textarea.form-input { resize: vertical; }
 .form-required-switch { display: inline-flex; align-items: center; gap: 6px; }
 .form-ask-if { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; flex-basis: 100%; }
 .form-ask-values { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
-.form-ask-values label { display: inline-flex; align-items: center; gap: 4px; }
+.form-ask-values label { display: inline-flex; align-items: center; gap: 6px; }
 .form-ask-none { color: var(--ink-3); }
 .form-question-moves { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
 .form-question-moves > button:not(.app-link) { width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
 .form-question-moves > button:disabled { color: var(--ink-3); cursor: default; }
 .form-add { min-height: 36px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+/* In the builder's preview it reads as the field the answerer gets, not as a greyed-out one. */
+.form-question-preview .form-add:disabled { opacity: 1; }
 .form-add-list { display: grid; gap: 2px; margin: 0 0 16px; }
 .form-add-list > button[role=menuitem] { min-height: 36px; padding: 0 8px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 @media (hover: hover) { .form-add-list > button[role=menuitem]:hover { background: var(--hover-dim); } }
