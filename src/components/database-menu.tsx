@@ -308,6 +308,8 @@ function ExportPanel({ db, view, blockId, back, close }: { db: DatabasePage; vie
   </>
 }
 
+/** The last picture made, so opening Export again on the same chart doesn't wait for it. */
+let lastPng: { svg: string; png: Blob } | null = null
 /** A chart's picture, made when the panel opens: a share has to start from the tap itself, with the file already made (chart.md §5). */
 function ChartExport({ db, view, blockId, close }: { db: DatabasePage; view: View; blockId: string; close: () => void }) {
   const { workspace } = useWorkspace()
@@ -317,12 +319,13 @@ function ChartExport({ db, view, blockId, close }: { db: DatabasePage; view: Vie
     const context = { today: todayIso(), pageDate: workspace.pages.find(p => p.id === hostPage)?.date ?? null, weekStart: workspace.weekStart ?? 0 }
     return chartPicture(readingWorkspace(workspace, db.id), db, view, context, themePalette())
   }, [workspace, db, view, blockId])
-  const [png, setPng] = useState<Blob | 'failed' | null>(null)
+  const [png, setPng] = useState<Blob | 'failed' | null>(() => (svg && lastPng?.svg === svg ? lastPng.png : null))
   const [said, setSaid] = useState<{ text: string; problem?: boolean } | null>(null)
   useEffect(() => {
+    if (svg && lastPng?.svg === svg) { setPng(lastPng.png); return }
     let live = true
     setPng(null)
-    if (svg) pngOf(svg).then(blob => { if (live) setPng(blob) }, () => { if (live) setPng('failed') })
+    if (svg) pngOf(svg).then(blob => { lastPng = { svg, png: blob }; if (live) setPng(blob) }, () => { if (live) setPng('failed') })
     return () => { live = false }
   }, [svg])
   if (!svg) return <><p className="database-menu-quiet">Nothing drawn yet, so no picture.</p><hr /></>

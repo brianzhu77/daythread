@@ -1,6 +1,6 @@
 // A chart as a standalone SVG, for Export (chart.md §5, G4-8): the same data the page draws, in the theme's ink and greys on its own
 // solid paper, with its names written in. It's drawn from the data rather than copied from the page, which draws its bars as HTML.
-import { donutSlices, type ChartData, type ChartPoint, type ChartSettings } from './chart.ts'
+import { chartTicks, donutSlices, shortNumber, type ChartData, type ChartPoint, type ChartSettings } from './chart.ts'
 
 const W = 720, H = 420, PAD = 40, AXIS = 56
 /** The theme it's exported from (Bumblebee 915d799e): a solid paper, never transparent, so a dark chart pasted on white still reads. */
@@ -27,13 +27,18 @@ export function chartSvg({ title, measureName, settings, data, number, valueText
 }
 
 const top = (data: ChartData) => Math.max(0, ...data.points.map(p => p.value ?? 0))
-const bottom = (data: ChartData) => Math.min(0, ...data.points.map(p => p.value ?? 0))
 
 function vertical(data: ChartData, line: boolean, valueText: (p: ChartPoint) => string, c: ChartPalette): string[] {
   const out: string[] = [], points = data.points, n = Math.max(1, points.length)
-  const x0 = PAD, x1 = W - PAD, y0 = 60, y1 = H - AXIS, hi = top(data), lo = bottom(data), span = hi - lo || 1
-  const y = (v: number) => y1 - ((v - lo) / span) * (y1 - y0), band = (x1 - x0) / n, bar = Math.max(2, band * 0.6)
-  out.push(`<line x1="${x0}" y1="${y(0).toFixed(1)}" x2="${x1}" y2="${y(0).toFixed(1)}" stroke="${c.line}"/>`)
+  // The page's scale: round ticks that hold zero and every value, a bar 70% of its band up to 48 px.
+  const values = points.flatMap(p => (data.overlapping && p.parts ? p.parts.map(x => x.value ?? 0) : [p.value ?? 0]))
+  const ticks = chartTicks(values), lo = Math.min(...ticks), hi = Math.max(...ticks), span = hi - lo || 1
+  const x0 = PAD + 28, x1 = W - PAD, y0 = 60, y1 = H - AXIS
+  const y = (v: number) => y1 - ((v - lo) / span) * (y1 - y0), band = (x1 - x0) / n, bar = Math.max(2, Math.min(band * 0.7, 48))
+  for (const t of ticks) {
+    out.push(`<line x1="${x0}" y1="${y(t).toFixed(1)}" x2="${x1}" y2="${y(t).toFixed(1)}" stroke="${c.line}"/>`)
+    out.push(text(x0 - 8, y(t) + 4, shortNumber(t), `font-size="11" text-anchor="end" fill="${c.muted}"`))
+  }
   const labelEvery = Math.max(1, Math.ceil(n / Math.floor((x1 - x0) / 70)))
   points.forEach((p, i) => {
     const cx = x0 + band * (i + 0.5)
