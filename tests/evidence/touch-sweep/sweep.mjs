@@ -46,11 +46,11 @@ await check('Tap the page reference: opens the page', async ({ page, centre, pre
   const after = await state()
   return { ok: /notes/.test(after.url), after }
 })
-await check('Tap the link: no keyboard, and it offers to open', async ({ page, centre, press, state }) => {
+await check('Tap the link: it opens, and the caret and keyboard stay as they were (B91)', async ({ page, centre, press, state }) => {
   const [x, y] = await centre(page.locator('.bn-block-outer[data-id="chips"] a[href^="https://example.com"]').first())
   await press(x, y, 60); await wait(800)
   const after = await state(), pages = page.context().pages().length
-  return { ok: true, after, pages }
+  return { ok: !after.editing && pages === 2 && after.url === '/', after, pages }
 })
 await check('Tap a line\'s words: caret there, keyboard up, nothing else', async ({ page, centre, press, state }) => {
   const [x, y] = await centre(line(page, 'p1'))
