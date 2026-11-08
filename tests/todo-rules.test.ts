@@ -166,6 +166,7 @@ test('a stored rules value that can\'t be read loads as no rules, and is kept un
   const rows = { ...rowsOf(h.ws), todoAutomations: '{"not": an array' }
   const loaded = workspaceOf(rows)
   assert.equal(loaded.todoAutomations, undefined, 'it loads, with no rules')
+  assert.equal(loaded.todoAutomationsUnreadable, true, 'and says so')
   h.ws = { ...loaded, receipts: {} }
   h.run({ type: 'task-status', taskId: h.task('Alpha').id, status: 'done', today })
   const plain = planWrites(rows, h.ws)
@@ -175,4 +176,7 @@ test('a stored rules value that can\'t be read loads as no rules, and is kept un
   const made = planWrites(rows, h.ws)
   assert.equal(typeof made.write.todoAutomations, 'string', 'a new rule replaces it')
   assert.equal(made.inverse.todoAutomations, '{"not": an array', 'and its Undo puts it back')
+  assert.equal(h.ws.todoAutomationsUnreadable, undefined, 'a rule made, it no longer says so')
+  const { changesBetween, applyChanges } = await import('../src/domain/workspace-changes.ts')
+  assert.equal(applyChanges(loaded, changesBetween(loaded, { ...loaded, revision: loaded.revision + 1 }))!.todoAutomationsUnreadable, true, 'the browser is told')
 })

@@ -86,7 +86,7 @@ export function workspaceOf(rows: Rows): Workspace {
   const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)
   return expandedWorkspace({
     schemaVersion: 2, revision: rows.revision, timezone: rows.timezone, ...(rows.weekStart === 1 ? { weekStart: 1 as const } : {}),
-    ...(() => { const rules = readRules(rows.todoAutomations); return rules?.length ? { todoAutomations: rules } : {} })(),
+    ...(() => { const rules = readRules(rows.todoAutomations); return rules?.length ? { todoAutomations: rules } : rows.todoAutomations && !rules ? { todoAutomationsUnreadable: true as const } : {} })(),
     ...(synced.length ? { synced } : {}),
     pages: sorted.filter(r => r.type !== 'synced').map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
     deletedTasks: byPosition(rows.deleted).map(r => JSON.parse(r.data) as Task), receipts: {},

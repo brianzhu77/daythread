@@ -1469,7 +1469,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (action.pageId === todosSourceId) {
         if (!/Automation/.test(action.change?.kind ?? "")) throw new DomainError("To-dos can't change that");
         const page = { id: todosSourceId, database: ruleDatabase(state, todosSourceId) } as Page & { database: Database };
-        try { const message = changeDatabase(state, page, action.change); setRulesIn(state, todosSourceId, page.database.automations ?? []); return { message, entityId: todosSourceId }; } catch (error) { throw new DomainError((error as Error).message); }
+        try { const message = changeDatabase(state, page, action.change); setRulesIn(state, todosSourceId, page.database.automations ?? []); if (state.todoAutomations?.length) delete state.todoAutomationsUnreadable; return { message, entityId: todosSourceId }; } catch (error) { throw new DomainError((error as Error).message); }
       }
       const p = databasePage(state, action.pageId);
       try { return { message: changeDatabase(state, p, action.change), entityId: p.id }; } catch (error) { throw new DomainError((error as Error).message); }
