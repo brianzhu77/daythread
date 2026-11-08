@@ -74,7 +74,7 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 export interface Condition { by: string; op: FilterOp; value?: Json }
 export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
-export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart"] as const;
+export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart", "feed"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
 /** Values a new row takes from a template: not its number, which is its own. */
 export function templateValues(template: Pick<Page, "values">): NonNullable<Page["values"]> {
