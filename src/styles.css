@@ -2962,6 +2962,18 @@ button.comment-quote { cursor: pointer; }
 .is-comment-target > .bn-block { background: var(--chosen-fill); transition: background 400ms; }
 .comment-count { display: inline-flex; flex: none; align-items: center; gap: 3px; min-height: 28px; padding: 0 6px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
 .comment-count svg { width: 16px; height: 16px; }
+.row-property.is-comment-target { background: var(--chosen-fill); transition: background 400ms; }
+/* A property's name opens its menu, with Comment (comments.md §6, step 4); its count, when it has comments, opens them. */
+.row-property-head { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.row-property-head .row-menu { min-width: 0; flex: 0 1 auto; }
+.row-property-menu { display: block; max-width: 100%; min-height: 28px; padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.row-property-menu .row-property-name { display: block; }
+@media (hover: hover) { .row-property-menu:hover .row-property-name { color: var(--ink); } }
+.row-property-head .comment-count { padding: 0 4px; color: var(--ink-3); }
+/* A cell with a comment on its property: a grey corner, as a sheet marks one. */
+/* Drawn as a background, so a frozen cell keeps its sticky position. */
+.database-td.has-comment { background-image: linear-gradient(225deg, var(--ink-3) 5px, transparent 5px); }
+.property-editor-foot { display: flex; justify-content: flex-end; padding: 6px 10px; border-top: 1px solid var(--line); }
 .crumbs .comment-count { margin-left: auto; }
 .crumbs .comment-count + .row-menu, .crumbs .comment-count + .page-more { margin-left: 0; }
 .comments-pane { position: fixed; z-index: 1100; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column; width: 360px; background: var(--paper); border-left: 1px solid var(--line); box-shadow: var(--shadow-float); }
