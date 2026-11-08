@@ -647,32 +647,54 @@ details.banner > :not(summary) { display: inline-flex; align-items: center; marg
   height: 100vh;
   overflow-y: auto;
   flex-direction: column;
-  gap: 2px;
-  padding: 18px 10px;
+  gap: 0;
+  padding: 12px;
   background: var(--gray-1);
   border-right: 1px solid var(--line);
   font-size: var(--text-ui);
 }
-.sidebar .brand { padding: 4px 10px 16px; }
+/* The lockup heads the sidebar in the rows' own geometry (Brian, Nov 8): the mark in the icon column, the
+   wordmark where the labels start, one row tall. */
+.sidebar .brand { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; margin-bottom: 12px; font-size: var(--text-ui); }
 /* The preview address marks itself (DAYTHREAD_PREVIEW): a caption by the wordmark, and on phones a line on top. */
 .brand-preview { font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--ink-2); letter-spacing: 0; }
 .preview-note { display: none; margin: 0; padding: 8px 20px 0; font-size: var(--text-meta); color: var(--ink-2); }
 @media (max-width: 599px) { .preview-note { display: block; } }
-.sidebar-nav, .side-group { display: grid; gap: 2px; }
-.side-row { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 10px; border-radius: var(--radius-row); color: var(--ink-2); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Rows (Brian, Nov 8): one size for every row, the words in ink, a 16px icon in grey, 30px tall. Hover is
+   one step along the scale and the current row two, so they read apart. */
+.sidebar-nav, .side-group { display: grid; gap: 1px; }
+.side-row { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 0 8px; border-radius: var(--radius-row); color: var(--gray-12); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 button.side-row { width: 100%; justify-content: flex-start; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
-.side-row svg { width: 19px; height: 19px; flex: none; }
-.side-row:hover { background: var(--fill); }
+.side-row svg { width: 16px; height: 16px; flex: none; color: var(--gray-11); }
+.side-row:hover { background: var(--gray-2); }
 .side-row[aria-current='page'] { background: var(--gray-3); color: var(--gray-12); font-weight: var(--weight-medium); }
-.side-row.small { min-height: 30px; font-size: var(--text-small); }
-.side-label { font-size: var(--text-caption); font-weight: var(--weight-semibold); color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; padding: 16px 10px 4px; }
+.side-row[aria-current='page'] svg { color: var(--gray-12); }
+/* A group's label: sentence case in the secondary grey, with more room above it than below. */
+.side-label { font-size: var(--text-meta); font-weight: var(--weight-medium); color: var(--gray-11); padding: 0 8px 4px; }
 /* "Pages" with its + centred on the label at the rows' right edge; the row takes the label's padding, and the button's
-   extra height is taken back so the row is as tall as Days'. */
-.side-label-row { display: flex; align-items: center; padding: 16px 4px 4px 0; }
+   extra height is taken back so the row stays the label's height. */
+.side-label-row { display: flex; align-items: center; padding: 22px 4px 4px 0; }
 .side-label-row .side-label { flex: 1; padding-block: 0; }
-.side-label-add { display: grid; place-items: center; width: 24px; height: 24px; min-height: 0; margin: -3px 0; padding: 0; border: 0; border-radius: var(--radius-control); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-ui); line-height: 1; cursor: pointer; }
-.side-label-add:hover { background: var(--hover-dim); color: var(--ink); }
+.side-label-add { display: grid; place-items: center; width: 22px; height: 22px; min-height: 0; margin: -3px 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--gray-11); font: inherit; font-size: var(--text-ui); line-height: 1; cursor: pointer; }
+.side-label-add:hover { background: var(--gray-3); color: var(--gray-12); }
 .side-note { font-size: var(--text-meta); color: var(--ink-2); padding: 0 10px; }
+/* Pinned under the tree: the Trash while it holds something, then the account row. Sticky at the foot of the sidebar's
+   own scroll, so a long tree scrolls under it. */
+.side-foot { position: sticky; bottom: 0; display: grid; gap: 1px; margin-top: auto; padding-top: 12px; background: var(--gray-1); }
+.side-account { position: relative; }
+.side-account-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.side-account-row svg { width: 14px; height: 14px; }
+.side-account-row[aria-expanded='true'] { background: var(--gray-3); }
+.side-account-menu { top: auto; right: auto; bottom: calc(100% + 6px); left: 0; width: 100%; min-width: 0; }
+.menu-note { margin: 0; padding: 6px 10px 2px; font-size: var(--text-meta); line-height: 1.4; color: var(--gray-11); }
+/* A choice among many (the time zone, the week start): the words are drawn and the select lies over them, unseen, as
+   in the phone's account row. */
+.menu-pick { position: relative; display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; border-radius: var(--radius-inline); cursor: pointer; }
+.menu-pick:hover, .menu-pick:has(select:focus-visible) { background: var(--app-surface); }
+.menu-pick:has(select:focus-visible) { box-shadow: inset 0 0 0 2px var(--blue); }
+.menu-pick-value { margin-left: auto; color: var(--gray-11); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-pick select { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; font: inherit; cursor: pointer; }
+.side-foot .account-delete { padding: 8px 8px 4px; font-size: var(--text-meta); color: var(--gray-11); }
 
 .tab-bar {
   position: fixed;
@@ -1243,9 +1265,19 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 
 /* Pages step B (Jazz docs/design/pages-tree-layout.md cfc7b92): sidebar tree, breadcrumb, Linked from, Subpages, Move to… */
 .tree { display: grid; gap: 1px; }
-.tree-row { display: flex; align-items: center; width: 100%; min-height: 30px; height: auto; padding: 0 4px 0 calc(var(--depth, 0) * 16px); border: 0; border-radius: var(--radius-row); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-small); text-align: left; }
-.tree-row:hover, .tree-row:focus-within { background: var(--fill); }
-.tree-row[aria-current='page'] { background: var(--card); color: var(--ink); font-weight: var(--weight-medium); box-shadow: var(--shadow-row); }
+/* A tree row shares the nav rows' geometry (Nov 8): 8px in, a 16px icon column, 10px to the title, 30px tall, ink text. */
+.tree-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 30px; height: auto; padding: 0 4px 0 calc(8px + var(--depth, 0) * 16px); border: 0; border-radius: var(--radius-row); background: none; color: var(--gray-12); font: inherit; font-size: var(--text-ui); text-align: left; }
+.tree-row:hover, .tree-row:focus-within { background: var(--gray-2); }
+.tree-row[aria-current='page'] { background: var(--gray-3); color: var(--gray-12); font-weight: var(--weight-medium); }
+/* The icon column holds the page's icon; a page with children shows its chevron there instead while the row is hovered
+   or focused (Notion's way), and always where nothing hovers, so every title starts in one place. */
+.tree-lead { position: relative; display: grid; place-items: center; flex: none; width: 16px; height: 16px; }
+.tree-icon { display: grid; place-items: center; width: 16px; height: 16px; color: var(--gray-11); font-size: 14px; line-height: 1; }
+.tree-icon svg { width: 16px; height: 16px; }
+.tree-lead .disclose { position: absolute; inset: -4px; width: 24px; height: 24px; opacity: 0; }
+.tree-row:hover .tree-lead.has-children .tree-icon, .tree-row:focus-within .tree-lead.has-children .tree-icon { opacity: 0; }
+.tree-row:hover .tree-lead .disclose, .tree-row:focus-within .tree-lead .disclose { opacity: 1; }
+@media (hover: none) { .tree-lead.has-children .tree-icon { opacity: 0; } .tree-lead .disclose { opacity: 1; } }
 /* B14: dragging a page. The line starts at the indent of the level the page lands on (Jazz dc9927a5). */
 .tree-row[data-page] { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .tree-row[data-page] a { -webkit-touch-callout: none; }
@@ -1253,7 +1285,7 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .tree-row[data-dragging='touch'] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-row); }
 .tree-row[data-drop-zone='inside'] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .tree-row[data-drop-zone='before']::after, .tree-row[data-drop-zone='after']::after, .side-label-row[data-drop-zone]::after {
-  content: ''; position: absolute; left: calc(var(--drop-depth, 0) * 16px + 22px); right: 4px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none;
+  content: ''; position: absolute; left: calc(var(--drop-depth, 0) * 16px + 8px); right: 4px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none;
 }
 .tree-row[data-drop-zone='before']::after { top: -1.5px; }
 .tree-row[data-drop-zone='after']::after { bottom: -1.5px; }
@@ -1405,8 +1437,9 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .search-empty p { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
 .search-empty small { font-size: var(--text-meta); line-height: 1.45; color: var(--ink-3); max-width: 40ch; }
 /* The sidebar's Search row: the shortcut sits at the right edge, quiet, in the row's own grey. */
-.search-side-row { margin-bottom: 6px; }
-.side-kbd { margin-left: auto; padding: 0 5px; border-radius: var(--radius-tight); box-shadow: inset 0 0 0 1px var(--gray-6); font: inherit; font-size: var(--text-caption); line-height: 18px; color: var(--ink-3); letter-spacing: .02em; }
+.search-side-row { margin-bottom: 0; }
+/* A shortcut is a quiet word at the row's end, not a pill (as in the / menu). */
+.side-kbd { margin-left: auto; font: inherit; font-size: var(--text-meta); color: var(--gray-11); letter-spacing: .02em; }
 /* Phone: a round glass button beside the tab capsule, the capsule's height, the same float. */
 .tab-search { pointer-events: auto; flex: none; display: grid; place-items: center; width: 60px; height: 60px; padding: 0; border: 0; border-radius: 50%; background: var(--glass); backdrop-filter: saturate(1.6) blur(20px); -webkit-backdrop-filter: saturate(1.6) blur(20px); color: var(--ink); box-shadow: var(--shadow-float); cursor: pointer; }
 .tab-search:active { background: var(--gray-3); }
@@ -1417,7 +1450,8 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .card-row-text { display: grid; flex: 1; min-width: 0; }
 .two-line .card-row { min-height: 56px; }
 .card-row-detail { font-size: var(--text-meta); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.side-hint { color: var(--ink-2); }
+/* "No pages yet": where the first page's title would start, in the secondary grey, not a row. */
+.side-hint { margin: 0; min-height: 30px; padding: 0 8px 0 34px; line-height: 30px; color: var(--gray-11); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* B20: a page under a day names its day, quietly, after the title. */
 .tree-day { flex: none; padding: 0 8px 0 6px; font-size: var(--text-caption); color: var(--ink-3); white-space: nowrap; }
 .tree-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1433,9 +1467,8 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .tree-acts .app-menu button { color: var(--ink); }
 .tree-acts .app-menu button.danger { color: var(--app-danger); }
 .tree-row:has(.row-menu [aria-expanded='true']) .tree-acts { display: flex; }
-.trash-entry { color: var(--ink-2); }
-.trash-entry svg { width: 16px; height: 16px; color: var(--ink-3); }
-.trash-count { color: var(--ink-3); }
+.trash-entry { color: var(--gray-12); }
+.trash-count { margin-left: auto; font-size: var(--text-meta); color: var(--gray-11); }
 /* A card to a trashed page stays in the text, muted, with a small outlined tag before the chevron. */
 .editor-page-card.in-trash, .editor-page-card.in-trash .editor-page-card-icon { color: var(--ink-3); }
 .in-trash-tag { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius-control); font-size: var(--text-caption); line-height: 18px; color: var(--ink-3); }

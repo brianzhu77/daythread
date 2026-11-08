@@ -65,7 +65,10 @@ export function RemindersStopped() {
   </div>
 }
 
-export function Reminders() {
+export type RemindersState = State
+
+/** This device's reminders: the state and the two actions, shared by the account row and the sidebar's account menu. */
+export function useReminders() {
   const [state, setState] = useState<State>('loading')
   const [publicKey, setPublicKey] = useState<string | null>(null)
   useEffect(() => {
@@ -104,7 +107,11 @@ export function Reminders() {
     } catch { /* the browser side is what matters; the server drops a dead endpoint on its own */ }
     setState('off')
   }
+  return { state, turnOn, turnOff }
+}
 
+export function Reminders() {
+  const { state, turnOn, turnOff } = useReminders()
   if (state === 'loading' || state === 'hidden') return null
   const on = <button type="button" className="link" onClick={() => void turnOn()}>Turn on reminders</button>
   return (

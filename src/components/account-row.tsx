@@ -12,22 +12,20 @@ import { HomeScreenHint } from './home-screen-hint'
 import { clearOfflineData } from './offline-copy'
 
 type Account = { email: string | null; timezone: string | null; timezones: string[] }
+export type ExportState = 'idle' | 'busy' | 'failed' | 'unsaved'
 
 /**
- * "{email} · {time zone} · Export · Sign out · Delete account" in --ink-3 (empty-start-states.md §2, Jazz f10f8de5):
- * the sidebar's last row on desktop, the end of the Pages list on the phone. Sign out asks nothing; drafts stay on the
- * device. With sign-in off there's no email, and the row is just "Export". Shot 2: the time zone is the account's,
- * picked here; Delete account asks for the password and removes everything.
+ * The account's facts and actions, shared by the phone's account row (below) and the laptop sidebar's account menu
+ * (`sidebar-account.tsx`). Sign out asks nothing; drafts stay on the device. With sign-in off there's no email, and
+ * the actions are Templates, the week start and Export. Shot 2: the time zone is the account's, picked here; Delete
+ * account asks for the password and removes everything.
  */
-export function AccountRow({ className }: { className: string }) {
+export function useAccount() {
   const { refresh, run, workspace } = useWorkspace()
-  const navigate = useNavigate()
   const [account, setAccount] = useState<Account | null>(null)
-  const [exporting, setExporting] = useState<'idle' | 'busy' | 'failed' | 'unsaved'>('idle')
+  const [exporting, setExporting] = useState<ExportState>('idle')
   const [deleting, setDeleting] = useState(false)
   useEffect(() => { void getAccount().then(setAccount).catch(() => undefined) }, [])
-  if (!account) return null
-  const email = account.email
   async function signOut() {
     await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => undefined)
     await clearOfflineData()
@@ -39,6 +37,8 @@ export function AccountRow({ className }: { className: string }) {
     setAccount({ ...account, timezone })
     if (!(await run({ type: 'set-timezone', timezone }, { text: `Time zone: ${timezone.replace(/_/g, ' ')}` }))) setAccount(before)
   }
+  // R3-20: moves the date pickers and database views together.
+  function pickWeekStart(weekStart: 0 | 1) { void run({ type: 'set-week-start', weekStart }, r => ({ text: r.message })) }
   // The browser's own download is the feedback; only a failure says anything (Jazz).
   async function exportAll() {
     if (exporting === 'busy') return
@@ -61,10 +61,25 @@ export function AccountRow({ className }: { className: string }) {
       setExporting('failed')
     }
   }
+  // The account's zone leads when the list doesn't hold it, so the select always shows the current one.
+  const zones = account?.timezone ? (account.timezones.includes(account.timezone) ? account.timezones : [account.timezone, ...account.timezones]) : []
+  const weekStart = (workspace?.weekStart ?? 0) as 0 | 1
+  return { account, workspace, exporting, exportAll, signOut, pickZone, zones, weekStart, pickWeekStart, deleting, setDeleting }
+}
+
+/**
+ * "{email} · {time zone} · Export · Sign out · Delete account" in --ink-3 (empty-start-states.md §2, Jazz f10f8de5):
+ * the end of the Pages list on the phone. The laptop sidebar holds the same actions in its account menu.
+ */
+export function AccountRow({ className }: { className: string }) {
+  const { account, workspace, exporting, exportAll, signOut, pickZone, zones, weekStart, pickWeekStart, deleting, setDeleting } = useAccount()
+  const navigate = useNavigate()
+  if (!account) return null
+  const email = account.email
   const retry = <button type="button" className="link retry" onClick={() => void exportAll()}>Try again</button>
   // A failure and its retry are two items, so the row's own "·" sits between them and either can start a line.
   const exportItems = exporting === 'failed' ? <><AccountItem><span className="account-text">Couldn’t export</span></AccountItem><AccountItem>{retry}</AccountItem></>
-    : exporting === 'unsaved' ? <><AccountItem><span className="account-text">Not exported · latest text not saved yet</span></AccountItem><AccountItem>{retry}</AccountItem></>
+    : exporting === 'unsaved' ? <><AccountItem><span className="account-text">Not exported · latest text not saved yet</span></AccountItem><AccountItem>{retry}</AccountItem></>
     : <AccountItem><button type="button" className="link" disabled={exporting === 'busy'} onClick={() => void exportAll()}>{exporting === 'busy' ? 'Exporting…' : 'Export'}</button></AccountItem>
   return (
     <div className={`account-row ${className}`}>
@@ -75,17 +90,16 @@ export function AccountRow({ className }: { className: string }) {
             <span className="account-select">
               <span className="account-select-text">{account.timezone.replace(/_/g, ' ')}<ChevronDownIcon /></span>
               <select className="account-zone" aria-label="Time zone" value={account.timezone} onChange={e => void pickZone(e.target.value)}>
-                {(account.timezones.includes(account.timezone) ? account.timezones : [account.timezone, ...account.timezones]).map(z => <option key={z} value={z}>{z.replace(/_/g, ' ')}</option>)}
+                {zones.map(z => <option key={z} value={z}>{z.replace(/_/g, ' ')}</option>)}
               </select>
             </span>
           </AccountItem>
         )}
-        {/* R3-20: moves the date pickers and database views together. */}
         {workspace && (
           <AccountItem>
             <span className="account-select">
-              <span className="account-select-text">Week starts {(workspace?.weekStart ?? 0) === 1 ? 'Monday' : 'Sunday'}<ChevronDownIcon /></span>
-            <select className="account-zone" aria-label="Week starts on" value={workspace?.weekStart ?? 0} onChange={e => { const weekStart = Number(e.target.value) as 0 | 1; void run({ type: 'set-week-start', weekStart }, r => ({ text: r.message })) }}>
+              <span className="account-select-text">Week starts {weekStart === 1 ? 'Monday' : 'Sunday'}<ChevronDownIcon /></span>
+            <select className="account-zone" aria-label="Week starts on" value={weekStart} onChange={e => pickWeekStart(Number(e.target.value) as 0 | 1)}>
               <option value={0}>Week starts Sunday</option><option value={1}>Week starts Monday</option>
             </select>
             </span>
@@ -105,7 +119,7 @@ export function AccountRow({ className }: { className: string }) {
 }
 
 /** The password again, then everything goes: pages, tasks, sessions. Export first is the way to keep a copy. */
-function DeleteAccount({ onCancel, filesGo }: { onCancel: () => void; filesGo: boolean }) {
+export function DeleteAccount({ onCancel, filesGo }: { onCancel: () => void; filesGo: boolean }) {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

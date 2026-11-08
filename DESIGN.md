@@ -143,11 +143,11 @@ components:
     height: "48px"
   nav-row:
     backgroundColor: "transparent"
-    textColor: "{colors.ink-soft}"
+    textColor: "{colors.ink}"
     typography: "{typography.ui}"
     rounded: "{rounded.control}"
-    padding: "0 10px"
-    height: "34px"
+    padding: "0 8px"
+    height: "30px"
   nav-row-active:
     backgroundColor: "{colors.paper-fill}"
     textColor: "{colors.ink}"
@@ -281,9 +281,10 @@ weight and grey.
   row level with its icon.
 - **UI** (500, 15px): buttons, filter chips, sidebar rows, menu items, the sign-in subtitle.
 - **Small** (400, 14px): the small sidebar rows, editor bar buttons, form labels.
-- **Meta** (500, 13px, 20px): badges, date chips, save state, hints, card metadata, the sub-task's "↳ parent".
-- **Caption** (600, 12px, 0.05em, uppercase in the sidebar): sidebar group labels, menu group titles, the `/` menu's
-  group labels (there at weight 400, sentence case) and shortcut hints.
+- **Meta** (500, 13px, 20px): badges, date chips, save state, hints, card metadata, the sub-task's "↳ parent",
+  the sidebar's group labels and its shortcut word.
+- **Caption** (600, 12px, 0.05em): menu group titles (uppercase), the `/` menu's group labels (there at weight 400,
+  sentence case) and shortcut hints.
 
 ### Named Rules
 **The Weight Carries Rule.** A heading differs from a line by weight and size, not by colour: titles and body are Ink,
@@ -306,7 +307,7 @@ floats as a glass card under the title. Secondary breakpoints at 700 px (editor 
 560 px dialog with 20 px corners above it), 600 px (hide the day's first arrow, sign-in top padding) and 430 px (filter
 chips tighten so four fit a 375 px phone).
 
-**Rhythm.** Sidebar rows are 34 px tall with a 2 px gap; group labels take 16 px above and 4 px below. The title block
+**Rhythm.** Sidebar rows are 30 px tall with a 1 px gap; group labels take 22 px above and 4 px below. The title block
 keeps the day page's rhythm: 12 px under the title, 20 px before the first block. List sections open with 18 px;
 cards use 12 px internal gaps and 16 px by 18 px padding; blocks 14 px by 16 px. Menus have 6 px padding with 38 px
 rows. Spacing values are multiples of 2 px from a small set (2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 48).
@@ -412,10 +413,18 @@ Text in a bordered rounded rectangle; the words do the work, the shape only hold
   line-through in Border-control.
 
 ### Navigation
-- **Sidebar (≥ 900 px):** sticky, 260 px, Paper with a 1 px Hairline right edge, UI type. Rows are 34 px, 8 px
-  corners, Ink-soft with a 19 px icon; hover Paper-fill; the current row Paper-fill with Ink at weight 500. Group
-  labels are Caption size, weight 600, uppercase, 0.05em, Ink-soft. The brand lockup (mark, 8 px, wordmark) sits at
-  the top with 16 px below.
+- **Sidebar (≥ 900 px):** sticky, 260 px, Paper with a 1 px Hairline right edge, 12 px padding, UI type. One row
+  geometry for everything in it (Nov 8): 30 px tall, 0 by 8 px padding, 8 px corners, a 16 px icon in
+  Ink-soft, 10 px to the words in Ink. Hover is Paper-tint; the current row Paper-fill with Ink at weight 500 and its
+  icon in Ink. Rows sit 1 px apart. The lockup (mark, 8 px, wordmark at UI size) heads the column in the same
+  geometry, one row tall with 12 px below. Group labels are Meta size, weight 500, sentence case, Ink-soft, with
+  22 px above and 4 px below; a group's `+` is a 22 px ghost square at the label's right. The Search row ends in its
+  shortcut as a quiet Meta-size word, not a box. The Pages tree shares the row geometry; a page's icon sits in the
+  icon column and swaps to the chevron while its row is hovered or focused, so every title starts in one place; a
+  child indents 16 px. The footer is pinned to the bottom of the sidebar's own scroll: the Trash row with its count
+  at the right while it holds something, then the account row (the address, or "Account", with a 14 px chevron),
+  which opens a menu upward holding Templates, Export, reminders, the time zone and week start as rows with a value
+  at the right, Sign out and Delete account.
 - **Tab capsule (< 900 px):** a floating glass pill, 6 px padding, saturate 1.6 and 20 px blur, the Float shadow;
   five 48 px tabs at most 64 px wide, Ink icons, the current tab a Paper-fill pill with Ink. A 60 px glass `+`
   circle sits beside it. The whole bar hides while the keyboard is up.
