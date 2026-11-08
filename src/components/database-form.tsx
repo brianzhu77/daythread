@@ -64,6 +64,7 @@ export function DatabaseForm({ db, view, changeView, blockId, showTitle = true, 
         if (open !== q.propertyId) return <div key={q.propertyId} className="form-question-preview" role="button" tabIndex={0} aria-label={`Edit ${q.wording || property.name}`} onClick={() => setOpen(q.propertyId)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(q.propertyId) } }}>
           <FormField q={q} property={property} value={undefined} disabled onChange={() => {}} />
           {q.required && <span className="form-required">Required</span>}
+          {q.showIf && (() => { const on = questions.find(x => x.propertyId === q.showIf!.propertyId), p = on ? questionProperty(db.database, on) : null; if (!on || !p) return null; const names = q.showIf!.values.map(v => p.options?.find(o => o.id === v)?.name ?? '(deleted option)'); return <p className="form-condition">{names.length ? `Only if ${on.wording.trim() || p.name} is ${names.join(' or ')}` : 'Always asked · no answer picked'}</p> })()}
         </div>
         return <QuestionEditor key={q.propertyId} q={q} property={property} above={questions.slice(0, i).flatMap(x => { const p = questionProperty(db.database, x); return p && canLeadOn(p) ? [{ q: x, property: p }] : [] })} first={i === 0} last={i === questions.length - 1} onPut={patch => put(q.propertyId, patch)} onMove={by => move(q.propertyId, by)} onRemove={() => remove(q.propertyId)} onClose={() => setOpen(null)} />
       })}

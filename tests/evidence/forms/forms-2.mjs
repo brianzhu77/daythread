@@ -33,6 +33,8 @@ await scenario('Ask only if: set on the form, the follow-up shows on its answer 
   await page.getByLabel('Ask only if').selectOption('feel'); await wait(800)
   await page.getByRole('group', { name: 'Felt is' }).getByLabel('Hard').check(); await wait(900)
   const kept = form().questions.find(q => q.propertyId === 'note').showIf
+  await page.getByRole('button', { name: 'Done' }).click(); await wait(300)
+  const line = await page.locator('.form-condition').first().textContent()
   await page.goto(`${base}/form?db=runs&view=f`); await wait(2000)
   const before = await page.getByLabel('Note').count()
   await page.getByText('Hard', { exact: true }).click(); await wait(150)
@@ -43,7 +45,7 @@ await scenario('Ask only if: set on the form, the follow-up shows on its answer 
   await page.getByLabel('Name').fill('Easy'); await page.getByLabel('How far did you go?').fill('2')
   await page.getByRole('button', { name: 'Send' }).click(); await wait(1500)
   const row = rows().find(r => r.title === 'Easy')
-  return { ok: kept?.propertyId === 'feel' && kept.values.join() === 'hard' && before === 0 && shown === 1 && hidden === 0 && row && row.values.note === undefined && row.values.feel === 'good', kept, before, shown, hidden, values: row?.values }
+  return { ok: kept?.propertyId === 'feel' && kept.values.join() === 'hard' && line === 'Only if Felt is Hard' && before === 0 && shown === 1 && hidden === 0 && row && row.values.note === undefined && row.values.feel === 'good', kept, line, before, shown, hidden, values: row?.values }
 })
 
 await scenario('Moving the question a follow-up depends on below it says it\'s now always asked, with Undo', async page => {

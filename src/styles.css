@@ -3082,6 +3082,8 @@ textarea.form-input { resize: vertical; }
 .form-question-preview .form-question { margin-bottom: 10px; }
 .form-question-preview .form-input, .form-question-preview .form-choices, .form-question-preview .form-check { pointer-events: none; }
 @media (hover: hover) { .form-question-preview:hover { background: var(--hover-dim); } }
+/* A follow-up says so without being opened (Jazz). */
+.form-condition { margin: -6px 0 10px; color: var(--ink-3); font-size: var(--text-meta); }
 .form-required { position: absolute; top: 8px; right: 8px; color: var(--ink-3); font-size: var(--text-meta); }
 .form-question-edit { margin: 0 -8px 12px; padding: 10px 8px; border-radius: var(--radius-row); box-shadow: inset 0 0 0 1px var(--line); }
 .form-wording-field { font-weight: var(--weight-semibold, 600); }
