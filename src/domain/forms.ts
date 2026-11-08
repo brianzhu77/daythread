@@ -63,7 +63,7 @@ export function askedQuestions(questions: readonly FormQuestion[], answers: Read
   for (const q of questions) {
     if (q.showIf) {
       const answer = answers[q.showIf.propertyId], given = Array.isArray(answer) ? answer : answer === undefined || answer === null ? [] : [answer]
-      // With no answer picked yet it's always asked. With answers that have all been deleted it's never asked, rather than quietly always (Bumblebee).
+      // A condition with no values chosen in it yet doesn't hold the question back. One whose chosen values have all been deleted never lets it show, rather than quietly always (Bumblebee).
       if (q.showIf.values.length && (!asked.has(q.showIf.propertyId) || !given.some(v => typeof v === 'string' && q.showIf!.values.includes(v)))) continue
     }
     asked.add(q.propertyId)
