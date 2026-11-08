@@ -2221,6 +2221,9 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-chart-table td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line-soft); color: var(--ink); overflow-wrap: anywhere; }
 .database-chart-table th:last-child, .database-chart-table td:last-child:not(:first-child) { padding-right: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .database-chart-opened h4 { margin: 4px 0; color: var(--ink); font-size: var(--text-ui); font-weight: var(--weight-semibold); }
+.database-chart-opened-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.database-chart-opened-head h4 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.database-chart-opened-head .database-chart-toggle { flex: none; align-self: center; }
 .database-chart .database-chart-row { display: block; width: 100%; min-height: 24px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 @media (hover: hover) { .database-chart-row:hover { text-decoration: underline; } }
 @media (max-width: 899px) {
