@@ -317,3 +317,22 @@ test('real Postgres: two tabs making two to-dos block each other get one link, a
     await Promise.all([a.end(), b.end()])
   }
 })
+
+test('real Postgres: a To-dos rules value that can\'t be read loads as none and is left as it was by a save', { skip }, async () => {
+  const schema = `daythread_test_rules_${process.pid}`
+  const sql = connect()
+  try {
+    const repo = new PostgresWorkspaceRepository(postgresClient(sql), schema)
+    let ws = await repo.load()
+    ws = (await repo.execute({ operationId: 'day', expectedRevision: ws.revision, action: { type: 'ensure-day', date: '2026-11-05' } })).workspace
+    await sql.unsafe(`update ${schema}.workspaces set todo_automations = '{"not": an array'`)
+    ws = await repo.load()
+    assert.equal(ws.todoAutomations, undefined)
+    await repo.execute({ operationId: 'next', expectedRevision: ws.revision, action: { type: 'ensure-day', date: '2026-11-06' } })
+    const [row] = await sql.unsafe(`select todo_automations from ${schema}.workspaces`)
+    assert.equal(row!.todo_automations, '{"not": an array')
+  } finally {
+    await sql.unsafe(`drop schema if exists ${schema} cascade`)
+    await sql.end()
+  }
+})

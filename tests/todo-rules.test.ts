@@ -159,3 +159,20 @@ test('a link made between to-dos sets off a rule on Blocked by', () => {
   h.run({ type: 'undo', targetOperationId: gone.receipt.operationId })
   assert.deepEqual(logged(h), ['Blocked: Alpha'])
 })
+
+test('a stored rules value that can\'t be read loads as no rules, and is kept until a rule is made (Lead)', async () => {
+  const { planWrites, rowsOf, workspaceOf } = await import('../src/server/workspace-rows.ts')
+  const h = setup([])
+  const rows = { ...rowsOf(h.ws), todoAutomations: '{"not": an array' }
+  const loaded = workspaceOf(rows)
+  assert.equal(loaded.todoAutomations, undefined, 'it loads, with no rules')
+  h.ws = { ...loaded, receipts: {} }
+  h.run({ type: 'task-status', taskId: h.task('Alpha').id, status: 'done', today })
+  const plain = planWrites(rows, h.ws)
+  assert.equal(plain.write.todoAutomations, undefined, 'an ordinary change leaves it as it was')
+  assert.equal(plain.rows.todoAutomations, '{"not": an array')
+  h.run({ type: 'change-database', pageId: todosSourceId, change: { kind: 'addAutomation', automation: rule() } } as never)
+  const made = planWrites(rows, h.ws)
+  assert.equal(typeof made.write.todoAutomations, 'string', 'a new rule replaces it')
+  assert.equal(made.inverse.todoAutomations, '{"not": an array', 'and its Undo puts it back')
+})
