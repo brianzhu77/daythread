@@ -826,7 +826,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const clickedFile = useRef<string | null>(null)
   const [fileDropLine, setFileDropLine] = useState<{ top: number; left: number; width: number } | null>(null)
   const dropRef = useRef<typeof drop>(null)
-  const heldFocus = useRef(false)
   // Edit notices ("Deleted 'Notes' · Undo") are HeroUI toasts. Undo only applies while the document is still the
   // one the notice describes; any later edit retires the notice.
   const notice = useRef<{ key: string; fingerprint: string } | null>(null)
@@ -2079,9 +2078,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const beginHold = (ids: string[]) => {
     const all = flatNodes(nodes())
     dragging.current = ids.flatMap(id => all.filter(n => n.id === id))
-    heldFocus.current = editor.isFocused()
     // Not editable while it's held: iOS's own long press would otherwise start a selection, or drag the caret with its loupe,
-    // on top of the drag (both seen in the Simulator). It's editable again on release, with the keyboard back if it was up.
+    // on top of the drag (both seen in the Simulator). It's editable again on release; the keyboard, if it was up, stays down.
     editor.isEditable = false
     markHeld(ids); setTouchDragging(true)
   }
@@ -2098,18 +2096,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   function endDrag(commit: boolean) {
     const target = dropRef.current, moving = dragging.current
     if (moving.length) editor.isEditable = true
-    let moved = false
     if (commit && target && moving.length) {
       const before = nodes(), next = moveInTree(before, moving.map(n => n.id), target)
       if (next && JSON.stringify(next) !== JSON.stringify(before)) {
         editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
         editor.replaceBlocks(editor.document, next as never)
         setNotice({ text: `Moved '${inlineText(moving[0]!.content) || 'block'}'`, fingerprint: JSON.stringify(editor.document) })
-        moved = true
       }
     }
-    // The keyboard comes back only if it was up, on the moved line: a drag on a phone never raises it.
-    if (moving.length && heldFocus.current) { if (moved) editor.setTextCursorPosition(moving[0]!.id, 'end'); editor.focus() }
+    // The keyboard stays down after a drag (Jazz, Bumblebee): one change to the page, not two, and a tap chooses where to write.
     markHeld([]); dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
   const editorRoot = useCallback(() => editor.domElement?.closest<HTMLElement>('.continuous-editor') ?? null, [editor])

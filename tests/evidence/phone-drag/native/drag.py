@@ -60,7 +60,7 @@ native(); shot(f'{OUT}/native-typing.png')
 drag('a3', 'a1', 'top', top=wv); time.sleep(2.5)
 native(); shot(f'{OUT}/native-typing-after.png')
 check(order() == 'ha a3 a1 a2 hb b1 b2(b21) t1', 'while typing, a hold on another line moves it where let go', order())
-check(focused(), 'and the keyboard stays up, as it was')
+check(not focused(), 'and the keyboard stays down after it, so a tap chooses where to write')
 # In the line being typed in, a long press is iOS's own: no drag, nothing moves.
 a = rect_of('a1'); native(); call('execute/sync', {'script': 'mobile: tap', 'args': [{'x': wv['x'] + a['x'] + 30, 'y': wv['y'] + a['y'] + a['h'] / 2}]}); time.sleep(1.2)
 before = order(); drag('a1', 'b1', 'bottom', top=wv); time.sleep(2.5)
