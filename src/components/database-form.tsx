@@ -110,16 +110,17 @@ function QuestionEditor({ q, property, above, first, last, onPut, onMove, onRemo
 
 /** "Ask only if Felt is Hard or OK": a question asked only after one of those answers above it (G7-6). */
 function AskOnlyIf({ q, above, onPut }: { q: FormQuestion; above: { q: FormQuestion; property: Property }[]; onPut(p: Partial<FormQuestion>): void }) {
-  const on = above.find(a => a.property.id === q.showIf?.propertyId)
-  const values = q.showIf?.values ?? []
+  // Shown at once, as a switch is: what's saved follows.
+  const [onId, setOnId] = useState(q.showIf?.propertyId ?? ''), [values, setValues] = useState<string[]>(q.showIf?.values ?? [])
+  const on = above.find(a => a.property.id === onId)
   return <span className="form-ask-if">
-    <select aria-label="Ask only if" value={on?.property.id ?? ''} onChange={e => { const id = e.target.value; onPut({ showIf: id ? { propertyId: id, values: [] } : undefined }) }}>
+    <select aria-label="Ask only if" value={on?.property.id ?? ''} onChange={e => { const id = e.target.value; setOnId(id); setValues([]); onPut({ showIf: id ? { propertyId: id, values: [] } : undefined }) }}>
       <option value="">Always ask</option>
       {above.map(a => <option key={a.property.id} value={a.property.id}>Only if {a.q.wording.trim() || a.property.name}…</option>)}
     </select>
     {on && <span className="form-ask-values" role="group" aria-label={`${on.q.wording.trim() || on.property.name} is`}>
       {values.filter(v => !(on.property.options ?? []).some(o => o.id === v)).length > 0 && <span className="form-ask-none">(deleted option)</span>}
-      {(on.property.options ?? []).map(o => <label key={o.id}><input type="checkbox" checked={values.includes(o.id)} onChange={e => onPut({ showIf: { propertyId: on.property.id, values: e.target.checked ? [...values, o.id] : values.filter(v => v !== o.id) } })} />{o.name}</label>)}
+      {(on.property.options ?? []).map(o => <label key={o.id}><input type="checkbox" checked={values.includes(o.id)} onChange={e => { const next = e.target.checked ? [...values, o.id] : values.filter(v => v !== o.id); setValues(next); onPut({ showIf: { propertyId: on.property.id, values: next } }) }} />{o.name}</label>)}
       {!values.length && <span className="form-ask-none">Pick an answer, or it's always asked</span>}
     </span>}
   </span>
