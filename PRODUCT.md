@@ -109,7 +109,7 @@ dashboard, feed, form, Trash, Tomorrow, Upcoming, Today, Not today, Put back, pe
   action. The visual system itself is recorded in `docs/design/system-v2.md` and `docs/design/tokens.md`; there is
   no DESIGN.md yet.
 - **References Brian named:** Craft (the first version "can copy Craft", 2026-10-16, since replaced by the own system;
-  Craft's icons, illustrations and brand assets are never copied), Tally (grey with a little blue), Notion (database
+  Craft's icons, illustrations and brand assets are never copied), another app he pointed to (grey with a little blue), Notion (database
   vocabulary and behaviour).
 
 ## Evidence on Hand
