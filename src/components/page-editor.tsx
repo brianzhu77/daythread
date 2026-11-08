@@ -29,6 +29,8 @@ import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-l
 import { databaseSource, withTodos } from '../domain/todos-source'
 import { DatabasePicker } from './database-linked'
 import { holdKeyboard } from './keyboard'
+import { dragChip, dropAt, useLineHold, type LineDrop } from './line-drag'
+import { moveInTree } from '../domain/line-move'
 import { buttonBlockType, blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { ButtonLine, ButtonPage } from './button-block'
@@ -764,7 +766,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     window.addEventListener('online', update); window.addEventListener('offline', update)
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
   }, [])
-  const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
+  const [drop, setDrop] = useState<LineDrop | null>(null)
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 899px)').matches)
   // Opened at a line (?block=id, from a tag or a line link): bring that block into view a third from the top and tint
   // it briefly (line-jump.ts). Nothing is focused, so a phone keyboard stays down. The parameter is dropped once shown,
@@ -824,6 +826,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const clickedFile = useRef<string | null>(null)
   const [fileDropLine, setFileDropLine] = useState<{ top: number; left: number; width: number } | null>(null)
   const dropRef = useRef<typeof drop>(null)
+  const heldFocus = useRef(false)
   // Edit notices ("Deleted 'Notes' · Undo") are HeroUI toasts. Undo only applies while the document is still the
   // one the notice describes; any later edit retires the notice.
   const notice = useRef<{ key: string; fingerprint: string } | null>(null)
@@ -2055,36 +2058,63 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }, [editor])
   const handleActions = useRef({ select, selected: () => selected.current }); handleActions.current = { select, selected: () => selected.current }
   const Handle = useMemo(() => function StableHandle() { return <SectionSideMenu select={(id, ids) => handleActions.current.select(id, ids)} picked={pickedIds} extended={extendedIds} selectedIds={() => handleActions.current.selected()} /> }, [])
-  function updateDrop(x: number, y: number) {
-    const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('.bn-block[data-id]')
-    const id = el?.dataset.id
-    const doc = nodes(), target = doc.find(n => n.id === id), first = dragging.current[0]
-    if (!first) return
-    const lastElement = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(doc.at(-1)?.id ?? '')}"]`)
-    const atEnd = !el && !!lastElement && y >= lastElement.getBoundingClientRect().bottom || !!el && y > el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2 && target?.id === doc.at(-1)?.id
-    const valid = !dragging.current.some(n => n.id === id)
-    const next = valid ? { id: id ?? '', end: atEnd, top: el ? (atEnd ? el.getBoundingClientRect().bottom : el.getBoundingClientRect().top) : y } : null
-    dropRef.current = next; setDrop(next)
-    const edges = scroller.edges()
-    if (y < edges.top + 85) scroller.by(-20)
-    else if (y > edges.bottom - 120) scroller.by(20)
-    return valid
+  // Lines held for a drag on a phone (line-drag.ts): dimmed where they were, everything else as it is.
+  // A stylesheet rather than classes: ProseMirror puts its blocks' attributes back as soon as anything else touches them.
+  const markHeld = (ids: readonly string[]) => {
+    let sheet = document.getElementById('line-held-style')
+    if (!ids.length) { sheet?.remove(); return }
+    if (!sheet) { sheet = document.createElement('style'); sheet.id = 'line-held-style'; document.head.append(sheet) }
+    sheet.textContent = `${ids.map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"] > .bn-block`).join(', ')} { opacity: .35; }`
   }
-  function commitDrag() {
-    const target = dropRef.current
-    if (target) {
-      const moving = dragging.current, ids = new Set(moving.map(n => n.id))
-      const rest = nodes().filter(n => !ids.has(n.id))
-      const index = target.end ? rest.length : rest.findIndex(n => n.id === target.id)
-      if (index >= 0) {
+  /** What a press on `id` holds: a heading's section, as on a desktop, or the line with what's nested under it; and its words. */
+  const holdOf = (id: string): { ids: string[]; label: string } | null => {
+    if (!editor.isEditable) return null
+    const held = sectionRange(nodes(), id)
+    if (!held.length) return null
+    const first = held[0]!, words = inlineText(first.content).trim() || (first.type === 'image' ? 'Image' : first.type === 'syncedBlock' ? 'Synced block' : 'Empty line')
+    return { ids: held.map(n => n.id), label: `${[...words].length > 40 ? `${[...words].slice(0, 39).join('').trimEnd()}…` : words}${held.length > 1 ? ` · ${held.length - 1} ${held.length === 2 ? 'line' : 'lines'}` : ''}` }
+  }
+  const beginHold = (ids: string[]) => {
+    const all = flatNodes(nodes())
+    dragging.current = ids.flatMap(id => all.filter(n => n.id === id))
+    heldFocus.current = editor.isFocused()
+    // Not editable while it's held: iOS's own long press would otherwise start a selection, or drag the caret with its loupe,
+    // on top of the drag (both seen in the Simulator). It's editable again on release, with the keyboard back if it was up.
+    editor.isEditable = false
+    markHeld(ids); setTouchDragging(true)
+  }
+  function updateDrop(x: number, y: number) {
+    const root = editor.domElement?.closest<HTMLElement>('.continuous-editor')
+    if (!dragging.current.length || !root) return
+    const next = dropAt(root, x, y, new Set(dragging.current.map(n => n.id)))
+    dropRef.current = next; setDrop(prev => (prev?.id === next?.id && prev?.place === next?.place && prev?.top === next?.top ? prev : next))
+    // Within 48 px of the top or bottom of what he can see, the page scrolls, faster the closer the finger (this runs each frame).
+    const edges = scroller.edges(), zone = 48
+    const into = y < edges.top + zone ? y - edges.top - zone : y > edges.bottom - zone ? y - edges.bottom + zone : 0
+    if (into) scroller.by(Math.max(-8, Math.min(8, Math.round((into / zone) * 8))))
+  }
+  function endDrag(commit: boolean) {
+    const target = dropRef.current, moving = dragging.current
+    if (moving.length) editor.isEditable = true
+    let moved = false
+    if (commit && target && moving.length) {
+      const before = nodes(), next = moveInTree(before, moving.map(n => n.id), target)
+      if (next && JSON.stringify(next) !== JSON.stringify(before)) {
         editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
-        editor.replaceBlocks(editor.document, [...rest.slice(0, index), ...moving, ...rest.slice(index)] as never)
-        editor.setTextCursorPosition(moving[0]!.id, 'end'); editor.focus()
+        editor.replaceBlocks(editor.document, next as never)
         setNotice({ text: `Moved '${inlineText(moving[0]!.content) || 'block'}'`, fingerprint: JSON.stringify(editor.document) })
+        moved = true
       }
     }
-    dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
+    // The keyboard comes back only if it was up, on the moved line: a drag on a phone never raises it.
+    if (moving.length && heldFocus.current) { if (moved) editor.setTextCursorPosition(moving[0]!.id, 'end'); editor.focus() }
+    markHeld([]); dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
+  const editorRoot = useCallback(() => editor.domElement?.closest<HTMLElement>('.continuous-editor') ?? null, [editor])
+  useLineHold(editorRoot, { pick: holdOf, begin: beginHold, move: updateDrop, end: endDrag })
+  // The grip beside the caret's line drags at once, with the same chip and landing.
+  const gripChip = useRef<ReturnType<typeof dragChip> | null>(null)
+  const gripStart = useRef<{ x: number; y: number } | null>(null)
   useEffect(() => {
     const receive = (place: BlockPlace) => {
       const known = (id: string | null) => (id && editor.getBlock(id) ? id : null)
@@ -2996,10 +3026,21 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     </ChipPageDate.Provider>
     </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
-      onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}
-      onPointerMove={e => { if (dragging.current.length && e.buttons) updateDrop(e.clientX - 35, e.clientY) }}
-      onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); select(touchHandle.id) } else commitDrag() }}
-      onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}><GripIcon /></button>}
+      onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); gripStart.current = { x: e.clientX, y: e.clientY } }}
+      onPointerMove={e => {
+        const start = gripStart.current
+        if (!start || !e.buttons) return
+        // A tap selects the line; only a finger that moves drags it, so a tap never takes the keyboard down and back up.
+        if (!dragging.current.length) {
+          if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < 6) return
+          const held = holdOf(touchHandle.id)
+          if (!held) return
+          beginHold(held.ids); gripChip.current = dragChip(held.label)
+        }
+        gripChip.current?.at(e.clientX, e.clientY); updateDrop(e.clientX, e.clientY)
+      }}
+      onPointerUp={e => { e.preventDefault(); gripStart.current = null; gripChip.current?.remove(); gripChip.current = null; if (dragging.current.length) endDrag(true); else select(touchHandle.id) }}
+      onPointerCancel={() => { gripStart.current = null; gripChip.current?.remove(); gripChip.current = null; endDrag(false) }}><GripIcon /></button>}
     {/* F16 order: Aa · + · outdent / indent · undo / redo · hide keyboard. Indent and outdent are Tab and Shift+Tab
         (F11): a phone has no Tab key. */}
     <div ref={phoneToolbar} className="editor-phone-toolbar" aria-label="Editor tools" style={keyboardTop === null ? undefined : { top: keyboardTop - 8, bottom: 'auto', translate: '0 -100%' }}>
@@ -3043,7 +3084,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       setPastedChecklistIds([]); editor.focus()
     }}>Turn into tasks</button></div>}
     </>, dock)}
-    {drop && <div className="editor-drop-line" style={{ top: drop.top }} />}
+    {drop && <div className="editor-drop-line" style={{ top: drop.top + fixedOffset(), ...(touchDragging ? { left: drop.left, right: 'auto', width: Math.max(0, drop.right - drop.left) } : {}) }} />}
     {fileDropLine && <div className="editor-drop-line" style={{ ...fileDropLine, right: 'auto' }} />}
   </div>
 }
