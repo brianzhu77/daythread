@@ -122,6 +122,14 @@ function moveOne(ws: Workspace, row: Page, from: DatabasePage, to: DatabasePage,
     if (left.length) values[property.id] = left; else delete values[property.id]
     if (Object.keys(values).length) page.values = values; else delete page.values
   }
+  // A thread on one of its properties goes to the property its value came along to, or the one an empty value would have.
+  // One left behind keeps its old property, so it reads "Property removed" rather than vanishing (comments.md §4).
+  for (const thread of ws.threads ?? []) {
+    const on = thread.pageId === row.id ? thread.property : undefined, p = on && from.database.properties.find(x => x.id === on.propertyId)
+    if (!on || !p) continue
+    const went = carried.find(c => c.from.id === p.id)?.to ?? (row.values?.[p.id] === undefined ? to.database.properties.find(x => fold(x.name) === fold(p.name) && x.type === p.type && (p.type !== 'relation' || x.target === p.target)) : undefined)
+    if (went) thread.property = { ...on, propertyId: went.id }
+  }
   const values: Record<string, Json> = {}
   for (const { from: p, to: q, add } of carried) {
     if (!hasOptions(p)) { values[q.id] = row.values![p.id]!; continue }

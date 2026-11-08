@@ -10,7 +10,7 @@ import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, u
 import { format } from "./formula-functions.ts";
 import { stepCell } from "./formula.ts";
 import { preparedSteps, StepReading, type StepVariables } from "./step-formulas.ts";
-import { commentLimit, leavesUndoAlone, type CommentThread, quoteLimit } from "./comments.ts";
+import { commentLimit, leavesUndoAlone, propertyNameLimit, type CommentThread, quoteLimit } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
 import { coverPlace, isCoverLink } from "./page-look.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
@@ -1218,7 +1218,11 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       }
       const on = page(state, action.pageId);
       if (isTrashed(on)) throw new DomainError("That page is in Trash");
-      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}), ...(action.anchor.at !== undefined ? { at: action.anchor.at } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
+      if (action.anchor && action.property) throw new DomainError("A comment is on a line or a property, not both");
+      // On a property of this row, as the row's database has it now.
+      if (action.property && !rowPage(state, on.id).db.database.properties.some((p) => p.id === action.property!.propertyId)) throw new DomainError("That property's gone");
+      const property = action.property && { propertyId: action.property.propertyId, name: action.property.name.slice(0, propertyNameLimit), quote: action.property.quote.slice(0, quoteLimit) };
+      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(property ? { property } : {}), ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}), ...(action.anchor.at !== undefined ? { at: action.anchor.at } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
       return { message: "Comment added", entityId: action.threadId };
     }
     case "edit-comment": {

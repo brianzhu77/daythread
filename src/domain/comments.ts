@@ -18,10 +18,20 @@ export interface CommentAnchor {
   at?: number
 }
 export const quoteLimit = 300
+/** A thread on one property of a row (step 4): its id, which a rename keeps, and its name and value's words as they were, for when it's gone (comments.md §4). */
+export interface CommentProperty { propertyId: string; name: string; quote: string }
+export const propertyNameLimit = 200
+/** How a thread on a property reads: "Stage: Idea" under the property's name now, and "Property removed · Stage: Idea" once the row's database has no such property (comments.md §4). */
+export function propertyQuote(on: CommentProperty, properties: readonly { id: string; name: string }[] | undefined): { text: string; gone: boolean } {
+  const now = properties?.find(p => p.id === on.propertyId), words = `${now?.name ?? on.name}${on.quote ? `: ${on.quote}` : ''}`
+  return now ? { text: words, gone: false } : { text: `Property removed · ${words}`, gone: true }
+}
 export interface CommentThread {
   id: string
   pageId: string
   anchor?: CommentAnchor
+  /** On a property of the row `pageId` is; never with `anchor`. */
+  property?: CommentProperty
   version: number
   createdAt: string
   resolvedAt?: string

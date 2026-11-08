@@ -157,7 +157,7 @@ export type Action =
   | { type: "run-row-button"; databaseId: string; propertyId: string; rowIds: string[]; stepsKey: string; at: string; today: LocalDate }
   | { type: "run-button"; pageId: string; blockId: string; stepsKey: string; expectedContent: string; at: string; today: LocalDate }
   /** A new thread on the page, or with `threadId` a reply on one. */
-  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string; anchor?: import("./comments.ts").CommentAnchor }
+  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string; anchor?: import("./comments.ts").CommentAnchor; property?: import("./comments.ts").CommentProperty }
   | { type: "edit-comment"; threadId: string; commentId: string; body: string; version: number; at: string }
   | { type: "delete-comment"; threadId: string; commentId: string; version: number }
   | { type: "resolve-thread"; threadId: string; resolved: boolean; version: number; at: string }

@@ -2,7 +2,7 @@
 // its rows with their positions; a command's result is turned back into rows, and the difference is what gets written,
 // with the rows as they were as the operation's inverse (what Undo puts back). The domain never sees positions.
 import { expandedWorkspace, storedDocument, type SyncedRecord } from '../domain/synced.ts'
-import type { CommentThread, CommentAnchor } from '../domain/comments.ts'
+import type { CommentThread, CommentAnchor, CommentProperty } from '../domain/comments.ts'
 import type { Automation } from '../domain/automations.ts'
 import { linkId, type TaskLink } from '../domain/task-links.ts'
 import type { Page, Task, Workspace, WeekStart } from '../domain/types.ts'
@@ -20,7 +20,7 @@ export interface TaskRow {
 /** A tombstone, kept as the task's exact JSON. */
 export interface DeletedRow { id: string; position: number; data: string }
 /** A thread of comments: its own table, which no save of a page touches and an older build never reads. */
-export interface ThreadRow { id: string; page_id: string; version: number; created_at: string; resolved_at: string | null; comments: string; /** Absent in a row from before anchors. */ anchor?: string | null }
+export interface ThreadRow { id: string; page_id: string; version: number; created_at: string; resolved_at: string | null; comments: string; /** Absent in a row from before anchors. */ anchor?: string | null; /** Absent in a row from before property threads. */ property?: string | null }
 
 /** A to-do blocked by another: its own table, keyed on both tasks, which an older build never reads, so its saves and deletes leave it alone (todo-dependency.md §4). */
 export interface LinkRow { id: string; blocked_id: string; blocker_id: string; created_at: string }
@@ -62,8 +62,15 @@ const byPosition = <R extends { position: number }>(rows: R[]): R[] => [...rows]
 
 /** The workspace the domain works on, from its rows: receipts and the Undo marker are the store's to add. */
 // In the table's order: rows are compared by their JSON, so a thread that hasn't changed must read as it does coming back.
-const threadRow = (t: CommentThread): ThreadRow => ({ id: t.id, page_id: t.pageId, version: t.version, created_at: t.createdAt, resolved_at: t.resolvedAt ?? null, comments: JSON.stringify(t.comments), anchor: t.anchor ? JSON.stringify(t.anchor) : null })
-const threadOf = (r: ThreadRow): CommentThread => ({ ...(r.anchor ? { anchor: JSON.parse(r.anchor) as CommentAnchor } : {}), id: r.id, pageId: r.page_id, version: r.version, createdAt: r.created_at, ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}), comments: JSON.parse(r.comments) as CommentThread['comments'] })
+const threadRow = (t: CommentThread): ThreadRow => ({ id: t.id, page_id: t.pageId, version: t.version, created_at: t.createdAt, resolved_at: t.resolvedAt ?? null, comments: JSON.stringify(t.comments), anchor: t.anchor ? JSON.stringify(t.anchor) : null, property: t.property ? JSON.stringify(t.property) : null })
+/** A thread row from an inverse an older build wrote has no key for what that build didn't know: the thread keeps what it has. */
+export const threadOptional = ['anchor', 'property'] as const
+const keepUnknown = (t: ThreadRow, held: ThreadRow | undefined): ThreadRow => {
+  const kept = { ...t }
+  for (const key of threadOptional) if (kept[key] === undefined) kept[key] = held?.[key] ?? null
+  return kept
+}
+const threadOf = (r: ThreadRow): CommentThread => ({ ...(r.anchor ? { anchor: JSON.parse(r.anchor) as CommentAnchor } : {}), ...(r.property ? { property: JSON.parse(r.property) as CommentProperty } : {}), id: r.id, pageId: r.page_id, version: r.version, createdAt: r.created_at, ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}), comments: JSON.parse(r.comments) as CommentThread['comments'] })
 const rulesJson = (ws: Pick<Workspace, 'todoAutomations'>): string | null => (ws.todoAutomations?.length ? JSON.stringify(ws.todoAutomations) : null)
 const linkRow = (l: TaskLink): LinkRow => ({ id: linkId(l), blocked_id: l.blockedId, blocker_id: l.blockerId, created_at: l.createdAt })
 const linkOf = (r: LinkRow): TaskLink => ({ blockedId: r.blocked_id, blockerId: r.blocker_id, createdAt: r.created_at })
@@ -167,7 +174,7 @@ function applySet<R extends { id: string }>(rows: R[], set: RowSet<R>): R[] {
 export function applyDiff(rows: Rows, diff: RowDiff): Rows {
   return {
     revision: rows.revision, timezone: diff.timezone ?? rows.timezone, weekStart: diff.weekStart ?? rows.weekStart ?? 0, todoAutomations: diff.todoAutomations !== undefined ? diff.todoAutomations : rows.todoAutomations ?? null,
-    pages: applySet(rows.pages, diff.pages), tasks: applySet(rows.tasks, diff.tasks), deleted: applySet(rows.deleted, diff.deleted), threads: diff.threads ? applySet(rows.threads, { ...diff.threads, upsert: diff.threads.upsert.map((t) => (t.anchor !== undefined ? t : { ...t, anchor: rows.threads.find((held) => held.id === t.id)?.anchor ?? null })) }) : rows.threads,
+    pages: applySet(rows.pages, diff.pages), tasks: applySet(rows.tasks, diff.tasks), deleted: applySet(rows.deleted, diff.deleted), threads: diff.threads ? applySet(rows.threads, { ...diff.threads, upsert: diff.threads.upsert.map((t) => keepUnknown(t, rows.threads.find((held) => held.id === t.id))) }) : rows.threads,
     links: diff.links ? applySet(rows.links ?? [], diff.links) : rows.links ?? []
   }
 }
