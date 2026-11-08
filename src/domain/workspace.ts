@@ -1,6 +1,6 @@
 // The domain: commands over the workspace (pure, one at a time, with receipts for replay and one Undo slot) and the
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
-import { linkLimits, loopReason, standingLinks } from "./task-links.ts";
+import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
@@ -20,7 +20,7 @@ import type { Database, Json, Property, SubItems } from "./database.ts";
 import { applyRowMove, movesIntoItself, rowMoveTree } from "./move-row.ts";
 import { importRefusal } from "./csv.ts";
 import { dueRepeats, periodWord, repeatRowId } from "./repeats.ts";
-import { newTodo, taskIdOfRow, todoBarColumns, todoChange, todoMoves, todoRowId, todosDatabase, todosTitle, withTodos } from "./todos-source.ts";
+import { blockedByColumn, newTodo, taskIdOfRow, todoBarColumns, todoChange, todoMoves, todoRowId, todosDatabase, todosTitle, withTodos } from "./todos-source.ts";
 import { inView, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
@@ -389,12 +389,18 @@ const ruleRow = (state: Workspace, databaseId: string, rowId: string): Page | un
  */
 function todoSources(before: Workspace, after: Workspace): RuleSource[] {
   const was = todosNow(before), now = todosNow(after), returned = new Set(before.deletedTasks.map((t) => todoRowId(t.id)));
-  const rows = (ws: Workspace) => ws.pages.filter((p) => p.parentId === todosSourceId);
-  const wasRows = rows(was), known = new Set(wasRows.map((r) => r.id));
+  // A link to a to-do that's deleted goes out of force and stays (todo-dependency.md §3): nothing was edited, so it reads as it was (Bumblebee).
+  const kept = (ws: Workspace) => new Set([...ws.tasks, ...ws.deletedTasks].map((t) => t.id));
+  const rows = (ws: Workspace, view: Workspace) => { const ids = kept(ws); return view.pages.filter((p) => p.parentId === todosSourceId).map((r) => {
+    const taskId = taskIdOfRow(r.id), by = taskId ? blockersOf(ws, taskId).filter((id) => ids.has(id)).map(todoRowId) : [];
+    const { [blockedByColumn]: _shown, ...values } = r.values ?? {};
+    return { ...r, values: by.length ? { ...values, [blockedByColumn]: by } : values };
+  }); };
+  const wasRows = rows(before, was), known = new Set(wasRows.map((r) => r.id));
   // A blank box that's never had words is version 1; one whose words were cleared has moved on. Only the first is new (Ratchet).
   const wasBlank = new Map(before.tasks.map((t) => [todoRowId(t.id), t.version]));
   const isNew = (r: Page) => !returned.has(r.id) && (!wasBlank.has(r.id) || wasBlank.get(r.id) === 1);
-  return [{ page: { ...now.pages.find((p) => p.id === todosSourceId)!, database: ruleDatabase(after, todosSourceId) } as Page & { database: Database }, before: wasRows, after: rows(now).filter((r) => known.has(r.id) || isNew(r)) }];
+  return [{ page: { ...now.pages.find((p) => p.id === todosSourceId)!, database: ruleDatabase(after, todosSourceId) } as Page & { database: Database }, before: wasRows, after: rows(after, now).filter((r) => known.has(r.id) || isNew(r)) }];
 }
 function runAutomations(start: Workspace, fired: FiredRule[], operationId: string): { state: Workspace; automations: NonNullable<Receipt["automations"]> } {
   let state = start;

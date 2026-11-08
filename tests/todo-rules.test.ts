@@ -153,4 +153,9 @@ test('a link made between to-dos sets off a rule on Blocked by', () => {
   const h = setup([blocked])
   h.run({ type: 'link-tasks', taskId: h.task('Alpha').id, add: [h.task('Bravo').id], remove: [], at: '2026-10-22T10:00:00.000Z' })
   assert.deepEqual(logged(h), ['Blocked: Alpha'])
+  // Deleting the blocker only takes the link out of force: nothing was edited, and its Undo sets off nothing either (Bumblebee).
+  const gone = h.save(dayId(today), doc => doc.filter(n => n.id !== 'l-b'))
+  assert.deepEqual(logged(h), ['Blocked: Alpha'])
+  h.run({ type: 'undo', targetOperationId: gone.receipt.operationId })
+  assert.deepEqual(logged(h), ['Blocked: Alpha'])
 })
