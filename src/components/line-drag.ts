@@ -77,7 +77,9 @@ export function useLineHold(root: () => HTMLElement | null, handlers: {
       if (e.pointerType !== 'touch' || !e.isPrimary || gesture) return
       const target = e.target as HTMLElement
       // Controls keep their own taps and holds: a view's rows, a checkbox, a button, the line's own grip.
-      if (target.closest('input, button, select, textarea, .database-block, .editor-touch-handle, [data-content-type="database"]')) return
+      // A to-do's box is the line's natural grip, so a hold there picks the line up; a tap still ticks it (B90).
+      const box = target.closest('.editor-task > input[type=checkbox], .editor-source-checklist > input[type=checkbox]')
+      if (!box && target.closest('input, button, select, textarea, .database-block, .editor-touch-handle, [data-content-type="database"]')) return
       const outer = outerOf(target)
       if (!outer || !el.contains(outer)) return
       const picked = h.current.pick(landingOf(outer).dataset.id!)
