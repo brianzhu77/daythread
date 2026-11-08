@@ -4,7 +4,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { axisLabels, axisStep, chartData, chartMeasure, chartSettings, chartTicks, chartValue, donutSlices, shortNumber, type ChartPoint, type ChartSeries } from '../domain/chart'
 import { calcLabels, cellValue, databaseRows, valueText, viewRows, type CalcKind, type CalcResult, type View } from '../domain/database'
 import type { Page } from '../domain/types'
-import { DatabaseHeader, useOpenRow, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
+import { useOpenRow, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -40,7 +40,8 @@ function useWidth() {
 // Coming back from a row finds its bar still open, as someone may be working down the list. Until a reload, as a fold is.
 const openedBars = new Map<string, string>()
 
-export default function DatabaseChart({ workspace, db, view, changeView, blockId, pageDate, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+/** The chart under its header, which `LaidOutView` draws before this code has loaded. */
+export default function DatabaseChart({ workspace, db, view, changeView, blockId, pageDate }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const today = todayIso(), weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
@@ -61,9 +62,7 @@ export default function DatabaseChart({ workspace, db, view, changeView, blockId
   const other = !found && data && data !== 'choose' && settings.form === 'donut' ? donutSlices(data.points).slices.find(sl => sl.key === opened) : undefined
   const point = found ?? (other ? { key: other.key, name: other.name, rows: other.rows, value: other.value, result: other.result, order: 0 } : undefined)
   const axisName = data && data !== 'choose' ? data.property.name : ''
-  return <>
-    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => {}} />
-    <div className="database-chart">
+  return <div className="database-chart">
       {measure === 'gone' ? <p className="database-empty"><button type="button" className="app-link" onClick={choose}>Choose what to measure</button></p>
         : settings.form === 'number' ? <div className="database-chart-number" role="img" aria-label={`${named}: ${textOf(chartValue(db.database, rows, measure))}`}><strong>{textOf(chartValue(db.database, rows, measure))}</strong><span>{named}</span></div>
         : data === 'choose' || !data ? <p className="database-empty"><button type="button" className="app-link" onClick={choose}>Choose what to show</button></p>
@@ -84,7 +83,6 @@ export default function DatabaseChart({ workspace, db, view, changeView, blockId
         </tbody></table>}
       </>}
     </div>
-  </>
 }
 
 const greyOf = (sr: ChartSeries | undefined) => (sr ? (sr.grey === null ? 'is-other' : `is-grey-${sr.grey}`) : '')

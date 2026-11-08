@@ -29,7 +29,16 @@ export function FormField({ q, property, value, missing, disabled, onChange, onN
   let field: React.ReactNode
   switch (property.type) {
     case 'number': field = <input className="form-input" aria-label={label} inputMode="decimal" disabled={disabled} value={typeof value === 'number' ? String(value) : typeof value === 'string' ? value : ''} onKeyDown={enter} onChange={e => onChange(e.target.value === '' ? undefined : e.target.value)} />; break
-    case 'date': field = <input className="form-input" type="date" aria-label={label} disabled={disabled} value={value && typeof value === 'object' && !Array.isArray(value) ? String((value as { start?: string }).start ?? '') : ''} onChange={e => onChange(e.target.value ? { start: e.target.value } : undefined)} />; break
+    case 'date': {
+      // The browser's own picker, as elsewhere. Empty, it reads as empty: WebKit draws today's date in one, which on an iPhone looks answered (Bumblebee).
+      const day = value && typeof value === 'object' && !Array.isArray(value) ? String((value as { start?: string }).start ?? '') : ''
+      field = <span className={`form-date${day ? '' : ' is-empty'}`}>
+        <input className="form-input" type="date" aria-label={label} disabled={disabled} value={day} onChange={e => onChange(e.target.value ? { start: e.target.value } : undefined)} />
+        {!day && <span className="form-date-empty" aria-hidden="true">Pick a date</span>}
+        {day && !disabled && <button type="button" className="form-date-clear" aria-label={`Clear ${label}`} onClick={() => onChange(undefined)}>×</button>}
+      </span>
+      break
+    }
     case 'checkbox': field = <label className="form-check"><input type="checkbox" aria-label={label} disabled={disabled} checked={value === true} onChange={e => onChange(e.target.checked || undefined)} />{label}</label>; break
     case 'select': case 'status': case 'multiSelect': case 'relation': {
       const toggle = (id: string) => onChange(many ? (picked.includes(id) ? picked.filter(x => x !== id) : [...picked, id]) : (picked[0] === id ? undefined : id))

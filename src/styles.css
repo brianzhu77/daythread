@@ -1936,6 +1936,13 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .cell-relation-ref { display: inline-flex; align-items: center; gap: 4px; color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .cell-relation-ref svg { flex: none; width: 14px; height: 14px; color: var(--ink-3); }
 .cell-relation.is-trashed, .cell-relation.is-trashed .cell-relation-ref { color: var(--ink-3); }
+/* In a table on a page, BlockNote's `.bn-editor a { color: revert; text-decoration: revert }` made these browser-blue. */
+.bn-editor a.cell-relation-ref { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.bn-editor .cell-relation.is-trashed a.cell-relation-ref { color: var(--ink-3); }
+.bn-editor a.cell-relation-ref svg { width: 14px; height: 14px; } /* `.bn-shadcn svg:not([class*=size-])` reverts it to the icon's own 22 px */
+.cell-relation-ref { min-width: 0; max-width: 100%; }
+.cell-relation-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.is-wrapped .cell-relation-name { white-space: normal; }
 .database-new, .database-more { display: block; min-height: 36px; padding: 6px 8px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; font-size: var(--text-ui); line-height: 24px; text-align: left; cursor: pointer; }
 /* To-dos: each row starts with its box, so Name's heading and + New start where its words do. */
 .database-table-wrap.is-todos .database-th.is-title { padding-inline-start: 24px; }
@@ -2114,7 +2121,15 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (hover: hover) { .database-rule-remove:hover, .database-menu-back:hover { background: var(--hover-dim); color: var(--ink); } }
 /* Chart (docs/design/chart.md): bars in the page's ink, one series, no colour. */
 .database-chart { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 4px; }
-.database-chart-loading { height: 240px; }
+.database-chart-loading { height: 304px; }
+.database-chart-loading.is-number { height: 106px; }
+/* As the day's "Couldn't draft · Retry" line reads. */
+.database-chart-loading.is-unavailable { display: flex; align-items: center; justify-content: center; color: var(--ink-2); font-size: var(--text-small); }
+.database-chart-loading.is-unavailable .is-warn { color: var(--warn); }
+.database-chart-loading.is-unavailable .sep { color: var(--ink-3); white-space: pre; }
+.database-chart-loading.is-unavailable button { padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+@media (hover: hover) { .database-chart-loading.is-unavailable button:hover { color: var(--ink); } }
+@media (max-width: 599px) { .database-chart-loading.is-unavailable button { min-height: 44px; } }
 .database-chart-number { display: flex; flex-direction: column; gap: 2px; padding: 12px 0; }
 .database-chart-number strong { min-width: 0; overflow-wrap: anywhere; color: var(--ink); font-size: 40px; font-weight: var(--weight-semibold); line-height: 1.1; font-variant-numeric: tabular-nums; }
 .database-chart-number span { color: var(--ink-2); font-size: var(--text-ui); }
@@ -2207,6 +2222,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (hover: hover) { .database-chart-row:hover { text-decoration: underline; } }
 @media (max-width: 899px) {
   .database-chart-plot { height: 180px; }
+  .database-chart-loading:not(.is-number) { height: 272px; }
   .database-chart-line { min-height: 36px; }
   .database-chart-legend-item { min-height: 36px; }
   .database-chart-toggle { min-height: 36px; }
@@ -3029,6 +3045,12 @@ button.comment-quote { cursor: pointer; }
 .form-input { box-sizing: border-box; width: 100%; min-height: 40px; margin: 0 0 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-control); background: none; color: var(--ink); font: inherit; }
 .form-input:focus { border-color: var(--blue); outline: none; }
 textarea.form-input { resize: vertical; }
+.form-date { position: relative; display: block; }
+.form-date.is-empty .form-input:not(:focus) { color: transparent; }
+.form-date.is-empty .form-input:not(:focus)::-webkit-datetime-edit { color: transparent; }
+.form-date-empty { position: absolute; top: 0; left: 11px; display: flex; align-items: center; height: 40px; color: var(--ink-3); pointer-events: none; }
+.form-date:focus-within .form-date-empty { display: none; }
+.form-date-clear { position: absolute; top: 0; right: 36px; width: 32px; height: 40px; min-height: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 18px; cursor: pointer; }
 .form-choices { display: grid; gap: 2px; border: 1px solid transparent; border-radius: var(--radius-control); }
 .form-choice, .form-check { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 8px; border-radius: var(--radius-row); cursor: pointer; }
 .form-check { padding: 0; }
@@ -3069,5 +3091,6 @@ textarea.form-input { resize: vertical; }
   body:has(.tab-bar.is-keyboard-up) .form-actions { bottom: 0; }
   .form-input, .form-head .form-state, .form-question-tools select, .form-max { font-size: 16px; }
   .form-input, .form-choice, .form-send { min-height: 44px; }
+  .form-date-empty, .form-date-clear { height: 44px; }
   .form-question-moves > button:not(.app-link) { width: 36px; height: 40px; }
 }

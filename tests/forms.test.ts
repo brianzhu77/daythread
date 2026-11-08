@@ -31,6 +31,7 @@ test('a new form asks a question for each property it can, Name first, and the f
   const { h, C } = setup()
   assert.deepEqual(form(h).questions.map(q => q.wording), ['Name', 'Distance', 'Felt', 'Tags', 'When', 'Stretched', 'Note'], 'not the formula')
   assert.deepEqual(db(h).views.map(v => [v.name, v.layout]), [['Table', 'table'], ['Log a run', 'form'], ['Responses', 'table']])
+  assert.deepEqual(db(h).views.find(v => v.name === 'Responses')!.columns.map(c => c.id), ['km', 'feel', 'tags', 'when', 'ok', 'note'], 'what was asked, in its order, and not the formula')
   C({ kind: 'addView', view: { id: 'f2', name: 'Another', layout: 'form', columns: [], sort: [], filter: [] } })
   assert.equal(db(h).views.filter(v => v.name === 'Responses').length, 1)
   // A view turned into a form takes its questions then; turned back, it keeps them.

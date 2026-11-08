@@ -1,6 +1,6 @@
 // Rules on a database (docs/design/automations.md): when something happens to a row, do these steps, inside the command that made the change. Nothing here writes:
 // `applyCommand` stages each rule on its own copy, so a rule's failure can't touch his edit. A database with no rules costs one look at its field.
-import { readSteps, usesFormulas, writeSteps, type ButtonStep } from './buttons.ts'
+import { isTodosTarget, readSteps, usesFormulas, writeSteps, type ButtonStep } from './buttons.ts'
 import { freshWorldOf } from './formula.ts'
 import { stepFormulaProblems } from './step-formulas.ts'
 import { dueDates, nextDate } from './repeats.ts'
@@ -58,6 +58,8 @@ const stepDatabase = (ws: Pick<Workspace, 'pages'>, db: Database, step: Extract<
 /** What's gone from under one step, so its row can say so. */
 export function stepBroken(ws: Pick<Workspace, 'pages'>, db: Database, step: ButtonStep): string | null {
   if (step.kind !== 'edit-property' && step.kind !== 'add-row' && step.kind !== 'edit-rows') return null
+  // To-dos can't be deleted, and its columns are fixed: a step adding or editing to-dos has nothing to lose (it isn't a page, so it would read as deleted).
+  if (step.kind !== 'edit-property' && isTodosTarget(step.databaseId)) return null
   const target = stepDatabase(ws, db, step)
   if (!target) return `${step.kind === 'edit-property' ? 'That database' : step.databaseName || 'That database'} was deleted`
   for (const set of step.set) {

@@ -1,0 +1,11 @@
+import * as pw from '@playwright/test'
+const [base, engine, width] = process.argv.slice(2)
+const b = await pw[engine].launch(); const p = await (await b.newContext({ viewport: { width: +width, height: 900 }, hasTouch: +width < 500 })).newPage()
+await p.goto(`${base}/form?db=runs&view=f`); await p.waitForTimeout(2300)
+const q = p.locator('[data-question="when"]')
+await q.screenshot({ path: `/tmp/rb-csv/form-date-empty-${engine}-${width}.png` })
+await p.getByLabel('When').fill('2026-11-05'); await p.waitForTimeout(200)
+await q.screenshot({ path: `/tmp/rb-csv/form-date-set-${engine}-${width}.png` })
+await p.getByRole('button', { name: 'Clear When' }).click(); await p.waitForTimeout(200)
+console.log(engine, width, 'cleared', await p.getByLabel('When').inputValue() === '', await q.locator('.form-date-empty').count())
+await b.close()

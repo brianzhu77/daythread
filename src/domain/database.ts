@@ -1388,7 +1388,9 @@ function cleanForm(db: Database, input: FormSettings): FormSettings {
 /** The first form makes a Table view named Responses, as Notion's does (forms.md §4). */
 function addResponses(db: Database): void {
   if (db.views.some((v) => v.name === "Responses") || db.views.filter((v) => v.layout === "form").length > 1 || db.views.length >= limits.views) return;
-  db.views.push({ id: `${db.views.find((v) => v.layout === "form")!.id}:responses`, name: "Responses", layout: "table", columns: db.views[0]!.layout === "form" ? db.properties.map((p) => ({ id: p.id })) : structuredClone(db.views[0]!.columns), sort: [], filter: [] });
+  // What was asked, in the form's order, so no answer is hidden by another view's choice of columns (Bumblebee). Name is always shown.
+  const form = db.views.find((v) => v.layout === "form")!;
+  db.views.push({ id: `${form.id}:responses`, name: "Responses", layout: "table", columns: (form.form?.questions ?? []).filter((q) => q.propertyId !== titleId).map((q) => ({ id: q.propertyId })), sort: [], filter: [] });
 }
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
