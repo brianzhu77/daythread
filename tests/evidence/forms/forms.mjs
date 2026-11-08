@@ -99,14 +99,20 @@ await scenario('Preview sends nothing; Closed, an unknown form and a form in Tra
   return { ok: /nothing is sent/.test(mark) && none === 0 && closed === 'This form is closed' && unknown === closed && nowhere === closed, mark, none, closed, unknown, nowhere }
 })
 
-await scenario('390: one column, 16 px fields 44 px tall, a number keyboard, Send above the tab bar, and Return goes to the next field', async page => {
+await scenario('390: one column, 16 px fields 44 px tall, a number keyboard, Send above the tab bar, Return goes to the next field, and an empty date reads as empty', async page => {
   const name = page.getByLabel('Name'), size = await name.evaluate(n => [getComputedStyle(n).fontSize, n.getBoundingClientRect().height])
   const km = await page.getByLabel('How far did you go?').getAttribute('inputmode')
   const send = await page.locator('.form-send').boundingBox(), bar = await page.locator('.tab-bar').boundingBox().catch(() => null)
   await name.tap(); await page.keyboard.type('Phone run'); await page.keyboard.press('Enter'); await wait(150)
   const next = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))
   const over = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
-  return { ok: size[0] === '16px' && size[1] >= 44 && km === 'decimal' && (!bar || send.y + send.height <= bar.y) && next === 'How far did you go?' && !over, size, km, send, bar, next, over }
+  // An empty date reads as empty, not as today; a set one clears with × (Bumblebee).
+  const when = page.locator('[data-question="when"]'), empty = await when.locator('.form-date-empty').textContent()
+  await page.getByLabel('When').fill('2026-11-05'); await wait(150)
+  const set = await when.locator('.form-date-empty').count()
+  await page.getByRole('button', { name: 'Clear When' }).tap(); await wait(150)
+  const cleared = await page.getByLabel('When').inputValue()
+  return { ok: size[0] === '16px' && size[1] >= 44 && km === 'decimal' && (!bar || send.y + send.height <= bar.y) && next === 'How far did you go?' && !over && empty === 'Pick a date' && set === 0 && cleared === '', size, km, send, bar, next, over, empty, set, cleared }
 }, phone)
 await browser.close()
 console.log(failed ? `${failed} failed` : 'all passed')
