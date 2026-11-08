@@ -3047,7 +3047,7 @@ button.comment-quote { cursor: pointer; }
 textarea.form-input { resize: vertical; }
 .form-date { position: relative; display: block; }
 .form-date.is-empty .form-input:not(:focus) { color: transparent; }
-.form-date.is-empty .form-input:not(:focus)::-webkit-datetime-edit { color: transparent; }
+.form-date.is-empty .form-input:not(:focus)::-webkit-datetime-edit, .form-date.is-empty .form-input:not(:focus)::-webkit-datetime-edit-text, .form-date.is-empty .form-input:not(:focus)::-webkit-datetime-edit-fields-wrapper { color: transparent; }
 .form-date-empty { position: absolute; top: 0; left: 11px; display: flex; align-items: center; height: 40px; color: var(--ink-3); pointer-events: none; }
 .form-date:focus-within .form-date-empty { display: none; }
 .form-date-clear { position: absolute; top: 0; right: 36px; width: 32px; height: 40px; min-height: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 18px; cursor: pointer; }
