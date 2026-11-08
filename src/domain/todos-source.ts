@@ -84,7 +84,8 @@ export function withTodos(ws: Workspace): Workspace {
   if (known) return known
   // The two link columns name their rows, as a relation's options do.
   const options = ws.tasks.filter(t => !isBlankTask(t)).map(t => ({ id: todoRowId(t.id), name: t.title }))
-  const database = { ...todosDatabase, properties: todosDatabase.properties.map(p => (offered.has(p.id) ? { ...p, options } : p)) }
+  // Its rules are the workspace's, as To-dos isn't stored (automations.md §7).
+  const database = { ...todosDatabase, properties: todosDatabase.properties.map(p => (offered.has(p.id) ? { ...p, options } : p)), ...(ws.todoAutomations?.length ? { automations: ws.todoAutomations } : {}) }
   const source = { id: todosSourceId, type: 'document', date: null, title: todosTitle, document: '[]', database } as Page
   const next = { ...ws, pages: [...ws.pages, source, ...ws.tasks.filter(t => !isBlankTask(t)).map(t => rowOf(ws, t))] }
   projected.set(ws, next)
