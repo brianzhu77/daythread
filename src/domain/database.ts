@@ -74,7 +74,7 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 export interface Condition { by: string; op: FilterOp; value?: Json }
 export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
-export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart", "feed"] as const;
+export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart", "form", "feed"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
 /** Values a new row takes from a template: not its number, which is its own. */
 export function templateValues(template: Pick<Page, "values">): NonNullable<Page["values"]> {
@@ -105,6 +105,8 @@ export interface View {
   filterAny?: true;
   /** How a Chart layout draws its groups (chart.md). Kept when the layout changes, as a group is. */
   chart?: ChartSettings;
+  /** A Form's questions and what it says when sent (forms.md). Kept when the layout changes; an older build keeps it and draws a table. */
+  form?: FormSettings;
   /** Groups below the top-level rules (filter-groups.md). A build that doesn't know them applies `filter` alone, and keeps this. */
   filterGroups?: FilterGroup[];
   /** What `+ New` starts from in this view, over the database's own (R3-12). */
@@ -178,6 +180,7 @@ export interface Repeat {
 }
 export type { Automation } from './automations.ts'
 import { everyOf, sameSchedule, type Automation } from './automations.ts'
+import { defaultForm, formLimits, questionable, type FormQuestion, type FormSettings } from "./forms.ts";
 import { todosSourceId } from "./todos-id.ts";
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
@@ -1022,7 +1025,7 @@ export type DatabaseChange =
   | { kind: "duplicateProperty"; propertyId: string; newId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; filterGroups?: FilterGroup[]; layout?: ViewLayout; chart?: ChartSettings; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; form?: FormSettings; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; filterGroups?: FilterGroup[]; layout?: ViewLayout; chart?: ChartSettings; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setRepeat"; templateId: string; repeat: Omit<Repeat, "last" | "lastRan"> | null }
   | { kind: "setDefaultTemplate"; templateId: string | null }
@@ -1364,10 +1367,35 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
   }
   return out;
 }
+/** A form's settings as kept: questions on properties that can be asked, once each, with their words bounded. */
+function cleanForm(db: Database, input: FormSettings): FormSettings {
+  if (!input || typeof input !== "object" || !Array.isArray(input.questions) || input.questions.length > formLimits.questions) throw new DatabaseError("Invalid form");
+  const seen = new Set<string>();
+  const questions = input.questions.map((q): FormQuestion => {
+    if (!q || typeof q.propertyId !== "string" || seen.has(q.propertyId)) throw new DatabaseError("Invalid form");
+    seen.add(q.propertyId);
+    const property = q.propertyId === titleId ? null : db.properties.find((p) => p.id === q.propertyId);
+    if (q.propertyId !== titleId && (!property || !questionable(property))) throw new DatabaseError(property ? `${property.name} can't be a question` : "Property not found");
+    const words = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\u0000/g, "").slice(0, max) : "");
+    const display = q.display === "list" || q.display === "dropdown" || q.display === "short" || q.display === "long" ? q.display : undefined;
+    const max = Number.isInteger(q.max) && q.max! >= 1 && q.max! <= 100 ? q.max : undefined;
+    return { propertyId: q.propertyId, wording: words(q.wording, formLimits.wording), ...(words(q.description, formLimits.description) ? { description: words(q.description, formLimits.description) } : {}), ...(q.required ? { required: true as const } : {}), ...(display ? { display } : {}), ...(max ? { max } : {}) };
+  });
+  const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.replace(/\u0000/g, "").slice(0, formLimits.submit) : undefined);
+  const submit = input.submit && typeof input.submit === "object" ? Object.fromEntries((["button", "title", "body"] as const).flatMap((k) => { const v = text(input.submit![k]); return v ? [[k, v]] : []; })) : {};
+  return { questions, ...(input.closed ? { closed: true as const } : {}), ...(Object.keys(submit).length ? { submit } : {}), ...(Number.isInteger(input.responses) && input.responses! > 0 ? { responses: input.responses } : {}) };
+}
+/** The first form makes a Table view named Responses, as Notion's does (forms.md §4). */
+function addResponses(db: Database): void {
+  if (db.views.some((v) => v.name === "Responses") || db.views.filter((v) => v.layout === "form").length > 1 || db.views.length >= limits.views) return;
+  // What was asked, in the form's order, so no answer is hidden by another view's choice of columns (Bumblebee). Name is always shown.
+  const form = db.views.find((v) => v.layout === "form")!;
+  db.views.push({ id: `${form.id}:responses`, name: "Responses", layout: "table", columns: (form.form?.questions ?? []).filter((q) => q.propertyId !== titleId).map((q) => ({ id: q.propertyId })), sort: [], filter: [] });
+}
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { ...(input.subItemsDisplay === 'flat' ? { subItemsDisplay: 'flat' as const } : {}), ...(input.subItemsShow === 'parents' || input.subItemsShow === 'subs' ? { subItemsShow: input.subItemsShow } : {}), id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.filterGroups?.length ? { filterGroups: cleanFilterGroups(db, input.filterGroups, []) } : {}), ...(input.chart ? { chart: cleanChart(db, input.chart) } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
+  return { ...(input.subItemsDisplay === 'flat' ? { subItemsDisplay: 'flat' as const } : {}), ...(input.subItemsShow === 'parents' || input.subItemsShow === 'subs' ? { subItemsShow: input.subItemsShow } : {}), id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.filterGroups?.length ? { filterGroups: cleanFilterGroups(db, input.filterGroups, []) } : {}), ...(input.chart ? { chart: cleanChart(db, input.chart) } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...(input.form || layout === "form" ? { form: input.form ? cleanForm(db, input.form) : defaultForm(db, titleId) } : {}), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -1429,6 +1457,9 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       if (added.type === "id") numberRows(ws, page);
       // A new property shows in every view, at the end (Notion shows it where it was made; one person rarely needs it hidden elsewhere).
       for (const v of db.views) v.columns.push({ id: added.id });
+      // Made from a form's + Add question: asked there, in the words it was named with (forms.md §3).
+      const onForm = change.viewId !== undefined ? view(change.viewId) : undefined;
+      if (onForm?.layout === "form" && onForm.form && questionable(added)) onForm.form = { ...onForm.form, questions: [...onForm.form.questions, { propertyId: added.id, wording: added.name }] };
       if (change.viewId !== undefined && change.beforeId !== undefined) {
         const v = view(change.viewId), at = v.columns.findIndex((c) => c.id === change.beforeId);
         if (at >= 0) { v.columns.pop(); v.columns.splice(at, 0, { id: added.id }); }
@@ -1565,6 +1596,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       checkRuleCount(added);
       if (db.views.some((v) => v.id === added.id)) throw new DatabaseError("Invalid id");
       db.views.push(added);
+      if (added.layout === "form") addResponses(db);
       return `Added ${added.name}`;
     }
     case "updateView": {
@@ -1604,6 +1636,8 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
         ...(() => { const groups = change.filterGroups === undefined ? old.filterGroups : cleanFilterGroups(db, change.filterGroups, heldRules); return groups?.length ? { filterGroups: groups } : {}; })(),
         ...(() => { const chart = change.chart === undefined ? old.chart : cleanChart(db, change.chart, old.chart); return chart ? { chart } : {}; })(),
+        // The questions it opens with, the first time it's a form; after that its own, kept when the layout changes (forms.md §3).
+        ...(() => { const form = change.form !== undefined ? cleanForm(db, change.form) : old.form ?? (layout === "form" ? defaultForm(db, titleId) : undefined); return form ? { form } : {}; })(),
         ...((change.wrapName ?? old.wrapName) ? { wrapName: true as const } : {}),
         ...(() => { const chosen = change.boardCalculation === undefined ? old.boardCalculation : change.boardCalculation; return chosen ? { boardCalculation: cleanBoardCalculation(db, chosen) } : {}; })(),
         ...(() => { const template = change.defaultTemplate === undefined ? old.defaultTemplate : change.defaultTemplate; return template ? { defaultTemplate: template } : {}; })(),
@@ -1612,6 +1646,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       };
       checkRuleCount(next);
       db.views[db.views.indexOf(old)] = next;
+      if (layout === "form" && old.layout !== "form") addResponses(db);
       return "View saved";
     }
     case "setRepeat": {

@@ -18,7 +18,7 @@ export function schemaName(value = process.env.DAYTHREAD_PG_SCHEMA ?? 'daythread
   return value
 }
 
-export interface WorkspaceInfo { id: string; timezone: string; weekStart: WeekStart; revision: number }
+export interface WorkspaceInfo { id: string; timezone: string; weekStart: WeekStart; revision: number; /** To-dos' rules, as JSON (automations.md §7). */ todoAutomations?: string | null }
 
 /** An operation is kept this long for replay (a lost response needs seconds; this is generous); the newest is always kept, it carries the Undo marker. */
 export const operationKeepMs = 30 * 24 * 3600_000
@@ -63,7 +63,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       const have = await tables(sql)
       if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations', 'comment_threads', 'task_links'].every(t => have.includes(t)) || have.includes('workspace')) return false
       const columns = await columnsOf(sql, 'pages')
-      return addedPageColumns.every(c => columns.includes(c)) && (await columnsOf(sql, 'workspaces')).includes('week_start') && (await columnsOf(sql, 'comment_threads')).includes('anchor')
+      return addedPageColumns.every(c => columns.includes(c)) && (await columnsOf(sql, 'workspaces')).includes('week_start') && (await columnsOf(sql, 'workspaces')).includes('todo_automations') && (await columnsOf(sql, 'comment_threads')).includes('anchor')
     }
     this.ready ??= complete(this.sql).then(async ok => {
       if (ok) return
@@ -125,6 +125,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
           create index if not exists operations_created on ${s}.operations (workspace_id, created_at);
           alter table ${s}.operations enable row level security;
           alter table ${s}.workspaces add column if not exists week_start smallint not null default 0;
+          alter table ${s}.workspaces add column if not exists todo_automations text;
           ${addedPageColumns.map(c => `alter table ${s}.pages add column if not exists ${c} text;`).join('\n          ')}`)
         if ((await tables(tx)).includes('workspace')) await this.migrateShot1(tx)
       })
@@ -169,7 +170,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
 
   async workspaceOf(userId: string, sql: SqlClient = this.sql): Promise<WorkspaceInfo | null> {
     await this.init()
-    const [row] = await sql.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where user_id = $1::uuid`, [userId])
+    const [row] = await sql.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", todo_automations as "todoAutomations", revision from ${this.t('workspaces')} where user_id = $1::uuid`, [userId])
     return row ?? null
   }
   async timezoneOf(userId: string): Promise<string | null> { return (await this.workspaceOf(userId))?.timezone ?? null }
@@ -196,7 +197,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
   /** One workspace by id, for background work on every account (reminders): no owner scope, no Undo marker. */
   async loadWorkspace(id: string): Promise<Workspace | null> {
     await this.init()
-    const [info] = await this.sql.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where id = $1::uuid`, [id])
+    const [info] = await this.sql.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", todo_automations as "todoAutomations", revision from ${this.t('workspaces')} where id = $1::uuid`, [id])
     return info ? workspaceOf(await this.readRows(this.sql, { ...info, userId: null })) : null
   }
   /** Every row of the account's workspace goes (the tables cascade). */
@@ -212,13 +213,13 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     const owner = currentOwner() ?? null
     const forUpdate = lock ? ' for update' : ''
     if (owner === null) {
-      const [local] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where user_id is null${forUpdate}`)
+      const [local] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", todo_automations as "todoAutomations", revision from ${this.t('workspaces')} where user_id is null${forUpdate}`)
       if (local) return { ...local, userId: null }
       const id = await this.createWorkspaceIn(tx, null, 'America/Vancouver')
-      const [made] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where id = $1::uuid${forUpdate}`, [id])
+      const [made] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", todo_automations as "todoAutomations", revision from ${this.t('workspaces')} where id = $1::uuid${forUpdate}`, [id])
       return { ...made!, userId: null }
     }
-    const [row] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where user_id = $1::uuid${forUpdate}`, [owner])
+    const [row] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", todo_automations as "todoAutomations", revision from ${this.t('workspaces')} where user_id = $1::uuid${forUpdate}`, [owner])
     if (!row) throw new Error('No workspace for this account')
     return { ...row, userId: owner }
   }
@@ -230,7 +231,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       tx.query<ThreadRow>(`select ${threadColumns.join(', ')} from ${this.t('comment_threads')} where workspace_id = $1::uuid`, [scope.id]),
       tx.query<LinkRow>(`select ${linkColumns.join(', ')} from ${this.t('task_links')} where workspace_id = $1::uuid`, [scope.id]),
     ])
-    return { revision: scope.revision, timezone: scope.timezone, weekStart: scope.weekStart, pages, tasks, deleted, threads, links }
+    return { revision: scope.revision, timezone: scope.timezone, weekStart: scope.weekStart, todoAutomations: scope.todoAutomations ?? null, pages, tasks, deleted, threads, links }
   }
   /** The Undo marker: the newest operation, when it has an inverse and nothing but notes came after it. A build without comments looks only at the very newest, so it offers none past a note. */
   private async undoMarker(tx: SqlClient, scope: Scope): Promise<Workspace['undo']> {
@@ -304,7 +305,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       if (after.revision !== workspace.revision) {
         const { write, inverse } = planWrites(rows, after)
         await this.writeDiff(tx, scope.id, write)
-        await tx.query(`update ${this.t('workspaces')} set revision = $2, timezone = $3, week_start = $4 where id = $1::uuid`, [scope.id, after.revision, after.timezone, after.weekStart ?? 0])
+        await tx.query(`update ${this.t('workspaces')} set revision = $2, timezone = $3, week_start = $4${write.todoAutomations !== undefined ? ', todo_automations = $5' : ''} where id = $1::uuid`, [scope.id, after.revision, after.timezone, after.weekStart ?? 0, ...(write.todoAutomations !== undefined ? [write.todoAutomations] : [])])
         await this.writeOperation(tx, scope.id, result.receipt, after.revision, command.action.type, after.undo?.operationId === command.operationId ? inverse : null)
         if (after.revision % pruneEvery === 0) await this.pruneOperations(tx, scope.id, new Date())
       }

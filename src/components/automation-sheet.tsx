@@ -13,6 +13,7 @@ import { todayIso } from './dates'
 import { useKeyboardTop } from './keyboard'
 import { useWide } from './property-editors'
 import { newOperationId, useWorkspace } from './use-day'
+import { databaseSource, todosSourceId } from '../domain/todos-source'
 
 let open: { id: string; at: { top: number; left: number } | null } | null = null
 const listeners = new Set<() => void>()
@@ -38,7 +39,8 @@ export function statusLine(rule: Automation, problem: string | null): { text: st
 export function AutomationsHost() {
   const current = useSyncExternalStore(subscribe, () => open, () => null)
   const { workspace } = useWorkspace()
-  const page = current ? workspace?.pages.find(p => p.id === current.id) : undefined
+  // To-dos isn't a page: its rules are the workspace's, read through its projection (automations.md §7).
+  const page = current && workspace ? (current.id === todosSourceId ? databaseSource(workspace, todosSourceId) : workspace.pages.find(p => p.id === current.id)) : undefined
   return page && isDatabase(page) && !page.trashedAt ? <Sheet key={page.id} db={page} at={current!.at} /> : null
 }
 
@@ -124,7 +126,8 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
     document.addEventListener('keydown', esc, true)
     return () => document.removeEventListener('keydown', esc, true)
   })
-  const properties: Property[] = [{ id: titleId, name: 'Name', type: 'text' }, ...db.database.properties.filter(p => p.type !== 'button')]
+  // To-dos: what a to-do can change, not Page, which is where its line is.
+  const properties: Property[] = [{ id: titleId, name: 'Name', type: 'text' }, ...db.database.properties.filter(p => p.type !== 'button' && !(db.database.fixed && p.readOnly))]
   const putTrigger = (i: number, next: AutomationTrigger) => setTriggers(list => list.map((t, j) => (j === i ? next : t)))
   return <>
     <div className="database-menu-head button-editor-head">
@@ -146,7 +149,7 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
             if (e.target.value === everyValue) { const now = new Date(); setAny(false); setTriggers([{ kind: 'every', repeat: { every: 'week', interval: 1, start: todayIso(), time: '09:00', notBefore: wallClock(now) } }]); return }
             const p = properties.find(x => x.id === e.target.value); putTrigger(i, p ? { kind: 'property-edited', propertyId: p.id, name: p.name } : { kind: 'row-added' })
           }}>
-            <option value="">A row is added</option>
+            <option value="">{db.id === todosSourceId ? 'A to-do is added' : 'A row is added'}</option>
             <option value={everyValue}>Every…</option>
             {properties.map(p => <option key={p.id} value={p.id}>{p.name} is edited</option>)}
           </select>
@@ -168,7 +171,7 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
       })()}
       {!every && <button type="button" role="menuitem" onClick={() => setTriggers(list => [...list, { kind: 'row-added' }])}>+ Add trigger</button>}
       <p className="button-editor-label">In</p>
-      <select className="button-editor-field" aria-label="In" value={viewId} onChange={e => setViewId(e.target.value)}><option value="">The whole database</option>{db.database.views.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
+      <select className="button-editor-field" aria-label="In" value={viewId} onChange={e => setViewId(e.target.value)}><option value="">{db.id === todosSourceId ? 'All to-dos' : 'The whole database'}</option>{db.database.views.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
       <p className="button-editor-label">Do</p>
       {steps.map((step, i) => {
         const problem = stepIssue(i)
