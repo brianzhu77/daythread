@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { chartData, chartSettings, type ChartForm } from '../src/domain/chart.ts'
-import { chartSvg, type ChartPalette } from '../src/domain/chart-svg.ts'
+import { chartSvg, pictureName, type ChartPalette } from '../src/domain/chart-svg.ts'
 import { viewRows, type View } from '../src/domain/database.ts'
 import { harness } from './v2-helpers.ts'
 
@@ -56,4 +56,10 @@ test('series are drawn as parts, with a legend', () => {
 test('a number is the number and what it measures', () => {
   const svg = chartSvg({ title: 'Runs', measureName: 'Count', settings: chartSettings(chart('number')), data: null, number: '3', valueText: () => '' })
   assert.ok(svg.includes('>3</text>') && svg.includes('>Count</text>'))
+})
+
+test("a picture's name leaves out the view's default name, and keeps one he gave it (Jazz 60439831)", () => {
+  assert.equal(pictureName('Reading list', 'Chart', ' - '), 'Reading list')
+  assert.equal(pictureName('Reading list', 'By month', ' · '), 'Reading list · By month')
+  assert.equal(pictureName('  ', 'Chart', ' - '), 'Untitled')
 })

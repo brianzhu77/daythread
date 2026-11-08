@@ -11,6 +11,9 @@ const cut = (s: string, n: number) => ([...s].length > n ? `${[...s].slice(0, n 
 const text = (x: number, y: number, s: string, attrs = '') => `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" ${attrs}>${esc(s)}</text>`
 const fill = (c: ChartPalette, grey: number | null | undefined) => (grey === null ? 'none' : c.greys[(grey ?? 0) % c.greys.length]!)
 
+/** The database's name, and the view's once it's been renamed: "Chart" alone, its default, would read as a label on a picture sent on (Jazz 60439831). */
+export const pictureName = (database: string, view: string, between: string): string => [database.trim() || 'Untitled', ...(view.trim() && view.trim() !== 'Chart' ? [view.trim()] : [])].join(between)
+
 export interface ChartSvgInput { title: string; measureName: string; settings: ChartSettings; data: ChartData | null; number?: string; valueText: (p: ChartPoint) => string; palette?: ChartPalette }
 
 export function chartSvg({ title, measureName, settings, data, number, valueText, palette = lightPalette }: ChartSvgInput): string {

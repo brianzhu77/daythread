@@ -1,7 +1,7 @@
 // Export from a chart's `⋯` (chart.md §5, G4-8): copy or download a PNG or an SVG of what the chart shows. In the Home Screen app on an
 // iPhone a download goes nowhere he can see, so there it hands the file to the share sheet, or says why it can't.
 import { chartData, chartMeasure, chartSettings, chartValue } from '../domain/chart'
-import { chartSvg, lightPalette, type ChartPalette } from '../domain/chart-svg'
+import { chartSvg, lightPalette, pictureName, type ChartPalette } from '../domain/chart-svg'
 import { calcLabels, viewRows, type CalcKind, type CalcResult, type Database, type View, type ViewContext } from '../domain/database'
 import { safeName } from '../domain/export'
 import type { Page, Workspace } from '../domain/types'
@@ -16,14 +16,14 @@ export function chartPicture(workspace: Workspace, db: Page & { database: Databa
   const kind: CalcKind = measure ? measure.kind : 'countAll', property = measure ? measure.property : null
   const textOf = (result: CalcResult) => calcText(kind, result, property?.format, context.today, property?.prefix).value
   const measureName = property ? `${calcLabels[kind]} of ${property.name}` : 'Count'
-  const title = [db.title.trim() || 'Untitled', view.name].join(' · ')
+  const title = pictureName(db.title, view.name, ' · ')
   if (settings.form === 'number') return chartSvg({ title, measureName, settings, data: null, number: textOf(chartValue(db.database, rows, measure)), valueText: () => '', palette })
   const data = chartData(db.database, view, rows, context.weekStart ?? 0)
   if (!data || data === 'choose' || data.tooMany) return null
   return chartSvg({ title, measureName, settings, data, valueText: p => textOf(p.result), palette })
 }
 
-export const chartFileName = (db: Page, view: View, extension: 'png' | 'svg') => `${safeName(`${db.title.trim() || 'Untitled'} - ${view.name}`)}.${extension}`
+export const chartFileName = (db: Page, view: View, extension: 'png' | 'svg') => `${safeName(pictureName(db.title, view.name, ' - '))}.${extension}`
 
 /** The theme it's exported from, as plain sRGB colours any app reads: the page's own colours may be written in a space an SVG viewer doesn't know. */
 export function themePalette(): ChartPalette {
