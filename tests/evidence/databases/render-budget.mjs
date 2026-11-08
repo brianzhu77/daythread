@@ -16,7 +16,9 @@ const measure = async (variant) => {
     const start = Date.now()
     await page.goto(`${base}/`)
     await page.getByText('Line 39 of the day').waitFor({ timeout: 60000 })
-    if (variant !== 'plain') await page.locator('.database-row').nth(24).waitFor({ timeout: 60000 })
+    // A chart is drawn when its second bar is, after its code has loaded; a table when its 25th row is.
+    if (variant === 'chart') await page.locator('.database-chart-bar').nth(1).waitFor({ timeout: 60000 })
+    else if (variant !== 'plain') await page.locator('.database-row').nth(24).waitFor({ timeout: 60000 })
     const ms = Date.now() - start
     if (i > 0) times.push(ms) // the first load warms the dev server's module cache
     await page.close()
@@ -25,7 +27,7 @@ const measure = async (variant) => {
   return { median: times[Math.floor(times.length / 2)], min: times[0], max: times.at(-1) }
 }
 // BUDGET_VARIANTS=relation,todos measures only those, against plain. `cover` isn't in the default set: BUDGET_VARIANTS=table,cover compares a day with a cover to one without.
-const variants = (process.env.BUDGET_VARIANTS ?? 'table,linked,todos,relation,formula,sub-items').split(',')
+const variants = (process.env.BUDGET_VARIANTS ?? 'table,linked,chart,todos,relation,formula,sub-items').split(',')
 const plain = await measure('plain'), out = { runs, plain }
 for (const v of variants) { out[v] = await measure(v); out[`extra_${v}`] = out[v].median - plain.median }
 console.log(JSON.stringify(out))
