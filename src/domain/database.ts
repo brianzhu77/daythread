@@ -180,7 +180,7 @@ export interface Repeat {
 }
 export type { Automation } from './automations.ts'
 import { everyOf, sameSchedule, type Automation } from './automations.ts'
-import { defaultForm, formLimits, questionable, type FormQuestion, type FormSettings } from "./forms.ts";
+import { canLeadOn, defaultForm, formLimits, questionable, type FormQuestion, type FormSettings } from "./forms.ts";
 import { todosSourceId } from "./todos-id.ts";
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
@@ -1379,7 +1379,11 @@ function cleanForm(db: Database, input: FormSettings): FormSettings {
     const words = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\u0000/g, "").slice(0, max) : "");
     const display = q.display === "list" || q.display === "dropdown" || q.display === "short" || q.display === "long" ? q.display : undefined;
     const max = Number.isInteger(q.max) && q.max! >= 1 && q.max! <= 100 ? q.max : undefined;
-    return { propertyId: q.propertyId, wording: words(q.wording, formLimits.wording), ...(words(q.description, formLimits.description) ? { description: words(q.description, formLimits.description) } : {}), ...(q.required ? { required: true as const } : {}), ...(display ? { display } : {}), ...(max ? { max } : {}) };
+    // Only on a choice question above it, and only on its options.
+    const on = q.showIf && typeof q.showIf === "object" ? db.properties.find((p) => p.id === q.showIf!.propertyId) : undefined;
+    const showIf = on && seen.has(on.id) && on.id !== q.propertyId && canLeadOn(on) && Array.isArray(q.showIf!.values) ? { propertyId: on.id, values: [...new Set(q.showIf!.values.filter((v) => typeof v === "string"))].slice(0, 200) } : undefined;
+    // Kept by option id, so a rename keeps it, and an option deleted since leaves it never asked rather than always (Bumblebee).
+    return { ...(showIf ? { showIf } : {}), propertyId: q.propertyId, wording: words(q.wording, formLimits.wording), ...(words(q.description, formLimits.description) ? { description: words(q.description, formLimits.description) } : {}), ...(q.required ? { required: true as const } : {}), ...(display ? { display } : {}), ...(max ? { max } : {}) };
   });
   const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.replace(/\u0000/g, "").slice(0, formLimits.submit) : undefined);
   const submit = input.submit && typeof input.submit === "object" ? Object.fromEntries((["button", "title", "body"] as const).flatMap((k) => { const v = text(input.submit![k]); return v ? [[k, v]] : []; })) : {};
