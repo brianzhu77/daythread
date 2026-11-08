@@ -123,6 +123,8 @@ export type Action =
   | { type: "ensure-day"; date: LocalDate }
   | { type: "add-task"; pageId: string; title: string; plannedOn?: LocalDate | null; attentionOn?: LocalDate | null; deadlineOn?: LocalDate | null }
   | { type: "task-status"; taskId: string; status: Task["status"]; today?: LocalDate }
+  /** An answer to a form: one row, its id made when the form opened, so a retry makes no second one (forms.md §4). */
+  | { type: "answer-form"; databaseId: string; viewId: string; pageId: string; title: string; values: Record<string, import("./database.ts").Json>; at: string }
   /** Blockers added to and taken off one to-do, as one change with one Undo (todo-dependency.md §4). */
   | { type: "link-tasks"; taskId: string; add: string[]; remove: string[]; at: string }
   /** New words for a to-do: its title and every line of it, on any page. */
