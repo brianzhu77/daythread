@@ -1936,6 +1936,13 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .cell-relation-ref { display: inline-flex; align-items: center; gap: 4px; color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .cell-relation-ref svg { flex: none; width: 14px; height: 14px; color: var(--ink-3); }
 .cell-relation.is-trashed, .cell-relation.is-trashed .cell-relation-ref { color: var(--ink-3); }
+/* In a table on a page, BlockNote's `.bn-editor a { color: revert; text-decoration: revert }` made these browser-blue. */
+.bn-editor a.cell-relation-ref { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.bn-editor .cell-relation.is-trashed a.cell-relation-ref { color: var(--ink-3); }
+.bn-editor a.cell-relation-ref svg { width: 14px; height: 14px; } /* `.bn-shadcn svg:not([class*=size-])` reverts it to the icon's own 22 px */
+.cell-relation-ref { min-width: 0; max-width: 100%; }
+.cell-relation-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.is-wrapped .cell-relation-name { white-space: normal; }
 .database-new, .database-more { display: block; min-height: 36px; padding: 6px 8px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; font-size: var(--text-ui); line-height: 24px; text-align: left; cursor: pointer; }
 /* To-dos: each row starts with its box, so Name's heading and + New start where its words do. */
 .database-table-wrap.is-todos .database-th.is-title { padding-inline-start: 24px; }
