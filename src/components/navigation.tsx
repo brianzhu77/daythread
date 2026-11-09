@@ -8,7 +8,7 @@ import { Mark } from './mark'
 import type { LocalDate } from '../domain/types'
 import { useWorkspace } from './use-day'
 import { SidebarTrashRow } from './trash'
-import { AccountRow } from './account-row'
+import { SidebarAccount } from './sidebar-account'
 import { useKeptDrafts } from './kept-drafts'
 import { useKeyboardTop } from './keyboard'
 import { openSearch, SidebarSearchRow } from './search-dialog'
@@ -65,7 +65,8 @@ export function Navigation() {
           ))}
           <SidebarBookmarksRow current={bookmarksView} />
         </nav>
-        <PageGroups path={path} openPageId={openPageId} trashView={trashView} today={today} />
+        <PageGroups path={path} openPageId={openPageId} today={today} />
+        <SidebarFooter path={path} openPageId={openPageId} trashView={trashView} />
       </aside>
 
       {/* B54: hidden while a keyboard is up (B48's detection), so it never sits between the keyboard and the toolbar. */}
@@ -85,14 +86,25 @@ export function Navigation() {
 }
 
 /** The page on screen: a day page by its date (`/` is today), or the page opened in Pages. */
-function PageGroups({ path, openPageId, trashView, today }: { path: string; openPageId?: string; trashView: boolean; today: LocalDate }) {
+function PageGroups({ path, openPageId, today }: { path: string; openPageId?: string; today: LocalDate }) {
   const { workspace } = useWorkspace()
   const date = path === '/' ? today : path.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/)?.[1]
   const activeId = (date ? workspace?.pages.find(p => p.type === 'daily' && p.date === date && !p.trashedAt)?.id : path.startsWith('/pages') ? openPageId : undefined) ?? null
   useEffect(() => { if (activeId) rememberOpened(activeId) }, [activeId])
   if (!workspace) return null
+  return <SidebarTree workspace={workspace} activeId={activeId} today={today} />
+}
+
+/** Pinned under the tree (Brian, Nov 8): the Trash while it holds something, then the account row with its menu. */
+function SidebarFooter({ path, openPageId, trashView }: { path: string; openPageId?: string; trashView: boolean }) {
+  const { workspace } = useWorkspace()
   // The Trash row is current on the Trash screen and on a trashed page, which has no row in the tree (layout T3/T4).
-  const trashOpen = path.startsWith('/pages') && (trashView || Boolean(openPageId && workspace.pages.find(p => p.id === openPageId)?.trashedAt))
-  return <SidebarTree workspace={workspace} activeId={activeId} today={today} footer={<><SidebarTrashRow current={trashOpen} /><AccountRow className="account-row-sidebar" /></>} />
+  const trashOpen = path.startsWith('/pages') && (trashView || Boolean(openPageId && workspace?.pages.find(p => p.id === openPageId)?.trashedAt))
+  return (
+    <div className="side-foot">
+      <SidebarTrashRow current={trashOpen} />
+      <SidebarAccount />
+    </div>
+  )
 }
 

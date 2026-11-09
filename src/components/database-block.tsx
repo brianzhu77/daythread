@@ -1,3 +1,4 @@
+import { layoutRect, useRoom, withSlot } from './drag-lift'
 // Databases R1 (design §4, §6, §10, §13): the `database` block in a page. Only a database's home block draws its table;
 // any other block pointing at a database (a paste, an old copy, one left behind by Move to…) is a page card to it until
 // linked views ship in R2 (Roadbuster 220ae60e). Cells edit through Jazz's value editors (property-editors.tsx); each
@@ -576,7 +577,10 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
       const own = new Set(links ? descendantsOf(all, links, rowId).map(r => r.id) : [])
       const next = here.slice(here.findIndex(r => r.id === rowId) + 1).find(r => !own.has(r.id))?.id ?? null
       if (sorted || before === rowId || before === next || (before !== null && own.has(before)) || beforeId === undefined) return
-      void run({ type: 'move-page', pageId: rowId, parentId: db.id, beforeId }, r => ({ text: 'Row moved', undoOperationId: r.operationId }))
+      // Seen in its new place at once, as a cell's change is (withPendingMoves), while the save is on its way.
+      const key = pendingKey(rowId, titleId), settled = () => setPendingCell(key, null)
+      setPendingCell(key, { databaseId: db.id, rowId, columnId: titleId, raw: rawOf(row, titleId) as Json | undefined, failed: false, retry: settled, discard: settled, beforeId, part: true })
+      void run({ type: 'move-page', pageId: rowId, parentId: db.id, beforeId }, r => ({ text: 'Row moved', undoOperationId: r.operationId })).then(settled, settled)
       return
     }
     if (!groups || to === null || !target) return
@@ -1012,29 +1016,48 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     setPicked(p => (p.includes(rowId) ? p.filter(x => x !== rowId) : [...p, rowId]))
   }
   // Rows drag by their ⋮⋮ only while the view isn't sorted (design §7.2); the drop is a move-page among the rows.
-  const [drag, setDrag] = useState<{ rowId: string; from: string | null; before: string | null; group: string | null } | null>(null)
+  // Rows drag by their ⋮⋮: the row itself lifts under the pointer, a slot waits where it lands and the rows make room (drag-lift.ts).
+  type Drag = { rowId: string; from: string | null; before: string | null; group: string | null; height: number }
+  const [drag, setDragState] = useState<Drag | null>(null)
+  const dragging = useRef<Drag | null>(null)
+  const setDrag = (next: Drag | null) => { dragging.current = next; setDragState(next) }
   const tbody = useRef<HTMLTableSectionElement>(null)
+  const room = useRoom(() => [...(tbody.current?.querySelectorAll(':scope > tr') ?? [])], rowId => tbody.current?.querySelector<HTMLElement>(`tr[data-row="${CSS.escape(rowId)}"]`) ?? null)
   const startDrag = (e: ReactPointerEvent, rowId: string, from: string | null) => {
     if (view.sort.length) return
     e.preventDefault()
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
-    // The row under the pointer, or a group's foot for the end of that group.
+    const handle = e.currentTarget as HTMLElement, line = handle.closest<HTMLTableRowElement>('tr.database-row')
+    if (!line) return
+    handle.setPointerCapture(e.pointerId)
+    const start = { x: e.clientX, y: e.clientY }
+    let held = false
+    // The row under the pointer, or a group's foot for the end of that group; read against places, not slides under way.
     const target = (y: number): { before: string | null; group: string | null } => {
       const trs = [...(tbody.current?.querySelectorAll<HTMLTableRowElement>('tr.database-row, tr.database-group-foot') ?? [])]
-      const tr = trs.find(t => { const r = t.getBoundingClientRect(); return y < r.top + r.height / 2 })
+      const tr = trs.find(t => { const r = layoutRect(t); return y < r.top + r.height / 2 })
       return { before: tr?.classList.contains('database-row') ? tr.dataset.row ?? null : null, group: (tr ?? trs.at(-1))?.dataset.group ?? null }
     }
-    setDrag({ rowId, from, ...target(e.clientY) })
-    const move = (ev: PointerEvent) => setDrag({ rowId, from, ...target(ev.clientY) })
-    const up = (ev: PointerEvent) => {
-      el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up)
-      setDrag(null)
-      if (ev.type === 'pointercancel') return
-      const { before, group } = target(ev.clientY)
-      moveRow(rowId, from, group, before, entries.map(x => x.row))
+    const place = (y: number, height: number) => {
+      const current = dragging.current, next = target(y)
+      if (current && current.before === next.before && current.group === next.group) return
+      room.willRedraw()
+      setDrag({ rowId, from, ...next, height })
     }
-    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up)
+    const move = (ev: PointerEvent) => {
+      // A press on the handle is nothing until it moves.
+      if (!held) { if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 3) return; held = true; room.pickUp(line, ev.clientX, ev.clientY, { tilt: 1 }) }
+      room.copy.current?.move(ev.clientX, ev.clientY)
+      place(ev.clientY, room.copy.current?.origin.height ?? line.offsetHeight)
+    }
+    const up = (ev: PointerEvent) => {
+      handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up)
+      if (!held) return
+      const current = dragging.current
+      if (ev.type !== 'pointercancel' && current) moveRow(rowId, from, current.group, current.before, entries.map(x => x.row))
+      setDrag(null)
+      room.land(rowId)
+    }
+    handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up)
   }
   useEffect(() => {
     if (!reveal) return
@@ -1200,7 +1223,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     })}
     <td className="database-td is-add" />
   </tr>
-  const rowLine = (row: Page, index: number, group?: string, tint = rowTint(db.database, view, row, context)) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} {...(tint ? { style: tint.style } : {})} className={`database-row${tint && tint.rule.scope !== 'property' ? tint.className : ''}${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${treeOf.get(row.id)?.context ? ' is-context' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
+  const rowLine = (row: Page, index: number, group?: string, tint = rowTint(db.database, view, row, context)) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} {...(tint ? { style: tint.style } : {})} className={`database-row${tint && tint.rule.scope !== 'property' ? tint.className : ''}${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${treeOf.get(row.id)?.context ? ' is-context' : ''}${drag?.rowId === row.id ? ' is-lifted' : ''}${room.landing === row.id ? ' is-landing' : ''}`}>
             <td className={`database-td is-title${view.wrapName ? ' is-wrapped' : ''}${tint?.rule.scope === 'property' && tint.rule.rule.by === titleId ? ' has-tint' : ''}`}><div className="database-title-inner">
               {wide && <span className="database-pin-strip" />}
               {wide && <span className="database-row-gutter">
@@ -1244,6 +1267,8 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
             })}
             <td className="database-td is-add" />
           </tr>
+  // A row's height, less its line below, which the slot's own margins stand in for.
+  const slot = <tr key="slot" className="drag-slot-row" aria-hidden="true"><td colSpan={columns.length + 2}><div className="drag-slot" style={{ height: (drag?.height ?? 36) - 2 }} /></td></tr>
   return <div className={`database-table-wrap${db.database.fixed ? ' is-todos' : ''}`} ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     {heads.overlay}
@@ -1257,16 +1282,16 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
             {!db.database.fixed && <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>}
           </tr>
         </thead>
-        <tbody ref={tbody} className={!groups && drag && drag.before === null ? 'is-drop-end' : undefined} onPointerDownCapture={() => { justHeld.current = false }} onClickCapture={tapWhilePicking}>
+        <tbody ref={tbody} onPointerDownCapture={() => { justHeld.current = false }} onClickCapture={tapWhilePicking}>
           {layers ? layers.map(({ group, subs }) => {
             const isFolded = folded.has(group.key)
             const body = (key: string, all: readonly Page[]) => {
               if (folded.has(key)) return null
               const inGroup = drawn(key, all), start = entries.findIndex(e => e.group === key), more = all.length > inGroup.length
               return <>
-                {inGroup.map((row, i) => rowLine(row, start + i, key))}
+                {withSlot(inGroup, r => r.id, drag?.group === key ? drag.before : undefined, (row, i) => rowLine(row, start + i, key), slot)}
                 {hasFoot && footRow(all)}
-                <tr className={`database-group-foot${drag && drag.before === null && drag.group === key ? ' is-drop-end' : ''}`} data-group={key}><td colSpan={columns.length + 2}>
+                <tr className="database-group-foot" data-group={key}><td colSpan={columns.length + 2}>
                   <div className="database-group-inner">
                     {more && <button type="button" className="database-more" onClick={() => showMore(key)}>Show 25 more</button>}
                     <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={key} /></span>
@@ -1289,7 +1314,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                   </Fragment> })
                 : body(group.key, group.rows))}
             </Fragment>
-          }) : entries.map((e, i) => rowLine(e.row, i))}
+          }) : withSlot(entries, e => e.row.id, drag && drag.group === null ? drag.before : undefined, (e, i) => rowLine(e.row, i), slot)}
         </tbody>
         {!groups && hasFoot && <tfoot>{footRow(rows)}</tfoot>}
       </table>
