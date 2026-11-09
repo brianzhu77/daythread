@@ -3172,7 +3172,7 @@ textarea.form-input { resize: vertical; }
 .feed-new { display: flex; align-items: center; margin: 4px 0 12px; }
 .feed-card { padding: 0 0 32px; margin-bottom: 32px; border-bottom: 1px solid var(--line-soft); }
 .feed-card:last-child { margin-bottom: 0; border-bottom: 0; }
-.feed-card.is-returned { background: var(--fill); }
+.feed-card.is-returned { background: var(--blue-soft); transition: background .3s; }
 .feed-title { display: block; width: 100%; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-section); font-weight: var(--weight-semibold); line-height: 1.35; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .feed-title.is-placeholder { color: var(--ink-3); }
 .feed-values { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 6px 0 0; color: var(--ink-2); font-size: var(--text-meta); }
