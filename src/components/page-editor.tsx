@@ -265,7 +265,8 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   // data-status: the task's real state, for checks such as scripts/check-alignment.mjs (Lead a2428bb1). Display only.
   const taskLine = useRef<HTMLDivElement>(null)
   // B92: on today's page, how long carry-over has brought it, from 7 days on. Older pages show what was, so nothing there.
-  const since = seen && workspace && role === 'plan' && planDate && planDate === todayIso() ? carriedSince(workspace, seen, planDate) : null
+  const today = todayIso()
+  const since = useMemo(() => (seen && workspace && role === 'plan' && planDate === today ? carriedSince(workspace, seen, today) : null), [workspace, seen?.status, seen?.paused, t, role, planDate, today]) // eslint-disable-line react-hooks/exhaustive-deps
   return <div ref={taskLine} className="editor-task" data-role={role} data-draft={t ? undefined : true} data-status={t?.status ?? 'draft'}>
     <input contentEditable={false} type="checkbox" {...tickOnly} aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={shown === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && tick.toggle((to, r) => ({ text: to === 'done' ? 'Task completed' : 'Task reopened', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${shown === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
