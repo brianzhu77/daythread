@@ -426,13 +426,19 @@ export function DatabaseCellEditor() {
   const loopTask = db.id === todosSourceId && cell.columnId === blockedByColumn ? taskIdOfRow(row.id) : null, ws = stored
   // A comment on this property of the row: a real row's, not a to-do's or a template's, and not on its title (comments.md §6, step 4).
   const comment = !db.database.fixed && !isNewTodo && cell.columnId !== titleId && stored && databaseOfRow(stored, row)?.id === db.id
-    ? () => { setOpenCell(null); openComments(row.id, { composing: true, property: commentOn(db, row, property) }) } : undefined
+    ? () => {
+        const saved = justCommitted?.key === cellKey(cell) ? justCommitted : null
+        justCommitted = null
+        setOpenCell(null)
+        openComments(row.id, { composing: true, property: commentOn(db, row, property, saved ? readValue(property, saved.raw) : value as CellValue) })
+      } : undefined
   return <PropertyEditor key={cellKey(cell)}
     property={loopTask ? { ...property, options: property.options?.filter(o => o.id !== row.id) } : property} value={value as CellValue} rowTitle={displayPageTitle(row)} anchor={anchor}
     unavailable={loopTask && ws ? loopsFor(ws, loopTask) : undefined}
     onComment={comment}
     onDraft={keeps ? text => keepDraft({ databaseId: db.id, rowId: row.id, columnId: cell.columnId, value: text, expected }) : undefined}
     onCommit={(raw, info) => {
+      justCommitted = { key: cellKey(cell), raw }
       setOpenCell(null)
       if (isNewTodo) { addTodo(typeof raw === 'string' ? raw : ''); return }
       const sent = typeof raw === 'string' ? raw : ''
@@ -1542,9 +1548,11 @@ export function DatabasePage({ workspace, db }: { workspace: Workspace; db: Page
 
 /** A row's properties above its body (design §5): one line each; more than 4 empty ones fold into one line. */
 /** What a comment on a property is on: its id, and its name and value's words as they read now (comments.md §4). */
-export function commentOn(db: Page & { database: Database }, row: Page, property: Property): CommentProperty {
-  return { propertyId: property.id, name: property.name, quote: valueText(db.database, property.id, cellValue(db.database, row, property.id)).slice(0, quoteLimit) }
+export function commentOn(db: Page & { database: Database }, row: Page, property: Property, value: CellValue = cellValue(db.database, row, property.id)): CommentProperty {
+  return { propertyId: property.id, name: property.name, quote: valueText(db.database, property.id, value).slice(0, quoteLimit) }
 }
+/** The value a cell's editor just saved, as Comment saves first and the row on hand is still the one from before (comments.md §6, step 4). */
+let justCommitted: { key: string; raw: Json | undefined } | null = null
 export function RowProperties({ workspace, row, db }: { workspace: Workspace; row: Page; db: Page & { database: Database } }) {
   const { run } = useWorkspace()
   const commit = useCommitCell()
