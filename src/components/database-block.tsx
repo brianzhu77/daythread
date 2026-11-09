@@ -1585,15 +1585,16 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
   const today = todayIso()
   const blockId = `row:${row.id}`
   const properties = db.database.properties
-  const empty = properties.filter(p => isEmptyValue(cellValue(db.database, row, p.id)) && p.type !== 'checkbox' && p.type !== 'status')
+  // A comment on one property (comments.md §6, step 4): from its name, on a row rather than a template or a to-do.
+  const commentable = !db.database.fixed && databaseOfRow(workspace, row)?.id === db.id
+  const openThreads = commentable ? (workspace.threads ?? []).filter(t => t.pageId === row.id && t.property && !t.resolvedAt) : []
+  // One with a comment stays out of the fold: the comment is what's there to see (Bumblebee d2ed4d18).
+  const empty = properties.filter(p => isEmptyValue(cellValue(db.database, row, p.id)) && p.type !== 'checkbox' && p.type !== 'status' && !openThreads.some(t => t.property!.propertyId === p.id))
   const fold = !unfolded && empty.length > 4
   usePendingCells()
   const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   const shown = fold ? properties.filter(p => !empty.includes(p)) : properties
   const addProperty = () => void run({ type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id: newId(), name: uniqueName(db.database), type: 'text' } } }, r => ({ text: r.message, undoOperationId: r.operationId }))
-  // A comment on one property (comments.md §6, step 4): from its name, on a row rather than a template or a to-do.
-  const commentable = !db.database.fixed && databaseOfRow(workspace, row)?.id === db.id
-  const openThreads = commentable ? (workspace.threads ?? []).filter(t => t.pageId === row.id && t.property && !t.resolvedAt) : []
   return <div className="row-properties" aria-label="Properties">
     {shown.map(property => {
       const pending = pendingCells.get(pendingKey(row.id, property.id))
