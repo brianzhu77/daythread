@@ -431,7 +431,7 @@ export function DatabaseCellEditor() {
         const saved = justCommitted?.key === cellKey(cell) ? justCommitted : null
         justCommitted = null
         setOpenCell(null)
-        openComments(row.id, { composing: true, property: commentOn(db, row, property, saved ? readValue(property, saved.raw) : value as CellValue) })
+        openComments(row.id, { composing: true, property: commentOn(db, row, property, saved ? readValue(property, saved.raw) : value as CellValue), clear: anchor.closest('td') ?? anchor })
       } : undefined
   return <PropertyEditor key={cellKey(cell)}
     property={loopTask ? { ...property, options: property.options?.filter(o => o.id !== row.id) } : property} value={value as CellValue} rowTitle={displayPageTitle(row)} anchor={anchor}

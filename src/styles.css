@@ -3056,6 +3056,8 @@ button.comment-quote { cursor: pointer; }
 /* Beside what it's about, not over it: the page makes room, or a side peek moves over the page it already made room for, so the row being commented on stays in sight (Jazz, comments.md §2). Narrower than this, there's no room, and it lies over them. */
 @media (min-width: 1100px) {
   body:has(.comments-pane:not(.is-sheet)):not(:has(.peek.is-side)) .app-content { padding-right: 360px; }
+  /* A page's database reaches toward the window's edge, which is under the pane now: it keeps to the page, and its table scrolls (Jazz 73cd2b32). */
+  body:has(.comments-pane:not(.is-sheet)):not(:has(.peek.is-side)) .database-block.is-page { width: auto; }
   body:has(.comments-pane:not(.is-sheet)) .peek.is-side { right: 360px; max-width: calc(100vw - 260px - 360px); }
   body:has(.comments-pane:not(.is-sheet)) .peek-scrim { padding-right: 384px; }
 }
