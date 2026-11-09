@@ -98,3 +98,37 @@ test('an answer sets off a Row added rule', () => {
   answer(h, 'a1', 'Run', { km: 3 })
   assert.equal(rows(h).find(p => p.id === 'a1')!.values?.ok, true)
 })
+
+test('a question asked only after an answer above it: hidden, it isn\'t required and its answer isn\'t kept (G7-6)', () => {
+  const { h, C } = setup()
+  const why = { propertyId: 'note', wording: 'Why was it hard?', required: true as const, showIf: { propertyId: 'feel', values: ['hard'] } }
+  C({ kind: 'updateView', viewId: 'f', form: { ...form(h), questions: [...form(h).questions.filter(q => q.propertyId !== 'note'), why] } })
+  assert.deepEqual(form(h).questions.at(-1)!.showIf, { propertyId: 'feel', values: ['hard'] })
+  answer(h, 'a1', 'Easy one', { km: 1, feel: 'good', note: 'typed before it was hidden' })
+  assert.equal(rows(h).find(p => p.id === 'a1')!.values?.note, undefined, 'hidden: not required, and its answer dropped')
+  assert.throws(() => answer(h, 'a2', 'Hard one', { km: 1, feel: 'hard' }), /Needs an answer: Why was it hard\?/)
+  answer(h, 'a3', 'Hard one', { km: 1, feel: 'hard', note: 'hills' })
+  assert.equal(rows(h).find(p => p.id === 'a3')!.values?.note, 'hills')
+})
+
+test('a condition points only upwards, holds option ids, and with every answer deleted the question is never asked', () => {
+  const { h, C } = setup()
+  // Pointing at a question below it, or at one that isn't a choice, is dropped when kept.
+  C({ kind: 'updateView', viewId: 'f', form: { ...form(h), questions: form(h).questions.map(q => (q.propertyId === 'km' ? { ...q, showIf: { propertyId: 'feel', values: ['hard'] } } : q.propertyId === 'tags' ? { ...q, showIf: { propertyId: 'km', values: ['x'] } } : q)) } })
+  assert.equal(form(h).questions.find(q => q.propertyId === 'km')!.showIf, undefined)
+  assert.equal(form(h).questions.find(q => q.propertyId === 'tags')!.showIf, undefined)
+  C({ kind: 'updateView', viewId: 'f', form: { ...form(h), questions: form(h).questions.map(q => (q.propertyId === 'note' ? { ...q, showIf: { propertyId: 'feel', values: ['hard'] } } : q)) } })
+  C({ kind: 'updateProperty', propertyId: 'feel', options: [{ id: 'good', name: 'Good', color: 'gray' }] })
+  assert.deepEqual(form(h).questions.find(q => q.propertyId === 'note')!.showIf, { propertyId: 'feel', values: ['hard'] }, 'kept by id')
+  answer(h, 'a1', 'Run', { km: 1, feel: 'good', note: 'never asked' })
+  assert.equal(rows(h).find(p => p.id === 'a1')!.values?.note, undefined)
+})
+
+test('a Files answer goes into the row as a Files value', () => {
+  const { h, C } = setup()
+  C({ kind: 'addProperty', property: { id: 'pics', name: 'Photos', type: 'files' }, viewId: 'f' })
+  assert.ok(form(h).questions.some(q => q.propertyId === 'pics'))
+  const file = { id: 'file-0001', name: 'route.jpg', size: 1234, type: 'image/jpeg' }
+  answer(h, 'a1', 'With a photo', { km: 2, pics: [file] })
+  assert.deepEqual(rows(h).find(p => p.id === 'a1')!.values?.pics, [file])
+})
