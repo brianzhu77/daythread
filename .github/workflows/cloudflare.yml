@@ -1,4 +1,4 @@
-# The Worker (B67). Every push to main (a merged PR) deploys it; everything else is run by hand:
+# The Worker (B67). A push to main (a merged PR) that changes more than docs deploys it; everything else is run by hand:
 # `gh workflow run cloudflare.yml --ref <branch> -f action=<action>`.
 #   deploy            build the ref and deploy it to the `daythread` Worker (what a push to main does on its own)
 #   domain-to-worker  daythread.dogrod.com answers from the Worker (its CNAME to Vercel is replaced)

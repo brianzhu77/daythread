@@ -54,8 +54,8 @@ model configured and says "Simulated" when none is set. A mocked reply is never 
   quietly with Retry.
 - **Dark mode** follows the system setting; no switch in the app.
 - **Reminders** for `@date` chips by web push: live in production since 2026-11-05 (B60); each person turns them on for their device.
-- **Deployment:** a Cloudflare Worker with Supabase Postgres (through Hyperdrive) in production; every push to main deploys it,
-  after its tests (#184). SQLite locally with sign-in off.
+- **Deployment:** a Cloudflare Worker with Supabase Postgres (through Hyperdrive) in production; every push to main that
+  changes more than docs deploys it, after its tests (#184, #186). SQLite locally with sign-in off.
   `npm run dev` serves http://127.0.0.1:3000.
 - **Process:** decisions and designs are recorded under `docs/` (specs, design, plan, reviews, validation), each
   attributed to Brian's message. A geometry gate (`node scripts/check-alignment.mjs <url>`, 0 FAIL / 0 MISSING at
