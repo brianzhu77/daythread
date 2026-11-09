@@ -53,8 +53,9 @@ model configured and says "Simulated" when none is set. A mocked reply is never 
 - **Offline:** the shell and the last loaded workspace open offline; drafts are kept and retried; failures are shown
   quietly with Retry.
 - **Dark mode** follows the system setting; no switch in the app.
-- **Reminders** for `@date` chips by web push: code exists; not yet enabled in production as of 2026-10-28.
-- **Deployment:** Vercel with Supabase Postgres in production (daythread.dogrod.com); SQLite locally with sign-in off.
+- **Reminders** for `@date` chips by web push: live in production since 2026-11-05 (B60); each person turns them on for their device.
+- **Deployment:** a Cloudflare Worker with Supabase Postgres (through Hyperdrive) in production; every push to main that
+  changes more than docs deploys it, after its tests (#184, #186). SQLite locally with sign-in off.
   `npm run dev` serves http://127.0.0.1:3000.
 - **Process:** decisions and designs are recorded under `docs/` (specs, design, plan, reviews, validation), each
   attributed to Brian's message. A geometry gate (`node scripts/check-alignment.mjs <url>`, 0 FAIL / 0 MISSING at
@@ -106,8 +107,8 @@ dashboard, feed, form, Trash, Tomorrow, Upcoming, Today, Not today, Put back, pe
 - **Colour, binding (Brian, 2026-10-26):** everything grey from one 12-step neutral scale on white surfaces; blue only
   for the very few (focus ring, checked box, text selection, the editor's chips, "Today"); the auth screens grey only;
   the primary button is the darkest grey; links grey and underlined; red only for a passed deadline or a destructive
-  action. The visual system itself is recorded in `docs/design/system-v2.md` and `docs/design/tokens.md`; there is
-  no DESIGN.md yet.
+  action. The visual system itself is recorded in `DESIGN.md`, from `docs/design/system-v2.md` and
+  `docs/design/tokens.md`.
 - **References Brian named:** Craft (the first version "can copy Craft", 2026-10-16, since replaced by the own system;
   Craft's icons, illustrations and brand assets are never copied), another app he pointed to (grey with a little blue), Notion (database
   vocabulary and behaviour).
