@@ -3019,8 +3019,8 @@ button.comment-quote { cursor: pointer; }
 .row-property-head .comment-count { padding: 0 4px; color: var(--ink-3); }
 .row-property-head .app-menu { left: 0; right: auto; min-width: 180px; }
 /* A cell with a comment on its property: a grey corner, as a sheet marks one. */
-/* Drawn as a background, so a frozen cell keeps its sticky position. */
-.database-td.has-comment { background-image: linear-gradient(225deg, var(--ink-3) 5px, transparent 5px); }
+/* Drawn as a background, so a frozen cell keeps its sticky position; Ink-soft holds 3:1 on every tint (Jazz af8d2872). */
+.database-td.has-comment { background-image: linear-gradient(225deg, var(--ink-2) 5px, transparent 5px); }
 .property-editor-foot { display: flex; justify-content: flex-end; padding: 6px 10px; border-top: 1px solid var(--line); }
 .crumbs .comment-count { margin-left: auto; }
 .crumbs .comment-count + .row-menu, .crumbs .comment-count + .page-more { margin-left: 0; }
