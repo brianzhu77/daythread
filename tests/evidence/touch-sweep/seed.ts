@@ -17,6 +17,9 @@ await run({ type: 'save-editor', pageId: day.id, expectedContent: pageContentKey
   { id: 'td1', type: 'task', props: { taskId: 'editor-task:td1', role: 'plan', planDate: today }, content: [t('Call the bank')], children: [] },
   { id: 'td2', type: 'task', props: { taskId: 'editor-task:td2', role: 'plan', planDate: today }, content: [t('Water the plants')], children: [] },
   { id: 'chips', type: 'paragraph', props: {}, content: [t('Dentist '), { type: 'dateMention', props: { eventId: 'ev1', date: today, time: '15:00' } }, t(' see '), { type: 'pageRef', props: { pageId: 'notes', refId: 'ref1' } }, t(' and '), { type: 'link', href: 'https://example.com/', content: [t('the site')] }], children: [] },
+  // Lines that are only a link, as Bookmarks pages are: one wrapping to two rows with room after it, one filling its last row.
+  { id: 'url1', type: 'paragraph', props: {}, content: [{ type: 'link', href: 'https://example.com/articles/2026/11/a-long-pasted-address', content: [t('https://example.com/articles/2026/11/a-long-pasted-address')] }], children: [] },
+  { id: 'url2', type: 'paragraph', props: {}, content: [{ type: 'link', href: 'https://example.com/x', content: [t('https://example.com/articles/2026/11/a-much-longer-pasted-address-that-fills-its-row-to-the-edge-xyzabcdefgh')] }], children: [] },
   { id: 'p1', type: 'paragraph', props: {}, content: [t('A plain line of words to select')], children: [{ id: 'p1a', type: 'paragraph', props: {}, content: [t('A nested line')], children: [] }] },
   ...Array.from({ length: 16 }, (_, i) => ({ id: `z${i}`, type: 'paragraph', props: {}, content: [t(`Filler line ${i}`)], children: [] })),
   { id: 'last', type: 'paragraph', props: {}, content: [t('Last line')], children: [] },

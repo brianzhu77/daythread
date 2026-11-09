@@ -25,7 +25,7 @@ import { inView, titleId, todosSourceId, changeDatabase, syncMirror, databaseBlo
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
-import { formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
+import { askedQuestions, formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -1455,7 +1455,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const form = view ? formOf(view) : null;
       // Closed, deleted, in Trash or never there all read the same (forms.md §2, G7-7).
       if (!p?.database || !view || !form || form.closed) throw new DomainError("This form is closed");
-      const questions = liveQuestions(p.database, form, titleId), asked = new Set(questions.map((q) => q.propertyId));
+      // Only what's asked given the answers: a hidden question isn't required, and its answer isn't kept (G7-6).
+      const questions = askedQuestions(liveQuestions(p.database, form, titleId), action.values), asked = new Set(questions.map((q) => q.propertyId));
       // A question removed while it was open: the others are sent. One made required since: it's asked for (§4).
       const values = Object.fromEntries(Object.entries(action.values).filter(([id]) => asked.has(id) && id !== titleId));
       const title = asked.has(titleId) ? text(action.title, 1000).trim() : "";
@@ -1473,7 +1474,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (action.pageId === todosSourceId) {
         if (!/Automation/.test(action.change?.kind ?? "")) throw new DomainError("To-dos can't change that");
         const page = { id: todosSourceId, database: ruleDatabase(state, todosSourceId) } as Page & { database: Database };
-        try { const message = changeDatabase(state, page, action.change); setRulesIn(state, todosSourceId, page.database.automations ?? []); return { message, entityId: todosSourceId }; } catch (error) { throw new DomainError((error as Error).message); }
+        try { const message = changeDatabase(state, page, action.change); setRulesIn(state, todosSourceId, page.database.automations ?? []); if (state.todoAutomations?.length) delete state.todoAutomationsUnreadable; return { message, entityId: todosSourceId }; } catch (error) { throw new DomainError((error as Error).message); }
       }
       const p = databasePage(state, action.pageId);
       try { return { message: changeDatabase(state, p, action.change), entityId: p.id }; } catch (error) { throw new DomainError((error as Error).message); }

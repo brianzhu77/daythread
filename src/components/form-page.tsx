@@ -2,8 +2,9 @@
 // its answers and key, so a retry sends the same thing and makes one row, while new words wait for the next send (Ratchet).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { isDatabase, titleId, type Database, type Json, type Property } from '../domain/database'
-import { formOf, isEmptyAnswer, liveQuestions, type FormQuestion } from '../domain/forms'
+import { fileLimits, isDatabase, titleId, type Database, type FileValue, type Json, type Property } from '../domain/database'
+import { fileHref, uploadFile, type UploadFailure } from './file-upload'
+import { askedQuestions, formOf, isEmptyAnswer, liveQuestions, type FormQuestion } from '../domain/forms'
 import { readingWorkspace } from '../domain/todos-source'
 import { useWorkspace } from './use-day'
 
@@ -19,7 +20,7 @@ export const questionProperty = (db: Database, q: FormQuestion): Property | null
   q.propertyId === titleId ? { id: titleId, name: 'Name', type: 'text' } : db.properties.find(p => p.id === q.propertyId) ?? null
 
 /** One question as it's answered. In the builder it's drawn the same way, and can't be typed in. */
-export function FormField({ q, property, value, missing, disabled, onChange, onNext }: { q: FormQuestion; property: Property; value: Json | undefined; missing?: boolean; disabled?: boolean; onChange(v: Json | undefined): void; onNext?(): void }) {
+export function FormField({ q, property, value, missing, disabled, onChange, onNext, onBusy }: { q: FormQuestion; property: Property; value: Json | undefined; missing?: boolean; disabled?: boolean; onChange(v: Json | undefined): void; onNext?(): void; /** Files: whether one is still on its way, which holds Send. */ onBusy?(busy: boolean): void }) {
   const label = q.wording.trim() || property.name
   const enter = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && onNext) { e.preventDefault(); onNext() } }
   const options = property.options ?? []
@@ -39,6 +40,7 @@ export function FormField({ q, property, value, missing, disabled, onChange, onN
       </span>
       break
     }
+    case 'files': field = <FilesField label={label} value={value} disabled={disabled} onChange={onChange} onBusy={onBusy} />; break
     case 'checkbox': field = <label className="form-check"><input type="checkbox" aria-label={label} disabled={disabled} checked={value === true} onChange={e => onChange(e.target.checked || undefined)} />{label}</label>; break
     case 'select': case 'status': case 'multiSelect': case 'relation': {
       const toggle = (id: string) => onChange(many ? (picked.includes(id) ? picked.filter(x => x !== id) : [...picked, id]) : (picked[0] === id ? undefined : id))
@@ -63,6 +65,36 @@ export function FormField({ q, property, value, missing, disabled, onChange, onN
   </div>
 }
 
+/**
+ * A Files answer, by the same upload as a Files cell (R3-11): only what's in goes into the answer. One still uploading holds Send;
+ * one that couldn't says so, with Try again and ×, so the rest can be sent (Bumblebee). Files don't wait offline as words do.
+ */
+function FilesField({ label, value, disabled, onChange, onBusy }: { label: string; value: Json | undefined; disabled?: boolean; onChange(v: Json | undefined): void; onBusy?(busy: boolean): void }) {
+  const done = (Array.isArray(value) ? value : []) as unknown as FileValue[]
+  const latest = useRef(done); latest.current = done
+  const [pending, setPending] = useState<{ key: string; file: File; failed?: string; retry?: boolean; progress: number }[]>([])
+  const picker = useRef<HTMLInputElement>(null)
+  const busy = pending.some(p => !p.failed)
+  useEffect(() => { onBusy?.(busy) }, [busy]) // eslint-disable-line react-hooks/exhaustive-deps
+  const put = (key: string, patch: Partial<(typeof pending)[number]> | null) => setPending(list => (patch ? list.map(p => (p.key === key ? { ...p, ...patch } : p)) : list.filter(p => p.key !== key)))
+  const start = (file: File, key: string = crypto.randomUUID()) => {
+    setPending(list => (list.some(p => p.key === key) ? list.map(p => (p.key === key ? { ...p, failed: undefined, progress: 0 } : p)) : [...list, { key, file, progress: 0 }]))
+    uploadFile(file, progress => put(key, { progress })).done.then(
+      v => { put(key, null); onChange([...latest.current, v] as unknown as Json) },
+      (f: UploadFailure) => put(key, { failed: f.message, retry: f.retry }),
+    )
+  }
+  const room = fileLimits.perCell - done.length - pending.length
+  return <div className="form-files" role="group" aria-label={label}>
+    {done.map(f => <span key={f.id} className="form-file"><a href={fileHref(f)} target="_blank" rel="noreferrer">{f.name}</a>{!disabled && <button type="button" aria-label={`Remove ${f.name}`} onClick={() => { const rest = latest.current.filter(x => x.id !== f.id); onChange(rest.length ? rest as unknown as Json : undefined) }}>×</button>}</span>)}
+    {pending.map(p => <span key={p.key} className={`form-file${p.failed ? ' is-failed' : ''}`}>{p.file.name}
+      {p.failed ? <> · {p.retry ? <button type="button" className="app-link" onClick={() => start(p.file, p.key)}>Not uploaded · Try again</button> : p.failed}</> : <> · {p.progress}%</>}
+      <button type="button" aria-label={`Remove ${p.file.name}`} onClick={() => put(p.key, null)}>×</button></span>)}
+    {!disabled && room > 0 && <button type="button" className="form-add" onClick={() => picker.current?.click()}>Add a file</button>}
+    <input ref={picker} type="file" multiple hidden onChange={e => { for (const file of [...(e.target.files ?? [])].slice(0, Math.max(0, room))) start(file); e.target.value = '' }} />
+  </div>
+}
+
 /** A value as the row stores it: a number from what was typed; the rest as they are. */
 function stored(property: Property, value: Json | undefined): Json | undefined {
   if (value === undefined) return undefined
@@ -83,16 +115,20 @@ export function FormPage({ databaseId, viewId, preview }: { databaseId: string; 
   const [state, setState] = useState<'open' | 'sending' | 'failed' | 'sent'>('open')
   const [missing, setMissing] = useState<string[]>([])
   const [refused, setRefused] = useState<string | null>(null)
+  const [uploading, setUploading] = useState<Record<string, boolean>>({})
+  const busy = Object.values(uploading).some(Boolean)
   useEffect(() => { if (!preview) writeDraft(draftAt, draft) }, [draft, draftAt, preview])
   if (!workspace) return null
   if (!page?.database || !view || !form || form.closed) return <div className="form-page"><h1 className="form-title">This form is closed</h1></div>
   const db = page.database
-  const questions = liveQuestions(db, form, titleId).flatMap(q => { const property = questionProperty(db, q); return property ? [{ q, property }] : [] })
+  // What's asked given the answers so far: a follow-up appears once its answer is picked, and goes, with its answer unsent, if that's changed (G7-6).
+  const questions = askedQuestions(liveQuestions(db, form, titleId), draft.answers).flatMap(q => { const property = questionProperty(db, q); return property ? [{ q, property }] : [] })
   const put = (id: string, v: Json | undefined) => { setDraft(d => { const answers = { ...d.answers }; if (v === undefined) delete answers[id]; else answers[id] = v; return { ...d, answers } }); setMissing(m => m.filter(x => x !== id)) }
   const focusNext = (i: number) => { const next = document.querySelectorAll<HTMLElement>('.form-page .form-question')[i + 1]?.querySelector<HTMLElement>('input, textarea, select'); next?.focus() }
 
   const send = async (payload = { key: draft.key, answers: draft.answers, at: new Date().toISOString() }) => {
-    const empty = questions.filter(({ q, property }) => q.required && isEmptyAnswer(stored(property, payload.answers[q.propertyId])))
+    const sent = askedQuestions(liveQuestions(db, form, titleId), payload.answers).flatMap(q => { const property = questionProperty(db, q); return property ? [{ q, property }] : [] })
+    const empty = sent.filter(({ q, property }) => q.required && isEmptyAnswer(stored(property, payload.answers[q.propertyId])))
     if (empty.length) {
       setMissing(empty.map(({ q }) => q.propertyId))
       document.querySelector(`[data-question="${CSS.escape(empty[0]!.q.propertyId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
@@ -101,7 +137,7 @@ export function FormPage({ databaseId, viewId, preview }: { databaseId: string; 
     setRefused(null)
     if (preview) { setState('sent'); return }
     setHeld(payload); setState('sending')
-    const values = Object.fromEntries(questions.flatMap(({ q, property }) => { const v = stored(property, payload.answers[q.propertyId]); return q.propertyId === titleId || v === undefined ? [] : [[q.propertyId, v]] }))
+    const values = Object.fromEntries(sent.flatMap(({ q, property }) => { const v = stored(property, payload.answers[q.propertyId]); return q.propertyId === titleId || v === undefined ? [] : [[q.propertyId, v]] }))
     const action = { type: 'answer-form' as const, databaseId, viewId, pageId: payload.key, title: typeof payload.answers[titleId] === 'string' ? payload.answers[titleId] as string : '', values, at: payload.at }
     let refusal: string | null = null
     const receipt = await run(action, undefined, payload.key, { quiet: true, inlineRefusal: /^Needs an answer|^This form is closed$| at most$/, onRefused: m => { refusal = m } })
@@ -125,9 +161,9 @@ export function FormPage({ databaseId, viewId, preview }: { databaseId: string; 
   return <div className="form-page">
     {preview && <p className="form-preview-mark">Preview · nothing is sent</p>}
     <h1 className="form-title">{view.name}</h1>
-    {questions.map(({ q, property }, i) => <FormField key={q.propertyId} q={q} property={property} value={draft.answers[q.propertyId]} missing={missing.includes(q.propertyId)} onChange={v => put(q.propertyId, v)} onNext={i < questions.length - 1 ? () => focusNext(i) : undefined} />)}
+    {questions.map(({ q, property }, i) => <FormField key={q.propertyId} q={q} property={property} value={draft.answers[q.propertyId]} missing={missing.includes(q.propertyId)} onChange={v => put(q.propertyId, v)} onNext={i < questions.length - 1 ? () => focusNext(i) : undefined} onBusy={b => setUploading(u => (u[q.propertyId] === b ? u : { ...u, [q.propertyId]: b }))} />)}
     <div className="form-actions">
-      <button type="button" className="form-send" disabled={state === 'sending'} onClick={() => void send()}>{state === 'sending' ? 'Sending…' : form.submit?.button || 'Send'}</button>
+      <button type="button" className="form-send" disabled={state === 'sending' || busy} onClick={() => void send()}>{state === 'sending' ? 'Sending…' : busy ? 'Uploading…' : form.submit?.button || 'Send'}</button>
       {/* Beside Send, in its bar, so it can't be under it (Jazz). */}
       {refused && <p className="form-failed" role="alert">{refused}</p>}
       {state === 'failed' && held && <p className="form-failed" role="alert">Not sent · <button type="button" className="app-link" onClick={() => void send(held)}>Try again</button></p>}

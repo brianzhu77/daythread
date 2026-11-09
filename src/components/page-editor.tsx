@@ -2109,6 +2109,28 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   const editorRoot = useCallback(() => editor.domElement?.closest<HTMLElement>('.continuous-editor') ?? null, [editor])
   useLineHold(editorRoot, { pick: id => holdOf(id, true), begin: beginHold, move: updateDrop, end: endDrag })
+  // B91: a tap on a link opens it, and leaves the caret and the keyboard as they were. Taken before the editor sees the
+  // press, which would put the caret in the line and raise the keyboard behind the new tab. A mouse keeps the editor's own.
+  useEffect(() => {
+    const root = editorRoot()
+    if (!root) return
+    const linkOf = (e: Event) => (e.target as Element | null)?.closest?.<HTMLAnchorElement>('.bn-inline-content a[href]') ?? null
+    let tapped: HTMLAnchorElement | null = null
+    const down = (e: PointerEvent) => {
+      tapped = e.pointerType === 'touch' ? linkOf(e) : null
+      if (tapped) { e.preventDefault(); e.stopPropagation() }
+    }
+    const mouse = (e: MouseEvent) => { if (tapped && linkOf(e) === tapped) { e.preventDefault(); e.stopPropagation() } }
+    const click = (e: MouseEvent) => {
+      const link = linkOf(e)
+      if (!tapped || link !== tapped) return
+      e.preventDefault(); e.stopPropagation(); tapped = null
+      const href = link.getAttribute('href') ?? ''
+      if (/^(https?:|mailto:)/i.test(href)) window.open(href, '_blank', 'noopener,noreferrer')
+    }
+    root.addEventListener('pointerdown', down, true); root.addEventListener('mousedown', mouse, true); root.addEventListener('mouseup', mouse, true); root.addEventListener('click', click, true)
+    return () => { root.removeEventListener('pointerdown', down, true); root.removeEventListener('mousedown', mouse, true); root.removeEventListener('mouseup', mouse, true); root.removeEventListener('click', click, true) }
+  }, [editorRoot])
   // The grip beside the caret's line drags at once, with the same chip and landing.
   const gripChip = useRef<ReturnType<typeof dragChip> | null>(null)
   const gripStart = useRef<{ x: number; y: number } | null>(null)
