@@ -1,14 +1,18 @@
-# The Worker (B67), run by the Lead only: `gh workflow run cloudflare.yml --ref <branch> -f action=<action>`.
-#   deploy            build the ref and deploy it to the `daythread` Worker (workers.dev until the domain moves)
+# The Worker (B67). Every push to main (a merged PR) deploys it; everything else is run by hand:
+# `gh workflow run cloudflare.yml --ref <branch> -f action=<action>`.
+#   deploy            build the ref and deploy it to the `daythread` Worker (what a push to main does on its own)
 #   domain-to-worker  daythread.dogrod.com answers from the Worker (its CNAME to Vercel is replaced)
 #   domain-to-vercel  the rollback: the Worker lets go of the name and the CNAME to Vercel comes back
 #   check-token       what the token may do (status and the Hyperdrive permission names), nothing secret printed
 #   timings           the Worker's requests in the last HOURS (default 6) from Workers observability: time, method, path, status, wall ms
-# Never runs on PRs, so a fork can't reach the secrets. The Cloudflare token (CLOUDFLARE_API_TOKEN) is Brian's, added by
-# him as a repository secret; the app's five values are the same as Vercel's production env, as repository secrets.
+# Never runs on PRs (only on main once merged, or by dispatch), so a fork can't reach the secrets. The Cloudflare token
+# (CLOUDFLARE_API_TOKEN) is Brian's, added by him as a repository secret; the app's five values are the same as Vercel's
+# production env, as repository secrets.
 name: Cloudflare
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       action:
@@ -37,14 +41,16 @@ jobs:
   # deploy-preview builds the dispatched ref as a second Worker, daythread-preview (Brian's preview address
   # daythread.dogrod.ca, attached to it in the dashboard). Same database, but its own schema (DAYTHREAD_PG_SCHEMA),
   # so it never reads or writes the production tables; only PREVIEW_INVITES may make an account there.
-  # Dispatch it from a throwaway branch made of infra/cloudflare merged with the PR head (e.g. preview/pr-35): a PR
-  # branch alone has neither this action nor the Worker build.
+  # Dispatch it with `--ref <PR branch>`.
+  # On a push to main there are no inputs, so NAME is the production Worker.
   deploy:
-    if: inputs.action == 'deploy' || inputs.action == 'deploy-preview'
+    if: github.event_name == 'push' || inputs.action == 'deploy' || inputs.action == 'deploy-preview'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       NAME: ${{ inputs.action == 'deploy-preview' && 'daythread-preview' || 'daythread' }}
+      # The tests assume his time zone, as in ci.yml.
+      TZ: America/Vancouver
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,6 +61,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # ci.yml runs the tests too, but in its own workflow: a red main must not deploy, so they run here as well.
+      - run: npm test
+        env:
+          FUTURE_DAYS_CONTRACT: '1'
       - name: Build (Worker)
         run: npm run build
         env:
