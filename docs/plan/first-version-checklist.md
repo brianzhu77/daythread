@@ -474,6 +474,8 @@ type-change Undo show up? Was a database deleted soon after he made it (a sign i
 is a regression. If he makes none in 7 days, I'll report that as evidence for releasing R2 (to-dos and linked views on
 day pages) sooner, not as a scope cut (Brian 57deaed7). R2 has since started without waiting for this read (D2).
 
+**7-day read, 2026-11-09 17:00Z (Bumblebee, snapshot `data/ws-2026-11-09-1700.json` in my workspace, revision 1155, operations from Nov 2 16:00Z):** he made **no database** (0 databases, 0 rows, nothing in Trash), so none of the questions above apply and no value can have been lost. Everything since R1 through Forms is live and unused. What he did use: day pages on 7 of 8 days (none on Sat Nov 7, where only the page and its draft were made), the day draft applied 34 times with 1 skip, 11 to-dos done, and 4 bookmark pages with none of his own words inside (baseline about 7 a week). Not yet used: comments (0 threads), icons and covers (0), images and files (0 blocks), synced blocks (0), reminders (0 push subscriptions, 0 sent). Workspace about 173 KB (106 KB on Nov 3), far under the ~10 MB ceiling. Production has `todo_automations`; `comment_threads` has no `property` column yet, as P2-6 hasn't shipped.
+
 ## D2. Databases R2 (tracked, not counted)
 
 Linked views, To-dos as a source (option 1) and Board with Group, from `docs/design/databases.md` §7, §9, §11, §14. Started on Brian's "别停下来" (5a5f969b) and the Lead's board order, not on a usage read, so it doesn't wait for the Nov 9 read. Tasks: #263 linked views and #264 to-dos (Roadbuster), #265 Board and Group (Jazz). Acceptance list by Bumblebee; **Open** rows are product questions the design doesn't answer yet. Status values as above.
