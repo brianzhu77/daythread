@@ -3,7 +3,7 @@ import { MoveRowDialog } from './move-row-dialog'
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { cardTo, childPages, hasContent, linkedFrom, moveRefusal, moveTargets, pageAncestors, pagePathTo, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
+import { cardTo, childPages, hasContent, linkedFrom, moveRefusal, moveTargets, pageAncestors, pagePathTo, pagesInDays, parentOf, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageEmoji, PageKindIcon, PagesIcon } from './icons'
@@ -412,20 +412,17 @@ function useExpanded(activeChain: string[]) {
   return { expanded, toggle, expand }
 }
 
-const monthName = (ym: string, today: LocalDate) => {
-  const d = new Date(`${ym}-01T12:00:00`)
-  return ym.slice(0, 4) === today.slice(0, 4) ? d.toLocaleDateString('en-US', { month: 'long' }) : `${ym.slice(0, 4)} · ${d.toLocaleDateString('en-US', { month: 'long' })}`
-}
-
 /**
- * Layout §1: Days (Today, this month's days with content, earlier months collapsed), then the Pages tree under a "Pages"
- * label with its own + (Notion's section +, always shown: Brian never found the old "＋ New page" row at the bottom).
- * Chevron opens and closes; the title opens the page. A row's `+` and `⋯` show on hover or keyboard focus.
+ * Layout §1, as of Nov 8: the Pages tree under a "Pages" label with its own + (Notion's section +, always shown: Brian
+ * never found the old "＋ New page" row at the bottom). Chevron opens and closes; the title opens the page. A row's `+`
+ * and `⋯` show on hover or keyboard focus.
+ *
+ * The sidebar's Pages group (Brian, Nov 8: days left the sidebar; Today, the Calendar and the date picker reach them).
+ * Only top-level pages (Brian 992f14f8, Notion's model): pages made in a day stay under that day, reached from it.
  */
-export function SidebarTree({ workspace, activeId, today, footer }: { workspace: Workspace; activeId: string | null; today: LocalDate; footer: ReactNode }) {
+export function SidebarTree({ workspace, activeId, today }: { workspace: Workspace; activeId: string | null; today: LocalDate }) {
   const activeChain = activeId ? [...pageAncestors(workspace, activeId).map(p => p.id)] : []
-  const activeMonth = workspace.pages.find(p => p.id === activeId)?.date?.slice(0, 7)
-  const { expanded, toggle, expand } = useExpanded(activeMonth ? [...activeChain, `month:${activeMonth}`] : activeChain)
+  const { expanded, toggle, expand } = useExpanded(activeChain)
   const [moving, setMoving] = useState<Page | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const { run, latest } = useWorkspace()
@@ -474,18 +471,21 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
     // Today's nav row is already selected when today is open; no second highlight here.
     const current = p.id === activeId && !(day && p.date === today)
     const dropHere = drag.drop?.rowKey === p.id ? drag.drop : null
-    const dragged = drag.dragging?.pageId === p.id ? (drag.dragging.touch ? 'touch' : 'mouse') : undefined
+    const dragged = drag.dragging?.pageId === p.id ? (drag.dragging.touch ? 'touch' : 'mouse') : drag.landing === p.id ? 'landing' : undefined
     return (
       <li key={p.id} role="treeitem" aria-expanded={children.length ? isOpen : undefined} aria-selected={current}>
         <div className="tree-row" aria-current={current ? 'page' : undefined}
           style={{ '--depth': Math.min(depth, 6), ...(dropHere ? { '--drop-depth': Math.min(dropHere.depth, 6) } : {}) } as React.CSSProperties}
           data-page={p.id} data-kind={day ? 'day' : 'page'} data-depth={depth} data-parent={parentOf(workspace, p)?.id ?? ''} data-next={nextId}
           data-first-child={isOpen ? children[0]?.id ?? '' : ''} data-drop-zone={dropHere?.zone} data-dragging={dragged}
-          onPointerDown={day ? undefined : e => drag.onPointerDown(e, pageLabel(p, today))} onDragStart={e => e.preventDefault()}>
-          {children.length > 0
-            ? <button type="button" className="disclose" aria-expanded={isOpen} aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${pageLabel(p, today)}`} onClick={() => toggle(p.id)}><ChevronRightIcon /></button>
-            : <span className="disclose none" aria-hidden="true" />}
-          <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}>{day ? p.icon && <PageEmoji icon={p.icon} /> : <PageKindIcon url={p.url} database={Boolean(p.database)} icon={p.icon} />}<span>{pageLabel(p, today)}</span></PageLink>
+          onPointerDown={day ? undefined : drag.onPointerDown} onDragStart={e => e.preventDefault()}>
+          {/* The icon column holds the page's icon; a page with children shows its chevron there while the row is
+              hovered or focused (Notion's way), so every title starts where the nav rows' do. */}
+          <span className={`tree-lead${children.length ? ' has-children' : ''}`}>
+            <span className="tree-icon">{day ? p.icon && <PageEmoji icon={p.icon} /> : <PageKindIcon url={p.url} database={Boolean(p.database)} icon={p.icon} />}</span>
+            {children.length > 0 && <button type="button" className="disclose" aria-expanded={isOpen} aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${pageLabel(p, today)}`} onClick={() => toggle(p.id)}><ChevronRightIcon /></button>}
+          </span>
+          <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}><span>{pageLabel(p, today)}</span></PageLink>
           <span className="tree-acts">
             <button type="button" aria-label={`New subpage in ${pageLabel(p, today)}`} onClick={() => void newPage(p)}>+</button>
             {!day && <RowMenu label={`Actions for ${pageLabel(p, today)}`} triggerClass="tree-more"
@@ -498,33 +498,16 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
     )
   }
 
-  const { recent: thisMonth, earlier } = sidebarDays(workspace, today, activeId)
   const roots = childPages(workspace, null)
   return (
     <div className="side-group" ref={listRef}>
-      <p className="side-label">Days</p>
-      <ul className="plain tree" role="tree" aria-label="Days">
-        {thisMonth.map(p => row(p, 0))}
-        {[...earlier].map(([ym, list]) => {
-          const id = `month:${ym}`, isOpen = expanded.has(id)
-          return (
-            <li key={ym} role="treeitem" aria-expanded={isOpen}>
-              <button type="button" className="tree-row month" onClick={() => toggle(id)} aria-expanded={isOpen}>
-                <span className="disclose" aria-hidden="true"><ChevronRightIcon /></span><span className="tree-title">{monthName(ym, today)}</span>
-              </button>
-              {isOpen && <ul className="plain" role="group">{list.map(p => row(p, 0))}</ul>}
-            </li>
-          )
-        })}
-      </ul>
       <div className="side-label-row" data-drop-top data-first={roots[0]?.id ?? ''} data-drop-zone={drag.drop?.rowKey === 'top' ? 'after' : undefined}>
         <p className="side-label">Pages</p>
         {/* Page or Database, as Pages' + offers (design §3.1). */}
         <NewPageMenu className="side-label-add" onPage={() => void newPage(null)} onDatabase={() => void newDatabase()}>+</NewPageMenu>
       </div>
       {/* Only top-level pages (Brian 992f14f8, Notion's model): pages made in a day stay under that day above. */}
-      {roots.length > 0 ? <ul className="plain tree" role="tree" aria-label="Pages">{roots.map((p, i) => row(p, 0, roots[i + 1]?.id))}</ul> : <p className="side-row small side-hint">No pages yet</p>}
-      {footer}
+      {roots.length > 0 ? <ul className="plain tree" role="tree" aria-label="Pages">{roots.map((p, i) => row(p, 0, roots[i + 1]?.id))}</ul> : <p className="side-hint">No pages yet</p>}
       {moving && <MovePageDialog page={moving} onClose={() => setMoving(null)} />}
     </div>
   )

@@ -1,6 +1,7 @@
 // Who may use this server. Sign-in is on everywhere unless DAYTHREAD_AUTH=off, which is refused on a hosting
 // platform: an off switch must never be able to reach the internet (Brian 247ee3f3, Ratchet f6dc9688).
 import { readLocalEnv } from '../local-env.ts'
+import { onHostingPlatform } from '../hosting.ts'
 
 export interface AuthConfig {
   supabaseUrl: string
@@ -15,7 +16,7 @@ export interface AuthConfig {
 
 export function authRequired(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.DAYTHREAD_AUTH !== 'off') return true
-  if (env.VERCEL || env.NETLIFY) throw new Error('DAYTHREAD_AUTH=off is refused on a hosting platform')
+  if (onHostingPlatform(env)) throw new Error('DAYTHREAD_AUTH=off is refused on a hosting platform')
   return false
 }
 

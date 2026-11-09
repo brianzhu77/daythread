@@ -3,6 +3,7 @@
 // their ⋮⋮ while the view isn't sorted, within a group or to another.
 import { formulaErrorOf } from '../domain/formula'
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { layoutRect, useRoom, withSlot } from './drag-lift'
 import { sectionKey, viewSections, viewSubGroups, cellValue, databaseRows, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { useSubOpen, rowTint, SubItemParent, PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps, SubItemLead, subFoldKey, subItemTree, treeUpTo } from './database-block'
@@ -47,28 +48,48 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
     requestAnimationFrame(() => open(pageId, group))
   })
 
-  // Rows drag by their ⋮⋮ only while the view isn't sorted (design §7.2), and a redraw can't lose it: nothing moves until the drop.
-  const [drag, setDrag] = useState<{ rowId: string; before: string | null; group: string | null } | null>(null)
+  // Rows drag by their ⋮⋮ only while the view isn't sorted (design §7.2). The line itself lifts under the pointer, a slot
+  // waits where it would land and the lines around make room (drag-lift.ts); the rows keep their order until the drop.
+  type Drag = { rowId: string; before: string | null; group: string | null; height: number }
+  const [drag, setDragState] = useState<Drag | null>(null)
+  const dragging = useRef<Drag | null>(null)
+  const setDrag = (next: Drag | null) => { dragging.current = next; setDragState(next) }
+  const room = useRoom(() => [...(body.current?.querySelectorAll('.database-list > *') ?? [])], rowId => body.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(rowId)}"]`) ?? null)
   const startDrag = (e: ReactPointerEvent, rowId: string, from: string | null) => {
     if (view.sort.length) return
     e.preventDefault()
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
+    const handle = e.currentTarget as HTMLElement, line = handle.closest<HTMLElement>('.database-list-row')
+    if (!line) return
+    handle.setPointerCapture(e.pointerId)
+    const start = { x: e.clientX, y: e.clientY }
+    let held = false
+    // The line under the pointer, or a group's foot for the end of that group; read against places, not slides under way.
     const target = (y: number): { before: string | null; group: string | null } => {
       const lines = [...(body.current?.querySelectorAll<HTMLElement>('.database-list-row, .database-list-foot') ?? [])]
-      const line = lines.find(l => { const r = l.getBoundingClientRect(); return y < r.top + r.height / 2 })
-      return { before: line?.classList.contains('database-list-row') ? line.dataset.row ?? null : null, group: (line ?? lines.at(-1))?.dataset.group ?? null }
+      const under = lines.find(l => { const r = layoutRect(l); return y < r.top + r.height / 2 })
+      return { before: under?.classList.contains('database-list-row') ? under.dataset.row ?? null : null, group: (under ?? lines.at(-1))?.dataset.group ?? null }
     }
-    setDrag({ rowId, ...target(e.clientY) })
-    const move = (ev: PointerEvent) => setDrag({ rowId, ...target(ev.clientY) })
+    const place = (y: number, height: number) => {
+      const current = dragging.current, next = target(y)
+      if (current && current.before === next.before && current.group === next.group) return
+      room.willRedraw()
+      setDrag({ rowId, ...next, height })
+    }
+    const move = (ev: PointerEvent) => {
+      // A press on the handle is nothing until it moves.
+      if (!held) { if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 3) return; held = true; room.pickUp(line, ev.clientX, ev.clientY, { tilt: 1 }) }
+      room.copy.current?.move(ev.clientX, ev.clientY)
+      place(ev.clientY, room.copy.current?.origin.height ?? line.offsetHeight)
+    }
     const up = (ev: PointerEvent) => {
-      el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up)
+      handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up)
+      if (!held) return
+      const current = dragging.current
+      if (ev.type !== 'pointercancel' && current) moveRow(rowId, from, current.group, current.before, ordered)
       setDrag(null)
-      if (ev.type === 'pointercancel') return
-      const { before, group } = target(ev.clientY)
-      moveRow(rowId, from, group, before, ordered)
+      room.land(rowId)
     }
-    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up)
+    handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up)
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -97,7 +118,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
     const nav = line++ === 0 ? '0:0' : undefined
     const tint = rowTint(db.database, view, row, context)
     return <div key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} {...(tint ? { style: tint.style } : {})}
-      className={`database-list-row${tint ? tint.className : ''}${treeOf.get(row.id)?.context ? ' is-context' : ''}${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}`}>
+      className={`database-list-row${tint ? tint.className : ''}${treeOf.get(row.id)?.context ? ' is-context' : ''}${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id ? ' is-lifted' : ''}${room.landing === row.id ? ' is-landing' : ''}`}>
       {wide && !view.sort.length && !db.database.fixed && !treeOf.get(row.id)?.depth && <span className="database-list-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
       <TodoTick row={row} />
       {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggleSub(treeOf.get(row.id)!)} />}
@@ -114,9 +135,10 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
     </div>
   }
 
+  const slot = <div key="slot" className="database-list-slot drag-slot" style={{ height: drag?.height }} aria-hidden="true" />
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown} {...cardPicks.props}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(groups?.shown[0]?.key) }} />
-    <div className={`database-list${view.wrapName ? ' wraps-name' : ''}${!groups && drag && drag.before === null ? ' is-drop-end' : ''}`} ref={body}>
+    <div className={`database-list${view.wrapName ? ' wraps-name' : ''}`} ref={body}>
       {groups ? groups.shown.map(group => {
         const isFolded = folded.has(group.key)
         const subs = viewSubGroups(db.database, view, group.rows, shownRaw, weekStart)
@@ -124,8 +146,8 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
           if (folded.has(key)) return null
           const shown = all.slice(0, limitOf(key))
           return <>
-            {shown.map(row => rowLine(row, key))}
-            <div className={`database-list-foot${drag && drag.before === null && drag.group === key ? ' is-drop-end' : ''}`} data-group={key}>
+            {withSlot(shown, r => r.id, drag?.group === key ? drag.before : undefined, row => rowLine(row, key), slot)}
+            <div className="database-list-foot" data-group={key}>
               {all.length > shown.length && <button type="button" className="database-more" onClick={() => showMore(key)}>Show 25 more</button>}
               <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={key} /></span>
             </div>
@@ -141,7 +163,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
             ? subs.shown.map(sub => { const key = sectionKey(group.key, sub.key); return <Fragment key={key}><SubGroupHead groups={subs} group={sub} isFolded={folded.has(key)} onToggle={() => toggle(key)} />{body(key, sub.rows)}</Fragment> })
             : body(group.key, group.rows))}
         </Fragment>
-      }) : (tree ? treeUpTo(tree, limit).map(e => e.row) : ordered.slice(0, limit)).map(row => rowLine(row))}
+      }) : withSlot(tree ? treeUpTo(tree, limit).map(e => e.row) : ordered.slice(0, limit), r => r.id, drag && drag.group === null ? drag.before : undefined, row => rowLine(row), slot)}
     </div>
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
     <PickedBar picks={picks} db={db} floating />

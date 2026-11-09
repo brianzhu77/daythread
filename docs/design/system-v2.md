@@ -1,7 +1,7 @@
 # Daythread design system v2: grey, with a little blue
 
 Status: **decided by Brian, Oct 26** ("for most content use only grey, with different levels; for something that really
-needs colour, only blue, for a small portion of components"), following Tally's pattern. This replaces the colour and
+needs colour, only blue, for a small portion of components"), following a pattern he pointed to in another app. This replaces the colour and
 shape rules of `tokens.md` (§2, §3) and `craft-v1.md` §1; type and spacing stay as `tokens.md` has them. `tokens.md`
 §10 (one surface) stands.
 

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { titleId, type Property, type PropertyType, type View } from '../domain/database'
-import { defaultForm, liveQuestions, questionable, type FormQuestion, type FormSettings } from '../domain/forms'
+import { canLeadOn, defaultForm, droppedConditions, liveQuestions, questionable, type FormQuestion, type FormSettings } from '../domain/forms'
 import { DatabaseHeader, setShownView, type ChangeView, type DatabaseViewProps } from './database-block'
 import { FormField, questionProperty } from './form-page'
 import { useWorkspace } from './use-day'
@@ -23,14 +23,17 @@ export function DatabaseForm({ db, view, changeView, blockId, showTitle = true, 
   const [newWording, setNewWording] = useState(''), [newType, setNewType] = useState<PropertyType>('text')
   // Each edit is made on the form as it is when it's sent, so one made while another is on its way doesn't undo it.
   const save = (edit: (form: FormSettings) => FormSettings) => changeView(current => ({ form: edit(current.form ?? defaultForm(db.database, titleId)) }))
+  const saveSaying = (notice: string | undefined, edit: (form: FormSettings) => FormSettings) => changeView(current => ({ form: edit(current.form ?? defaultForm(db.database, titleId)) }), notice)
   const put = (id: string, patch: Partial<FormQuestion>) => save(form => ({ ...form, questions: form.questions.map(q => {
     if (q.propertyId !== id) return q
     const next = { ...q, ...patch } as FormQuestion & Record<string, unknown>
     for (const k of Object.keys(next)) if (next[k] === undefined || next[k] === false || next[k] === '') delete next[k]
     return { ...next, wording: next.wording ?? '' } as FormQuestion
   }) }))
-  const move = (id: string, by: number) => save(form => { const list = [...form.questions], at = list.findIndex(q => q.propertyId === id), to = at + by; if (at < 0 || to < 0 || to >= list.length) return form; const [q] = list.splice(at, 1); list.splice(to, 0, q!); return { ...form, questions: list } })
-  const remove = (id: string) => { setOpen(null); save(form => ({ ...form, questions: form.questions.filter(q => q.propertyId !== id) })) }
+  // A move or a remove that leaves a condition pointing at nothing below it says so, with the change's Undo (Bumblebee).
+  const costs = (next: FormQuestion[]) => { const lost = droppedConditions(form.questions, next); return lost.length ? `${lost.map(q => q.wording.trim() || 'A question').join(', ')} ${lost.length === 1 ? 'is' : 'are'} now always asked` : undefined }
+  const move = (id: string, by: number) => { const list = [...form.questions], at = list.findIndex(q => q.propertyId === id), to = at + by; if (at >= 0 && to >= 0 && to < list.length) { const [q] = list.splice(at, 1); list.splice(to, 0, q!) } const notice = costs(list); saveSaying(notice, form => { const list = [...form.questions], at = list.findIndex(q => q.propertyId === id), to = at + by; if (at < 0 || to < 0 || to >= list.length) return form; const [q] = list.splice(at, 1); list.splice(to, 0, q!); return { ...form, questions: list } }) }
+  const remove = (id: string) => { setOpen(null); saveSaying(costs(form.questions.filter(q => q.propertyId !== id)), form => ({ ...form, questions: form.questions.filter(q => q.propertyId !== id) })) }
   const asked = new Set(form.questions.map(q => q.propertyId))
   const unasked: Property[] = [...(asked.has(titleId) ? [] : [{ id: titleId, name: 'Name', type: 'text' } as Property]), ...db.database.properties.filter(p => questionable(p) && !asked.has(p.id))]
   const ask = (p: Property) => { setAdding(null); save(form => ({ ...form, questions: [...form.questions, { propertyId: p.id, wording: p.name }] })); setOpen(p.id) }
@@ -61,8 +64,9 @@ export function DatabaseForm({ db, view, changeView, blockId, showTitle = true, 
         if (open !== q.propertyId) return <div key={q.propertyId} className="form-question-preview" role="button" tabIndex={0} aria-label={`Edit ${q.wording || property.name}`} onClick={() => setOpen(q.propertyId)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(q.propertyId) } }}>
           <FormField q={q} property={property} value={undefined} disabled onChange={() => {}} />
           {q.required && <span className="form-required">Required</span>}
+          {q.showIf && (() => { const on = questions.find(x => x.propertyId === q.showIf!.propertyId), p = on ? questionProperty(db.database, on) : null; if (!on || !p) return null; const names = q.showIf!.values.map(v => p.options?.find(o => o.id === v)?.name ?? '(deleted option)'); return <p className="form-condition">{names.length ? `Only if ${on.wording.trim() || p.name} is ${names.join(' or ')}` : 'Always asked · no answer picked'}</p> })()}
         </div>
-        return <QuestionEditor key={q.propertyId} q={q} property={property} first={i === 0} last={i === questions.length - 1} onPut={patch => put(q.propertyId, patch)} onMove={by => move(q.propertyId, by)} onRemove={() => remove(q.propertyId)} onClose={() => setOpen(null)} />
+        return <QuestionEditor key={q.propertyId} q={q} property={property} above={questions.slice(0, i).flatMap(x => { const p = questionProperty(db.database, x); return p && canLeadOn(p) ? [{ q: x, property: p }] : [] })} first={i === 0} last={i === questions.length - 1} onPut={patch => put(q.propertyId, patch)} onMove={by => move(q.propertyId, by)} onRemove={() => remove(q.propertyId)} onClose={() => setOpen(null)} />
       })}
       {adding === null && <button type="button" className="form-add" onClick={() => setAdding('list')}>+ Add question</button>}
       {adding === 'list' && <div className="form-add-list" role="menu" aria-label="Add question">
@@ -80,7 +84,7 @@ export function DatabaseForm({ db, view, changeView, blockId, showTitle = true, 
   </div>
 }
 
-function QuestionEditor({ q, property, first, last, onPut, onMove, onRemove, onClose }: { q: FormQuestion; property: Property; first: boolean; last: boolean; onPut(p: Partial<FormQuestion>): void; onMove(by: number): void; onRemove(): void; onClose(): void }) {
+function QuestionEditor({ q, property, above, first, last, onPut, onMove, onRemove, onClose }: { q: FormQuestion; property: Property; /** Choice questions above it, which it can follow (G7-6). */ above: { q: FormQuestion; property: Property }[]; first: boolean; last: boolean; onPut(p: Partial<FormQuestion>): void; onMove(by: number): void; onRemove(): void; onClose(): void }) {
   const [wording, setWording] = useState(q.wording), [description, setDescription] = useState(q.description ?? '')
   const keep = () => { if (wording !== q.wording || description !== (q.description ?? '')) onPut({ wording, description: description || undefined }) }
   const text = property.type === 'text' || property.id === titleId
@@ -94,6 +98,7 @@ function QuestionEditor({ q, property, first, last, onPut, onMove, onRemove, onC
       {choiceTypes.has(property.type) && property.type !== 'multiSelect' && property.type !== 'relation' && <select aria-label="Shown as" value={q.display ?? ''} onChange={e => onPut({ display: (e.target.value || undefined) as FormQuestion['display'] })}><option value="">Automatic</option><option value="list">A list</option><option value="dropdown">A dropdown</option></select>}
       {text && <select aria-label="Answer" value={q.display ?? 'short'} onChange={e => onPut({ display: e.target.value === 'long' ? 'long' : undefined })}><option value="short">Short answer</option><option value="long">Long answer</option></select>}
       {(property.type === 'multiSelect' || property.type === 'relation') && <input className="form-max" aria-label="At most" inputMode="numeric" placeholder="Any number" value={q.max ?? ''} onChange={e => { const n = Number(e.target.value); onPut({ max: e.target.value && Number.isInteger(n) && n >= 1 && n <= 100 ? n : undefined }) }} />}
+      {above.length > 0 && <AskOnlyIf q={q} above={above} onPut={onPut} />}
       <span className="form-question-moves">
         <button type="button" aria-label="Move up" disabled={first} onClick={() => { keep(); onMove(-1) }}>↑</button>
         <button type="button" aria-label="Move down" disabled={last} onClick={() => { keep(); onMove(1) }}>↓</button>
@@ -102,6 +107,24 @@ function QuestionEditor({ q, property, first, last, onPut, onMove, onRemove, onC
       </span>
     </div>
   </div>
+}
+
+/** "Ask only if Felt is Hard or OK": a question asked only after one of those answers above it (G7-6). */
+function AskOnlyIf({ q, above, onPut }: { q: FormQuestion; above: { q: FormQuestion; property: Property }[]; onPut(p: Partial<FormQuestion>): void }) {
+  // Shown at once, as a switch is: what's saved follows.
+  const [onId, setOnId] = useState(q.showIf?.propertyId ?? ''), [values, setValues] = useState<string[]>(q.showIf?.values ?? [])
+  const on = above.find(a => a.property.id === onId)
+  return <span className="form-ask-if">
+    <select aria-label="Ask only if" value={on?.property.id ?? ''} onChange={e => { const id = e.target.value; setOnId(id); setValues([]); onPut({ showIf: id ? { propertyId: id, values: [] } : undefined }) }}>
+      <option value="">Always ask</option>
+      {above.map(a => <option key={a.property.id} value={a.property.id}>Only if {a.q.wording.trim() || a.property.name}…</option>)}
+    </select>
+    {on && <span className="form-ask-values" role="group" aria-label={`${on.q.wording.trim() || on.property.name} is`}>
+      {values.filter(v => !(on.property.options ?? []).some(o => o.id === v)).length > 0 && <span className="form-ask-none">(deleted option)</span>}
+      {(on.property.options ?? []).map(o => <label key={o.id}><input type="checkbox" checked={values.includes(o.id)} onChange={e => { const next = e.target.checked ? [...values, o.id] : values.filter(v => v !== o.id); setValues(next); onPut({ showIf: { propertyId: on.property.id, values: next } }) }} />{o.name}</label>)}
+      {!values.length && <span className="form-ask-none">Pick an answer, or it's always asked</span>}
+    </span>}
+  </span>
 }
 
 function SubmitSettings({ form, onSave }: { form: FormSettings; onSave(submit: NonNullable<FormSettings['submit']> | null): void }) {

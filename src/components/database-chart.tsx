@@ -1,14 +1,15 @@
 // Chart, a layout of a view (docs/design/chart.md): bars or one number from the view's rows, read-only. Loaded only when a chart is on screen.
 // Bars are elements, not a picture: each is a button with its value, labels get real ellipses, and it costs nothing to measure.
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { axisLabels, axisStep, chartData, chartMeasure, chartSettings, chartTicks, chartValue, donutSlices, shortNumber, type ChartPoint, type ChartSeries } from '../domain/chart'
-import { calcLabels, cellValue, databaseRows, valueText, viewRows, type CalcKind, type CalcResult, type View } from '../domain/database'
+import { axisLabels, axisStep, chartData, chartMeasure, chartSettings, chartTicks, chartValue, donutSlices, pointRules, pointView, shortNumber, type ChartPoint, type ChartSeries } from '../domain/chart'
+import { calcLabels, cellValue, databaseRows, isDatabase, valueText, viewRows, type CalcKind, type CalcResult, type View } from '../domain/database'
 import type { Page } from '../domain/types'
-import { useOpenRow, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
+import { isLinkedBlock, setShownView, useOpenRow, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { calcText } from './property-values'
+import { useWorkspace } from './use-day'
 
 const openedLimit = 100
 /** The room left of the plot, for the axis's numbers. */
@@ -62,6 +63,17 @@ export default function DatabaseChart({ workspace, db, view, changeView, blockId
   const other = !found && data && data !== 'choose' && settings.form === 'donut' ? donutSlices(data.points).slices.find(sl => sl.key === opened) : undefined
   const point = found ?? (other ? { key: other.key, name: other.name, rows: other.rows, value: other.value, result: other.result, order: 0 } : undefined)
   const axisName = data && data !== 'choose' ? data.property.name : ''
+  const { run } = useWorkspace()
+  // Notion's "Save as view in" (chart.md §5): a Table view of the bar's rows, in the database. A linked view's block shows one view of its
+  // own, so there it's saved to the database and says where; otherwise the block turns to it.
+  const saveAsView = point && pointRules(db.database, view, point.key) ? () => {
+    const id = crypto.randomUUID(), name = `${view.name} · ${point.name}`, key = point.key, from = view, linked = isLinkedBlock(blockId)
+    void run(ws => {
+      const now = ws.pages.find(p => p.id === db.id), saved = isDatabase(now) ? pointView(now.database, from, key, name, id) : null
+      return saved ? { type: 'change-database', pageId: db.id, change: { kind: 'addView', view: saved } } : null
+    }, r => ({ text: linked ? `Saved as a view in ${db.title.trim() || 'Untitled database'}` : 'Saved as a view', undoOperationId: r.operationId }))
+    if (!linked) setShownView(blockId, id)
+  } : undefined
   return <div className="database-chart">
       {measure === 'gone' ? <p className="database-empty"><button type="button" className="app-link" onClick={choose}>Choose what to measure</button></p>
         : settings.form === 'number' ? <div className="database-chart-number" role="img" aria-label={`${named}: ${textOf(chartValue(db.database, rows, measure))}`}><strong>{textOf(chartValue(db.database, rows, measure))}</strong><span>{named}</span></div>
@@ -75,7 +87,7 @@ export default function DatabaseChart({ workspace, db, view, changeView, blockId
       </div>}
       {rows.length === 0 && databaseRows(workspace, db.id).length === 0 && <p className="database-empty">No rows</p>}
       <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
-      {point && <OpenedRows point={point} text={textOf(point.result)} db={db} openRow={openRow} measureId={property?.id} {...(other?.from ? { from: other.from, fromName: axisName } : {})} />}
+      {point && <OpenedRows point={point} text={textOf(point.result)} db={db} openRow={openRow} measureId={property?.id} {...(saveAsView ? { saveAsView } : {})} {...(other?.from ? { from: other.from, fromName: axisName } : {})} />}
       {data && data !== 'choose' && <>
         <button type="button" className="database-chart-toggle" aria-expanded={showData} onClick={() => setShowData(now => !now)}>{showData ? 'Hide data' : 'Data'}</button>
         {showData && <table className="database-chart-table"><thead><tr><th scope="col">{data.property.name}</th>{data.series?.map(sr => <th key={sr.key} scope="col">{sr.name}</th>)}<th scope="col">{named}</th></tr></thead><tbody>
@@ -179,12 +191,12 @@ function Donut({ points, opened, onOpen, textOf }: { points: ChartPoint[]; opene
 }
 
 /** The rows behind a bar: a plain table, read-only, and a row opens as a page (§5). */
-function OpenedRows({ point, text, db, openRow, measureId, from, fromName }: { point: ChartPoint; text: string; db: DatabaseViewProps['db']; openRow: (rowId: string) => void; measureId?: string; from?: Map<string, string>; fromName?: string }) {
+function OpenedRows({ point, text, db, openRow, measureId, from, fromName, saveAsView }: { point: ChartPoint; text: string; db: DatabaseViewProps['db']; openRow: (rowId: string) => void; measureId?: string; from?: Map<string, string>; fromName?: string; saveAsView?: () => void }) {
   const [limit, setLimit] = useState(openedLimit)
   const measured = measureId ? db.database.properties.find(p => p.id === measureId) : undefined
   const cell = (row: Page) => (measured ? valueText(db.database, measured.id, cellValue(db.database, row, measured.id)) : null)
   return <section className="database-chart-opened" aria-label={point.name}>
-    <h4>{point.name} · {text}</h4>
+    <div className="database-chart-opened-head"><h4>{point.name} · {text}</h4>{saveAsView && <button type="button" className="database-chart-toggle" onClick={saveAsView}>Save as view</button>}</div>
     {point.rows.length === 0 ? <p className="database-menu-quiet">No rows</p> : <table className="database-chart-table"><tbody>
       {point.rows.slice(0, limit).map(row => <tr key={row.id}><td><button type="button" className="database-chart-row" onClick={() => openRow(row.id)}>{displayPageTitle(row)}</button></td>{from && <td className="database-chart-from" title={fromName}>{from.get(row.id)}</td>}{measured && <td>{cell(row)}</td>}</tr>)}
     </tbody></table>}

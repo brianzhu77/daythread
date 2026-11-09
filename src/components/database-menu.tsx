@@ -2,7 +2,7 @@
 // property's own menu (§6.2). Like the cell editors it lives outside the page editor's block (one host in the app
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
-import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { automationProblem } from '../domain/automations'
 import { opsFor } from '../domain/database'
 import { openAutomations } from './automation-sheet'
@@ -20,6 +20,7 @@ import { rollupFunctionsFor, withLinks } from '../domain/relations'
 import { FormulaEditor } from './formula-editor'
 import { ruleWords, startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange, afterLinkedColumn } from './database-block'
 import { chooseCsv } from './csv-import'
+import { chartFileName, chartPicture, copyChart, pngOf, saveChart, sharesInstead, themePalette, type ExportResult } from './chart-export'
 import { exportDatabase } from './database-export'
 import { todayIso } from './dates'
 import { flushAllEditors } from './editor-flush'
@@ -296,13 +297,53 @@ function ExportPanel({ db, view, blockId, back, close }: { db: DatabasePage; vie
   }
   return <>
     <Head title="Export" back={back} />
-    <button type="button" role="menuitem" disabled={state === 'busy'} onClick={() => void take(false)}>This view</button>
+    {view.layout === 'chart' && <ChartExport db={db} view={view} blockId={blockId} close={close} />}
+    <button type="button" role="menuitem" disabled={state === 'busy'} onClick={() => void take(false)}>{view.layout === 'chart' ? 'Rows as CSV' : 'This view'}</button>
     <button type="button" role="menuitem" disabled={state === 'busy'} onClick={() => void take(true)}>Whole database</button>
     {!db.database.fixed && <label className="database-menu-row">Include page bodies
       <input type="checkbox" checked={withBodies} onChange={e => setWithBodies(e.target.checked)} />
     </label>}
     {state === 'unsaved' && <p className="database-menu-quiet is-error" role="status">No file came: a page hasn't saved yet. Try again in a moment.</p>}
     {state === 'failed' && <p className="database-menu-quiet is-error" role="status">No file came. Try again.</p>}
+  </>
+}
+
+/** The last picture made, so opening Export again on the same chart doesn't wait for it. */
+let lastPng: { svg: string; png: Blob } | null = null
+/** A chart's picture, made when the panel opens: a share has to start from the tap itself, with the file already made (chart.md §5). */
+function ChartExport({ db, view, blockId, close }: { db: DatabasePage; view: View; blockId: string; close: () => void }) {
+  const { workspace } = useWorkspace()
+  const svg = useMemo(() => {
+    if (!workspace) return null
+    const hostPage = blockActions.get(blockId)?.hostPageId
+    const context = { today: todayIso(), pageDate: workspace.pages.find(p => p.id === hostPage)?.date ?? null, weekStart: workspace.weekStart ?? 0 }
+    return chartPicture(readingWorkspace(workspace, db.id), db, view, context, themePalette())
+  }, [workspace, db, view, blockId])
+  const [png, setPng] = useState<Blob | 'failed' | null>(() => (svg && lastPng?.svg === svg ? lastPng.png : null))
+  const [said, setSaid] = useState<{ text: string; problem?: boolean } | null>(null)
+  useEffect(() => {
+    if (svg && lastPng?.svg === svg) { setPng(lastPng.png); return }
+    let live = true
+    setPng(null)
+    if (svg) pngOf(svg).then(blob => { lastPng = { svg, png: blob }; if (live) setPng(blob) }, () => { if (live) setPng('failed') })
+    return () => { live = false }
+  }, [svg])
+  if (!svg) return <><p className="database-menu-quiet">Nothing drawn yet, so no picture.</p><hr /></>
+  const share = sharesInstead()
+  const after = (closeWhenDone: boolean, doneText?: string) => (result: ExportResult) => {
+    if (result === 'cancelled') return
+    if (result !== 'done') setSaid({ text: result.problem, problem: true })
+    else if (closeWhenDone) close()
+    else if (doneText) setSaid({ text: doneText })
+  }
+  const ready = png instanceof Blob ? png : null
+  return <>
+    <button type="button" role="menuitem" disabled={!ready} onClick={() => { if (ready) void copyChart(ready).then(after(false, 'Copied')) }}>Copy as PNG</button>
+    <button type="button" role="menuitem" disabled={!ready} onClick={() => { if (ready) void saveChart(new File([ready], chartFileName(db, view, 'png'), { type: 'image/png' })).then(after(true)) }}>{share ? 'Share PNG' : 'Download PNG'}</button>
+    <button type="button" role="menuitem" onClick={() => void saveChart(new File([svg], chartFileName(db, view, 'svg'), { type: 'image/svg+xml' })).then(after(true))}>{share ? 'Share SVG' : 'Download SVG'}</button>
+    {png === 'failed' && <p className="database-menu-quiet is-error" role="status">No PNG could be made here. Download SVG still works.</p>}
+    {said && <p className={`database-menu-quiet${said.problem ? ' is-error' : ''}`} role="status">{said.text}</p>}
+    <hr />
   </>
 }
 

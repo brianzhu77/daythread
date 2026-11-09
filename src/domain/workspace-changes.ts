@@ -20,6 +20,8 @@ export interface WorkspaceChanges {
   timezone: string
   /** Absent: Sunday. */
   weekStart?: 1
+  /** To-dos' stored rules couldn't be read (workspace-rows.ts). */
+  todoAutomationsUnreadable?: true
   undo: { operationId: string; revision: number } | null
   pages: ListChanges<Page>
   tasks: ListChanges<Task>
@@ -63,7 +65,7 @@ export function changesBetween(before: Workspace, after: Workspace): WorkspaceCh
   const rules = JSON.stringify(before.todoAutomations ?? []) === JSON.stringify(after.todoAutomations ?? []) ? {} : { todoAutomations: after.todoAutomations?.length ? after.todoAutomations : null }
   const links = JSON.stringify(before.links ?? []) === JSON.stringify(after.links ?? []) ? {} : { links: after.links ?? [] }
   return {
-    from: before.revision, revision: after.revision, timezone: after.timezone, ...(after.weekStart === 1 ? { weekStart: 1 as const } : {}), undo: undoMarker(after),
+    from: before.revision, revision: after.revision, timezone: after.timezone, ...(after.weekStart === 1 ? { weekStart: 1 as const } : {}), ...(after.todoAutomationsUnreadable ? { todoAutomationsUnreadable: true as const } : {}), undo: undoMarker(after),
     pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced, ...threads, ...links, ...rules,
   }
 }
@@ -82,9 +84,9 @@ export function applyChanges(ws: Workspace, changes: WorkspaceChanges): Workspac
   const pages = applyList(ws.pages, changes.pages), tasks = applyList(ws.tasks, changes.tasks)
   const synced = changes.synced ?? ws.synced, threads = changes.threads ?? ws.threads, links = changes.links ?? ws.links, rules = changes.todoAutomations !== undefined ? changes.todoAutomations : ws.todoAutomations
   if (!pages || !tasks) return null
-  const { undo: _undo, weekStart: _weekStart, threads: _threads, links: _links, todoAutomations: _rules, ...rest } = ws
+  const { undo: _undo, weekStart: _weekStart, threads: _threads, links: _links, todoAutomations: _rules, todoAutomationsUnreadable: _unread, ...rest } = ws
   return expandedWorkspace({
-    ...rest, revision: changes.revision, timezone: changes.timezone, ...(changes.weekStart === 1 ? { weekStart: 1 as const } : {}), pages, tasks,
+    ...rest, revision: changes.revision, timezone: changes.timezone, ...(changes.weekStart === 1 ? { weekStart: 1 as const } : {}), ...(changes.todoAutomationsUnreadable ? { todoAutomationsUnreadable: true as const } : {}), pages, tasks,
     deletedTasks: changes.deletedTasks ?? ws.deletedTasks, receipts: {},
     ...(synced ? { synced } : {}),
     ...(threads?.length ? { threads } : {}),

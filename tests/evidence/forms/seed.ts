@@ -1,8 +1,8 @@
 // A disposable store for Forms (forms.md): Runs with a number, a select, a multi-select, a date, a checkbox and a text, and a form on it.
-// Usage: node --no-warnings tests/evidence/forms/seed.ts <store-path>
+// Usage: node --no-warnings tests/evidence/forms/seed.ts <store-path> [files]  (files: with a Files property too)
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import type { Action } from '../../../src/domain/types.ts'
-const [path] = process.argv.slice(2)
+const [path, withFiles] = process.argv.slice(2)
 if (!path) { console.error('Usage: node --no-warnings tests/evidence/forms/seed.ts <store-path> (a throwaway SQLite file, never his data)'); process.exit(2) }
 const repo = new SqliteWorkspaceRepository(path, undefined, { allowMissingLegacy: true })
 let ws = await repo.load()
@@ -15,6 +15,7 @@ await C({ kind: 'addProperty', property: { id: 'tags', name: 'Tags', type: 'mult
 await C({ kind: 'addProperty', property: { id: 'when', name: 'When', type: 'date' } })
 await C({ kind: 'addProperty', property: { id: 'ok', name: 'Stretched', type: 'checkbox' } })
 await C({ kind: 'addProperty', property: { id: 'note', name: 'Note', type: 'text' } })
+if (withFiles) await C({ kind: 'addProperty', property: { id: 'pics', name: 'Photos', type: 'files' } })
 await C({ kind: 'addView', view: { id: 'f', name: 'Log a run', layout: 'form', columns: [], sort: [], filter: [] } })
 const form = ws.pages.find(p => p.id === 'runs')!.database!.views.find(v => v.id === 'f')!.form!
 await C({ kind: 'updateView', viewId: 'f', form: { ...form, questions: form.questions.map(q => (q.propertyId === 'km' ? { ...q, wording: 'How far did you go?', required: true } : q)) } })

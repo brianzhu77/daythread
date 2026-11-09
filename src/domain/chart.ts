@@ -1,6 +1,6 @@
 // Chart, a layout of a view (docs/design/chart.md): the view's own rows in its own groups, so a filter, a group and a column
 // calculation all agree with what's drawn. The axis is the view's `groupBy` and `groupDateBy`; only what's new is in `chart`.
-import { calcChoices, columnCalc, dateGroupName, propertyOf, viewGroups, viewSubGroups, type CalcKind, type CalcResult, type Database, type Property, type View } from './database.ts'
+import { addDays, calcChoices, columnCalc, dateGroupName, propertyOf, viewGroupBy, viewGroups, viewSubGroups, type CalcKind, type CalcResult, type Condition, type Database, type FilterGroup, type Property, type View } from './database.ts'
 import type { WeekStart } from './types.ts'
 import type { Page } from './types.ts'
 
@@ -196,4 +196,39 @@ export function chartTicks(values: readonly number[], count = 3): number[] {
   const out: number[] = []
   for (let n = Math.floor(low / step); n * step < high + step * 0.999; n++) out.push(Number((n * step).toPrecision(12)))
   return out
+}
+
+/**
+ * The rules that pick out one bar's rows, for Save as view (chart.md §5): its value of what the chart is by, under the view's own filter.
+ * Null where a bar can't be said as a rule: Other, which is several values at once, or a created or edited time. A date range is on a
+ * period when it overlaps it, which is a filter's reading; the chart puts a range under its start.
+ */
+export function pointRules(db: Database, view: View, key: string): Condition[] | null {
+  const settings = chartSettings(view), p = viewGroupBy(db, settings.byYear ? { ...view, groupDateBy: 'month' } : view)
+  if (!p || key === otherKey) return null
+  const by = p.id, empty: Condition[] = [{ by, op: 'isEmpty' }]
+  switch (p.type) {
+    case 'select': case 'status': return key === noValue ? empty : [{ by, op: 'isAnyOf', value: [key] }]
+    case 'multiSelect': case 'relation': return key === noValue ? empty : [{ by, op: 'contains', value: [key] }]
+    case 'checkbox': return [{ by, op: 'is', value: key === 'checked' }]
+    case 'number': return key === noValue ? empty : [{ by, op: 'eq', value: Number(key) }]
+    case 'text': case 'url': case 'email': case 'phone': return key === noValue ? empty : [{ by, op: 'is', value: key }]
+    case 'date': {
+      if (key === noValue) return empty
+      const period = settings.byYear ? 'year' : view.groupDateBy ?? 'month'
+      const first = period === 'year' ? `${key}-01-01` : period === 'month' ? `${key}-01` : key
+      const last = period === 'day' ? key : period === 'week' ? addDays(key, 6) : period === 'month' ? addDays(addDays(`${key}-01`, 31).slice(0, 7) + '-01', -1) : `${key}-12-31`
+      return [{ by, op: 'onOrAfter', value: { date: first } }, { by, op: 'onOrBefore', value: { date: last } }]
+    }
+    default: return null
+  }
+}
+/** A Table view of one bar's rows, named after it: its rules under the chart view's own, whatever they were. */
+export function pointView(db: Database, view: View, key: string, name: string, id: string): View | null {
+  const rules = pointRules(db, view, key)
+  if (!rules) return null
+  // Rules that combine with "any", or in groups, keep their own meaning as a group under this bar's.
+  const own = view.filterAny || view.filterGroups?.length ? { filter: rules, filterGroups: [{ ...(view.filterAny ? { any: true as const } : {}), rules: view.filter, ...(view.filterGroups?.length ? { groups: view.filterGroups } : {}) } as FilterGroup] } : { filter: [...view.filter, ...rules] }
+  const first = db.views.find(v => v.layout === 'table')
+  return { id, name, layout: 'table', columns: first ? structuredClone(first.columns) : db.properties.map(p => ({ id: p.id })), sort: [], ...own }
 }
