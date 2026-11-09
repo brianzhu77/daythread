@@ -1,5 +1,5 @@
 # Typecheck, tests and both builds on every PR and on main. No secrets are used, so a PR from a fork can't read any.
-# Deploys are Vercel's Git integration (a preview per PR = staging), not this workflow.
+# Deploys are cloudflare.yml (every push to main); Vercel's Git integration still makes a preview per PR (= staging).
 name: CI
 
 on:
