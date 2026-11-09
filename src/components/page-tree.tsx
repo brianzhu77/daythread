@@ -471,14 +471,14 @@ export function SidebarTree({ workspace, activeId, today }: { workspace: Workspa
     // Today's nav row is already selected when today is open; no second highlight here.
     const current = p.id === activeId && !(day && p.date === today)
     const dropHere = drag.drop?.rowKey === p.id ? drag.drop : null
-    const dragged = drag.dragging?.pageId === p.id ? (drag.dragging.touch ? 'touch' : 'mouse') : undefined
+    const dragged = drag.dragging?.pageId === p.id ? (drag.dragging.touch ? 'touch' : 'mouse') : drag.landing === p.id ? 'landing' : undefined
     return (
       <li key={p.id} role="treeitem" aria-expanded={children.length ? isOpen : undefined} aria-selected={current}>
         <div className="tree-row" aria-current={current ? 'page' : undefined}
           style={{ '--depth': Math.min(depth, 6), ...(dropHere ? { '--drop-depth': Math.min(dropHere.depth, 6) } : {}) } as React.CSSProperties}
           data-page={p.id} data-kind={day ? 'day' : 'page'} data-depth={depth} data-parent={parentOf(workspace, p)?.id ?? ''} data-next={nextId}
           data-first-child={isOpen ? children[0]?.id ?? '' : ''} data-drop-zone={dropHere?.zone} data-dragging={dragged}
-          onPointerDown={day ? undefined : e => drag.onPointerDown(e, pageLabel(p, today))} onDragStart={e => e.preventDefault()}>
+          onPointerDown={day ? undefined : drag.onPointerDown} onDragStart={e => e.preventDefault()}>
           {/* The icon column holds the page's icon; a page with children shows its chevron there while the row is
               hovered or focused (Notion's way), so every title starts where the nav rows' do. */}
           <span className={`tree-lead${children.length ? ' has-children' : ''}`}>

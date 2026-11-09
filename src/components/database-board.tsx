@@ -1,11 +1,11 @@
 // Databases R2: the Board view (design §7.2). Columns come from a Select, Status or Checkbox property; a card is a row. A
 // card drags to another column by pointer at 1280 and by long-press on the phone, one `set-values` with its new place, so
-// one Undo takes back both. Nothing moves in the page while dragging, only a floating copy: a redraw of the block mid-drag
-// would lose the pointer.
+// one Undo takes back both. The card itself lifts under the pointer (drag-lift.ts), a slot waits where it would land and
+// the column makes room; the rows keep their order until the drop, so a redraw mid-drag changes nothing under the pointer.
 import { formulaErrorOf } from '../domain/formula'
 import { PageEmoji } from './icons'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type UIEvent } from 'react'
-import { createPortal } from 'react-dom'
+import { layoutRect, useRoom, withSlot } from './drag-lift'
 import { sectionKey, viewSections, viewSubGroups, columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { rowTint, SubItemParent, CardSubItems, PickedBar, useCardPicking, useMoveRows, useRowPicking, SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
@@ -21,7 +21,8 @@ const holdMs = 350
 /** A view whose property can't group any more shows all its rows in one column, under this key, and asks. */
 const allKey = ''
 
-interface Drag { rowId: string; from: string; over: string; before: string | null }
+/** `height`: the lifted card's, which the slot takes. */
+interface Drag { rowId: string; from: string; over: string; before: string | null; height: number }
 
 export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { run, latest } = useWorkspace()
@@ -69,14 +70,13 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
 
   // ------------------------------------------------------------ dragging
   const board = useRef<HTMLDivElement>(null)
-  const ghost = useRef<HTMLDivElement>(null)
   const [drag, setDragState] = useState<Drag | null>(null)
   const dragging = useRef<Drag | null>(null)
   const setDrag = (next: Drag | null) => { dragging.current = next; setDragState(next) }
   const justDragged = useRef(false)
   const pointer = useRef({ x: 0, y: 0 })
-  const placeGhost = () => { if (ghost.current) ghost.current.style.transform = `translate(${pointer.current.x + 8}px, ${pointer.current.y + 8}px)` }
-  useLayoutEffect(placeGhost)
+  // Everything in a column makes room for the slot, `+ New` included; after the drop the copy glides to the card's place.
+  const room = useRoom(() => [...(board.current?.querySelectorAll('.database-column > *') ?? [])], rowId => board.current?.querySelector<HTMLElement>(`[data-card="${CSS.escape(rowId)}"]`) ?? null)
 
   /** The column under a point, or the nearest; in it, the card to go before. A sorted view has no place to choose. */
   const targetAt = (x: number, y: number, rowId: string): { over: string; before: string | null } | null => {
@@ -89,21 +89,23 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     const distance = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return x < r.left ? r.left - x : x > r.right ? x - r.right : 0 }
     const col = cols.reduce((best, el) => (distance(el) < distance(best) ? el : best))
     const cards = [...col.querySelectorAll<HTMLElement>('[data-card]')].filter(c => c.dataset.card !== rowId)
-    const next = sorted ? undefined : cards.find(c => { const r = c.getBoundingClientRect(); return y < r.top + r.height / 2 })
+    // Read against the cards' places, not their slides: a card still moving out of the way mustn't take the slot back.
+    const next = sorted ? undefined : cards.find(c => { const r = layoutRect(c); return y < r.top + r.height / 2 })
     return { over: col.dataset.column!, before: next?.dataset.card ?? null }
   }
   const startCard = (e: ReactPointerEvent, row: Page, from: string) => {
     // These are a pick, not a drag (R3-26).
     if (e.button !== 0 || picks.picking || e.shiftKey || e.metaKey || e.ctrlKey || (e.target as Element).closest('.property-checkbox')) return
     const touch = e.pointerType !== 'mouse'
+    const card = e.currentTarget as HTMLElement
     const start = { x: e.clientX, y: e.clientY }
     pointer.current = start
-    let lifted = false, frame = 0
+    let held = false, frame = 0
     const follow = () => {
       const current = dragging.current
       if (!current) return
       const target = targetAt(pointer.current.x, pointer.current.y, current.rowId)
-      if (target && (target.over !== current.over || target.before !== current.before)) setDrag({ ...current, ...target })
+      if (target && (target.over !== current.over || target.before !== current.before)) { room.willRedraw(); setDrag({ ...current, ...target }) }
     }
     // Near an edge the board or the page moves on, so a column or card off the screen can be reached.
     const edges = () => {
@@ -116,38 +118,43 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
       follow()
       frame = requestAnimationFrame(edges)
     }
-    const lift = () => {
-      lifted = true
-      setDrag({ rowId: row.id, from, over: from, before: null })
+    const pickUp = () => {
+      held = true
+      const several = picks.picked.length > 1 && picks.picked.includes(row.id)
+      const lifted = room.pickUp(card, pointer.current.x, pointer.current.y, { tilt: 3, badge: several ? `${picks.picked.length} rows` : undefined })
+      setDrag({ rowId: row.id, from, over: from, before: null, height: lifted.origin.height })
       follow()
       frame = requestAnimationFrame(edges)
     }
-    const hold = touch ? window.setTimeout(lift, holdMs) : 0
+    const hold = touch ? window.setTimeout(pickUp, holdMs) : 0
     const finish = () => {
       clearTimeout(hold); cancelAnimationFrame(frame)
       document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', esc, true)
     }
     const move = (ev: PointerEvent) => {
       pointer.current = { x: ev.clientX, y: ev.clientY }
-      if (lifted) { placeGhost(); follow(); return }
+      if (held) { room.copy.current?.move(ev.clientX, ev.clientY); follow(); return }
       const far = Math.hypot(ev.clientX - start.x, ev.clientY - start.y)
       // A finger moving before the hold is up is a swipe or a scroll, and it stays the browser's.
-      if (touch) { if (far > 8) finish() } else if (far > 4) lift()
+      if (touch) { if (far > 8) finish() } else if (far > 4) pickUp()
     }
-    const end = () => { finish(); justDragged.current = lifted; setTimeout(() => { justDragged.current = false }) }
+    const end = () => { finish(); justDragged.current = held; setTimeout(() => { justDragged.current = false }) }
+    // The copy glides to where the card is now, moved or back where it was, and the card shows as it lands.
+    const land = () => { const current = dragging.current; setDrag(null); room.land(current?.rowId ?? null) }
     const up = (ev: PointerEvent) => {
       const current = dragging.current
-      end(); setDrag(null)
+      end()
       if (!current) return
       pointer.current = { x: ev.clientX, y: ev.clientY }
       const target = targetAt(ev.clientX, ev.clientY, current.rowId) ?? current
       // One of several picked: they all go, each from where it is (R3-26).
-      if (picks.picked.length > 1 && picks.picked.includes(current.rowId)) { moveRows(picks.picked.map(rowId => ({ rowId, from: wrap.current?.querySelector<HTMLElement>(`[data-card="${rowId}"]`)?.closest<HTMLElement>('[data-column]')?.dataset.column ?? null })), target.over); return }
-      moveRow(current.rowId, current.from, target.over, target.before, ordered)
+      if (picks.picked.length > 1 && picks.picked.includes(current.rowId)) moveRows(picks.picked.map(rowId => ({ rowId, from: wrap.current?.querySelector<HTMLElement>(`[data-card="${rowId}"]`)?.closest<HTMLElement>('[data-column]')?.dataset.column ?? null })), target.over)
+      else moveRow(current.rowId, current.from, target.over, target.before, ordered)
+      land()
     }
-    const cancel = () => { end(); setDrag(null) }
+    const cancel = () => { end(); land() }
     // The button's still down, so its click comes when it's let go, and mustn't open the card.
-    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key !== 'Escape') return; ev.stopPropagation(); finish(); setDrag(null); if (lifted) { justDragged.current = true; document.addEventListener('pointerup', () => setTimeout(() => { justDragged.current = false }), { once: true }) } }
+    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key !== 'Escape') return; ev.stopPropagation(); finish(); land(); if (held) { justDragged.current = true; document.addEventListener('pointerup', () => setTimeout(() => { justDragged.current = false }), { once: true }) } }
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
   }
   // Only with a card lifted: stops iOS scrolling under the finger. It has to be there, and not passive, before the touch starts.
@@ -214,21 +221,20 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const onScroll = (e: UIEvent<HTMLDivElement>) => { const place = blockPlaces.get(placeKey); blockPlaces.set(placeKey, { limit: place?.limit ?? cap, ...(place?.groups ? { groups: place.groups } : {}), scrollLeft: e.currentTarget.scrollLeft }) }
 
   const cardColumns = viewColumns(db.database, view).filter(c => c.property.id !== groups?.property.id || c.property.type === 'multiSelect')
-  const draggedRow = drag ? ordered.find(r => r.id === drag.rowId) : null
-  const cardBody = (row: Page, group: string, interactive: boolean) => {
+  const cardBody = (row: Page, group: string) => {
     const unsaved = [...pendingCells.values()].some(p => p.failed && p.rowId === row.id)
     return <>
       <TodoTick row={row} />
-      <button type="button" tabIndex={interactive ? 0 : -1} className={`database-card-title${row.title ? '' : ' is-placeholder'}`}
-        data-cell={interactive ? cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, group }) : undefined}
-        data-nav={interactive && row.id === firstCard ? '0:0' : undefined}
+      <button type="button" className={`database-card-title${row.title ? '' : ' is-placeholder'}`}
+        data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, group })}
+        data-nav={row.id === firstCard ? '0:0' : undefined}
         onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.icon && <PageEmoji icon={row.icon} className="database-row-icon" />}{row.title || 'Untitled'}</button>
       <SubItemParent workspace={workspace} db={db} row={row} />
       {cardColumns.map(({ property, wrap = false }) => {
         const pending = pendingCells.get(pendingKey(row.id, property.id))
         const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
         if (property.type === 'checkbox') return <span key={property.id} className="database-card-check">
-          <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={!interactive || isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />{property.name}
+          <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />{property.name}
         </span>
         if (isEmptyValue(value) && !formulaErrorOf(row, property)) return null
         return <span key={property.id} className={`database-card-value${wrap && canWrap(property.type) ? ' is-wrapped' : ''}`}><PropertyCell property={property} value={value} row={row} today={today} wrap={wrap && canWrap(property.type)} /></span>
@@ -240,6 +246,12 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   // Where Enter goes on the block selected whole (design §10), as a table's first cell.
   const firstCard = columns.find(g => g.rows.length)?.rows[0]?.id
   const canAddColumn = !db.database.fixed && groups && (groups.property.type === 'select' || groups.property.type === 'status')
+  // While a card is held over another column, both counts already say where it is: the slot is its place.
+  const countOf = (key: string, over: readonly Page[]) => {
+    if (!drag || calculation || subs || picks.picked.length > 1) return headOf(over)
+    return over.length + (drag.over === key && drag.from !== key ? 1 : 0) - (drag.from === key && drag.over !== key ? 1 : 0)
+  }
+  const slot = <div key="slot" className="database-card-slot drag-slot" style={{ height: drag?.height }} aria-hidden="true" />
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown} {...cardPicks.props}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />
@@ -252,15 +264,15 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
         const body = laneColumns.map(group => {
         const shown = group.rows.slice(0, limitOf(group.key))
         const over = drag?.over === group.key
-        return <section key={group.key} className={`database-column${over && (sorted || drag!.from !== group.key) ? ' is-drop' : ''}`} data-column={group.key} aria-label={group.name ? `${group.name}, ${group.rows.length}` : 'All rows'}>
-          {groups && !subs && <h3 className="database-column-head"><GroupName groups={groups} group={group.head} /><span className="database-group-count">· {headOf(group.head.rows)}</span></h3>}
-          {shown.map(row => <article key={row.id} data-card={row.id} {...(rowTint(db.database, view, row, context) ? { style: rowTint(db.database, view, row, context)!.style } : {})}
-            className={`database-card${rowTint(db.database, view, row, context)?.className ?? ''}${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id || (drag && picks.picked.includes(drag.rowId) && picks.picked.includes(row.id)) ? ' is-dragging' : ''}${over && !sorted && drag!.before === row.id && drag!.rowId !== row.id ? ' is-drop-before' : ''}`}
+        // Sorted, there's no place to show, so the column as a whole says it will take the card.
+        return <section key={group.key} className={`database-column${over && sorted && drag!.from !== group.key ? ' is-drop' : ''}`} data-column={group.key} aria-label={group.name ? `${group.name}, ${group.rows.length}` : 'All rows'}>
+          {groups && !subs && <h3 className="database-column-head"><GroupName groups={groups} group={group.head} /><span className="database-group-count">· {countOf(group.key, group.head.rows)}</span></h3>}
+          {withSlot(shown, r => r.id, over && !sorted ? drag!.before : undefined, row => <article key={row.id} data-card={row.id} {...(rowTint(db.database, view, row, context) ? { style: rowTint(db.database, view, row, context)!.style } : {})}
+            className={`database-card${rowTint(db.database, view, row, context)?.className ?? ''}${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id ? ' is-lifted' : drag && picks.picked.includes(drag.rowId) && picks.picked.includes(row.id) ? ' is-dragging' : ''}${room.landing === row.id ? ' is-landing' : ''}`}
             // A mouse press selects no text: that would move the page's selection, and redraw this block under the drag.
             onPointerDown={e => startCard(e, row, group.key)} onMouseDown={e => { if (!(e.target as Element).closest('.property-checkbox')) e.preventDefault() }} onContextMenu={e => { if (e.nativeEvent instanceof PointerEvent && e.nativeEvent.pointerType !== 'mouse') e.preventDefault() }}>
-            {cardBody(row, group.key, true)}
-          </article>)}
-          {over && !sorted && drag!.before === null && <div className="database-column-drop-end" />}
+            {cardBody(row, group.key)}
+          </article>, slot)}
           {group.rows.length > shown.length && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
           <NewRow db={db} blockId={blockId} addRow={addRow} {...(group.key === allKey ? {} : { group: group.key })} />
         </section>
@@ -278,7 +290,6 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     {cardPicks.boxDrawn}
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
     {groups && <HiddenSubGroups db={db.database} view={view} rows={ordered} changeView={changeView} weekStart={weekStart} />}
-    {drag && draggedRow && createPortal(<div ref={ghost} className="database-card is-ghost" aria-hidden="true">{cardBody(draggedRow, drag.from, false)}{picks.picked.length > 1 && picks.picked.includes(draggedRow.id) && <span className="database-ghost-count">{picks.picked.length} rows</span>}</div>, document.body)}
   </div>
 }
 
