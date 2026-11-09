@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { lift, type Lift } from './drag-lift'
 
 // B14 (task #138, plan 9293ae5f, touch notes Jazz dc9927a5): drag a page in the sidebar tree to put it between two
 // siblings or inside another page, Notion's way. Pointer events, no library: a mouse drags after 4px; a finger holds
-// 400 ms without moving 8px, so a swipe still scrolls the sidebar.
+// 400 ms without moving 8px, so a swipe still scrolls the sidebar. The row itself lifts under the pointer (drag-lift.ts)
+// and a line says where it lands; after the release the copy glides to the row's new place once the move is back from
+// the server, or to where it stayed.
 //
 // The tree's rows carry what a drop needs as data attributes, read at the pointer:
 //   .tree-row[data-page]  data-parent (its parent's id, '' at the top level), data-depth, data-kind ('day' | 'page'),
@@ -15,7 +18,7 @@ export interface Drop { rowKey: string; zone: DropZone; depth: number; parentId:
 /** True when the domain would refuse the move (its own spot, into itself, a day page…): no line, no write. */
 export type Refuse = (pageId: string, parentId: string | null, beforeId: string | null) => boolean
 
-const MOUSE_SLOP = 4, TOUCH_SLOP = 8, HOLD_MS = 400, EDGE = 32, SCROLL_STEP = 8, CHIP_LIFT = 24
+const MOUSE_SLOP = 4, TOUCH_SLOP = 8, HOLD_MS = 400, EDGE = 32, SCROLL_STEP = 8, RAISE = 24, LAND_WAIT_MS = 450
 
 export function dropAt(x: number, y: number, pageId: string, refuse: Refuse): Drop | null {
   const el = document.elementFromPoint(x, y)
@@ -40,24 +43,62 @@ export function dropAt(x: number, y: number, pageId: string, refuse: Refuse): Dr
 
 const sameDrop = (a: Drop | null, b: Drop | null) => a === b || Boolean(a && b && a.rowKey === b.rowKey && a.zone === b.zone && a.beforeId === b.beforeId)
 
+/** Where a row's item sits in the tree: its list and the item before it. A move changes one of them. */
+const placeOf = (row: Element | null) => { const li = row?.closest('li') ?? null; return { parent: li?.parentElement ?? null, prev: li?.previousElementSibling ?? null } }
+
+/** After a release: the row whose copy still rides where it was let go, until the tree shows the row moved. */
+interface Landing { pageId: string; copy: Lift; place: ReturnType<typeof placeOf>; since: number; /** Give the save time to move the row before gliding. */ wait: boolean }
+
 export function useTreeDrag(options: { refuse: Refuse; onDrop: (pageId: string, drop: Drop) => void; scroller: () => HTMLElement | null }) {
   const [dragging, setDragging] = useState<{ pageId: string; touch: boolean } | null>(null)
   const [drop, setDrop] = useState<Drop | null>(null)
+  const [landing, setLanding] = useState<Landing | null>(null)
   const opts = useRef(options); opts.current = options
   const endGesture = useRef<(() => void) | null>(null)
-  useEffect(() => () => endGesture.current?.(), [])
+  const mounted = useRef(true)
+  /** The copy gliding home, then the one that has landed and goes when its row shows. */
+  const gliding = useRef<Lift | null>(null), landed = useRef<Lift | null>(null)
+  // Set in the effect, not at creation: StrictMode runs the cleanup once at mount, and the flag has to come back.
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false; endGesture.current?.(); gliding.current?.remove(); landed.current?.remove() }
+  }, [])
+  // Each redraw after a release: once the row has moved, or the wait is up, the copy glides to it (or back to where it stayed).
+  useLayoutEffect(() => {
+    if (!landing || gliding.current === landing.copy) return
+    const row = document.querySelector<HTMLElement>(`.tree .tree-row[data-page="${CSS.escape(landing.pageId)}"]`)
+    const now = placeOf(row)
+    const moved = row !== null && (now.parent !== landing.place.parent || now.prev !== landing.place.prev)
+    if (landing.wait && !moved && Date.now() - landing.since < LAND_WAIT_MS) return
+    gliding.current = landing.copy
+    void landing.copy.settle(row?.getBoundingClientRect() ?? null).then(() => {
+      gliding.current = null
+      setLanding(current => {
+        // Its row shows in the same paint as the copy goes (below); overtaken by a newer landing, it just goes.
+        if (current === landing) { landed.current = landing.copy; return null }
+        landing.copy.remove()
+        return current
+      })
+    })
+  })
+  useLayoutEffect(() => { if (!landing && landed.current) { landed.current.remove(); landed.current = null } }, [landing])
+  useEffect(() => {
+    if (!landing?.wait) return
+    const t = setTimeout(() => setLanding(current => (current === landing ? { ...current, wait: false } : current)), LAND_WAIT_MS)
+    return () => clearTimeout(t)
+  }, [landing])
 
-  const onPointerDown = (e: ReactPointerEvent<HTMLElement>, title: string) => {
+  const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0 || endGesture.current || (e.target as Element).closest('button')) return
-    const pageId = e.currentTarget.dataset.page!, pointerId = e.pointerId, touch = e.pointerType === 'touch'
+    const row = e.currentTarget, pageId = row.dataset.page!, pointerId = e.pointerId, touch = e.pointerType === 'touch'
     const start = { x: e.clientX, y: e.clientY }
-    let last = start, started = false, current: Drop | null = null, frame = 0, chip: HTMLElement | null = null
+    let last = start, started = false, current: Drop | null = null, frame = 0, copy: Lift | null = null
     const hold = touch ? window.setTimeout(() => begin(), HOLD_MS) : 0
 
     const place = () => {
       current = dropAt(last.x, last.y, pageId, opts.current.refuse)
       setDrop(prev => sameDrop(prev, current) ? prev : current)
-      if (chip) chip.style.transform = `translate(${last.x}px, ${last.y - CHIP_LIFT}px) translate(-50%, -100%)`
+      copy?.move(last.x, last.y)
     }
     // Near the sidebar's top or bottom edge the list scrolls under a still pointer, and the drop is read again.
     const scroll = () => {
@@ -72,19 +113,14 @@ export function useTreeDrag(options: { refuse: Refuse; onDrop: (pageId: string, 
     const begin = () => {
       started = true
       setDragging({ pageId, touch })
-      if (touch) {
-        navigator.vibrate?.(10)
-        // The finger covers the row: a chip with the title rides above it (touch only).
-        chip = document.createElement('div')
-        chip.className = 'tree-drag-chip'
-        chip.textContent = title
-        document.body.append(chip)
-      }
+      if (touch) navigator.vibrate?.(10)
+      // The row itself rides under the pointer; above a finger, which would cover it.
+      copy = lift(row, last.x, last.y, { tilt: 1.5, raise: touch ? RAISE : 0 })
       place()
       frame = requestAnimationFrame(scroll)
     }
     const end = (commit: boolean) => {
-      clearTimeout(hold); cancelAnimationFrame(frame); chip?.remove()
+      clearTimeout(hold); cancelAnimationFrame(frame)
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel)
       window.removeEventListener('touchmove', touchMove); window.removeEventListener('keydown', key, true); window.removeEventListener('contextmenu', noMenu, true)
       endGesture.current = null
@@ -94,7 +130,10 @@ export function useTreeDrag(options: { refuse: Refuse; onDrop: (pageId: string, 
       window.addEventListener('click', swallow, true)
       setTimeout(() => window.removeEventListener('click', swallow, true), 0)
       setDragging(null); setDrop(null)
-      if (commit && current) opts.current.onDrop(pageId, current)
+      const dropped = commit && current ? current : null
+      if (copy && mounted.current) setLanding({ pageId, copy, place: placeOf(row), since: Date.now(), wait: dropped !== null })
+      else copy?.remove()
+      if (dropped) opts.current.onDrop(pageId, dropped)
     }
     const move = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return
@@ -121,5 +160,5 @@ export function useTreeDrag(options: { refuse: Refuse; onDrop: (pageId: string, 
     endGesture.current = () => end(false)
   }
 
-  return { dragging, drop, onPointerDown }
+  return { dragging, drop, landing: landing?.pageId ?? null, onPointerDown }
 }

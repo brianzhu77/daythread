@@ -623,7 +623,7 @@ doesn't show.
 - **A column** is 260 px, or 300 px with snap on the phone, so the next one peeks. Its head reads "◐ Reading · 3". `+ New` at its foot sets its value; at 1280 the title opens to type, and on the phone the row opens as its page.
 - **`+ Add column`** at the end, for Select and Status, makes a new option there.
 - **A tap or click on a card opens its row.** A tick on a Checkbox property ticks in place.
-- **Dragging:** by pointer past 4 px at 1280; by a 350 ms long-press on the phone, and moving sooner stays a swipe or a scroll. A floating copy follows, with a line where it lands and the column tinted. Holding near an edge moves the board or page on. Esc cancels. When sorted, only the column counts, and its place comes from the sort.
+- **Dragging:** by pointer past 4 px at 1280; by a 350 ms long-press on the phone, and moving sooner stays a swipe or a scroll. The card itself lifts under the pointer, a hatched slot its size waits where it would land, the column makes room and both columns' counts already say where it is; on release the card glides into the slot (`docs/design/drag.md`). Holding near an edge moves the board or page on. Esc cancels. When sorted there's no place to show, so the column tints instead and its place comes from the sort. A table's and a list's rows do the same by their `⋮⋮`.
 - **A failed save** stays shown in its new column, with "Not saved" on the card and the usual "1 change not saved · Retry · Undo".
 - **A filter that would hide it:** "Moved to Done · hidden by this view's filter · Undo", or for a new row, §7.4's notice.
 - **Keys at 1280:** arrows move between cards and columns, Shift-arrows move the card, Enter opens, Esc gives the block back, ⌘Z undoes, and cut, paste and copy stay out of the page.

@@ -200,7 +200,8 @@ A single neutral scale on white, with one blue held back for the five places att
 
 ### Primary
 - **Thread Blue** (`thread-blue`): the filled dot of the mark and the app's only accent. Used as the 2 px focus ring,
-  the fill of a checked box, the dot on a written day in the date picker, and the drop line while dragging.
+  the fill of a checked box, the dot on a written day in the date picker, and the line where a dragged page lands in
+  the sidebar.
 - **Thread Blue, pressed** (`thread-blue-pressed`): the solid blue when hovered or pressed.
 - **Thread Blue, text** (`thread-blue-text`): the word "Today" in the calendar and sidebar, and the text colour on a
   blue wash.
@@ -331,7 +332,8 @@ a shadow is therefore a statement: this is above what you were reading.
 - **Float** (`box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 10px 30px rgba(0, 0, 0, .10)`): menus, the `/` menu, the
   sheet, the phone's tab capsule and `+`, the laptop's floating capture bar, the editor's selection bar, a dialog.
   In dark: `0 2px 6px rgba(0, 0, 0, .35), 0 10px 30px rgba(0, 0, 0, .5)`.
-- **Row** (`box-shadow: 0 1px 2px rgba(0, 0, 0, .08)`): a row lifted while dragging. Dark `0 1px 2px rgba(0, 0, 0, .4)`.
+- **Row** (`box-shadow: 0 1px 2px rgba(0, 0, 0, .08)`): the first frame of a lifted copy, before it floats. Dark
+  `0 1px 2px rgba(0, 0, 0, .4)`.
 - **Card, soft** (`box-shadow: 0 1px 2px rgba(17, 17, 26, .04)`): a saved link card and a receipt, the one resting
   element with a whisper of lift because it represents something brought in from outside the page.
 - **Fab** (`box-shadow: 0 5px 24px #0002`): the desktop capture `+`.
@@ -342,6 +344,13 @@ or dialog always does.
 
 **The Hairline Rule.** An edge is a 1 px line in Hairline grey, not a tinted background. A block on a page, an empty
 state, a note card and the sidebar's edge all get the line; none gets a fill.
+
+**The Lift Rule (Nov 8).** Whatever is dragged lifts itself: a copy keeps the grab point under the pointer, tilts 3°
+(cards) or 1° (rows), grows 2% and takes Float, over 160 ms. A hatched slot its size (1 px dashed `gray-6`, 1 px
+`gray-4` lines every 6 px) waits where it would land, and its neighbours slide 180 ms to make room. On release the
+copy glides into the slot in 220 ms on `cubic-bezier(.16, 1, .3, 1)` and flattens; the real thing shows as it lands.
+Nothing else tints or draws a line, except the sidebar's page tree, where nesting keeps the Thread Blue line. Reduced
+motion keeps the lift and the slot and drops the tilt, the slide and the glide.
 
 ## Shapes
 
