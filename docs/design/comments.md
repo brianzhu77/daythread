@@ -62,6 +62,11 @@ A workspace holds one person, so a comment is a note attached to something, kept
   - **A place's page in Trash:** the others go on showing it. If every place is in Trash, it goes with them, and comes back with the first restored. **As built:** it stays on its home, in Trash or not, and comes back with whichever place is restored first, which covers what this was for.
   - **Undo of any of these:** one Undo moves the thread's anchor back to the shared line, with the sync's own rule: "Can't undo · edited since" if a place changed. It never restores an old copy of the replies (Ratchet dcd7619a). **As built:** no refusal of its own beyond that one. Step 2's checks include: unsync the home, edit and reply, end the sharing elsewhere, then Undo.
   - **Search and export:** export writes it once, under its home page, or the first remaining place. Search opens the home place if it's live, otherwise the first live place, otherwise the home page's pane.
+- **A thread on a row's property (step 4; Bumblebee 42004183, Roadbuster beecc4aa agreed):** it stores the property's id, and its name and the value's words when made (up to 300 characters, like a line's quote).
+  - **Renamed:** the thread follows, as it holds the id.
+  - **Property deleted:** the thread stays in the row's pane, reading "Property removed · Stage: Idea". Undo of the delete brings the mark back.
+  - **Row moved to another database (R4-10):** the thread goes to the property its value came along to, mapped as the move maps values. One whose property didn't come along reads "Property removed", never vanishing.
+  - **Property hidden in a view:** the thread is still on the row page, where comments are read; the hidden cell just has no mark.
 - **A page or row in Trash:** its threads go with it and come back with it, and go for good with it. Moving a row to another database keeps them.
 - **Search:** finds a comment's words and opens the thread. Resolved ones too, marked as resolved.
 - **The day draft:** sends the model no comments. They're notes about a line rather than the day's words, and sending them would widen what the model sees.

@@ -49,6 +49,8 @@ function Sheet({ db, at }: { db: Page & { database: Database }; at: { top: numbe
   const wide = useWide(), keyboardTop = useKeyboardTop()
   const [editing, setEditing] = useState<Automation | null>(null), [isNew, setIsNew] = useState(false)
   const rules = db.database.automations ?? []
+  const unreadable = db.id === todosSourceId && Boolean(workspace?.todoAutomationsUnreadable)
+  const [replacing, setReplacing] = useState(false)
   const change = (c: DatabaseChange, notice = true) => void run({ type: 'change-database', pageId: db.id, change: c }, notice ? r => ({ text: r.message, undoOperationId: r.operationId }) : undefined, newOperationId())
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -63,7 +65,9 @@ function Sheet({ db, at }: { db: Page & { database: Database }; at: { top: numbe
     <div ref={box} className="app-menu database-menu button-editor automation-sheet" role="dialog" aria-label="Automations" style={{ position: 'fixed', ...(wide ? at ?? { top: 90, left: Math.max(16, window.innerWidth / 2 - 190) } : {}), ...(!wide && keyboardTop !== null ? { '--keyboard-lift': `${window.innerHeight - keyboardTop}px` } as object : {}) }} onKeyDown={e => e.stopPropagation()}>
       {editing ? <Editor rule={editing} isNew={isNew} db={db} onCancel={() => setEditing(null)} onDone={rule => { change(isNew ? { kind: 'addAutomation', automation: rule } : { kind: 'updateAutomation', automation: rule }); setEditing(null) }} onDelete={isNew ? null : () => { change({ kind: 'removeAutomation', automationId: editing.id }); setEditing(null) }} /> : <>
         <div className="database-menu-head button-editor-head"><span>Automations</span></div>
-        {rules.length === 0 && <p className="database-menu-quiet">No automations</p>}
+        {/* What's stored couldn't be read: say so, rather than an empty list that a new rule would quietly write over (Bumblebee). */}
+        {unreadable && <p className="button-step-problem" role="status">Rules couldn't be read</p>}
+        {rules.length === 0 && !unreadable && <p className="database-menu-quiet">No automations</p>}
         {rules.map((rule, i) => {
           const problem = automationProblem(workspace!, db.database, rule, db.id), status = statusLine(rule, problem)
           return <div key={rule.id} className="automation-row">
@@ -73,7 +77,8 @@ function Sheet({ db, at }: { db: Page & { database: Database }; at: { top: numbe
             <label className="database-property-switch automation-switch"><input type="checkbox" role="switch" aria-label={`${rule.name} on`} checked={rule.active && !rule.paused && !problem} onChange={() => { if (problem) { setIsNew(false); setEditing(withLiveNames(workspace!, db.database, rule)) } else change({ kind: 'setAutomationActive', automationId: rule.id, active: !(rule.active && !rule.paused), notBefore: wallClock(new Date()) }) }} /></label>
           </div>
         })}
-        <button type="button" role="menuitem" onClick={() => { setIsNew(true); setEditing({ id: crypto.randomUUID(), name: '', active: true, triggers: [{ kind: 'row-added' }], steps: writeSteps([]) }) }}>+ New automation</button>
+        {replacing && <p className="button-step-problem" role="alert">A new rule replaces the ones that couldn't be read</p>}
+        <button type="button" role="menuitem" onClick={() => { if (unreadable && !replacing) { setReplacing(true); return } setIsNew(true); setEditing({ id: crypto.randomUUID(), name: '', active: true, triggers: [{ kind: 'row-added' }], steps: writeSteps([]) }) }}>{replacing ? 'Replace them with a new rule' : '+ New automation'}</button>
       </>}
     </div>
   </>, document.body)

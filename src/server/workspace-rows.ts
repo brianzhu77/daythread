@@ -65,13 +65,28 @@ const byPosition = <R extends { position: number }>(rows: R[]): R[] => [...rows]
 const threadRow = (t: CommentThread): ThreadRow => ({ id: t.id, page_id: t.pageId, version: t.version, created_at: t.createdAt, resolved_at: t.resolvedAt ?? null, comments: JSON.stringify(t.comments), anchor: t.anchor ? JSON.stringify(t.anchor) : null })
 const threadOf = (r: ThreadRow): CommentThread => ({ ...(r.anchor ? { anchor: JSON.parse(r.anchor) as CommentAnchor } : {}), id: r.id, pageId: r.page_id, version: r.version, createdAt: r.created_at, ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}), comments: JSON.parse(r.comments) as CommentThread['comments'] })
 const rulesJson = (ws: Pick<Workspace, 'todoAutomations'>): string | null => (ws.todoAutomations?.length ? JSON.stringify(ws.todoAutomations) : null)
+/**
+ * To-dos' rules as stored, or null if what's stored can't be read: then the workspace loads with none rather than not at all, says so once
+ * in the log, and the value is left as it is until a rule is made, so nothing that might be mended is written over (Lead).
+ */
+function readRules(stored: string | null | undefined): Automation[] | null {
+  if (!stored) return null
+  try {
+    const rules = JSON.parse(stored) as unknown
+    if (Array.isArray(rules)) return rules as Automation[]
+  } catch { /* below */ }
+  if (!unreadable.has(stored)) { unreadable.add(stored); console.warn(JSON.stringify({ level: 'warn', event: 'rules.unreadable', bytes: stored.length })) }
+  return null
+}
+const unreadable = new Set<string>()
+const readableRules = (stored: string | null | undefined): boolean => !stored || readRules(stored) !== null
 const linkRow = (l: TaskLink): LinkRow => ({ id: linkId(l), blocked_id: l.blockedId, blocker_id: l.blockerId, created_at: l.createdAt })
 const linkOf = (r: LinkRow): TaskLink => ({ blockedId: r.blocked_id, blockerId: r.blocker_id, createdAt: r.created_at })
 export function workspaceOf(rows: Rows): Workspace {
   const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)
   return expandedWorkspace({
     schemaVersion: 2, revision: rows.revision, timezone: rows.timezone, ...(rows.weekStart === 1 ? { weekStart: 1 as const } : {}),
-    ...(rows.todoAutomations ? { todoAutomations: JSON.parse(rows.todoAutomations) as Automation[] } : {}),
+    ...(() => { const rules = readRules(rows.todoAutomations); return rules?.length ? { todoAutomations: rules } : rows.todoAutomations && !rules ? { todoAutomationsUnreadable: true as const } : {} })(),
     ...(synced.length ? { synced } : {}),
     pages: sorted.filter(r => r.type !== 'synced').map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
     deletedTasks: byPosition(rows.deleted).map(r => JSON.parse(r.data) as Task), receipts: {},
@@ -144,13 +159,14 @@ export function planWrites(before: Rows, after: Workspace): { write: RowDiff; in
     return entities.map(e => row(e, next.get(e.id)!))
   }
   const rows: Rows = {
-    revision: after.revision, timezone: after.timezone, weekStart: after.weekStart ?? 0, todoAutomations: rulesJson(after),
+    revision: after.revision, timezone: after.timezone, weekStart: after.weekStart ?? 0, todoAutomations: readableRules(before.todoAutomations) || rulesJson(after) !== null ? rulesJson(after) : before.todoAutomations ?? null,
     pages: positions(pageEntities(after), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow), threads: (after.threads ?? []).map(threadRow), links: (after.links ?? []).map(linkRow),
   }
   const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted), threads = diffSet(before.threads, rows.threads), links = diffSet(before.links ?? [], rows.links ?? [])
   const timezone = before.timezone !== after.timezone
   const weekStart = (before.weekStart ?? 0) !== (after.weekStart ?? 0)
-  const rules = (before.todoAutomations ?? null) !== rulesJson(after)
+  // An unreadable value is only replaced once he makes a rule; until then it's kept as it was.
+  const rules = readableRules(before.todoAutomations) ? (before.todoAutomations ?? null) !== rulesJson(after) : rulesJson(after) !== null
   return {
     write: { ...(timezone ? { timezone: after.timezone } : {}), ...(weekStart ? { weekStart: after.weekStart ?? 0 } : {}), ...(rules ? { todoAutomations: rulesJson(after) } : {}), pages: pages.write, tasks: tasks.write, deleted: deleted.write, threads: threads.write, links: links.write },
     inverse: { ...(timezone ? { timezone: before.timezone } : {}), ...(weekStart ? { weekStart: before.weekStart ?? 0 } : {}), ...(rules ? { todoAutomations: before.todoAutomations ?? null } : {}), pages: pages.inverse, tasks: tasks.inverse, deleted: deleted.inverse, threads: threads.inverse, links: links.inverse },
