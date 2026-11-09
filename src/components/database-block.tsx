@@ -16,7 +16,10 @@ import { loopRefusal } from '../domain/dependencies.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
-import { ChevronDownIcon, ChevronRightIcon, PageEmoji } from './icons'
+import { ChevronDownIcon, ChevronRightIcon, CommentIcon, PageEmoji } from './icons'
+import { openComments } from './comments-pane'
+import { quoteLimit, type CommentProperty } from '../domain/comments'
+import { RowMenu } from './row-menu'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
 import { calcText, emailHref, phoneHref, urlHref } from './property-values'
@@ -422,11 +425,21 @@ export function DatabaseCellEditor() {
   const value = cell.columnId === titleId ? ((inFlight ? String(inFlight.raw ?? '') : row.title) || null) : inFlight ? readValue(property, inFlight.raw) : cellValue(db.database, row, cell.columnId)
   // A to-do's blockers: one that would make a loop is greyed, with why.
   const loopTask = db.id === todosSourceId && cell.columnId === blockedByColumn ? taskIdOfRow(row.id) : null, ws = stored
+  // A comment on this property of the row: a real row's, not a to-do's or a template's, and not on its title (comments.md §6, step 4).
+  const comment = !db.database.fixed && !isNewTodo && cell.columnId !== titleId && stored && databaseOfRow(stored, row)?.id === db.id
+    ? () => {
+        const saved = justCommitted?.key === cellKey(cell) ? justCommitted : null
+        justCommitted = null
+        setOpenCell(null)
+        openComments(row.id, { composing: true, property: commentOn(db, row, property, saved ? readValue(property, saved.raw) : value as CellValue) })
+      } : undefined
   return <PropertyEditor key={cellKey(cell)}
     property={loopTask ? { ...property, options: property.options?.filter(o => o.id !== row.id) } : property} value={value as CellValue} rowTitle={displayPageTitle(row)} anchor={anchor}
     unavailable={loopTask && ws ? loopsFor(ws, loopTask) : undefined}
+    onComment={comment}
     onDraft={keeps ? text => keepDraft({ databaseId: db.id, rowId: row.id, columnId: cell.columnId, value: text, expected }) : undefined}
     onCommit={(raw, info) => {
+      justCommitted = { key: cellKey(cell), raw }
       setOpenCell(null)
       if (isNewTodo) { addTodo(typeof raw === 'string' ? raw : ''); return }
       const sent = typeof raw === 'string' ? raw : ''
@@ -950,6 +963,8 @@ export function DatabaseHeader({ db, view, changeView, blockId, showTitle, linke
 }
 
 export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+  // A cell whose property has an open comment on its row has a mark (comments.md §4); a hidden property's simply isn't drawn.
+  const commented = useMemo(() => new Set((workspace.threads ?? []).flatMap(t => (t.property && !t.resolvedAt ? [`${t.pageId}|${t.property.propertyId}`] : []))), [workspace.threads])
   const { run, latest } = useWorkspace()
   const navigate = useNavigate()
   const commit = useCommitCell()
@@ -1232,7 +1247,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               // His value stays shown while it saves and after a failed save, never a silent revert (design §13).
               const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
               const navId = `${index}:${col + 1}`
-              return <td key={property.id} {...frozenAt(property.id)} className={`database-td is-${property.type}${frozenClass(property.id)}${tint?.rule.scope === 'property' && tint.rule.rule.by === property.id ? ' has-tint' : ''}${wraps ? ' is-wrapped' : ''}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
+              return <td key={property.id} {...frozenAt(property.id)} className={`database-td is-${property.type}${frozenClass(property.id)}${tint?.rule.scope === 'property' && tint.rule.rule.by === property.id ? ' has-tint' : ''}${commented.has(`${row.id}|${property.id}`) ? ' has-comment' : ''}${wraps ? ' is-wrapped' : ''}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
                 {property.type === 'checkbox'
                   ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if ((e.key === ' ' || e.key === 'Enter') && !isReadOnly(property)) { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
@@ -1557,6 +1572,12 @@ export function DatabasePage({ workspace, db }: { workspace: Workspace; db: Page
 }
 
 /** A row's properties above its body (design §5): one line each; more than 4 empty ones fold into one line. */
+/** What a comment on a property is on: its id, and its name and value's words as they read now (comments.md §4). */
+export function commentOn(db: Page & { database: Database }, row: Page, property: Property, value: CellValue = cellValue(db.database, row, property.id)): CommentProperty {
+  return { propertyId: property.id, name: property.name, quote: valueText(db.database, property.id, value).slice(0, quoteLimit) }
+}
+/** The value a cell's editor just saved, as Comment saves first and the row on hand is still the one from before (comments.md §6, step 4). */
+let justCommitted: { key: string; raw: Json | undefined } | null = null
 export function RowProperties({ workspace, row, db }: { workspace: Workspace; row: Page; db: Page & { database: Database } }) {
   const { run } = useWorkspace()
   const commit = useCommitCell()
@@ -1564,20 +1585,30 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
   const today = todayIso()
   const blockId = `row:${row.id}`
   const properties = db.database.properties
-  const empty = properties.filter(p => isEmptyValue(cellValue(db.database, row, p.id)) && p.type !== 'checkbox' && p.type !== 'status')
+  // A comment on one property (comments.md §6, step 4): from its name, on a row rather than a template or a to-do.
+  const commentable = !db.database.fixed && databaseOfRow(workspace, row)?.id === db.id
+  const openThreads = commentable ? (workspace.threads ?? []).filter(t => t.pageId === row.id && t.property && !t.resolvedAt) : []
+  // One with a comment stays out of the fold: the comment is what's there to see (Bumblebee d2ed4d18).
+  const empty = properties.filter(p => isEmptyValue(cellValue(db.database, row, p.id)) && p.type !== 'checkbox' && p.type !== 'status' && !openThreads.some(t => t.property!.propertyId === p.id))
   const fold = !unfolded && empty.length > 4
   usePendingCells()
   const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   const shown = fold ? properties.filter(p => !empty.includes(p)) : properties
   const addProperty = () => void run({ type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id: newId(), name: uniqueName(db.database), type: 'text' } } }, r => ({ text: r.message, undoOperationId: r.operationId }))
-  void workspace
   return <div className="row-properties" aria-label="Properties">
     {shown.map(property => {
       const pending = pendingCells.get(pendingKey(row.id, property.id))
       const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
       const key = cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })
-      return <div key={property.id} className={`row-property${pending?.failed ? ' is-unsaved' : ''}`}>
-        <span className="row-property-name" data-type={property.type}>{property.name}</span>
+      const threads = openThreads.filter(t => t.property!.propertyId === property.id)
+      const name = <span className="row-property-name" data-type={property.type}>{property.name}</span>
+      return <div key={property.id} className={`row-property${pending?.failed ? ' is-unsaved' : ''}`} data-property-id={property.id}>
+        {commentable
+          ? <span className="row-property-head">
+              <RowMenu label={property.name} trigger={name} triggerClass="row-property-menu" groups={[{ items: [{ label: 'Comment', onSelect: () => openComments(row.id, { composing: true, property: commentOn(db, row, property) }) }] }]} />
+              {threads.length > 0 && <button type="button" className="comment-count" aria-label={`${threads.length} ${threads.length === 1 ? 'comment' : 'comments'} on ${property.name}`} onClick={() => openComments(row.id, { threadId: threads[0]!.id })}><CommentIcon /><span>{threads.length}</span></button>}
+            </span>
+          : name}
         {isReadOnly(property) && property.type === 'checkbox' && !formulaErrorOf(row, property)
           ? <span className="row-property-value is-read-only"><PropertyCheckbox checked={value === true} label={property.name} disabled onToggle={() => {}} /></span>
           : isReadOnly(property)

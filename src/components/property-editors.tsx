@@ -51,6 +51,8 @@ export interface EditorProps {
   onRestoreTarget?(): void
   /** Files: saves what's finished while the editor stays open, as the page going out of sight mustn't stop or close anything. */
   onKeep?(raw: Json | undefined): void
+  /** A comment on this property of the row (comments.md §6, step 4), where the row can take one. */
+  onComment?(): void
   /** Text and URL: what's typed so far, on every change, so the caller can keep it on the device (R1-15). */
   onDraft?(text: string): void
   /** Tab / Shift-Tab in an in-cell field (≥ 900): called after the commit, to move the cell cursor along the row. */
@@ -126,6 +128,7 @@ interface ShellProps {
   /** In-cell fields lie over the cell instead of under it. */
   overCell?: boolean
   maxWidth?: number
+  onComment?(): void
   children: ReactNode
 }
 /**
@@ -149,7 +152,7 @@ function useNoCaretAfterSheet(sheet: boolean) {
   }, [sheet])
 }
 
-function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, maxWidth = 320, children }: ShellProps) {
+function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, maxWidth = 320, onComment, children }: ShellProps) {
   useNoCaretAfterSheet(!wide)
   // Keys stay inside: nothing typed here reaches the page editor's handlers through the React tree (§10). That also
   // keeps Esc from the dismiss listeners on the document, so the shell handles Esc itself. (They still catch an Esc
@@ -158,7 +161,9 @@ function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, ma
     e.stopPropagation()
     if (e.key === 'Escape' && !composing(e)) { e.preventDefault(); onDismiss('escape') }
   }
-  if (wide) return <Popover anchor={anchor} label={property.name} onDismiss={onDismiss} overCell={overCell} maxWidth={maxWidth}><div onKeyDown={keep}>{children}</div></Popover>
+  // What's typed saves as Done would save it, then the comment opens.
+  const foot = onComment && <div className="property-editor-foot"><button type="button" className="app-link" onClick={() => { onDismiss('done'); onComment() }}>Comment</button></div>
+  if (wide) return <Popover anchor={anchor} label={property.name} onDismiss={onDismiss} overCell={overCell} maxWidth={maxWidth}><div onKeyDown={keep}>{children}{foot}</div></Popover>
   return (
     <Modal.Backdrop isOpen isDismissable onOpenChange={open => { if (!open) onDismiss('outside') }}>
       <Modal.Container placement="bottom" scroll="inside" className="property-sheet">
@@ -173,6 +178,7 @@ function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, ma
               <button type="button" className="app-link" onClick={() => onDismiss('done')}>Done</button>
             </header>
             {children}
+            {foot}
           </div>
         </Modal.Dialog>
       </Modal.Container>
@@ -292,7 +298,7 @@ function TextEditor(p: EditorProps & { kind: 'text' | 'url' | 'email' | 'phone' 
     onFocus,
   }
   return (
-    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onDismiss={onDismiss} overCell={wide} maxWidth={360}>
+    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={onDismiss} overCell={wide} maxWidth={360}>
       {p.kind === 'text'
         ? <textarea {...common} rows={wide ? 1 : 3} />
         // Email is a text input with an email keyboard: type="email" would drop what's typed around the address, and has no caret to place.
@@ -322,7 +328,7 @@ function NumberEditor(p: EditorProps) {
     else if (e.key === 'Tab' && wide) { e.preventDefault(); if (save()) p.onMove?.(e.shiftKey ? 'previous' : 'next') }
   }
   return (
-    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onDismiss={onDismiss} overCell={wide}>
+    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={onDismiss} overCell={wide}>
       <div className="property-number">
         <input className="property-field is-number" value={draft} autoFocus onFocus={onFocus} inputMode="decimal" enterKeyHint={wide ? undefined : 'done'}
           aria-label={p.property.name} aria-invalid={invalid || undefined} onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} />
@@ -341,7 +347,7 @@ type Choice = { kind: 'option'; option: Option } | { kind: 'create'; name: strin
 /** A relation whose database is in Trash has nothing to pick (design §13). */
 function TargetInTrash(p: EditorProps) {
   const wide = useWide()
-  return <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onDismiss={p.onCancel}>
+  return <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={p.onCancel}>
     <p className="property-empty">{p.property.targetTitle} is in Trash · <button type="button" className="app-link" onClick={() => { p.onRestoreTarget?.(); p.onCancel() }}>Restore</button></p>
   </EditorShell>
 }
@@ -422,7 +428,7 @@ function OptionsEditor(p: EditorProps) {
   const focusField = wide || options.length === 0
   let lastGroup: string | undefined
   return (
-    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onDismiss={onDismiss}>
+    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={onDismiss}>
       <div className="property-search">
         {multi && picked.map(id => (
           <span key={id} className="property-chip is-removable">
@@ -518,7 +524,7 @@ function FilesEditor(p: EditorProps) {
     save()
   }
   return (
-    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onDismiss={onDismiss}>
+    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={onDismiss}>
       <div className="property-files">
         {items.map(item => <div key={item.key} className={`property-file${item.state === 'failed' ? ' is-failed' : ''}`}>
           {item.value
@@ -586,7 +592,7 @@ function DateEditor(p: EditorProps) {
   const quick = [0, 1, 2, 3].map(i => addDays(today, i))
   const dayOf = (text: string | null) => (text ? splitDate(text).day : null)
   return (
-    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onDismiss={onDismiss}>
+    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={onDismiss}>
       {endOn && (
         <div className="property-date-ends" role="radiogroup" aria-label="Which date">
           {(['start', 'end'] as const).map(part => {

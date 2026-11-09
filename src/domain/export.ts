@@ -1,7 +1,7 @@
 import { editorSeed, inlineText, pageNodes, type EditorNode } from './editor-document.ts'
 import type { Page, Workspace } from './types.ts'
 import { bodyFilesIn, bodyFileOf } from './body-files.ts'
-import { threadsOn } from './comments.ts'
+import { propertyQuote, threadsOn, type CommentThread } from './comments.ts'
 import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
 import { clockIn } from './formula.ts'
@@ -76,7 +76,9 @@ export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>)
 function commentsMarkdown(ws: Workspace, p: Page): string {
   const threads = threadsOn(ws.threads, p.id)
   if (!threads.length) return ''
-  return `\n## Comments\n\n${threads.map(t => `${t.anchor?.quote ? `> ${t.anchor.quote.replace(/\n+/g, ' ')}\n` : ''}${t.comments.map(c => `- ${c.at.slice(0, 16).replace('T', ' ')}${t.resolvedAt ? ' (resolved)' : ''}: ${c.body.replace(/\n+/g, ' ')}`).join('\n')}`).join('\n\n')}\n`
+  const properties = threads.some(t => t.property) ? databaseOfRow(ws, p)?.database.properties : undefined
+  const quoted = (t: CommentThread) => (t.property ? propertyQuote(t.property, properties).text : t.anchor?.quote)?.replace(/\n+/g, ' ')
+  return `\n## Comments\n\n${threads.map(t => `${quoted(t) ? `> ${quoted(t)}\n` : ''}${t.comments.map(c => `- ${c.at.slice(0, 16).replace('T', ' ')}${t.resolvedAt ? ' (resolved)' : ''}: ${c.body.replace(/\n+/g, ' ')}`).join('\n')}`).join('\n\n')}\n`
 }
 
 export function blocksMarkdown(nodes: EditorNode[], ws: Workspace, names: Map<string, string>): string {

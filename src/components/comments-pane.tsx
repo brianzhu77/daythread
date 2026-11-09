@@ -4,21 +4,22 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from '@heroui/react'
 import { useRouterState } from '@tanstack/react-router'
-import { commentLimit, threadLineIds, threadsShownOn, type Comment, type CommentAnchor, type CommentThread } from '../domain/comments'
+import { commentLimit, propertyQuote, threadLineIds, threadsShownOn, type Comment, type CommentAnchor, type CommentProperty, type CommentThread } from '../domain/comments'
+import { databaseOfRow } from '../domain/database'
 import type { Page } from '../domain/types'
 import { CloseIcon, CommentIcon } from './icons'
 import { useKeyboardTop } from './keyboard'
 import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
-type Open = { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null }
+type Open = { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null; property: CommentProperty | null }
 let open: Open | null = null
 /** A pane waiting for the page it's about, as a search hit opens it and goes there. */
 let arriving: Open | null = null
 const listeners = new Set<() => void>()
 const changed = () => listeners.forEach(l => l())
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
-export function openComments(pageId: string, options: { composing?: boolean; threadId?: string; afterGoing?: boolean; anchor?: CommentAnchor } = {}) {
-  const opening = { pageId, composing: Boolean(options.composing), threadId: options.threadId ?? null, anchor: options.anchor ?? null }
+export function openComments(pageId: string, options: { composing?: boolean; threadId?: string; afterGoing?: boolean; anchor?: CommentAnchor; property?: CommentProperty } = {}) {
+  const opening = { pageId, composing: Boolean(options.composing), threadId: options.threadId ?? null, anchor: options.anchor ?? null, property: options.property ?? null }
   if (options.afterGoing) { arriving = opening; return }
   open = opening; changed()
 }
@@ -108,6 +109,25 @@ function goToLine(blockId: string) {
   line.classList.add('is-comment-target')
   setTimeout(() => line.classList.remove('is-comment-target'), 1600)
 }
+const propertyOf = (propertyId: string) => document.querySelector<HTMLElement>(`.row-property[data-property-id="${CSS.escape(propertyId)}"]`)
+/** Goes to the property on the row page, and shows which it is for a moment. */
+function goToProperty(propertyId: string) {
+  const row = propertyOf(propertyId)
+  if (!row) return
+  row.scrollIntoView({ block: 'center' })
+  row.classList.add('is-comment-target')
+  setTimeout(() => row.classList.remove('is-comment-target'), 1600)
+}
+/** What a thread on a property reads as, with the row's properties as they are now. */
+function useRowProperties(rowId: string) {
+  const { workspace } = useWorkspace(), row = workspace?.pages.find(p => p.id === rowId)
+  return workspace && row ? databaseOfRow(workspace, row)?.database.properties : undefined
+}
+function PropertyQuote({ on, rowId }: { on: CommentProperty; rowId: string }) {
+  const { text, gone } = propertyQuote(on, useRowProperties(rowId))
+  // Folded away with the empty ones, or not on screen (a table): its words, and no button that seems to do nothing.
+  return gone ? <p className="comment-quote is-gone">{text}</p> : propertyOf(on.propertyId) ? <button type="button" className="comment-quote" onClick={() => goToProperty(on.propertyId)}>{text}</button> : <p className="comment-quote">{text}</p>
+}
 function ThreadView({ thread, focused }: { thread: CommentThread; focused: boolean }) {
   const { run, workspace } = useWorkspace()
   const anchor = thread.anchor, page = anchor ? workspace?.pages.find(p => p.id === thread.pageId) : undefined
@@ -121,6 +141,7 @@ function ThreadView({ thread, focused }: { thread: CommentThread; focused: boole
   /** From a button, with no field to say so: a failure is the header's, with its Retry. */
   const act = (action: Parameters<Run>[0]) => void send(run, action, { notice: r => ({ text: r.message, undoOperationId: r.operationId }), quiet: false })
   return <div ref={box} className={`comment-thread${focused ? ' is-focused' : ''}`}>
+    {thread.property && <PropertyQuote on={thread.property} rowId={thread.pageId} />}
     {anchor && (gone
       ? <p className="comment-quote is-gone">Line removed{anchor.quote ? ` · ${anchor.quote}` : ''}</p>
       // An empty row hidden on a past day is there, but there's nowhere to go: its words, and no button that seems to do nothing.
@@ -154,9 +175,9 @@ export function CommentsPaneHost() {
     seen.current = place
     open = arriving; arriving = null; changed()
   }, [place])
-  return current ? <CommentsPane key={`${current.pageId}|${current.anchor?.blockId ?? ''}`} pageId={current.pageId} composing={current.composing} threadId={current.threadId} anchor={current.anchor} /> : null
+  return current ? <CommentsPane key={`${current.pageId}|${current.anchor?.blockId ?? ''}|${current.property?.propertyId ?? ''}`} pageId={current.pageId} composing={current.composing} threadId={current.threadId} anchor={current.anchor} property={current.property} /> : null
 }
-function CommentsPane({ pageId, composing, threadId, anchor }: { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null }) {
+function CommentsPane({ pageId, composing, threadId, anchor, property }: { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null; property: CommentProperty | null }) {
   const { workspace, run } = useWorkspace()
   const threads = workspace ? threadsShownOn(workspace, pageId) : []
   const opened = threads.find(t => t.id === threadId)
@@ -164,6 +185,7 @@ function CommentsPane({ pageId, composing, threadId, anchor }: { pageId: string;
   const shown = threads.filter(t => (show === 'open') === !t.resolvedAt), other = threads.length - shown.length
   const keyboardTop = useKeyboardTop()
   const phone = window.matchMedia('(max-width: 899px)').matches
+  const properties = useRowProperties(pageId)
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !(e.target as Element).closest?.('.comment-field')) { e.preventDefault(); e.stopPropagation(); closeComments() } }
     document.addEventListener('keydown', esc, true)
@@ -171,11 +193,11 @@ function CommentsPane({ pageId, composing, threadId, anchor }: { pageId: string;
   }, [])
   const add = async (body: string, { operationId, threadId, commentId, at }: Stamp) => {
     written.current = threadId
-    return send(run, { type: 'add-comment', pageId, threadId, commentId, body, at, ...(anchor ? { anchor } : {}) }, { operationId, quiet: true })
+    return send(run, { type: 'add-comment', pageId, threadId, commentId, body, at, ...(anchor ? { anchor } : {}), ...(property ? { property } : {}) }, { operationId, quiet: true })
   }
   // Written on that line, the next one in this pane is on the page again, unless a line is asked for. Not while there are words typed since: they're for this line (Ratchet).
   const written = useRef<string | null>(null)
-  const afterSent = (left: string) => { if (anchor && !left && written.current) openComments(pageId, { threadId: written.current }) }
+  const afterSent = (left: string) => { if ((anchor || property) && !left && written.current) openComments(pageId, { threadId: written.current }) }
   return createPortal(<aside className={`comments-pane${phone ? ' is-sheet' : ''}`} aria-label="Comments" style={phone && keyboardTop !== null ? { bottom: window.innerHeight - keyboardTop, height: Math.min(window.innerHeight * 0.7, (window.visualViewport?.height ?? window.innerHeight) - 8) } : undefined}>
     <header className="comments-pane-head">
       <h2>Comments</h2>
@@ -190,7 +212,8 @@ function CommentsPane({ pageId, composing, threadId, anchor }: { pageId: string;
       {!shown.length && <p className="comment-note">{show === 'open' ? (other ? `No open comments · ${other} resolved` : 'No comments') : 'Nothing resolved'}</p>}
     </div>
     {show === 'open' && anchor && <p className="comment-quote is-composing">{anchor.quote || 'An empty line'}</p>}
-    {show === 'open' && <CommentField draftKey={anchor ? `new:${pageId}:${anchor.blockId}` : `new:${pageId}`} label="New comment" action="Comment" placeholder={anchor ? 'Comment on this line' : 'Add a comment'} autoFocus={composing && !phone} onDone={add} onSaved={afterSent} />}
+    {show === 'open' && property && <p className="comment-quote is-composing">{propertyQuote(property, properties).text}</p>}
+    {show === 'open' && <CommentField draftKey={anchor ? `new:${pageId}:${anchor.blockId}` : property ? `new:${pageId}:property:${property.propertyId}` : `new:${pageId}`} label="New comment" action="Comment" placeholder={anchor ? 'Comment on this line' : property ? `Comment on ${property.name}` : 'Add a comment'} autoFocus={composing && !phone} onDone={add} onSaved={afterSent} />}
   </aside>, document.body)
 }
 

@@ -11,7 +11,7 @@ import { todayIn, type ServerRepository } from './repository.ts'
 import type { SqlClient } from './db/sql.ts'
 import { commandLogFields, debugLog } from './debug-log.ts'
 import { currentOwner } from './auth/request-owner.ts'
-import { applyDiff, planWrites, rowsOf, workspaceOf, type DeletedRow, type LinkRow, type ThreadRow, type PageRow, type RowDiff, type Rows, type TaskRow } from './workspace-rows.ts'
+import { applyDiff, planWrites, rowsOf, threadOptional, workspaceOf, type DeletedRow, type LinkRow, type ThreadRow, type PageRow, type RowDiff, type Rows, type TaskRow } from './workspace-rows.ts'
 
 export function schemaName(value = process.env.DAYTHREAD_PG_SCHEMA ?? 'daythread'): string {
   if (!/^[a-z_][a-z0-9_]{0,62}$/.test(value)) throw new Error('DAYTHREAD_PG_SCHEMA must be a lowercase SQL identifier')
@@ -27,7 +27,7 @@ export const pruneEvery = 25
 interface Scope extends WorkspaceInfo { userId: string | null }
 
 const upsertBatch = 500
-const threadColumns = ['id', 'page_id', 'version', 'created_at', 'resolved_at', 'comments', 'anchor'] as const
+const threadColumns = ['id', 'page_id', 'version', 'created_at', 'resolved_at', 'comments', 'anchor', 'property'] as const
 const linkColumns = ['id', 'blocked_id', 'blocker_id', 'created_at'] as const
 const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved', 'database_json', 'row_values', 'created_at', 'edited_at', 'icon', 'cover', 'cover_position'] as const
 /** Columns added to `pages` after its first release (databases): added on start when missing, before any build writes them. */
@@ -62,8 +62,8 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     const complete = async (sql: SqlClient) => {
       const have = await tables(sql)
       if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations', 'comment_threads', 'task_links'].every(t => have.includes(t)) || have.includes('workspace')) return false
-      const columns = await columnsOf(sql, 'pages')
-      return addedPageColumns.every(c => columns.includes(c)) && (await columnsOf(sql, 'workspaces')).includes('week_start') && (await columnsOf(sql, 'workspaces')).includes('todo_automations') && (await columnsOf(sql, 'comment_threads')).includes('anchor')
+      const columns = await columnsOf(sql, 'pages'), threadColumnsNow = await columnsOf(sql, 'comment_threads')
+      return addedPageColumns.every(c => columns.includes(c)) && (await columnsOf(sql, 'workspaces')).includes('week_start') && (await columnsOf(sql, 'workspaces')).includes('todo_automations') && threadOptional.every(c => threadColumnsNow.includes(c))
     }
     this.ready ??= complete(this.sql).then(async ok => {
       if (ok) return
@@ -109,6 +109,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
           );
           alter table ${s}.comment_threads enable row level security;
           alter table ${s}.comment_threads add column if not exists anchor text;
+          alter table ${s}.comment_threads add column if not exists property text;
           create table if not exists ${s}.task_links (
             workspace_id uuid not null references ${s}.workspaces (id) on delete cascade,
             id text not null, blocked_id text not null, blocker_id text not null, created_at text not null,
@@ -267,9 +268,15 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     await upsert('tasks', taskColumns, diff.tasks.upsert); await remove('tasks', diff.tasks.remove)
     await upsert('deleted_tasks', deletedColumns, diff.deleted.upsert); await remove('deleted_tasks', diff.deleted.remove)
     if (diff.threads) {
-      // An inverse written by a build with no anchors has no such key: the thread keeps the one it has.
-      const knows = diff.threads.upsert.filter(t => t.anchor !== undefined), older = diff.threads.upsert.filter(t => t.anchor === undefined)
-      await upsert('comment_threads', threadColumns, knows); await upsert('comment_threads', threadColumns.filter(c => c !== 'anchor'), older); await remove('comment_threads', diff.threads.remove)
+      // An inverse written by an older build has no key for what it didn't know (an anchor, a property): the thread keeps the one it has.
+      const byColumns = new Map<string, { columns: string[]; rows: ThreadRow[] }>()
+      for (const t of diff.threads.upsert) {
+        const columns = threadColumns.filter(c => !(threadOptional as readonly string[]).includes(c) || t[c as keyof ThreadRow] !== undefined), key = columns.join()
+        const group = byColumns.get(key) ?? { columns, rows: [] }
+        group.rows.push(t); byColumns.set(key, group)
+      }
+      for (const { columns, rows } of byColumns.values()) await upsert('comment_threads', columns, rows)
+      await remove('comment_threads', diff.threads.remove)
     }
     if (diff.links) { await upsert('task_links', linkColumns, diff.links.upsert); await remove('task_links', diff.links.remove) }
   }

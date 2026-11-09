@@ -80,7 +80,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("rename-page"), pageId: id, title }),
   z.object({ type: z.literal("run-row-button"), databaseId: id, propertyId: id, rowIds: z.array(id).min(1).max(limits.rowsAtOnce), stepsKey: z.string().max(200), at: z.string().max(40), today: z.string().max(10) }),
   z.object({ type: z.literal("run-button"), pageId: id, blockId: id, stepsKey: z.string().max(200), expectedContent: z.string().max(200), at: z.string().max(40), today: z.string().max(10) }),
-  z.object({ type: z.literal("add-comment"), pageId: id, threadId: id, commentId: id, body: z.string().max(20_000), at: z.string().max(40), anchor: z.object({ blockId: id, quote: z.string().max(2000), taskId: id.optional(), at: z.number().int().nonnegative().optional() }).optional() }),
+  z.object({ type: z.literal("add-comment"), pageId: id, threadId: id, commentId: id, body: z.string().max(20_000), at: z.string().max(40), anchor: z.object({ blockId: id, quote: z.string().max(2000), taskId: id.optional(), at: z.number().int().nonnegative().optional() }).optional(), property: z.object({ propertyId: id, name: z.string().max(2000), quote: z.string().max(2000) }).optional() }),
   z.object({ type: z.literal("edit-comment"), threadId: id, commentId: id, body: z.string().max(20_000), version: z.number().int().nonnegative(), at: z.string().max(40) }),
   z.object({ type: z.literal("delete-comment"), threadId: id, commentId: id, version: z.number().int().nonnegative() }),
   z.object({ type: z.literal("resolve-thread"), threadId: id, resolved: z.boolean(), version: z.number().int().nonnegative(), at: z.string().max(40) }),
