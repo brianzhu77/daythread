@@ -34,8 +34,12 @@ check(await clip.evaluate(e => e.classList.contains('is-clipped')) && capped ===
 await tap(long.locator('.feed-more')); await wait(400)
 const open = await clip.evaluate(e => Math.round(e.getBoundingClientRect().height))
 check(open > capped && (await long.locator('.feed-more').innerText()) === 'Show less', 'Show more opens it in place', open)
-await tap(long.locator('.feed-more')); await wait(400)
+// Show less from the foot of a long card: the title comes back on screen (G5-3).
+await long.locator('.feed-more').scrollIntoViewIfNeeded(); await page.evaluate(() => scrollBy(0, 200)); await wait(300)
+await tap(long.locator('.feed-more')); await wait(600)
 check(await clip.evaluate(e => e.classList.contains('is-clipped')), 'and Show less closes it')
+{ const t = await long.locator('.feed-title').evaluate(e => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom), innerHeight] }); check(t[0] >= 0 && t[1] <= t[2], 'with the card\'s title on screen', t) }
+{ const color = await card('See also').locator('.feed-body a[href]').first().evaluate(a => getComputedStyle(a).color); check(color !== 'rgb(0, 0, 238)' && !/rgb\(0, 0, 2/.test(color), 'a web link reads as links do, not browser blue', color) }
 check(!(await card('On slow mornings').locator('.feed-more').count()), 'a short body has no Show more')
 // A tick: the task's command, no document changed, one Undo.
 const docs = () => JSON.stringify(store().pages.map(p => [p.id, p.document]))
