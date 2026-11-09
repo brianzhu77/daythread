@@ -11,6 +11,7 @@ import { DateChipInPage } from './event-rows'
 import { LineRefLabel, PageRefLabel } from './line-text'
 import { displayPageTitle } from './page-title'
 import { TagText } from './tag-text'
+import { urlHref } from './property-values'
 import { PropertyCheckbox } from './property-editors'
 import { useTaskTick } from './use-day'
 
@@ -38,15 +39,23 @@ export function FeedInline({ content, workspace }: { content: unknown; workspace
     if (c.type === 'pageRef') return <PageRefLabel key={i} workspace={workspace} pageId={String(c.props?.pageId ?? '')} newTitle={c.props?.newTitle || undefined} />
     const mention = readMention(c)
     if (mention) return <DateChipInPage key={i} date={mention.date} time={mention.time} />
-    if (c.type === 'link') return <a key={i} href={c.href} target="_blank" rel="noreferrer">{(Array.isArray(c.content) ? (c.content as Inline[]) : []).map((t, j) => styled(t.text ?? '', t.styles, j))}</a>
+    if (c.type === 'link') {
+      const words = (Array.isArray(c.content) ? (c.content as Inline[]) : []).map((t, j) => styled(t.text ?? '', t.styles, j))
+      // A stored href is drawn as live markup here, so only what a URL cell would open (http(s), mailto, tel); anything else is words.
+      const href = urlHref(String(c.href ?? ''))
+      return href ? <a key={i} href={href} target="_blank" rel="noreferrer">{words}</a> : <span key={i}>{words}</span>
+    }
     return styled(<TagText text={c.text ?? inlineText(c.content)} />, c.styles, i)
   })
 }
 
 /** A `[[` page link as its own line: the page card, followed on a tap. */
-function PageLine({ workspace, pageId }: { workspace: Workspace; pageId: string }) {
+function PageLine({ workspace, pageId, url }: { workspace: Workspace; pageId: string; url?: string }) {
   const navigate = useNavigate()
-  const target = workspace.pages.find(p => p.id === pageId)
+  const target = pageId ? workspace.pages.find(p => p.id === pageId) : undefined
+  // A pasted link the server hasn't made a page for yet (A2): its address.
+  const href = !pageId && url ? urlHref(url) : null
+  if (href) return <p className="feed-line"><a href={href} target="_blank" rel="noreferrer">{url}</a></p>
   if (!target) return <p className="feed-line is-quiet">Page not found</p>
   return <p className="feed-line"><button type="button" className="feed-link" onClick={() => void navigate({ to: '/pages', search: { page: pageId } })}><PageRefLabel workspace={workspace} pageId={pageId} /></button></p>
 }
@@ -69,7 +78,7 @@ function FeedImage({ url, caption }: { url: string; caption: string }) {
   return <figure className="feed-image"><img src={url} alt={caption} loading="lazy" decoding="async" onError={() => setFailed(true)} />{caption && <figcaption>{caption}</figcaption>}</figure>
 }
 
-const blockNames: Record<string, string> = { file: 'File', table: 'Table', video: 'Video', audio: 'Audio', codeBlock: 'Code', toggleListItem: 'Toggle', sourceChecklist: 'To-dos', button: 'Button' }
+const blockNames: Record<string, string> = { file: 'File', table: 'Table', video: 'Video', audio: 'Audio', codeBlock: 'Code', sourceChecklist: 'To-dos', button: 'Button' }
 
 /** The body of `row`, read only. `openRow` is where anything not listed leads. */
 export function FeedBody({ workspace, row, openRow }: { workspace: Workspace; row: Page; openRow: () => void }) {
@@ -77,13 +86,16 @@ export function FeedBody({ workspace, row, openRow }: { workspace: Workspace; ro
   const render = (list: readonly EditorNode[]): ReactNode[] => {
     let number = 0
     return list.map(n => {
-      number = n.type === 'numberedListItem' ? number + 1 : 0
-      const children = n.children?.length ? <div className="feed-children">{render(n.children)}</div> : null
+      number = n.type === 'numberedListItem' ? (number ? number + 1 : Number(n.props?.start ?? 1) || 1) : 0
+      // A toggle's lines are folded away on the page, so a card leaves them out too: its words, and the row has the rest.
+      const folded = n.type === 'toggleListItem' || (n.type === 'heading' && Boolean(n.props?.isToggleable))
+      const children = n.children?.length && !folded ? <div className="feed-children">{render(n.children)}</div> : null
       const words = <FeedInline content={n.content} workspace={workspace} />
       const line = (() => {
         switch (n.type) {
           case 'paragraph': return Array.isArray(n.content) && n.content.length ? <p className="feed-line">{words}</p> : <p className="feed-line is-blank" aria-hidden="true" />
-          case 'heading': return <p className={`feed-heading level-${Number(n.props?.level ?? 2)}`}>{words}</p>
+          case 'heading': return <p className={`feed-heading level-${Number(n.props?.level ?? 2)}`}>{folded && n.children?.length ? <span className="feed-marker" aria-hidden="true">▸ </span> : null}{words}</p>
+          case 'toggleListItem': return <p className="feed-line feed-item"><span className="feed-marker" aria-hidden="true">▸</span><span>{words}</span></p>
           case 'bulletListItem': return <p className="feed-line feed-item"><span className="feed-marker" aria-hidden="true">•</span><span>{words}</span></p>
           case 'numberedListItem': return <p className="feed-line feed-item"><span className="feed-marker" aria-hidden="true">{number}.</span><span>{words}</span></p>
           case 'checkListItem': return <p className={`feed-line feed-item${n.props?.checked ? ' is-done' : ''}`}><span className="feed-marker" aria-hidden="true">{n.props?.checked ? '☑' : '☐'}</span><span>{words}</span></p>
@@ -91,7 +103,7 @@ export function FeedBody({ workspace, row, openRow }: { workspace: Workspace; ro
           case 'divider': return <hr className="feed-rule" />
           case 'task': return <FeedTask node={n} workspace={workspace} />
           case 'image': return <FeedImage url={String(n.props?.url ?? '')} caption={String(n.props?.caption ?? '')} />
-          case 'pageLink': return <PageLine workspace={workspace} pageId={String(n.props?.pageId ?? '')} />
+          case 'pageLink': return <PageLine workspace={workspace} pageId={String(n.props?.pageId ?? '')} url={typeof n.props?.url === 'string' ? n.props.url : undefined} />
           // A view's rows aren't drawn in a card, so a feed can't nest views or get expensive: its name, linking to its database.
           case 'database': { const db = workspace.pages.find(p => p.id === n.props?.pageId); return db ? <PageLine workspace={workspace} pageId={db.id} /> : null }
           case syncedBlockType: {

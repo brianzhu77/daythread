@@ -45,14 +45,12 @@ function Clipped({ id, title, children }: { id: string; title: () => HTMLElement
   }
   return <>
     <div ref={body} className={`feed-clip${over && !open ? ' is-clipped' : ''}`}>{children}</div>
-    {over && <button type="button" className="feed-more" aria-expanded={open} onClick={toggle}>{open ? 'Show less' : 'Show more'}</button>}
+    {over && <button type="button" className="app-link feed-more" aria-expanded={open} onClick={toggle}>{open ? 'Show less' : 'Show more'}</button>}
   </>
 }
 
-function Card({ workspace, db, view, row, blockId, group, returned, context }: { workspace: Workspace; db: DatabaseViewProps['db']; view: View; row: Page; blockId: string; group?: string; returned: boolean; context: { today: string; pageDate: string | null; weekStart: 0 | 1 } }) {
-  const wide = useWide()
+function Card({ workspace, db, view, row, group, returned, context, openRow }: { workspace: Workspace; db: DatabaseViewProps['db']; view: View; row: Page; group?: string; returned: boolean; context: { today: string; pageDate: string | null; weekStart: 0 | 1 }; openRow: ReturnType<typeof useOpenRow> }) {
   const commit = useCommitCell()
-  const openRow = useOpenRow(view, undefined, blockId)
   const title = useRef<HTMLButtonElement>(null)
   const tint = rowTint(db.database, view, row, context)
   const threads = threadsShownOn(workspace, row.id).filter(t => !t.resolvedAt).length
@@ -69,7 +67,7 @@ function Card({ workspace, db, view, row, blockId, group, returned, context }: {
       {values}
       {threads > 0 && <button type="button" className="feed-comments" onClick={() => openComments(row.id)}>{threads === 1 ? '1 comment' : `${threads} comments`}</button>}
     </div>}
-    <Clipped id={`${blockId}|${row.id}`} title={() => title.current}><FeedBody workspace={workspace} row={row} openRow={() => openRow(row.id)} /></Clipped>
+    <Clipped id={`${db.id}|${view.id}|${row.id}`} title={() => title.current}><FeedBody workspace={workspace} row={row} openRow={() => openRow(row.id)} /></Clipped>
   </article>
 }
 
@@ -89,7 +87,7 @@ export function DatabaseFeed({ workspace, db, view, changeView, blockId, pageDat
   const [limit, setLimit] = useState(cap)
   // A new row opens: in a peek with room for one, on its page on a phone, where its title takes the caret.
   const addRow = useAddRow(db, view, context, blockId, pageId => requestAnimationFrame(() => { if (wide) openPeek(navigate, pageId, undefined, false); else openRow(pageId, 'title') }))
-  const card = (row: Page, group?: string) => <Card key={`${group ?? ''}:${row.id}`} workspace={workspace} db={db} view={view} row={row} blockId={blockId} {...(group !== undefined ? { group } : {})} returned={returned === row.id} context={context} />
+  const card = (row: Page, group?: string) => <Card key={`${group ?? ''}:${row.id}`} workspace={workspace} db={db} view={view} row={row} {...(group !== undefined ? { group } : {})} returned={returned === row.id} context={context} openRow={openRow} />
   return <div className="database-table-wrap">
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(groups?.shown[0]?.key) }} />
     {/* Newest usually comes first, so + New is at the top. */}

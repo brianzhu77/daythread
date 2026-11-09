@@ -3168,11 +3168,15 @@ textarea.form-input { resize: vertical; }
   .form-question-moves > button:not(.app-link) { width: 36px; height: 40px; }
 }
 /* Feed (feed.md §2): the rows read one above another. No box: a hairline and about 32 px before the next card. */
-.database-feed { display: flex; flex-direction: column; }
+.database-feed { display: flex; flex-direction: column; isolation: isolate; }
 .feed-new { display: flex; align-items: center; margin: 4px 0 12px; }
 .feed-card { padding: 0 0 32px; margin-bottom: 32px; border-bottom: 1px solid var(--line-soft); }
 .feed-card:last-child { margin-bottom: 0; border-bottom: 0; }
-.feed-card.is-returned { background: var(--blue-soft); transition: background .3s; }
+.feed-card { --feed-paper: var(--bg-doc); position: relative; }
+.feed-card.has-tint { --feed-paper: var(--row-tint); background: var(--row-tint); }
+/* Back from a row: a wash framing the card, behind its words, that clears as a table row's does. */
+.feed-card::before { content: ''; position: absolute; inset: -10px -12px 22px; z-index: -1; border-radius: 12px; background: transparent; transition: background .3s; pointer-events: none; }
+.feed-card.is-returned::before { background: var(--blue-soft); }
 .feed-title { display: block; width: 100%; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-section); font-weight: var(--weight-semibold); line-height: 1.35; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .feed-title.is-placeholder { color: var(--ink-3); }
 .feed-values { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 6px 0 0; color: var(--ink-2); font-size: var(--text-meta); }
@@ -3183,8 +3187,8 @@ textarea.form-input { resize: vertical; }
 .feed-clip { --feed-cap: 288px; position: relative; margin-top: 12px; }
 @media (max-width: 899px) { .feed-clip { --feed-cap: 384px; } }
 .feed-clip.is-clipped { max-height: var(--feed-cap); overflow: hidden; }
-.feed-clip.is-clipped::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--bg-doc)); pointer-events: none; }
-.feed-more { min-height: 32px; padding: 4px 0 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
+.feed-clip.is-clipped::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--feed-paper, var(--bg-doc))); pointer-events: none; }
+.feed-more { min-height: 32px; margin-top: 4px; border: 0; background: none; font-size: var(--text-meta); cursor: pointer; }
 @media (max-width: 899px) { .feed-more { min-height: 44px; } }
 /* A body at the page's own text size, read only. */
 .feed-body { color: var(--ink); font-size: var(--text-row); line-height: 1.6; }
@@ -3192,7 +3196,7 @@ textarea.form-input { resize: vertical; }
 .feed-line.is-blank { min-height: .8em; }
 .feed-line.is-quiet { color: var(--ink-3); }
 .feed-heading { margin: 14px 0 2px; font-weight: var(--weight-semibold); line-height: 1.35; overflow-wrap: anywhere; }
-.feed-heading.level-1 { font-size: 22px; } .feed-heading.level-2 { font-size: var(--text-section); } .feed-heading.level-3 { font-size: 17px; }
+.feed-heading { font-weight: 600; } .feed-heading.level-1 { font-size: 17px; } .feed-heading.level-2, .feed-heading.level-3 { font-size: 16px; }
 .feed-item { display: flex; gap: 8px; }
 .feed-marker { flex: none; min-width: 1em; color: var(--ink-2); }
 .feed-item.is-done > span:last-child, .feed-task.is-done .feed-task-words { color: var(--ink-3); text-decoration: line-through; }

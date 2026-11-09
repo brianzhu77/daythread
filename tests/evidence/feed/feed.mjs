@@ -23,6 +23,10 @@ const first = await card('On slow mornings').innerText()
 check(first.includes('Writing before reading') && first.includes('Tea, not the phone') && /Idea/.test(first), "a card has its title, properties and body", first.replace(/\s+/g, ' ').slice(0, 90))
 check(await card('On slow mornings').locator('strong', { hasText: 'Writing before reading' }).count() === 1, 'bold stays bold')
 check((await card('See also').innerText()).includes('Reading') && await card('See also').locator('.page-ref').count() === 1, 'a [[link]] reads as on the page')
+// A folded toggle shows its words, not its lines; a stored href that isn't a web link is words, not a link (Roadbuster).
+{ const see = card('See also'); const t = await see.innerText(); const hrefs = await see.locator('.feed-body a').evaluateAll(l => l.map(a => a.getAttribute('href')))
+  check(t.includes('Folded notes') && !t.includes('Hidden under the toggle'), 'a folded toggle shows its words and not its lines', t.replace(/\s+/g, ' ').slice(0, 120))
+  check(t.includes('not a link') && !hrefs.some(h => /^javascript:/i.test(h ?? '')) && hrefs.includes('https://example.com/ok'), "a javascript: href stays words; a web link stays a link", hrefs) }
 // Show more and Show less.
 const long = card('A long one'), clip = long.locator('.feed-clip')
 const capped = await clip.evaluate(e => Math.round(e.getBoundingClientRect().height))

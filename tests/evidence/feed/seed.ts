@@ -21,7 +21,9 @@ const rows: [string, string, string, EditorNode[]][] = [
   ['n1', 'On slow mornings', 'idea', [para('a1', text('The first hour sets the day. '), text('Writing before reading', { bold: true }), text(' keeps it mine.')), { id: 'a2', type: 'bulletListItem', props: {}, content: [text('Tea, not the phone')] as never, children: [] }, { id: 'a3', type: 'bulletListItem', props: {}, content: [text('One page, any page')] as never, children: [] }]],
   ['n2', 'A long one', 'book', Array.from({ length: 16 }, (_, i) => para(`l${i}`, text(`Paragraph ${i + 1}: a line long enough to wrap at a phone's width, so the cap by height has something to cut.`)))],
   ['n3', 'Things to do from it', 'idea', [para('t0', text('From the chapter on habits:')), { id: 't1', type: 'task', props: { taskId: 'editor-task:t1', role: 'reference', planDate: '' }, content: [text('Try the two-minute rule')] as never, children: [] }]],
-  ['n4', 'See also', 'book', [para('r1', text('Pairs with '), { type: 'pageRef', props: { pageId: 'reading', refId: 'ref1', newTitle: '', lineId: '', taskId: '' } }, text(' and the quote below.')), { id: 'q1', type: 'quote', props: {}, content: [text('Slow is fast.')] as never, children: [] }]],
+  ['n4', 'See also', 'book', [para('r1', text('Pairs with '), { type: 'pageRef', props: { pageId: 'reading', refId: 'ref1', newTitle: '', lineId: '', taskId: '' } }, text(' and the quote below.')), { id: 'q1', type: 'quote', props: {}, content: [text('Slow is fast.')] as never, children: [] },
+    { id: 'tg', type: 'toggleListItem', props: {}, content: [text('Folded notes')] as never, children: [para('tg1', text('Hidden under the toggle'))] },
+    para('bad', { type: 'link', href: 'javascript:alert(1)', content: [text('not a link')] }, text(' and '), { type: 'link', href: 'https://example.com/ok', content: [text('a real one')] })]],
   ['n5', 'Empty for now', 'idea', []],
 ]
 for (const [id, title, kind, body] of rows) {
