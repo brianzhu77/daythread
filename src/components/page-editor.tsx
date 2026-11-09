@@ -281,7 +281,7 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {/* One group at the line's end, so a deadline and "Since" sit together rather than one wrapping under the other at 390. */}
     {seen && seen.status === 'open' && (hasDateFacts(seen) || since) && <span contentEditable={false} className="editor-date-tag">
       {hasDateFacts(seen) && <DateTag task={seen} today={todayIso()} pageDate={planDate || todayIso()} />}
-      {since && <span className="app-tag is-since">Since {sinceLabel(since, todayIso())}</span>}
+      {since && <span className="editor-since is-since">Since {sinceLabel(since, todayIso())}</span>}
     </span>}
     {t && <BlockedMark taskId={t.id} />}
   </div>

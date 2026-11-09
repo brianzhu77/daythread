@@ -1,4 +1,4 @@
-// B92 in the built app: on today's page a to-do carried 7 days or more reads "Since <date>" after its words; 6 days reads
+// B92 in the built app: on today's page a to-do carried 7 days or more reads "Since <date>" after its words, as plain text; 6 days reads
 // nothing; an older day page shows none; a deadline shows both; a long Chinese line at 390 keeps its box and doesn't overlap.
 // Usage: node tests/evidence/carried-since/carried-since.mjs <base-url> <today> [chromium|webkit]  (the server's store from seed.ts for <today>)
 import * as pw from '@playwright/test'
@@ -20,6 +20,9 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 6 days: nothing`, await row(page, 'Six days only').locator('.is-since').count() === 0)
     const taxes = row(page, 'File the taxes')
     ok(`${tag} a deadline shows both`, await taxes.locator('.is-since').count() === 1 && /Due/.test(await taxes.locator('.app-tag:not(.is-since)').first().innerText().catch(() => '')))
+    // Plain words, not a badge (Jazz 535b6fff), and on the title's first line when they fit, as a short to-do's do.
+    const look = await taxes.evaluate(el => { const since = el.querySelector('.is-since'), title = el.querySelector('.editor-task-title'), cs = getComputedStyle(since), lh = parseFloat(getComputedStyle(title).lineHeight); return { fill: cs.backgroundColor, firstLine: since.getBoundingClientRect().top < title.getBoundingClientRect().top + lh } })
+    ok(`${tag} it's plain words, beside a short to-do's title`, /rgba\(0, 0, 0, 0\)|transparent/.test(look.fill) && look.firstLine, JSON.stringify(look))
     // The long Chinese line: the box stays at the line's start and the badge overlaps neither it nor the words.
     const cn = row(page, '提交加拿大')
     const geo = await cn.evaluate(el => {
