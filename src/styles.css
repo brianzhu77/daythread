@@ -1031,7 +1031,7 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .continuous-editor .bn-editor { padding-top:0; }
 .continuous-editor { margin-top:2px; }
 .continuous-editor .bn-editor > .bn-block-group > .bn-block-outer:first-child { margin-top:0; }
-.editor-date-tag { margin-left:auto; flex:none; }
+.editor-date-tag { margin-left:auto; flex:none; display:inline-flex; gap:4px; }
 .editor-date-tag .app-tag { font-size:var(--text-caption); }
 /* Desktop: + sits just outside the content column so it never covers right-aligned date tags; the phone tab bar owns + below 900px. */
 @media(max-width:899px) { .desktop-capture-plus { display:none; } }
