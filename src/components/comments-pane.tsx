@@ -8,6 +8,7 @@ import { commentLimit, propertyQuote, threadLineIds, threadsShownOn, type Commen
 import { databaseOfRow } from '../domain/database'
 import type { Page } from '../domain/types'
 import { CloseIcon, CommentIcon } from './icons'
+import { displayPageTitle } from './page-title'
 import { useKeyboardTop } from './keyboard'
 import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
@@ -120,12 +121,19 @@ function goToProperty(propertyId: string) {
   setTimeout(() => row.classList.remove('is-comment-target'), 1600)
 }
 /** What a thread on a property reads as, with the row's properties as they are now. */
+/** The row's name, where the pane isn't on the row's own page or its peek, as in a table: "Alpha · Extra 6", not which row's (Jazz b03eeba4). */
+function useRowNameAway(rowId: string): string | null {
+  const { workspace } = useWorkspace(), row = workspace?.pages.find(p => p.id === rowId)
+  const here = useRouterState({ select: r => { const { page, peek } = r.location.search as { page?: string; peek?: string }; return page === rowId || peek === rowId } })
+  return row && !here ? displayPageTitle(row) : null
+}
+const onRow = (row: string | null, words: string) => (row ? `${row} · ${words}` : words)
 function useRowProperties(rowId: string) {
   const { workspace } = useWorkspace(), row = workspace?.pages.find(p => p.id === rowId)
   return workspace && row ? databaseOfRow(workspace, row)?.database.properties : undefined
 }
 function PropertyQuote({ on, rowId }: { on: CommentProperty; rowId: string }) {
-  const { text, gone } = propertyQuote(on, useRowProperties(rowId))
+  const away = useRowNameAway(rowId), quote = propertyQuote(on, useRowProperties(rowId)), gone = quote.gone, text = gone ? quote.text : onRow(away, quote.text)
   // Folded away with the empty ones, or not on screen (a table): its words, and no button that seems to do nothing.
   return gone ? <p className="comment-quote is-gone">{text}</p> : propertyOf(on.propertyId) ? <button type="button" className="comment-quote" onClick={() => goToProperty(on.propertyId)}>{text}</button> : <p className="comment-quote">{text}</p>
 }
@@ -199,6 +207,7 @@ function CommentsPane({ pageId, composing, threadId, anchor, property, clear }: 
   const keyboardTop = useKeyboardTop()
   const phone = window.matchMedia('(max-width: 899px)').matches
   const properties = useRowProperties(pageId)
+  const rowAway = useRowNameAway(pageId)
   const pane = useRef<HTMLElement>(null)
   // After the page has made room for the pane, as its own layout does from 1100 px.
   useLayoutEffect(() => {
@@ -232,8 +241,8 @@ function CommentsPane({ pageId, composing, threadId, anchor, property, clear }: 
       {!shown.length && <p className="comment-note">{show === 'open' ? (other ? `No open comments · ${other} resolved` : 'No comments') : 'Nothing resolved'}</p>}
     </div>
     {show === 'open' && anchor && <p className="comment-quote is-composing">{anchor.quote || 'An empty line'}</p>}
-    {show === 'open' && property && <p className="comment-quote is-composing">{propertyQuote(property, properties).text}</p>}
-    {show === 'open' && <CommentField draftKey={anchor ? `new:${pageId}:${anchor.blockId}` : property ? `new:${pageId}:property:${property.propertyId}` : `new:${pageId}`} label="New comment" action="Comment" placeholder={anchor ? 'Comment on this line' : property ? `Comment on ${property.name}` : 'Add a comment'} autoFocus={composing && !phone} onDone={add} onSaved={afterSent} />}
+    {show === 'open' && property && <p className="comment-quote is-composing">{onRow(rowAway, propertyQuote(property, properties).text)}</p>}
+    {show === 'open' && <CommentField draftKey={anchor ? `new:${pageId}:${anchor.blockId}` : property ? `new:${pageId}:property:${property.propertyId}` : `new:${pageId}`} label="New comment" action="Comment" placeholder={anchor ? 'Comment on this line' : property ? `Comment on ${onRow(rowAway, property.name)}` : 'Add a comment'} autoFocus={composing && !phone} onDone={add} onSaved={afterSent} />}
   </aside>, document.body)
 }
 
