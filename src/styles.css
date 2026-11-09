@@ -3058,10 +3058,12 @@ textarea.form-input { resize: vertical; }
 .form-choice, .form-check { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 8px; border-radius: var(--radius-row); cursor: pointer; }
 .form-check { padding: 0; }
 /* 18 px boxes an --ink-3 line can be seen by, filled with the accent once picked, in light and dark (Jazz). */
-.form-choice > input, .form-check > input, .form-required-switch > input, .form-ask-values input[type=checkbox] { appearance: none; -webkit-appearance: none; display: inline-grid; place-content: center; flex: none; box-sizing: border-box; width: 18px; height: 18px; margin: 0; border: 1.5px solid var(--ink-3); border-radius: 4px; background: transparent; cursor: pointer; }
+.form-choice > input, .form-check > input, .form-required-switch > input, .form-ask-values input[type=checkbox] { appearance: none; -webkit-appearance: none; display: inline-grid; place-content: center; flex: none; box-sizing: border-box; width: 20px; height: 20px; margin: 0; border: 1.5px solid var(--check); border-radius: 5px; background: var(--card); cursor: pointer; transition: background-color .12s ease, border-color .12s ease; }
 .form-choice > input[type=radio] { border-radius: 50%; }
+/* The signature checkbox's hover (DESIGN.md, Inputs): the edge goes Thread Blue. */
+.form-choice > input:hover:not(:disabled), .form-check > input:hover:not(:disabled), .form-required-switch > input:hover:not(:disabled), .form-ask-values input[type=checkbox]:hover:not(:disabled) { border-color: var(--app-accent); }
 .form-choice > input:checked, .form-check > input:checked, .form-required-switch > input:checked, .form-ask-values input[type=checkbox]:checked { border-color: var(--blue); background: var(--blue); }
-.form-choice > input[type=checkbox]::after, .form-check > input::after, .form-required-switch > input::after, .form-ask-values input[type=checkbox]::after { content: ''; width: 9px; height: 5px; border: 2px solid var(--ink-on-blue); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg) scale(0); }
+.form-choice > input[type=checkbox]::after, .form-check > input::after, .form-required-switch > input::after, .form-ask-values input[type=checkbox]::after { content: ''; width: 10px; height: 6px; border: 2px solid var(--ink-on-blue); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg) scale(0); }
 .form-choice > input[type=checkbox]:checked::after, .form-check > input:checked::after, .form-required-switch > input:checked::after, .form-ask-values input[type=checkbox]:checked::after { transform: translateY(-1px) rotate(-45deg) scale(1); }
 .form-choice > input[type=radio]::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-on-blue); transform: scale(0); }
 .form-choice > input[type=radio]:checked::after { transform: scale(1); }
