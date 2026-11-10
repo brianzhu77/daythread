@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { cellValue, rowTime, viewRows, type Database, type Property, type View } from '../src/domain/database.ts'
+import { writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import type { Action, Page } from '../src/domain/types.ts'
 import { harness } from './v2-helpers.ts'
@@ -60,4 +61,21 @@ test('the export shows the account day a row was created on', () => {
   const list = files.find(f => f.path.endsWith('/pages/Reading list.md'))!.text
   assert.match(list, /2026-10-22 18:30/)
   assert.doesNotMatch(list, /2026-10-23/)
+  const rowFile = files.find(f => f.path.endsWith('/pages/Dune.md'))!.text
+  assert.match(rowFile, /2026-10-22 18:30/)
+  assert.doesNotMatch(rowFile, /2026-10-23/)
+})
+
+test('a rule limited to rows created today fires by the account day', t => {
+  // The account's today is decided from the current time: fix it at 18:30 on 22 October in Vancouver.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse(created) })
+  const { h, database } = setup()
+  const change = (c: Extract<Action, { type: 'change-database' }>['change']) => h.run({ type: 'change-database', pageId: 'list', change: c })
+  change({ kind: 'addProperty', property: { id: 'n', name: 'N', type: 'number' } })
+  change({ kind: 'addView', view: { ...database.views[0]!, id: 'today', name: 'Today', filter: [{ by: 'made', op: 'is', value: { relative: 'today' } }] } })
+  const setN = { id: 's-n', kind: 'edit-property', set: [{ id: 'n', name: 'N', type: 'number', value: { kind: 'fixed', raw: 50 } }] } as ButtonStep
+  change({ kind: 'addAutomation', automation: { id: 'a', name: 'A', active: true, viewId: 'today', triggers: [{ kind: 'row-added' }], steps: writeSteps([setN]) } })
+  const { receipt } = h.run({ type: 'add-row', databaseId: 'list', pageId: 'r2', title: 'Two', values: {}, at: created })
+  assert.deepEqual(receipt.automations?.ran, ['A'])
+  assert.equal(h.page('r2').values?.n, 50)
 })
