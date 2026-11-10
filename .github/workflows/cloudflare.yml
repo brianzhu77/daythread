@@ -120,12 +120,13 @@ jobs:
           echo "bound $bucket"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Wrangler is the version in the lockfile, so a deploy never runs a release nobody reviewed.
       - name: Deploy
         run: |
           if [ "$NAME" = daythread-preview ]; then
-            npx wrangler@4 deploy -c .output/server/wrangler.json --name "$NAME" --var DAYTHREAD_PG_SCHEMA:daythread_preview --var DAYTHREAD_PREVIEW:1
+            npx --no-install wrangler deploy -c .output/server/wrangler.json --name "$NAME" --var DAYTHREAD_PG_SCHEMA:daythread_preview --var DAYTHREAD_PREVIEW:1
           else
-            npx wrangler@4 deploy -c .output/server/wrangler.json
+            npx --no-install wrangler deploy -c .output/server/wrangler.json
           fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -135,7 +136,7 @@ jobs:
         run: |
           [ "$NAME" = daythread-preview ] || unset DAYTHREAD_INVITES
           node -e 'const k=["DATABASE_URL","SUPABASE_URL","SUPABASE_PUBLISHABLE_KEY","OPENROUTER_API_KEY","OPENROUTER_MODEL","DAYTHREAD_INVITES","DAYTHREAD_DRAFT_EMAILS","DAYTHREAD_VAPID_PUBLIC_KEY","DAYTHREAD_VAPID_PRIVATE_KEY","DAYTHREAD_VAPID_SUBJECT"];process.stdout.write(JSON.stringify(Object.fromEntries(k.filter(n=>process.env[n]).map(n=>[n,process.env[n]]))))' > "$RUNNER_TEMP/secrets.json"
-          npx wrangler@4 secret bulk "$RUNNER_TEMP/secrets.json" -c .output/server/wrangler.json --name "$NAME"
+          npx --no-install wrangler secret bulk "$RUNNER_TEMP/secrets.json" -c .output/server/wrangler.json --name "$NAME"
           rm "$RUNNER_TEMP/secrets.json"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -219,6 +220,8 @@ jobs:
           HOURS: ${{ inputs.hours }}
         run: |
           set -euo pipefail
+          # Used in arithmetic below, where the shell would evaluate anything else it holds.
+          case "${HOURS:-6}" in ''|*[!0-9]*|0[0-9]*) echo "hours must be a whole number"; exit 1 ;; esac
           api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' "$@"; }
           account=$(api https://api.cloudflare.com/client/v4/accounts | jq -r '.result[0].id')
           now=$(($(date +%s) * 1000))
