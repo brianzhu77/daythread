@@ -91,7 +91,7 @@ function fires(db: Database, rule: Automation, was: Page | undefined, now: Page,
     const changed = Boolean(was) && !same(rawOf(was!, t.propertyId), rawOf(now, t.propertyId))
     if (!t.condition) return { changed, holds: changed }
     const property = t.propertyId === titleId ? { id: titleId, name: 'Name', type: 'text' as const } : propertyOf(db, t.propertyId)
-    return { changed, holds: Boolean(property && conditionHolds(property, t.condition, cellValue(db, now, t.propertyId), context)) }
+    return { changed, holds: Boolean(property && conditionHolds(property, t.condition, cellValue(db, now, t.propertyId, context.zone), context)) }
   })
   if (!results.length) return false
   // All: every condition true after this edit, and at least one of them just changed, so an unrelated edit doesn't repeat it (§5.6).

@@ -228,14 +228,24 @@ export const isReadOnlyType = (type: PropertyType): boolean => type === "created
 export const isReadOnly = (property: Property): boolean => isReadOnlyType(property.type) || Boolean(property.readOnly);
 export const isTimeType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime";
 const isTextType = (type: PropertyType): boolean => type === "text" || type === "url" || type === "email" || type === "phone";
-/** A row's Created or Edited time as a date value; none on a row from before they were kept. */
-export function rowTime(property: Property, row: Page): DateValue | null {
+/** A row's Created or Edited time as a date value; none on a row from before they were kept. `zone`: read in it rather than on this device (the server passes the account's). */
+export function rowTime(property: Property, row: Page, zone?: string): DateValue | null {
   const at = property.type === "editedTime" ? row.editedAt ?? row.createdAt : row.createdAt;
-  return at ? { start: localWall(at) } : null;
+  return at ? { start: localWall(at, zone) } : null;
 }
-/** An ISO time as a wall clock on this device: what a date cell holds, so a created time reads in local time. */
-function localWall(iso: string): string {
+const wallFormats = new Map<string, Intl.DateTimeFormat>();
+/** An ISO time as a wall clock: what a date cell holds. On this device, or in `zone` for a reader that isn't one (the server, with the account's zone). */
+function localWall(iso: string, zone?: string): string {
   const d = new Date(iso), two = (n: number) => String(n).padStart(2, "0");
+  if (zone) {
+    try {
+      let format = wallFormats.get(zone);
+      if (!format) wallFormats.set(zone, format = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }));
+      const part: Record<string, string> = {};
+      for (const { type, value } of format.formatToParts(d)) part[type] = value;
+      return `${part.year}-${part.month}-${part.day}T${part.hour}:${part.minute}`;
+    } catch { /* a zone this runtime doesn't know: read as on this device */ }
+  }
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 export const databaseBlockType = "database";
@@ -484,11 +494,11 @@ export function propertyOf(db: Database, id: string): Property | null {
   return id === titleId ? titleProperty : db.properties.find((p) => p.id === id) ?? null;
 }
 /** A row's value for a column, as its cell shows it. */
-export function cellValue(db: Database, row: Page, columnId: string): CellValue {
+export function cellValue(db: Database, row: Page, columnId: string, zone?: string): CellValue {
   const property = propertyOf(db, columnId);
   if (!property) return null;
   if (property.type === "id") { const n = row.values?.[rowNumberKey]; return typeof n === "number" ? n : null; }
-  if (isTimeType(property.type)) return rowTime(property, row);
+  if (isTimeType(property.type)) return rowTime(property, row, zone);
   // Its label, so a cell draws it. Nothing's stored under it.
   if (property.type === "button") return property.button?.label || property.name;
   return readValue(property, rawOf(row, columnId));
@@ -515,7 +525,7 @@ export function rowsWithOption(ws: Workspace, databaseId: string, property: Prop
 
 // ---------------------------------------------------------------- views: filter and sort
 
-export interface ViewContext { today: LocalDate; /** The date of the day page the block is on; null elsewhere. */ pageDate: LocalDate | null; /** 1: weeks start on Monday. Sunday otherwise (R3-20). */ weekStart?: WeekStart }
+export interface ViewContext { today: LocalDate; /** The date of the day page the block is on; null elsewhere. */ pageDate: LocalDate | null; /** 1: weeks start on Monday. Sunday otherwise (R3-20). */ weekStart?: WeekStart; /** The zone Created and Edited times are read in; this device's when absent (the server passes the account's). */ zone?: string }
 
 export function addDays(day: LocalDate, days: number): LocalDate {
   const d = new Date(`${day}T12:00:00Z`);
@@ -642,14 +652,14 @@ export function conditionHolds(property: Property, condition: Condition, value: 
 export function rowColour(db: Database, view: View, row: Page, context: ViewContext): ColourRule | null {
   for (const rule of view.colourRules ?? []) {
     const property = propertyOf(db, rule.rule.by);
-    if (property && conditionHolds(property, rule.rule, cellValue(db, row, rule.rule.by), context)) return rule;
+    if (property && conditionHolds(property, rule.rule, cellValue(db, row, rule.rule.by, context.zone), context)) return rule;
   }
   return null;
 }
 /** True or false, or null when nothing in it can be read: a rule on a deleted property or with no value, and a group of only those, count neither way (design §13). */
 function groupHolds(db: Database, row: Page, node: FilterGroup, context: ViewContext): boolean | null {
   const results = [
-    ...node.rules.map((c) => { const property = propertyOf(db, c.by); return property ? conditionHolds(property, c, cellValue(db, row, c.by), context) : null; }),
+    ...node.rules.map((c) => { const property = propertyOf(db, c.by); return property ? conditionHolds(property, c, cellValue(db, row, c.by, context.zone), context) : null; }),
     ...(node.groups ?? []).map((g) => groupHolds(db, row, g, context)),
   ].filter((r) => r !== null);
   if (!results.length) return null;
@@ -722,7 +732,7 @@ export function viewRows(ws: Workspace, databaseId: string, view: View, context:
   // A sort on a deleted property is dropped quietly (design §13).
   const sorts = view.sort.map((s) => ({ ...s, property: propertyOf(db, s.by) })).filter((s): s is Sort & { property: Property } => s.property !== null);
   if (!sorts.length) return rows;
-  const keyed = rows.map((row, index) => ({ row, index, values: sorts.map((s) => cellValue(db, row, s.by)) }));
+  const keyed = rows.map((row, index) => ({ row, index, values: sorts.map((s) => cellValue(db, row, s.by, context.zone)) }));
   keyed.sort((x, y) => {
     for (let i = 0; i < sorts.length; i++) {
       const s = sorts[i]!, a = x.values[i]!, b = y.values[i]!;
