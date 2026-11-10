@@ -1,0 +1,8 @@
+{
+  "name": "daythread-deploy-tools",
+  "private": true,
+  "description": "Wrangler for the deploy workflow, in a package of its own so its dependencies can't change what the app's build resolves.",
+  "devDependencies": {
+    "wrangler": "4.159.0"
+  }
+}
