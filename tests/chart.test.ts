@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { axisLabels, axisStep, chartData, chartMeasure, chartTicks, chartValue, donutSlices, otherKey, shortNumber, type ChartPoint } from '../src/domain/chart.ts'
-import { columnCalc, groupableProperties, viewRows, type Database, type View } from '../src/domain/database.ts'
+import { columnCalc, groupableProperties, viewRows, type Condition, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import type { Action } from '../src/domain/types.ts'
 import { harness, today } from './v2-helpers.ts'
@@ -43,7 +43,7 @@ test('a measure matches a column calculation on the same rows, and a blank is no
   for (const [kind, want] of [['median', 350], ['min', 300], ['max', 400], ['range', 100]] as const) assert.equal(of(h, view({ chart: { form: 'bar', measure: { by: 'pages', kind } } }))[0]!.value, want)
 })
 test('the view\'s filter applies, groups included', () => {
-  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const
+  const novels: Condition = { by: 'kind', op: 'isAnyOf', value: ['novel'] }
   assert.deepEqual(pairs(of(shelf(), view({ filter: [novels], filterGroups: [{ rules: [{ by: 'pages', op: 'gt', value: 350 }] }], hideEmptyGroups: true }))), [['Novel', 1]])
 })
 test('a multi-select counts a row under each value, as Group does', () => {

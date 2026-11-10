@@ -47,7 +47,7 @@ test('R2-15: the source is only in what the layouts read: Pages, search and the 
   withTodos(ws)
   assert.ok(!ws.pages.some(p => p.id === todosSourceId))
   assert.ok(!listedPages(ws).some(p => p.id === todosSourceId))
-  assert.ok(!search(buildSearchIndex(ws), 'To-dos').pages.some(x => x.page.id === todosSourceId))
+  assert.ok(!search(buildSearchIndex(ws), 'To-dos', today).pages.some(x => x.page.id === todosSourceId))
   h.run({ type: 'create-document', title: 'Holder', body: '', pageId: 'holder' })
   h.save('holder', d => [...d, { id: 'v', type: 'database', props: { pageId: todosSourceId, view: '' }, children: [] }])
   assert.equal(h.page('holder').document.includes(todosSourceId), true, 'a block that shows it saves whole')
@@ -125,7 +125,7 @@ test('R3-13: a drag across Status and Planned sends only what a to-do can hold',
   h.run({ type: 'add-task', pageId: h.ws.pages.find(p => p.date === '2026-11-03')!.id, title: 'Open one', plannedOn: '2026-11-03' })
   const task = h.ws.tasks.find(t => t.title === 'Open one')!
   const status = (value: string) => ({ id: 'status', value }), day = { id: 'planned', value: { start: '2026-11-05' } }, noDay = { id: 'planned', value: undefined }
-  const ids = (moved: { id: string }[]) => todoMoves(h.ws, task.id, moved as never).map(m => m.id)
+  const ids = (moved: { id: string; value?: unknown }[]) => todoMoves(h.ws, task.id, moved as never).map(m => m.id)
   for (const to of ['paused', 'done', 'cancelled']) assert.deepEqual(ids([status(to), day]), ['status'], `${to} decides its own day`)
   assert.deepEqual(ids([status('open'), day]), ['status', 'planned'], 'reopened, then planned')
   assert.deepEqual(ids([day, status('open')]), ['status', 'planned'], 'whichever layer is which')

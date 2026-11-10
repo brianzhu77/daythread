@@ -40,7 +40,7 @@ test('a title stays words: search and the title don\'t change, and export writes
   const h = page()
   h.run({ type: 'set-page-icon', pageId: 'p', icon: '🌲' })
   assert.equal(h.page('p').title, 'Trip')
-  assert.equal(JSON.stringify(search(buildSearchIndex(h.ws), '🌲').pages ?? []).includes('"p"'), false)
+  assert.equal(JSON.stringify(search(buildSearchIndex(h.ws), '🌲', '2026-11-05').pages ?? []).includes('"p"'), false)
   const md = pageMarkdown(h.page('p'), h.ws, new Map([['p', 'Trip']]))
   assert.match(md, /🌲\n\n# Trip\n/)
 })

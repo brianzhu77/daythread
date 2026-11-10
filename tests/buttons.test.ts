@@ -26,8 +26,8 @@ const tap = (h: ReturnType<typeof harness>, blockId = 'btn', pageId = 'p', tapDa
   return h.run({ type: 'run-button', pageId, blockId, stepsKey: stepsKey(String(block.props?.steps)), expectedContent: pageContentKey(page), at, today: tapDay })
 }
 const ids = (h: ReturnType<typeof harness>, id = 'p') => pageNodes(h.page(id)).map(n => n.id)
-const addRow = (id = 's1'): ButtonStep => ({ id, kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Run', set: [{ id: 'when', name: 'When', value: { kind: 'today' } }] })
-const editAll = (id = 's2', n = 9): ButtonStep => ({ id, kind: 'edit-rows', databaseId: 'runs', databaseName: 'Runs', filter: [], set: [{ id: 'n', name: 'N', value: { kind: 'fixed', raw: n } }] })
+const addRow = (id = 's1'): Extract<ButtonStep, { kind: 'add-row' }> => ({ id, kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Run', set: [{ id: 'when', name: 'When', value: { kind: 'today' } }] })
+const editAll = (id = 's2', n = 9): Extract<ButtonStep, { kind: 'edit-rows' }> => ({ id, kind: 'edit-rows', databaseId: 'runs', databaseName: 'Runs', filter: [], set: [{ id: 'n', name: 'N', value: { kind: 'fixed', raw: n } }] })
 const rows = (h: ReturnType<typeof harness>) => h.ws.pages.filter(p => p.parentId === 'runs' && !p.trashedAt)
 
 test('Add row: with today read at the tap, the notice names it, and it can open', () => {
