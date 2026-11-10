@@ -58,6 +58,9 @@ const serverTransport: Transport = {
 /** Commands queued or being sent in this tab, across providers: a reload waits for none (new-build.ts). */
 let commandsOut = 0
 export const commandsPending = (): boolean => commandsOut > 0
+/** A command that failed and waits on the header's Retry lives only in this tab: a reload would drop it (new-build.ts). */
+let commandFailedOut = false
+export const commandFailed = (): boolean => commandFailedOut
 
 export function newOperationId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `op-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -242,6 +245,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           setSaveState('saved')
           setSaveError(null)
           setLastFailed(null)
+          commandFailedOut = false
           const spec = typeof notice === 'function' ? notice(result.receipt) : notice
           const rules = result.receipt.automations
           // What rules did goes on the notice his change already has, with its one Undo: "Moved to Done · Log finish · Undo" (automations.md §5).
@@ -265,6 +269,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
             setSaveState('failed')
             setSaveError(message)
             setLastFailed({ action, notice, operationId })
+            commandFailedOut = true
           }
           options.onFailure?.(message)
           debugClient('command.response',{...fields,elapsedMs:performance.now()-started,result:isConflict(message)?'conflict':'error',error:e instanceof Error?e.name:'UnknownError'})

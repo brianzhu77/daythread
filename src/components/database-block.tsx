@@ -208,6 +208,8 @@ export const blockPlaces = new Map<string, { scrollLeft: number; limit: number; 
 /** `beforeId`: the place a dropped card is going to, so it shows there until it's saved. */
 interface PendingCell { databaseId: string; rowId: string; columnId: string; raw: Json | undefined; failed: boolean; retry: () => void; discard: () => void; beforeId?: string | null; /** The rest of one change, whose first cell speaks for it. */ part?: true }
 export const pendingCells = new Map<string, PendingCell>()
+/** A cell whose save failed shows Retry and is kept only here: a reload would drop it (new-build.ts). */
+export const cellsUnsaved = (): boolean => [...pendingCells.values()].some(p => p.failed)
 const pendingCellListeners = new Set<() => void>()
 let pendingCellVersion = 0
 export const pendingKey = (rowId: string, columnId: string) => `${rowId}|${columnId}`
