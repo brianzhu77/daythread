@@ -345,12 +345,15 @@ or dialog always does.
 **The Hairline Rule.** An edge is a 1 px line in Hairline grey, not a tinted background. A block on a page, an empty
 state, a note card and the sidebar's edge all get the line; none gets a fill.
 
-**The Lift Rule (Nov 8).** Whatever is dragged lifts itself: a copy keeps the grab point under the pointer, tilts 3°
-(cards) or 1° (rows), grows 2% and takes Float, over 160 ms. A hatched slot its size (1 px dashed `gray-6`, 1 px
-`gray-4` lines every 6 px) waits where it would land, and its neighbours slide 180 ms to make room. On release the
-copy glides into the slot in 220 ms on `cubic-bezier(.16, 1, .3, 1)` and flattens; the real thing shows as it lands.
-Nothing else tints or draws a line, except the sidebar's page tree, where nesting keeps the Thread Blue line. Reduced
-motion keeps the lift and the slot and drops the tilt, the slide and the glide.
+**The Lift Rule (Nov 8; springs Nov 9).** Whatever is dragged lifts itself: a copy keeps the grab point under the
+pointer, tilts 3° (cards, pages) or 1° (rows), grows 2% (1% for a row, whose far end would swing out) and takes Float.
+A hatched slot its size (1 px dashed `gray-6`, 1 px `gray-4` lines every 6 px) waits where it would land, and its
+neighbours slide to make room. On release the copy glides into the slot and flattens; the real thing shows as it
+lands. Every movement is a Motion spring set in `drag-lift.ts`, never a curve: the lift springs up in about 200 ms
+with a hair of overshoot; the copy leans up to 2.5° further with the hand's speed and comes back when it stops; the
+glide carries the hand's momentum (capped) and settles in about 300 ms; the slide is stiff and never bounces. Nothing
+else tints or draws a line, except the sidebar's page tree, where nesting keeps the Thread Blue line. Reduced motion
+keeps the lift and the slot and drops the tilt, the lean, the slide and the glide.
 
 ## Shapes
 
