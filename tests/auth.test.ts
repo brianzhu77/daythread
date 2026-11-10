@@ -229,10 +229,10 @@ test('sign-in: a verified address that is not invited is refused and nothing is 
 test('sign-in: an account whose email is not confirmed yet is told so, not "wrong"; Supabase down is 503', async () => {
   const h = await handlers()
   try {
-    h.server.useSupabase({ verifyPassword: async () => ({ ok: false, reason: 'unconfirmed' }), signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined })
+    h.server.useSupabase({ verifyPassword: async () => ({ ok: false, reason: 'unconfirmed' }), signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined, recover: async () => { throw new Error('not used in this test') }, resendConfirmation: async () => { throw new Error('not used in this test') }, resetPassword: async () => { throw new Error('not used in this test') }, userFromToken: async () => { throw new Error('not used in this test') } })
     const r = await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'new@example.com', password: 'right' }))
     assert.equal(r.status, 401); assert.equal(((await r.json()) as { error: string }).error, 'unconfirmed')
-    h.server.useSupabase({ verifyPassword: async () => { throw new Error('Supabase Auth 503') }, signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined })
+    h.server.useSupabase({ verifyPassword: async () => { throw new Error('Supabase Auth 503') }, signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined, recover: async () => { throw new Error('not used in this test') }, resendConfirmation: async () => { throw new Error('not used in this test') }, resetPassword: async () => { throw new Error('not used in this test') }, userFromToken: async () => { throw new Error('not used in this test') } })
     assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'new@example.com', password: 'right' }))).status, 503)
   } finally { await h.close() }
 })
@@ -366,7 +366,7 @@ test('forgot password: the same answer for any address, Supabase asked for the k
     }
     assert.deepEqual(h.supabase.recovered, ['brian@example.com', 'nobody@example.com'])
     assert.equal((await h.server.handleRecover(h.post('/api/auth/recover', { email: 'not an address' }))).status, 400)
-    h.server.useSupabase({ verifyPassword: async () => ({ ok: false }), signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined, recover: async () => { throw new Error('Supabase Auth 503') }, resetPassword: async () => ({ ok: false, reason: 'expired' }), userFromToken: async () => null })
+    h.server.useSupabase({ verifyPassword: async () => ({ ok: false }), signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined, recover: async () => { throw new Error('Supabase Auth 503') }, resetPassword: async () => ({ ok: false, reason: 'expired' }), userFromToken: async () => null, resendConfirmation: async () => { throw new Error('not used in this test') } })
     assert.equal((await h.server.handleRecover(h.post('/api/auth/recover', { email: 'brian@example.com' }))).status, 503)
   } finally { await h.close() }
 })

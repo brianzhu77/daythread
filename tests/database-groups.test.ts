@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { columnMoved, filterTree, hasFilter, rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { columnMoved, filterTree, hasFilter, rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Condition, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { canHoldGroup, moveIntoGroup, moveIntoNewGroup, moveOutOfGroup, moveRulesOut, removeGroup, treeFields, withoutRule } from '../src/domain/filter-tree.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
@@ -299,13 +299,13 @@ test('a calendar by week is stored on the view, and back to a month clears it', 
 
 test('any rule matches: a row in if one holds, and rules that cannot be read do not count (R3-4)', () => {
   const h = reading()
-  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const
-  const long = { by: 'pages', op: 'gt', value: 350 } as const
+  const novels: Condition = { by: 'kind', op: 'isAnyOf', value: ['novel'] }
+  const long: Condition = { by: 'pages', op: 'gt', value: 350 }
   const titles = (v: View) => h.rows(v).map(r => r.id)
   assert.deepEqual(titles(view({ filter: [novels, long] })), ['dune'])
   assert.deepEqual(titles(view({ filter: [{ by: 'kind', op: 'isAnyOf', value: ['essay'] }, long], filterAny: true })), ['dune', 'ubik'])
   // A deleted property's rule, or one with no value yet, doesn't count: it neither lets everything in nor hides everything.
-  const gone = { by: 'gone', op: 'isEmpty' } as const, unfinished = { by: 'note', op: 'contains' } as const
+  const gone: Condition = { by: 'gone', op: 'isEmpty' }, unfinished: Condition = { by: 'note', op: 'contains' }
   assert.deepEqual(titles(view({ filter: [gone, long], filterAny: true })), ['dune'])
   assert.deepEqual(titles(view({ filter: [unfinished, long], filterAny: true })), ['dune'])
   assert.equal(titles(view({ filter: [gone, unfinished], filterAny: true })).length, 4)
@@ -314,7 +314,7 @@ test('any rule matches: a row in if one holds, and rules that cannot be read do 
 
 test('a new row under any rule takes one value that shows it, or none and the notice (R3-4, §7.4)', () => {
   const h = reading()
-  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const, sf = { by: 'tags', op: 'contains', value: ['sf'] } as const
+  const novels: Condition = { by: 'kind', op: 'isAnyOf', value: ['novel'] }, sf: Condition = { by: 'tags', op: 'contains', value: ['sf'] }
   assert.deepEqual(newRowValues(h.db(), view({ filter: [novels, sf], filterAny: true }), ctx), { title: '', values: { kind: 'novel' }, visible: true })
   // All rules: every value it can take.
   assert.deepEqual(newRowValues(h.db(), view({ filter: [novels, sf] }), ctx).values, { kind: 'novel', tags: ['sf'] })
@@ -976,9 +976,9 @@ test('a property inserted beside a column (R4-18): placed there in that view, la
 
 test('filter groups: all and any across three layers, and what can\'t be read counts neither way (filter-groups.md §3)', () => {
   const h = reading()
-  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const, essays = { by: 'kind', op: 'isAnyOf', value: ['essay'] } as const
-  const long = { by: 'pages', op: 'gt', value: 350 } as const, short = { by: 'pages', op: 'lt', value: 350 } as const
-  const gone = { by: 'gone', op: 'isEmpty' } as const, unfinished = { by: 'note', op: 'contains' } as const
+  const novels: Condition = { by: 'kind', op: 'isAnyOf', value: ['novel'] }, essays: Condition = { by: 'kind', op: 'isAnyOf', value: ['essay'] }
+  const long: Condition = { by: 'pages', op: 'gt', value: 350 }, short: Condition = { by: 'pages', op: 'lt', value: 350 }
+  const gone: Condition = { by: 'gone', op: 'isEmpty' }, unfinished: Condition = { by: 'note', op: 'contains' }
   const titles = (v: View) => h.rows(v).map(r => r.id)
   const everything = titles(view())
   // A top rule and a group: the rule, and one or the other.
@@ -1002,8 +1002,8 @@ test('filter groups: all and any across three layers, and what can\'t be read co
 
 test('filter groups: a new row takes a value where one is needed, walking the tree, or none and the notice (§3, §7.4)', () => {
   const h = reading()
-  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const, sf = { by: 'tags', op: 'contains', value: ['sf'] } as const
-  const long = { by: 'pages', op: 'gt', value: 350 } as const, exact = { by: 'pages', op: 'eq', value: 400 } as const
+  const novels: Condition = { by: 'kind', op: 'isAnyOf', value: ['novel'] }, sf: Condition = { by: 'tags', op: 'contains', value: ['sf'] }
+  const long: Condition = { by: 'pages', op: 'gt', value: 350 }, exact: Condition = { by: 'pages', op: 'eq', value: 400 }
   // All at the top: the rule's value and the group's.
   assert.deepEqual(newRowValues(h.db(), view({ filter: [novels], filterGroups: [{ rules: [sf] }] }), ctx), { title: '', values: { kind: 'novel', tags: ['sf'] }, visible: true })
   // Any in a group: its first single value that works, and only one.
@@ -1051,7 +1051,7 @@ test('filter groups: stored only as far as three layers and twenty rules, held b
 })
 
 test('filter groups: the sheet\'s moves keep every rule, and no group stands empty', () => {
-  const a = { by: 'a', op: 'isEmpty' } as const, b = { by: 'b', op: 'isEmpty' } as const, c = { by: 'c', op: 'isEmpty' } as const
+  const a: Condition = { by: 'a', op: 'isEmpty' }, b: Condition = { by: 'b', op: 'isEmpty' }, c: Condition = { by: 'c', op: 'isEmpty' }
   assert.deepEqual(moveIntoNewGroup({ rules: [a, b] }, 0), { rules: [b], groups: [{ rules: [a] }] })
   assert.deepEqual(moveIntoGroup({ rules: [a], groups: [{ rules: [b] }] }, 0, 0), { rules: [], groups: [{ rules: [b, a] }] })
   // Out, and the group goes with its last rule, under any layer.
@@ -1068,7 +1068,7 @@ test('filter groups: the sheet\'s moves keep every rule, and no group stands emp
 
 test('filter groups: a calendar move, this page\'s day in a group, and the opening day read the same tree (§3)', () => {
   const h = reading()
-  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const
+  const novels: Condition = { by: 'kind', op: 'isAnyOf', value: ['novel'] }
   const onPageDay = { by: 'due', op: 'is', value: { relative: 'pageDate' } } as const
   const tree = view({ filter: [novels], filterGroups: [{ any: true, rules: [onPageDay] }] })
   assert.deepEqual(viewRows(h.ws, 'list', tree, { ...ctx, pageDate: '2026-10-25' }).map(r => r.id), ['dune'])

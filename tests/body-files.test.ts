@@ -52,7 +52,7 @@ test('the export names it, says it isn\'t included, and leaves no link pointing 
 test('search finds a block by its caption and name, never by its address', () => {
   const h = notes()
   h.save('notes', () => [image() as never])
-  const hits = (q: string) => search(buildSearchIndex(h.ws), q).lines
+  const hits = (q: string) => search(buildSearchIndex(h.ws), q, today).lines
   assert.equal(hits(id).length, 0, 'by its address')
   assert.equal(hits('api files').length, 0, 'by its address')
   assert.deepEqual(hits('shot').map(l => l.blockId), ['img'], 'by name')

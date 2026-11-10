@@ -410,8 +410,8 @@ test('R2-15: views are not pages: Pages, search, the export and Trash count each
   const count = () => ({
     listed: listedPages(h.ws).length,
     files: exportFiles(h.ws, new Date(at)).length,
-    dune: search(buildSearchIndex(h.ws), 'Dune').pages.filter(x => x.page.id === 'dune').length,
-    list: search(buildSearchIndex(h.ws), 'Reading list').pages.filter(x => x.page.id === 'list').length,
+    dune: search(buildSearchIndex(h.ws), 'Dune', today).pages.filter(x => x.page.id === 'dune').length,
+    list: search(buildSearchIndex(h.ws), 'Reading list', today).pages.filter(x => x.page.id === 'list').length,
   })
   h.run({ type: 'create-document', title: 'Other', body: '', pageId: 'other' })
   const before = count()

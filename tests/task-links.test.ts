@@ -114,8 +114,9 @@ test('over a limit the whole change is refused', () => {
   const many = Array.from({ length: linkLimits.perTask + 1 }, (_, i) => `T${i + 1}`)
   assert.throws(() => link(h, 'T0', many), new RegExp(`${linkLimits.perTask} blockers at most`))
   assert.equal(h.ws.links, undefined)
+  const links = () => h.ws.links // a fresh read: the assertion above narrowed h.ws.links to undefined
   link(h, 'T0', many.slice(0, linkLimits.perTask))
-  assert.equal(h.ws.links?.length, linkLimits.perTask)
+  assert.equal(links()?.length, linkLimits.perTask)
 })
 
 test('links go through the rows and back, an inverse from before links leaves them, and the browser\'s changes carry them', () => {
