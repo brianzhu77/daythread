@@ -150,8 +150,8 @@
   --shadow-card-soft: 0 1px 2px rgba(17, 17, 26, .04);
   --shadow-fab: 0 5px 24px #0002;
   --dur-fast: .12s;
-  /* Dragging (drag-lift.ts): the lift, the neighbours' slide, and the glide home. */
-  --dur-lift: .16s; --dur-shift: .18s; --dur-settle: .22s; --ease-settle: cubic-bezier(.16, 1, .3, 1);
+  /* Dragging (drag-lift.ts): the shadow's rise as a copy lifts. The movement itself is springs, set there. */
+  --dur-lift: .16s;
   color-scheme: light dark;
 }
 /* Dark (system-v2 §2, the Dark column): the same twelve steps, Radix's dark values, so every rule that names a step
@@ -1295,12 +1295,12 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .side-label-row[data-drop-zone]::after { bottom: -1.5px; }
 /* Dragging, one feel everywhere (Brian, Nov 8; drag-lift.ts): the thing itself lifts under the pointer, tilts a little
    and floats; a hatched slot its size waits where it would land; its neighbours slide to make room; on release the copy
-   glides into the slot and the real thing shows as it lands. Cards, rows and pages share it. */
+   glides into the slot and the real thing shows as it lands. Cards, rows and pages share it; every movement is a
+   spring, set in drag-lift.ts, so the CSS here holds only the shadow and the slot. */
 .drag-lift { position: fixed; top: 0; left: 0; z-index: 1000; pointer-events: none; will-change: transform; }
-.drag-lift.is-settling { transition: transform var(--dur-settle) var(--ease-settle); }
 .drag-lift.is-gone { opacity: 0; transition: opacity .15s; }
-.drag-lift-body { position: relative; overflow: hidden; border-radius: var(--radius-control); background: var(--bg-doc); box-shadow: var(--shadow-row); transition: transform var(--dur-lift) var(--ease-settle), box-shadow var(--dur-lift); }
-.drag-lift-body.is-up { transform: rotate(calc(var(--lift-tilt, 3deg) * -1)) scale(1.02); box-shadow: var(--shadow-float); }
+.drag-lift-body { position: relative; overflow: hidden; border-radius: var(--radius-control); background: var(--bg-doc); box-shadow: var(--shadow-row); transition: box-shadow var(--dur-lift); }
+.drag-lift-body.is-up { box-shadow: var(--shadow-float); }
 .drag-lift-body > * { box-sizing: border-box; width: 100%; height: 100%; margin: 0; }
 .drag-lift-body table { table-layout: fixed; border-collapse: collapse; background: var(--bg-doc); }
 .drag-lift .tree-acts, .drag-lift .disclose, .drag-lift .database-row-gutter, .drag-lift .database-list-handle, .drag-lift .database-open, .drag-lift .database-sub-add { display: none; }
@@ -1314,7 +1314,6 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .drag-slot-row .drag-slot { margin: 1px 0; }
 @media (prefers-reduced-motion: reduce) {
   .drag-lift, .drag-lift-body, .drag-slot { transition: none; animation: none; }
-  .drag-lift-body.is-up { transform: none; }
 }
 .disclose { display: grid; place-items: center; width: 22px; height: 30px; min-height: 0; flex: none; padding: 0; border: 0; border-radius: var(--radius-control); background: none; color: var(--ink-3); cursor: pointer; }
 .disclose:hover { color: var(--ink); }
