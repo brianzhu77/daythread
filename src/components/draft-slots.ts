@@ -32,7 +32,45 @@ export interface DraftSlot {
   taking?: number
 }
 
-const prefix = (pageId: string) => `daythread:editor:${pageId}`
+/**
+ * Whose drafts this tab reads and writes (set by use-day.tsx as soon as it knows whose workspace is on screen). A
+ * draft exists only on this device, so it is kept under the account it belongs to: another account on the same
+ * browser never sees or sends it, and it is back when that account signs in again. With sign-in off ('local') or
+ * before the account is known, the key is the one from before accounts.
+ */
+let draftOwner: string | null = null
+const legacyHead = 'daythread:editor:'
+const head = () => (draftOwner && draftOwner !== 'local' ? `daythread:draft:${draftOwner}:` : legacyHead)
+const prefix = (pageId: string) => `${head()}${pageId}`
+export function setDraftOwner(owner: string | null): void {
+  if (owner === draftOwner) return
+  draftOwner = owner
+  adoptLegacy()
+}
+
+/**
+ * Drafts from before they were kept per account carry none. They go to the first account that loads after the
+ * update, once, as the Tomorrow block's unsaved lines did (pending-tomorrow-lines.tsx). A slot another tab may
+ * still be writing (seen lately, not closed) stays where it is: that tab, still on the old build, reads and clears
+ * the old key, and a copy made here would outlive its save and come back later as a gone tab's draft. It is taken
+ * once that tab has gone, which is why this also runs from ownDrafts (the kept-drafts scan). When both keys hold a
+ * draft, the one written last stays.
+ */
+function adoptLegacy(now = Date.now()): void {
+  if (head() === legacyHead) return
+  try {
+    const mine = `:${tabId()}`, old: string[] = []
+    for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key?.startsWith(legacyHead)) old.push(key) }
+    for (const key of old) {
+      const raw = localStorage.getItem(key), slot = parse(raw)
+      if (raw === null || !slot) continue
+      if (!key.endsWith(mine) && !slot.closed && now - (slot.seen ?? 0) <= goneAfter()) continue
+      const next = head() + key.slice(legacyHead.length), there = parse(localStorage.getItem(next))
+      if (!there || (slot.seen ?? 0) > (there.seen ?? 0)) localStorage.setItem(next, raw)
+      localStorage.removeItem(key)
+    }
+  } catch { /* storage unavailable: nothing to move */ }
+}
 /**
  * A slot nobody has touched for this long is a tab that's gone. Closed tabs say so at once (pagehide); this only
  * covers tabs killed without it. Chrome slows a long-hidden tab's timers to about once a minute, so the cutoff sits
@@ -108,12 +146,13 @@ export function readOwn(pageId: string): DraftSlot | null {
 export function ownDrafts(): { pageId: string; slot: DraftSlot }[] {
   const out: { pageId: string; slot: DraftSlot }[] = []
   try {
-    const tail = `:${tabId()}`, head = 'daythread:editor:'
+    adoptLegacy()
+    const tail = `:${tabId()}`, start = head()
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (!key?.startsWith(head) || !key.endsWith(tail)) continue
+      if (!key?.startsWith(start) || !key.endsWith(tail)) continue
       const slot = parse(localStorage.getItem(key))
-      if (slot && !slot.claimedBy) out.push({ pageId: key.slice(head.length, -tail.length), slot })
+      if (slot && !slot.claimedBy) out.push({ pageId: key.slice(start.length, -tail.length), slot })
     }
   } catch { /* storage unavailable: nothing kept here */ }
   return out
