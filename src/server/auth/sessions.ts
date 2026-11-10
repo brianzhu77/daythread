@@ -27,15 +27,17 @@ export class SessionStore {
   private readonly sql: SqlClient
   private readonly table: string
   private readonly failures: string
+  private readonly keyedFailures: string
   private readonly workspaces: string | undefined
   /** `workspaces`: the workspaces table every check reads the account's workspace from; omitted, sessions stand alone (tests). */
   constructor(sql: SqlClient, schema = schemaName(), options: { workspaces?: string } = {}) {
-    this.sql = sql; this.table = `${schema}.sessions`; this.failures = `${schema}.sign_in_failures`; this.workspaces = options.workspaces
+    this.sql = sql; this.table = `${schema}.sessions`; this.failures = `${schema}.sign_in_failures`; this.keyedFailures = `${schema}.sign_in_failures_by_key`; this.workspaces = options.workspaces
   }
 
   /**
    * Once per process. The tables are created only if missing, re-checked under the lock: ALTER TABLE takes an
    * exclusive lock, so running it on every cold start would stall, or deadlock with, sign-ins on other instances.
+   * The per-account failures table has its own check and block, so the first block never re-runs on an existing database.
    */
   private init(): Promise<void> {
     // A plain catalog query, not to_regclass: an advisory lock doesn't refresh the catalog cache that to_regclass
@@ -44,6 +46,12 @@ export class SessionStore {
     const exists = async (sql: SqlClient) => (await sql.query<{ n: number }>(
       `select count(*)::int as n from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
         where n.nspname = $1 and c.relname = any($2::text[]) and c.relrowsecurity`, [schema, [sessions, failures]]))[0]?.n === 2
+    const keyed = this.keyedFailures.split('.')[1]
+    // The table added for the per-account brake gets its own check and its own small block, touching only itself:
+    // the block below must never run again on a database that has its two tables (see its comment).
+    const keyedExists = async (sql: SqlClient) => (await sql.query<{ n: number }>(
+      `select count(*)::int as n from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = $1 and c.relname = $2 and c.relrowsecurity`, [schema, keyed]))[0]?.n === 1
     this.ready ??= exists(this.sql).then(ok => ok ? undefined : this.sql.transaction(async tx => {
       await tx.query("select pg_advisory_xact_lock(hashtext('daythread.init'))")
       if (await exists(tx)) return
@@ -61,6 +69,12 @@ export class SessionStore {
         create table if not exists ${this.failures} (at timestamptz not null);
         create index if not exists sign_in_failures_at on ${this.failures} (at);
         alter table ${this.failures} enable row level security;`)
+    })).then(() => keyedExists(this.sql)).then(ok => ok ? undefined : this.sql.transaction(async tx => {
+      await tx.query("select pg_advisory_xact_lock(hashtext('daythread.init'))")
+      if (await keyedExists(tx)) return
+      await tx.exec(`create table if not exists ${this.keyedFailures} (key text not null, at timestamptz not null);
+        create index if not exists sign_in_failures_by_key_key_at on ${this.keyedFailures} (key, at);
+        alter table ${this.keyedFailures} enable row level security;`)
     }))
     return this.ready
   }
@@ -108,28 +122,31 @@ export class SessionStore {
   }
 
   /**
-   * One sign-in try against the failures of every instance and address (Lead 48163c61). Tries run one at a time under
-   * a transaction lock, so simultaneous requests can't all read the old count and get through (Ratchet). After
+   * One sign-in try against that account's failures on every instance. The count was global until accounts other than
+   * the owner's existed; now `who` (the address as typed) is reduced to a hash of its trimmed, lower-cased form, and
+   * only the hash is kept. Tries for one account run one at a time under a transaction lock, so simultaneous requests
+   * can't all read the old count and get through (Ratchet); tries for other accounts don't queue behind it. After
    * `freeFailures` in the window, each further try waits 30 s, doubling per failure, up to 15 min after the last
-   * failure; a refused try records nothing, so it never pushes the wait out. A success clears the count; a
-   * 'neutral' outcome (right password, workspace linked to another account) does neither (Bumblebee fb275f23). Only
+   * failure; a refused try records nothing, so it never pushes the wait out. A success clears only that account's
+   * count; a 'neutral' outcome (right password, workspace linked to another account) does neither (Bumblebee fb275f23). Only
    * new sign-ins wait: existing sessions are never touched (Bumblebee 2cef8a00). `verify` runs in the same
    * transaction, so whatever it writes (the link, the new session) commits or rolls back with the try.
    */
-  async attempt(verify: (tx: SqlClient) => Promise<Outcome>, now = () => new Date()): Promise<{ outcome: Outcome; waitMs: number }> {
+  async attempt(who: string, verify: (tx: SqlClient) => Promise<Outcome>, now = () => new Date()): Promise<{ outcome: Outcome; waitMs: number }> {
     await this.init()
+    const key = hash(who.trim().toLowerCase())
     return this.sql.transaction(async tx => {
-      await tx.query("select pg_advisory_xact_lock(hashtext('daythread.sign-in'))")
+      await tx.query('select pg_advisory_xact_lock(hashtext($1::text))', [`daythread.sign-in:${key}`])
       const at = now()
       const [row] = await tx.query<{ n: number; last: string | Date | null }>(
-        `select count(*)::int as n, max(at) as last from ${this.failures} where at > $1`, [new Date(at.getTime() - failureWindowMs).toISOString()])
+        `select count(*)::int as n, max(at) as last from ${this.keyedFailures} where key = $1 and at > $2`, [key, new Date(at.getTime() - failureWindowMs).toISOString()])
       const waitMs = row && row.n >= freeFailures && row.last ? Math.max(0, new Date(row.last).getTime() + Math.min(30_000 * 2 ** (row.n - freeFailures), maxWaitMs) - at.getTime()) : 0
       if (waitMs > 0) return { outcome: 'fail' as const, waitMs }
       const outcome = await verify(tx)
-      if (outcome === 'ok') await tx.query(`delete from ${this.failures}`)
+      if (outcome === 'ok') await tx.query(`delete from ${this.keyedFailures} where key = $1`, [key])
       if (outcome === 'fail') {
-        await tx.query(`insert into ${this.failures} (at) values ($1)`, [at.toISOString()])
-        await tx.query(`delete from ${this.failures} where at < $1`, [new Date(at.getTime() - failureWindowMs).toISOString()])
+        await tx.query(`insert into ${this.keyedFailures} (key, at) values ($1, $2)`, [key, at.toISOString()])
+        await tx.query(`delete from ${this.keyedFailures} where at < $1`, [new Date(at.getTime() - failureWindowMs).toISOString()])
       }
       return { outcome, waitMs: 0 }
     })

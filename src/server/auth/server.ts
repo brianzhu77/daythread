@@ -198,7 +198,7 @@ export async function handleSignIn(request: Request): Promise<Response> {
   try {
     const config = authConfig()
     await Promise.all([workspaceStore().prepare(), accounts().prepare(), sessions().prepare()])
-    attempt = await sessions().attempt(async (tx): Promise<Outcome> => {
+    attempt = await sessions().attempt(body.data.email, async (tx): Promise<Outcome> => {
       const result = await supabase.verifyPassword(config, body.data.email, body.data.password)
       if (!result.ok) { if (result.reason === 'unconfirmed') { refusal = 'unconfirmed'; return 'neutral' } return 'fail' }
       // Known: an account row, or a workspace without one (the one migrated from shot 1 gets its account row now).
@@ -262,7 +262,7 @@ export async function handleDeleteAccount(request: Request): Promise<Response> {
   let attempt, config: AuthConfig
   try {
     config = authConfig()
-    attempt = await sessions().attempt(async (tx): Promise<Outcome> => {
+    attempt = await sessions().attempt(session.email, async (tx): Promise<Outcome> => {
       const result = await supabase.verifyPassword(config, session.email, body.data.password)
       if (!result.ok || result.userId !== session.userId) return 'fail'
       await workspaceStore().deleteWorkspace(tx, session.userId)

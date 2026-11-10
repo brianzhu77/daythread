@@ -92,19 +92,20 @@ test('brake: after 5 failures each try waits, doubling to 15 min; refused tries 
   let clock = t0.getTime(), calls = 0
   const now = () => new Date(clock)
   const wrong = async () => { calls++; return 'fail' as const }, right = async () => { calls++; return 'ok' as const }
-  for (let i = 0; i < freeFailures; i++) assert.deepEqual(await store.attempt(wrong, now), { outcome: 'fail', waitMs: 0 })
-  assert.deepEqual(await store.attempt(wrong, now), { outcome: 'fail', waitMs: 30_000 }, '6th try waits 30 s')
+  const who = 'owner@example.com'
+  for (let i = 0; i < freeFailures; i++) assert.deepEqual(await store.attempt(who, wrong, now), { outcome: 'fail', waitMs: 0 })
+  assert.deepEqual(await store.attempt(who, wrong, now), { outcome: 'fail', waitMs: 30_000 }, '6th try waits 30 s')
   assert.equal(calls, freeFailures, 'a braked try never reaches Supabase')
   clock += 10_000
-  assert.equal((await store.attempt(right, now)).waitMs, 20_000, 'refused tries record nothing: still 20 s left, not 30')
+  assert.equal((await store.attempt(who, right, now)).waitMs, 20_000, 'refused tries record nothing: still 20 s left, not 30')
   clock += 20_000
-  assert.deepEqual(await store.attempt(wrong, now), { outcome: 'fail', waitMs: 0 })
-  assert.equal((await store.attempt(wrong, now)).waitMs, 60_000, 'doubles')
-  for (let i = 0; i < 10; i++) { clock += maxWaitMs; await store.attempt(wrong, now) }
-  assert.ok((await store.attempt(wrong, now)).waitMs <= maxWaitMs, 'never more than 15 min')
+  assert.deepEqual(await store.attempt(who, wrong, now), { outcome: 'fail', waitMs: 0 })
+  assert.equal((await store.attempt(who, wrong, now)).waitMs, 60_000, 'doubles')
+  for (let i = 0; i < 10; i++) { clock += maxWaitMs; await store.attempt(who, wrong, now) }
+  assert.ok((await store.attempt(who, wrong, now)).waitMs <= maxWaitMs, 'never more than 15 min')
   clock += maxWaitMs
-  assert.deepEqual(await store.attempt(right, now), { outcome: 'ok', waitMs: 0 })
-  assert.deepEqual(await store.attempt(wrong, now), { outcome: 'fail', waitMs: 0 }, 'a success cleared the count')
+  assert.deepEqual(await store.attempt(who, right, now), { outcome: 'ok', waitMs: 0 })
+  assert.deepEqual(await store.attempt(who, wrong, now), { outcome: 'fail', waitMs: 0 }, 'a success cleared the count')
   await db.close()
 })
 
@@ -112,7 +113,7 @@ test('brake: simultaneous tries are taken one at a time, so only the free ones r
   const db = await PGlite.create()
   const store = new SessionStore(pgliteClient(db))
   let calls = 0
-  const results = await Promise.all(Array.from({ length: 20 }, () => store.attempt(async () => { calls++; await new Promise(r => setTimeout(r, 5)); return 'fail' as const })))
+  const results = await Promise.all(Array.from({ length: 20 }, () => store.attempt('owner@example.com', async () => { calls++; await new Promise(r => setTimeout(r, 5)); return 'fail' as const })))
   assert.equal(calls, freeFailures)
   assert.equal(results.filter(r => r.waitMs > 0).length, 20 - freeFailures)
   await db.close()
@@ -122,9 +123,61 @@ test('brake: a signed-in session keeps working while new sign-ins wait', async (
   const db = await PGlite.create()
   const store = new SessionStore(pgliteClient(db))
   const { token } = await store.create('u1', 'owner@example.com', t0)
-  for (let i = 0; i <= freeFailures; i++) await store.attempt(async () => 'fail' as const, () => at(1000))
-  assert.ok((await store.attempt(async () => 'ok' as const, () => at(2000))).waitMs > 0)
+  for (let i = 0; i <= freeFailures; i++) await store.attempt('owner@example.com', async () => 'fail' as const, () => at(1000))
+  assert.ok((await store.attempt('owner@example.com', async () => 'ok' as const, () => at(2000))).waitMs > 0)
   assert.equal((await store.check(token, at(3000)))?.email, 'owner@example.com')
+  await db.close()
+})
+
+test('brake: one account\'s failures never delay another account, and a success clears only its own count', async () => {
+  const db = await PGlite.create()
+  const store = new SessionStore(pgliteClient(db))
+  const now = () => t0
+  let bCalls = 0
+  for (let i = 0; i < freeFailures; i++) await store.attempt('a@example.com', async () => 'fail' as const, now)
+  assert.deepEqual(await store.attempt('a@example.com', async () => 'fail' as const, now), { outcome: 'fail', waitMs: 30_000 })
+  assert.deepEqual(await store.attempt('b@example.com', async () => { bCalls++; return 'ok' as const }, now), { outcome: 'ok', waitMs: 0 })
+  assert.equal(bCalls, 1, 'the other account\'s try reached its password check')
+  assert.ok((await store.attempt('a@example.com', async () => 'ok' as const, now)).waitMs > 0, 'b\'s success cleared nothing of a\'s')
+  await db.close()
+})
+
+test('brake: the account is the address whatever its case or spaces, and no address is stored', async () => {
+  const db = await PGlite.create()
+  const store = new SessionStore(pgliteClient(db))
+  const now = () => t0
+  for (let i = 0; i < freeFailures; i++) await store.attempt(' A@Example.com ', async () => 'fail' as const, now)
+  assert.ok((await store.attempt('a@example.com', async () => 'fail' as const, now)).waitMs > 0)
+  const rows = (await db.query<{ key: string }>('select key from daythread.sign_in_failures_by_key')).rows
+  assert.equal(rows.length, freeFailures)
+  for (const row of rows) assert.match(row.key, /^[0-9a-f]{64}$/)
+  assert.equal((await db.query<{ n: number }>('select count(*)::int as n from daythread.sign_in_failures')).rows[0]!.n, 0, 'the old table is not used')
+  await db.close()
+})
+
+test('sign-in: wrong passwords for one address do not delay another address', async () => {
+  const h = await handlers()
+  try {
+    h.supabase.verified.set('brian@example.com', A)
+    h.supabase.verified.set('other@example.com', B)
+    await h.accounts.invite('other@example.com')
+    for (let i = 0; i < freeFailures; i++) assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'wrong' }))).status, 401, `try ${i + 1}`)
+    assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'wrong' }))).status, 429)
+    assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'other@example.com', password: 'right' }))).status, 200)
+  } finally { await h.close() }
+})
+
+test('the per-account failures table is added to a database that already has the two older tables, which are left alone', async () => {
+  const db = await PGlite.create()
+  const first = new SessionStore(pgliteClient(db))
+  await first.prepare()
+  const { token } = await first.create('u1', 'owner@example.com', t0)
+  await db.query('drop table daythread.sign_in_failures_by_key')
+  const second = new SessionStore(pgliteClient(db))
+  assert.deepEqual(await second.attempt('owner@example.com', async () => 'fail' as const), { outcome: 'fail', waitMs: 0 })
+  assert.equal((await db.query<{ n: number }>('select count(*)::int as n from daythread.sign_in_failures_by_key')).rows[0]!.n, 1)
+  assert.equal((await second.check(token, at(1000)))?.email, 'owner@example.com')
+  assert.equal((await db.query<{ n: number }>('select count(*)::int as n from daythread.sign_in_failures')).rows[0]!.n, 0)
   await db.close()
 })
 
