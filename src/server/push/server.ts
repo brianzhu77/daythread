@@ -71,7 +71,11 @@ export async function handleUnsubscribe(request: Request): Promise<Response> {
 /** How far back a tick looks: a scheduler that skipped a run still delivers, an hour late at worst. */
 export const tickWindowMs = 60 * 60_000
 
-export interface TickSummary { workspaces: number; due: number; sent: number; gone: number; failed: number }
+export interface TickSummary {
+  workspaces: number; due: number; sent: number; gone: number; failed: number
+  /** Workspaces whose pass threw and were skipped. */
+  broken: number
+}
 interface TickDeps {
   store: Pick<PushStore, 'subscribed' | 'claim' | 'markSent' | 'release' | 'remove' | 'prune'>
   loadWorkspace: (id: string) => Promise<Workspace | null>
@@ -86,30 +90,36 @@ interface TickDeps {
  * gets only what falls due after it signed up, so a chip from just before stays quiet (B60 3).
  */
 export async function runTick({ store, loadWorkspace, send, now = new Date(), windowMs = tickWindowMs }: TickDeps): Promise<TickSummary> {
-  const summary: TickSummary = { workspaces: 0, due: 0, sent: 0, gone: 0, failed: 0 }
+  const summary: TickSummary = { workspaces: 0, due: 0, sent: 0, gone: 0, failed: 0, broken: 0 }
   const started = Date.now()
   for (const { workspaceId, subscriptions } of await store.subscribed()) {
     summary.workspaces++
-    const ws = await loadWorkspace(workspaceId)
-    if (!ws) continue
-    const due = dueReminders(ws, now.getTime() - windowMs, now.getTime())
-    let live = subscriptions
-    for (const reminder of due) {
-      // Taken right before it's sent and settled right after, each on its own lease, so a long batch can't outlast one. The clock moves with the batch.
-      const at = new Date(now.getTime() + Date.now() - started)
-      if (!(await store.claim(workspaceId, [reminder.key], at)).length) continue
-      const signedUp = live.filter(s => s.since <= reminder.fireAt)
-      if (!signedUp.length) { await store.markSent(workspaceId, [reminder.key], at); continue }
-      summary.due++
-      // At once, so however many devices, one reminder takes no longer than one send's timeout.
-      const results = await Promise.all(signedUp.map(async sub => [sub, await send(sub, { key: reminder.key, title: reminder.title, body: reminder.body, url: reminder.url })] as const))
-      let taken = false
-      for (const [sub, result] of results) {
-        if (result === 'ok') { summary.sent++; taken = true }
-        else if (result === 'gone') { summary.gone++; taken = true; await store.remove(sub.endpoint); live = live.filter(s => s.endpoint !== sub.endpoint) }
-        else summary.failed++
+    // One account's unreadable data must not cost the others their reminders; a reminder left claimed frees itself when its lease runs out.
+    try {
+      const ws = await loadWorkspace(workspaceId)
+      if (!ws) continue
+      const due = dueReminders(ws, now.getTime() - windowMs, now.getTime())
+      let live = subscriptions
+      for (const reminder of due) {
+        // Taken right before it's sent and settled right after, each on its own lease, so a long batch can't outlast one. The clock moves with the batch.
+        const at = new Date(now.getTime() + Date.now() - started)
+        if (!(await store.claim(workspaceId, [reminder.key], at)).length) continue
+        const signedUp = live.filter(s => s.since <= reminder.fireAt)
+        if (!signedUp.length) { await store.markSent(workspaceId, [reminder.key], at); continue }
+        summary.due++
+        // At once, so however many devices, one reminder takes no longer than one send's timeout.
+        const results = await Promise.all(signedUp.map(async sub => [sub, await send(sub, { key: reminder.key, title: reminder.title, body: reminder.body, url: reminder.url })] as const))
+        let taken = false
+        for (const [sub, result] of results) {
+          if (result === 'ok') { summary.sent++; taken = true }
+          else if (result === 'gone') { summary.gone++; taken = true; await store.remove(sub.endpoint); live = live.filter(s => s.endpoint !== sub.endpoint) }
+          else summary.failed++
+        }
+        if (taken || !live.length) await store.markSent(workspaceId, [reminder.key], at); else await store.release(workspaceId, [reminder.key])
       }
-      if (taken || !live.length) await store.markSent(workspaceId, [reminder.key], at); else await store.release(workspaceId, [reminder.key])
+    } catch (error) {
+      summary.broken++
+      console.error(JSON.stringify({ level: 'error', event: 'push.tick.workspace-failed', workspaceId, error: error instanceof Error ? error.message.slice(0, 200) : String(error) }))
     }
   }
   if (now.getMinutes() === 0) await store.prune(now)
