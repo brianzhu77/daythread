@@ -13,6 +13,7 @@ import { todayIso } from './dates'
 import { openAutomations } from './automation-sheet'
 import { flushAllEditors } from './editor-flush'
 import { offlineCopy } from './offline-copy'
+import { setDraftOwner } from './draft-slots'
 import { HOLD_MS, heldWorkspace, isSaving, settleTick, shownStatus, tapTarget, withTick, type Tick, type Ticks, type TickStatus } from './task-ticks'
 
 export interface Transport {
@@ -28,6 +29,11 @@ let knownOwner: string | null = null
 export function workspaceOwner(): string | null {
   return knownOwner
 }
+/** The one place the owner changes, so the kept drafts (draft-slots.ts) are read and written under the same account. */
+function noteOwner(owner: string | null): void {
+  knownOwner = owner
+  setDraftOwner(owner)
+}
 
 // Every workspace the server answers with is the copy the next offline open shows, kept under the account it belongs to.
 const serverTransport: Transport = {
@@ -35,7 +41,7 @@ const serverTransport: Transport = {
     const startedAt = Date.now()
     const response=await loadWorkspace({data:{operationId,triggerOperationId}})
     configureDebug(response.debug)
-    knownOwner = response.owner
+    noteOwner(response.owner)
     // Synced blocks' lines travel once, in their records (synced.ts).
     const workspace = expandedWorkspace(response.workspace)
     void offlineCopy.remember(workspace, { owner: response.owner, startedAt })
@@ -47,7 +53,7 @@ const serverTransport: Transport = {
     const startedAt = Date.now()
     const response = await runCommand({ data: { operationId, expectedRevision: workspace.revision, action, changes: true } })
     const ownerBefore = knownOwner
-    knownOwner = response.owner
+    noteOwner(response.owner)
     const next = replyWorkspace(workspace, response, ownerBefore)
     if (!next) return { workspace: await serverTransport.load(), receipt: response.receipt }
     void offlineCopy.remember(next, { owner: response.owner, startedAt })
@@ -153,7 +159,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     void refresh().catch(async (e: unknown) => {
       // No network: the last-loaded copy opens the app, read as it was; any other failure is shown as before.
       const copy = await offlineCopy.fallback(e)
-      if (copy && !knownOwner) knownOwner = await offlineCopy.recallOwner()
+      if (copy && !knownOwner) noteOwner(await offlineCopy.recallOwner())
       if (copy && (!wsRef.current || copy.revision >= wsRef.current.revision)) {
         adopt(copy); setOffline(true)
         debugClient('workspace.offline-copy', { afterRevision: copy.revision })
