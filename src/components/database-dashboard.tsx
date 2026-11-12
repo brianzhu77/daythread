@@ -12,6 +12,7 @@ import { DatabaseHeader, LaidOutView, rowCaps, setLinkedBlock, type ChangeView, 
 import { SourceLine, TrashedSource } from './database-linked'
 import { displayPageTitle } from './page-title'
 import { RowMenu, type MenuItem } from './row-menu'
+import { useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
 type DatabasePage = Page & { database: Database }
@@ -22,11 +23,21 @@ const newId = (): string => crypto.randomUUID()
 /** The commands' common part, built from the dashboard as the workspace holds it when the command goes. */
 function useDashboardRun(hostId: string, viewId: string) {
   const { run } = useWorkspace()
-  return (build: (dashboard: Dashboard) => DashboardChange | null, notice?: string) => run(ws => {
-    const host = ws.pages.find(p => p.id === hostId), view = isDatabase(host) ? host.database.views.find(v => v.id === viewId) : undefined
-    const change = view?.dashboard ? build(view.dashboard) : null
-    return change ? { type: 'change-database', pageId: hostId, change } : null
-  }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined)
+  return async (build: (dashboard: Dashboard) => DashboardChange | null, notice?: string) => {
+    const once = (inline: boolean) => {
+      let stale = false
+      const receipt = run(ws => {
+        const host = ws.pages.find(p => p.id === hostId), view = isDatabase(host) ? host.database.views.find(v => v.id === viewId) : undefined
+        const change = view?.dashboard ? build(view.dashboard) : null
+        return change ? { type: 'change-database', pageId: hostId, change } : null
+      }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined, undefined, inline ? { inlineRefusal: /Saved elsewhere/, onRefused: () => { stale = true } } : {})
+      return receipt.then(r => ({ r, stale }))
+    }
+    // A tab behind the workspace is refused whatever it sends, and comes back up to date (G6-5). Each command names only
+    // its own widget or row, so it's built again from what's there now and sent once more; a real refusal says so.
+    const first = await once(true)
+    return first.stale ? (await once(false)).r : first.r
+  }
 }
 
 /** Where a dashboard isn't its database's own page, as on a day page: a link to it, never its widgets (dashboard.md §5). */
@@ -128,13 +139,45 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
     const key = (ev: KeyboardEvent) => { if (ev.key === 'Escape' && lifted) { ev.preventDefault(); ev.stopPropagation(); end(new PointerEvent('pointerup', { clientX: x0, clientY: y0 }), true) } }
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('keydown', key, true)
   }
+  const wide = useWide()
+  // Between 900 and 1100, or with the Comments pane open, a row can wrap: a width handle shows only between neighbours side by side (§7).
+  useLayoutEffect(() => {
+    if (!wide || !root.current) return
+    for (const row of root.current.querySelectorAll<HTMLElement>('.dashboard-row[data-row]')) {
+      let top: number | null = null
+      for (const w of row.querySelectorAll<HTMLElement>(':scope > .dashboard-widget')) {
+        const now = Math.round(w.getBoundingClientRect().top)
+        w.toggleAttribute('data-wrapped', top !== null && now !== top)
+        top = now
+      }
+    }
+  })
+  /** After a menu move at 390: scroll the widget into view and give it the moved-line wash (dashboard-edit.md §7). */
+  const moved = (id: string) => requestAnimationFrame(() => {
+    const el = root.current?.querySelector<HTMLElement>(`[data-widget="${CSS.escape(id)}"]`)
+    if (!el) return
+    el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    el.classList.add('is-moved'); setTimeout(() => el.classList.remove('is-moved'), 1000)
+  })
+  const head = <div className="dashboard-head">
+    <div className="dashboard-head-main"><DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle ?? true} onTitleEnter={() => {}} /></div>
+    <button type="button" className={`dashboard-edit${editing ? ' is-on' : ''}`} aria-pressed={editing} onClick={() => setEditing(e => !e)}>{editing ? 'Done' : 'Edit'}</button>
+  </div>
+  const adding = editing && (count >= dashboardLimits.widgets
+    ? <p className="dashboard-limit">{dashboardLimits.widgets} widgets at most</p>
+    : <AddWidget workspace={workspace} onPick={(source, sourceView) => void send(() => ({ kind: 'addWidget', viewId: view.id, widget: { id: newId(), source, view: sourceView }, rowId: null, newRowId: newId(), beforeId: null }), 'Widget added')} />)
+  // At 390: every widget full width, one above another in reading order; stored widths ignored, nothing stored differently (§7).
+  if (!wide) return <div ref={root} className={`dashboard is-phone${editing ? ' is-editing' : ''}`} data-dashboard={view.id}>
+    {head}
+    {dashboard.rows.flatMap((row, r) => row.widgets.map(widget => <WidgetFrame key={widget.id} workspace={workspace} host={db} view={view} row={row} widget={widget} width={12} editing={editing} blockId={`${blockId}|widget:${widget.id}`}
+      previous={order[order.indexOf(widget.id) - 1]} next={order[order.indexOf(widget.id) + 1]} rowAbove={dashboard.rows[r - 1]} rowBelow={dashboard.rows[r + 1]} send={send} phone onMoved={moved} />))}
+    {adding}
+    {!dashboard.rows.length && !editing && <p className="database-empty">No widgets · <button type="button" className="app-link" onClick={() => setEditing(true)}>Edit</button></p>}
+  </div>
   const slot = (width: number, key: string) => <div key={key} className="drag-slot dashboard-slot" style={{ ['--widget-width' as string]: width }} aria-hidden="true" />
   const landing = drag?.landing ?? null
   return <div ref={root} className={`dashboard${editing ? ' is-editing' : ''}${drag ? ' is-dragging' : ''}`} data-dashboard={view.id}>
-    <div className="dashboard-head">
-      <div className="dashboard-head-main"><DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle ?? true} onTitleEnter={() => {}} /></div>
-      <button type="button" className={`dashboard-edit${editing ? ' is-on' : ''}`} aria-pressed={editing} onClick={() => setEditing(e => !e)}>{editing ? 'Done' : 'Edit'}</button>
-    </div>
+    {head}
     {dashboard.rows.map((row, r) => {
       const ownRow = moving?.row.id === row.id
       // While dragging, the widget leaves its row (whose neighbours make room) and a slot shows where it would go.
@@ -162,9 +205,7 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
       return [newRowSlot, rowEl]
     })}
     {landing && 'newRowBefore' in landing && landing.newRowBefore === null && <div className="dashboard-row" style={{ ['--row-height' as string]: `${moving?.row.height ?? rowHeights.initial}px` }}>{slot(12, 'slot')}</div>}
-    {editing && !drag && (count >= dashboardLimits.widgets
-      ? <p className="dashboard-limit">{dashboardLimits.widgets} widgets at most</p>
-      : <AddWidget workspace={workspace} onPick={(source, sourceView) => void send(() => ({ kind: 'addWidget', viewId: view.id, widget: { id: newId(), source, view: sourceView }, rowId: null, newRowId: newId(), beforeId: null }), 'Widget added')} />)}
+    {!drag && adding}
     {!dashboard.rows.length && !editing && <p className="database-empty">No widgets · <button type="button" className="app-link" onClick={() => setEditing(true)}>Edit</button></p>}
   </div>
 }
@@ -252,10 +293,11 @@ function RowSize({ row, viewId, send }: { row: DashboardRow; viewId: string; sen
 }
 
 /** One widget: in read mode its linked view as any; in edit mode the same, inert, under a frame with its menu. */
-function WidgetFrame({ workspace, host, view, row, widget, width, editing, blockId, previous, next, rowAbove, rowBelow, send, onPointerDown, split }: {
+function WidgetFrame({ workspace, host, view, row, widget, width, editing, blockId, previous, next, rowAbove, rowBelow, send, onPointerDown, split, phone, onMoved }: {
   workspace: Workspace; host: DatabasePage; view: View; row: DashboardRow; widget: DashboardWidget; width: number; editing: boolean; blockId: string
   previous?: string; next?: string; rowAbove?: DashboardRow; rowBelow?: DashboardRow; send: ReturnType<typeof useDashboardRun>
   onPointerDown?: (e: React.PointerEvent<HTMLElement>) => void; /** The handle on its left edge, between it and widget `split - 1`. */ split?: number
+  /** At 390: Move up and Move down, no row items, and its height following its content up to 360 px (§7). */ phone?: boolean; onMoved?: (id: string) => void
 }) {
   const body = useRef<HTMLDivElement>(null)
   // `inert` keeps every click, tap, key and focus out of the content while arranging (dashboard-edit.md §3).
@@ -263,12 +305,14 @@ function WidgetFrame({ workspace, host, view, row, widget, width, editing, block
   const reading = readingWorkspace(workspace, widget.source)
   const source = reading.pages.find(p => p.id === widget.source)
   const viewId = view.id, id = widget.id
+  const swap = (withId: string) => () => void send(() => ({ kind: 'swapWidget', viewId, widgetId: id, withId }), 'Widget moved').then(() => onMoved?.(id))
   const items: MenuItem[] = [
     { label: 'Duplicate', onSelect: () => void send(() => ({ kind: 'duplicateWidget', viewId, widgetId: id, newId: newId(), newViewId: newId(), newRowId: newId() }), 'Widget duplicated') },
-    ...(previous ? [{ label: 'Move left', onSelect: () => void send(() => ({ kind: 'swapWidget', viewId, widgetId: id, withId: previous }), 'Widget moved') }] : []),
-    ...(next ? [{ label: 'Move right', onSelect: () => void send(() => ({ kind: 'swapWidget', viewId, widgetId: id, withId: next }), 'Widget moved') }] : []),
-    ...(row.widgets.length > 1 ? [{ label: 'Move to its own row', onSelect: () => void send(() => ({ kind: 'moveWidget', viewId, widgetId: id, toRowId: null, newRowId: newId(), rowBeforeId: rowBelow?.id ?? null, beforeId: null }), 'Widget moved') }] : []),
-    ...(rowAbove && rowAbove.widgets.length < dashboardLimits.perRow ? [{ label: 'Join the row above', onSelect: () => void send(() => ({ kind: 'moveWidget', viewId, widgetId: id, toRowId: rowAbove.id, beforeId: null }), 'Widget moved') }] : []),
+    ...(previous ? [{ label: phone ? 'Move up' : 'Move left', onSelect: swap(previous) }] : []),
+    ...(next ? [{ label: phone ? 'Move down' : 'Move right', onSelect: swap(next) }] : []),
+    // Rows aren't visible at 390, so neither row item shows there (§3).
+    ...(!phone && row.widgets.length > 1 ? [{ label: 'Move to its own row', onSelect: () => void send(() => ({ kind: 'moveWidget', viewId, widgetId: id, toRowId: null, newRowId: newId(), rowBeforeId: rowBelow?.id ?? null, beforeId: null }), 'Widget moved') }] : []),
+    ...(!phone && rowAbove && rowAbove.widgets.length < dashboardLimits.perRow ? [{ label: 'Join the row above', onSelect: () => void send(() => ({ kind: 'moveWidget', viewId, widgetId: id, toRowId: rowAbove.id, beforeId: null }), 'Widget moved') }] : []),
     { label: 'Remove', danger: true, onSelect: () => void send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed') },
   ]
   const onKeyDown = (e: ReactKeyboardEvent) => {
@@ -284,7 +328,9 @@ function WidgetFrame({ workspace, host, view, row, widget, width, editing, block
       {!source || !isDatabase(source)
         ? <><div className="database-title-row"><span className="database-title is-static">{widget.view.name}</span></div><p className="database-empty">Source deleted{editing ? '' : <> · <button type="button" className="app-link" onClick={() => void send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed')}>Remove</button></>}</p></>
         : source.trashedAt ? <TrashedSource db={source} label={widget.view.name} />
-        : <WidgetView workspace={reading} source={source} host={host} view={view} widget={widget} blockId={blockId} />}
+        : <Lazy id={blockId} phone={Boolean(phone)}>{phone
+            ? <PhoneClip id={blockId}><WidgetView workspace={reading} source={source} host={host} view={view} widget={widget} blockId={blockId} /></PhoneClip>
+            : <WidgetView workspace={reading} source={source} host={host} view={view} widget={widget} blockId={blockId} />}</Lazy>}
     </div>
   </section>
 }
@@ -317,4 +363,51 @@ function AddWidget({ workspace, onPick }: { workspace: Workspace; onPick: (sourc
     {sources.map(s => <button key={s.id} type="button" role="menuitem" onClick={() => { setOpen(false); onPick(s.id, firstWidgetView(s.database, newId())) }}>{s.id === todosSourceId ? todosTitle : displayPageTitle(s)}</button>)}
     <button type="button" role="menuitem" onClick={() => setOpen(false)}>Cancel</button>
   </div>
+}
+
+/** The height each widget was last drawn at, for the session: one that loads late holds it, so nothing below jumps (Jazz 352627d8). */
+const lastHeights = new Map<string, number>()
+/** A widget's content, drawn once it's near the screen (G6-7): until then its place holds its last height, 360 px at least the first time. */
+function Lazy({ id, phone, children }: { id: string; phone: boolean; children: React.ReactNode }) {
+  const holder = useRef<HTMLDivElement>(null)
+  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined')
+  useEffect(() => {
+    const el = holder.current
+    if (near || !el) return
+    const seen = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) setNear(true) }, { rootMargin: '300px 0px' })
+    seen.observe(el)
+    return () => seen.disconnect()
+  }, [near])
+  useEffect(() => {
+    const el = holder.current
+    if (!near || !el) return
+    const keep = new ResizeObserver(() => { if (el.offsetHeight) lastHeights.set(id, el.offsetHeight) })
+    keep.observe(el)
+    return () => keep.disconnect()
+  }, [near, id])
+  return <div ref={holder} className="dashboard-lazy" style={near ? undefined : { minHeight: phone ? Math.max(360, lastHeights.get(id) ?? 0) : undefined }} data-loaded={near || undefined}>{near ? children : null}</div>
+}
+
+/** Opened with Show more, for the session (§7). */
+const openWidgets = new Set<string>()
+/** At 390 a widget's content up to 360 px, then a fade and Show more; it never scrolls down inside, so a thumb can't get trapped there. */
+function PhoneClip({ id, children }: { id: string; children: React.ReactNode }) {
+  const body = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(() => openWidgets.has(id))
+  const [over, setOver] = useState(false)
+  useLayoutEffect(() => {
+    const el = body.current
+    if (!el) return
+    const measure = () => setOver(el.scrollHeight > 360 + 1)
+    measure()
+    const seen = new ResizeObserver(measure)
+    seen.observe(el)
+    for (const child of el.children) seen.observe(child)
+    return () => seen.disconnect()
+  }, [])
+  const toggle = () => { const next = !open; if (next) openWidgets.add(id); else openWidgets.delete(id); setOpen(next) }
+  return <>
+    <div ref={body} className={`dashboard-clip${over && !open ? ' is-clipped' : ''}`}>{children}</div>
+    {over && <button type="button" className="app-link dashboard-more" aria-expanded={open} onClick={toggle}>{open ? 'Show less' : 'Show more'}</button>}
+  </>
 }

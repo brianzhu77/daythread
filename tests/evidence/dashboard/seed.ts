@@ -20,6 +20,8 @@ await C('runs', { kind: 'addProperty', property: { id: 'st', name: 'Stage', type
 for (const [id, title, st] of [['r1', 'Alpha', 'a'], ['r2', 'Bravo', 'b'], ['r3', 'Charlie', 'a']]) await run({ type: 'add-row', databaseId: 'runs', pageId: id, title, values: { st }, at })
 await run({ type: 'create-database', pageId: 'books', homeBlockId: null, title: 'Books' })
 for (const [id, title] of [['b1', 'Dune'], ['b2', 'Emma']]) await run({ type: 'add-row', databaseId: 'books', pageId: id, title, at })
+// More of them, so Books is taller than 360 px at 390 and shows Show more there.
+for (let n = 3; n <= 14; n++) await run({ type: 'add-row', databaseId: 'books', pageId: `b${n}`, title: `Book ${n}`, at })
 await run({ type: 'create-database', pageId: 'home', homeBlockId: null, title: 'Home' })
 const db = (id: string) => w.pages.find((p: any) => p.id === id).database
 await C('home', { kind: 'addDashboard', view: { id: 'dash', name: 'This week' }, rows: [{ id: 'row1', widgets: [
