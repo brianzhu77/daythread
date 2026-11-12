@@ -11,6 +11,10 @@
 - **The dashboard's own width:** from the sidebar's edge to the window's, less the page's 48 px gutters. At 1280 that's
   924 px, up to 1100 (the database width in `DESIGN.md`).
 - **Rows of widgets,** 24 px apart in both directions (`--dash-gap: 24px`).
+- **The page goes wide with it:** on a page showing a dashboard, the breadcrumb, title and dashboard head start at the
+  dashboard's left edge, so the page keeps one left line (Jazz 6f0ebb20).
+- **A widget's head:** its heading is its database's name, and its view tab names its view, which a new widget calls by
+  its layout ("Table"), as any linked view does.
 - **A widget is its linked view:** its name as the heading, its own chips and head, with no outline, fill or shadow.
 - **Heights** are the stored row height. Within that the content scrolls only as a table scrolls today: sideways, and
   down past its row cap.
@@ -35,8 +39,7 @@
 | Hover (pointer) | the ring steps to `--line-strong` (Border-control) | 120 ms |
 | Focus (keyboard) | the 2 px Thread Blue focus ring at 2 px outside the Hairline ring | as every focus ring |
 
-**The widget's menu (`⋯`):** View settings… (opens the linked view's own menu: layout, filter, sort, properties),
-Duplicate, then Move left and Move right, each only where it can move, then "Move to its own row" (a full-width row
+**The widget's menu (`⋯`):** Duplicate, then Move left and Move right, each only where it can move, then "Move to its own row" (a full-width row
 right under its current one, hidden when it's already alone) and "Join the row above" (at that row's end, re-divided,
 hidden when that row has 4 or there's none), then Remove. With the swaps these reach any layout a drag can, so arranging
 by keyboard is complete (Bumblebee 9337a4b0). Both are `moveWidget`; neither shows at 390, where rows aren't visible. Remove says "View removed", with
@@ -87,7 +90,8 @@ only between two neighbours, and it trades width between them.
   the bar is Ink-faint.
 - **Snapping:** a width moves only between snap points. Each snap the pointer passes shows at once, and neighbours never
   go under 1/4. A height moves in 40 px steps from 160 to 800.
-- **The value while dragging:** a Meta-size badge (Paper-fill, Ink-soft, 6 px corners) beside the handle, saying
+- **The value while dragging:** a Meta-size badge (Paper-fill, Ink-soft, 6 px corners) centred on the handle at the
+  pointer's height, kept inside the row so it never covers a name, saying
   "1/3 · 2/3" for widths or "320 px" for heights. It's state, so the Quiet Copy Rule allows it, and it goes on release.
 - **One drag is one command and one Undo.** The value only saves on release.
 - **Keys:** a focused handle (Tab reaches it after its row's widgets) moves one snap with ← → or ↑ ↓. Each step saves.
@@ -113,7 +117,8 @@ only between two neighbours, and it trades width between them.
   and down, and the 1280 layout keeps every other widget where it was. After a move the page scrolls to the widget
   and gives it the moved-line flash (Thread Blue wash, 1 s, as `DESIGN.md` lists).
 - **Edit and Done** sit in the head as at 1280. `+ Add widget` is under the last widget. The row `+` doesn't exist.
-- **Between 900 and 1100, or with the Comments pane open,** a row wraps when a widget would go under 280 px. This
+- **Between 900 and 1100, or with the Comments pane open,** a row wraps when a widget would go under 200 px
+  (`--widget-min`; Roadbuster 94fa8ad0: four quarters at 1280 are 213 px, so 280 would always wrap a row of four). This
   isn't stored. In edit mode a width handle shows only between neighbours that sit side by side.
 
 ## 8. States to check once built
