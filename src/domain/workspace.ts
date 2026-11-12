@@ -26,6 +26,7 @@ import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, storedDocument, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
 import { askedQuestions, formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
+import { changeDashboard, isDashboardChange } from "./dashboard.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -1483,7 +1484,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         try { const message = changeDatabase(state, page, action.change); setRulesIn(state, todosSourceId, page.database.automations ?? []); if (state.todoAutomations?.length) delete state.todoAutomationsUnreadable; return { message, entityId: todosSourceId }; } catch (error) { throw new DomainError((error as Error).message); }
       }
       const p = databasePage(state, action.pageId);
-      try { return { message: changeDatabase(state, p, action.change), entityId: p.id }; } catch (error) { throw new DomainError((error as Error).message); }
+      // A dashboard's commands read each widget's source as it is now: To-dos', or a database page that isn't in Trash.
+      const sourceOf = (id: string) => { if (id === todosSourceId) return todosDatabase; const q = state.pages.find((x) => x.id === id); return isDatabase(q) && !isTrashed(q) ? q.database : null; };
+      try { return { message: isDashboardChange(action.change) ? changeDashboard(p.database, action.change, sourceOf) : changeDatabase(state, p, action.change), entityId: p.id }; } catch (error) { throw new DomainError((error as Error).message); }
     }
     case "run-repeats": {
       const skipped: Array<{ title: string; earlier: string; full?: true }> = [];
