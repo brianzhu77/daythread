@@ -1383,7 +1383,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const recipe = action.recipe ?? 1;
       if (old && (!draftReplaceable(old, recipe) || (draftSettled(old) && action.status !== "ready"))) throw new DomainError("This day already has its draft");
       const items = remadeItems(old, normalizeDraftItems(state, day, action.items, allowed));
-      const moreOpen = action.moreOpen.filter((id) => allowed.has(id));
+      // A to-do he already applied or skipped from the day's draft isn't offered again under "more open" (Ratchet ea6ab2bd).
+      const decided = new Set(items.flatMap((i) => (i.state !== "open" && i.taskId ? [i.taskId] : [])));
+      const moreOpen = action.moreOpen.filter((id) => allowed.has(id) && !decided.has(id));
       const draft: DayDraft = { status: action.status, items, moreOpen, ...(action.recipe ? { recipe: action.recipe } : {}) };
       const existing = state.pages.find((p) => p.id === draftPageId(day.id));
       if (existing) existing.document = JSON.stringify(draft);
