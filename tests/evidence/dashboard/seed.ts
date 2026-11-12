@@ -1,9 +1,12 @@
-// The store dashboard.mjs runs on: Runs and Books with rows, and a Dashboard view on Home with a Runs widget and a To-dos one.
+// The store dashboard.mjs runs on: Runs and Books with rows, a to-do on today's page, and a Dashboard view on Home: Runs and
+// Books in one row, To-dos and a second view of Runs in another. A page "Notes" holds a block of Home turned to the dashboard.
 // Usage: node --no-warnings tests/evidence/dashboard/seed.ts <store-path>  (a throwaway path; it's replaced)
 import { rmSync } from 'node:fs'
 import { SqliteWorkspaceRepository as R } from '../../../src/server/sqlite-repository.ts'
 import { firstWidgetView } from '../../../src/domain/dashboard.ts'
 import { todosSourceId } from '../../../src/domain/todos-id.ts'
+import { pageContentKey } from '../../../src/domain/editor-document.ts'
+import { todosDatabase } from '../../../src/domain/todos-source.ts'
 const S = process.argv[2]
 if (!S) { console.error('Usage: node --no-warnings tests/evidence/dashboard/seed.ts <store-path>'); process.exit(2) }
 for (const x of ['', '-wal', '-shm']) rmSync(S + x, { force: true })
@@ -19,10 +22,24 @@ for (const [id, title] of [['b1', 'Dune'], ['b2', 'Emma']]) await run({ type: 'a
 await run({ type: 'create-database', pageId: 'home', homeBlockId: null, title: 'Home' })
 const db = (id: string) => w.pages.find((p: any) => p.id === id).database
 await C('home', { kind: 'addDashboard', view: { id: 'dash', name: 'This week' }, rows: [{ id: 'row1', widgets: [
-  { id: 'w-runs', source: 'runs', view: { ...firstWidgetView(db('runs'), 'v-runs'), name: 'Runs' } },
-  { id: 'w-books', source: 'books', view: { ...firstWidgetView(db('books'), 'v-books'), name: 'Books' } },
+  { id: 'w-runs', source: 'runs', view: { ...firstWidgetView(db('runs'), 'v-runs'), name: 'Table' } },
+  { id: 'w-books', source: 'books', view: { ...firstWidgetView(db('books'), 'v-books'), name: 'Table' } },
+] }, { id: 'row2', widgets: [
+  { id: 'w-todos', source: todosSourceId, view: { ...firstWidgetView(todosDatabase, 'v-todos'), name: 'Open' } },
+  { id: 'w-runs2', source: 'runs', view: { ...firstWidgetView(db('runs'), 'v-runs2'), name: 'By stage' } },
 ] }] })
 // Shown first on Home's page, as a fresh dashboard is (the views panel turns to it).
 const home = w.pages.find((p: any) => p.id === 'home').database
 await C('home', { kind: 'moveView', viewId: 'dash', beforeId: home.views[0].id })
+// A to-do planned for today, for the To-dos widget's tick.
+const today = new Date().toLocaleDateString('en-CA')
+await run({ type: 'ensure-day', date: today })
+const day = w.pages.find((p: any) => p.type === 'daily' && p.date === today)
+await run({ type: 'add-task', pageId: day.id, title: 'Water the plants', plannedOn: today })
+// A document holding a block of Home whose view is the dashboard: anywhere but Home's own page it's a link.
+await run({ type: 'create-document', title: 'Notes', body: 'Above the block', pageId: 'notes' })
+const notes = w.pages.find((p: any) => p.id === 'notes')
+const dash = w.pages.find((p: any) => p.id === 'home').database.views.find((v: any) => v.id === 'dash')
+const doc = JSON.parse(notes.document)
+await run({ type: 'save-editor', pageId: 'notes', expectedContent: pageContentKey(notes), document: JSON.stringify([...doc, { id: 'home-block', type: 'database', props: { pageId: 'home', view: JSON.stringify({ ...dash, id: 'linked-dash' }) }, children: [] }]), today })
 console.log('views', w.pages.find((p: any) => p.id === 'home').database.views.map((v: any) => `${v.id}:${v.layout}`).join(','), todosSourceId)

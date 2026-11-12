@@ -3267,7 +3267,9 @@ textarea.form-input { resize: vertical; }
 /* Its own width, from the sidebar's edge to the window's less the page's 48 px gutters, up to 1100 (dashboard-edit.md §1):
    it starts left of the reading column. With the Comments pane open it keeps to the page as any database does (#191). */
 @media (min-width: 900px) {
-  body:not(:has(.comments-pane:not(.is-sheet))) .database-block.is-page:has(> .dashboard) { width: min(1100px, calc(100vw - 260px - 96px)); margin-left: calc(28px - (100vw - 300px - var(--column)) / 2); }
+  /* The whole page goes wide with it, so its crumbs, title and the dashboard share one left edge (Jazz 6f0ebb20). */
+  .app-main:has(.database-block.is-page > .dashboard) { max-width: calc(min(1100px, 100vw - 260px - 96px) + 40px); }
+  .database-block.is-page:has(> .dashboard) { width: auto; }
 }
 .dashboard-widget-body { flex: 1; min-height: 0; overflow: auto; }
 .dashboard-link { margin: 4px 0; }
@@ -3297,5 +3299,5 @@ textarea.form-input { resize: vertical; }
 .dashboard-split:focus-visible::after, .dashboard-row-size:focus-visible::after { opacity: 1; }
 .dashboard-split.is-held::after, .dashboard-row-size.is-held::after { opacity: 1; background: var(--ink-3); }
 .dashboard-badge { position: absolute; z-index: 4; padding: 1px 7px; border-radius: 6px; background: var(--fill); color: var(--ink-2); font-size: var(--text-meta); line-height: 20px; white-space: nowrap; pointer-events: none; }
-.dashboard-split .dashboard-badge { top: 8px; left: 14px; }
+.dashboard-split .dashboard-badge { left: 50%; transform: translate(-50%, -50%); }
 .dashboard-row-size .dashboard-badge { top: 18px; }

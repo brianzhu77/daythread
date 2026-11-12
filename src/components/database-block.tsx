@@ -887,7 +887,7 @@ export function useFolds(blockId: string, viewId: string) {
 /** The table view (design §4.1, §4.2): Name first, then the view's shown properties; `+ New` under the rows. */
 export interface DatabaseViewProps { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number; showTitle?: boolean; linked?: LinkedHeader }
 /** A linked view's own title and the line under it (design §9.2). */
-export interface LinkedHeader { title: string; rename(title: string): void; source: ReactNode }
+export interface LinkedHeader { title: string; rename(title: string): void; source: ReactNode; /** A dashboard widget's heading is its database's name, not edited here (Jazz 6f0ebb20). */ fixedTitle?: true }
 /** The view a block shows, and how to change it, drawn in its layout. */
 function DatabaseView(props: DatabaseViewProps) {
   useShownViews()
@@ -956,10 +956,10 @@ export function DatabaseHeader({ db, view, changeView, blockId, showTitle, linke
     {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
       {db.icon && <PageEmoji icon={db.icon} className="database-title-icon" />}
-      <input ref={titleInput} className="database-title" data-database={linked ? undefined : db.id} aria-label={linked ? 'View name' : 'Database name'} placeholder="Untitled database" defaultValue={linked ? linked.title : db.title} key={linked ? linked.title : db.title}
+      {linked?.fixedTitle ? <span className="database-title is-static">{linked.title}</span> : <input ref={titleInput} className="database-title" data-database={linked ? undefined : db.id} aria-label={linked ? 'View name' : 'Database name'} placeholder="Untitled database" defaultValue={linked ? linked.title : db.title} key={linked ? linked.title : db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
-        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); onTitleEnter() } }} />
+        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); onTitleEnter() } }} />}
       {linked ? <span className="database-view-name is-static">{view.name}</span> : <DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} />}
       <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}

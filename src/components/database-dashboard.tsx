@@ -15,6 +15,7 @@ import { RowMenu, type MenuItem } from './row-menu'
 import { useWorkspace } from './use-day'
 
 type DatabasePage = Page & { database: Database }
+const sourceTitle = (source: DatabasePage) => (source.id === todosSourceId ? todosTitle : displayPageTitle(source))
 type Props = DatabaseViewProps & { view: View; changeView: ChangeView }
 const newId = (): string => crypto.randomUUID()
 
@@ -105,7 +106,7 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
       if (!lifted) {
         if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return
         lifted = true
-        room.pickUp(el, ev.clientX, ev.clientY)
+        room.pickUp(el, ev.clientX, ev.clientY, { context: 'database-block is-page dashboard is-editing is-dragging' })
         setDrag({ widgetId, landing: null })
       }
       room.copy.current?.move(ev.clientX, ev.clientY)
@@ -175,27 +176,57 @@ function splitChoices(row: DashboardRow, left: DashboardWidget, right: Dashboard
 }
 
 /** The handle between two neighbours: it trades width between them, snapping to allowed splits; one drag, one command (§5). */
+/**
+ * A handle's drag: the value shows at once as `preview` draws it, saves on release, and Esc puts it back and saves
+ * nothing (Ratchet a950bc9e). Its listeners go with it, as does a drag still held when the handle goes.
+ */
+function useHandleDrag<T>(preview: (value: T | null) => void, save: (value: T) => void) {
+  const stop = useRef<(() => void) | null>(null)
+  useEffect(() => () => stop.current?.(), [])
+  return (initial: T, valueAt: (ev: PointerEvent) => T) => {
+    let value = initial
+    const end = (commit: boolean) => {
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('keydown', key, true)
+      stop.current = null
+      preview(null)
+      if (commit) save(value)
+    }
+    const move = (ev: PointerEvent) => { value = valueAt(ev); preview(value) }
+    const up = () => end(true)
+    // Capturing, so the dashboard's own Esc (which leaves edit mode) never sees this one.
+    const key = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); end(false) } }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('keydown', key, true)
+    stop.current = () => end(false)
+  }
+}
+
 function SplitHandle({ row, left, right, viewId, send }: { row: DashboardRow; left: DashboardWidget; right: DashboardWidget; viewId: string; send: ReturnType<typeof useDashboardRun> }) {
   const [shown, setShown] = useState<number | null>(null)
+  // The badge rides at the pointer's height on the handle, inside the row, so it never covers a widget's name (Jazz 6f0ebb20).
+  const [badgeY, setBadgeY] = useState(0)
   const choices = splitChoices(row, left, right), total = left.width + right.width
   const save = (leftWidth: number) => { if (leftWidth !== left.width) void send(() => ({ kind: 'sizeSplit', viewId, rowId: row.id, leftId: left.id, rightId: right.id, leftWidth }), 'Width saved') }
+  const els = useRef<{ left: HTMLElement; right: HTMLElement } | null>(null)
+  // Each snap shows at once on the two widgets themselves (§5), and the render puts the saved widths back.
+  const drag = useHandleDrag<number>(value => {
+    setShown(value)
+    const pair = els.current
+    if (!pair) return
+    pair.left.style.setProperty('--widget-width', String(value ?? left.width)); pair.right.style.setProperty('--widget-width', String(value === null ? right.width : total - value))
+  }, save)
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault(); e.stopPropagation()
     const rowEl = e.currentTarget.closest<HTMLElement>('.dashboard-row')!, leftEl = rowEl.querySelector<HTMLElement>(`[data-widget="${CSS.escape(left.id)}"]`)!, rightEl = rowEl.querySelector<HTMLElement>(`[data-widget="${CSS.escape(right.id)}"]`)!
-    const from = leftEl.getBoundingClientRect().left, span = rightEl.getBoundingClientRect().right - from
-    let value = left.width
-    const move = (ev: PointerEvent) => {
-      const want = ((ev.clientX - from) / span) * total
-      value = choices.reduce((best, c) => (Math.abs(c - want) < Math.abs(best - want) ? c : best), left.width)
-      setShown(value)
-    }
-    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); setShown(null); save(value) }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
+    els.current = { left: leftEl, right: rightEl }
+    const from = leftEl.getBoundingClientRect().left, span = rightEl.getBoundingClientRect().right - from, rowBox = rowEl.getBoundingClientRect()
+    const placeBadge = (y: number) => setBadgeY(Math.min(rowBox.height - 14, Math.max(14, y - rowBox.top)))
+    placeBadge(e.clientY)
+    drag(left.width, ev => { placeBadge(ev.clientY); const want = ((ev.clientX - from) / span) * total; return choices.reduce((best, c) => (Math.abs(c - want) < Math.abs(best - want) ? c : best), left.width) })
   }
   const step = (d: number) => { const at = choices.indexOf(left.width), next = choices[at + d]; if (next !== undefined) save(next) }
   return <button type="button" className={`dashboard-split${shown !== null ? ' is-held' : ''}`} aria-label={`Width of ${left.view.name} and ${right.view.name}: ${fraction(left.width)} · ${fraction(right.width)}`}
     onPointerDown={onPointerDown} onKeyDown={e => { if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1) } if (e.key === 'ArrowRight') { e.preventDefault(); step(1) } }}>
-    {shown !== null && <span className="dashboard-badge">{fraction(shown)} · {fraction(total - shown)}</span>}
+    {shown !== null && <span className="dashboard-badge" style={{ top: badgeY }}>{fraction(shown)} · {fraction(total - shown)}</span>}
   </button>
 }
 
@@ -203,14 +234,13 @@ function SplitHandle({ row, left, right, viewId, send }: { row: DashboardRow; le
 function RowSize({ row, viewId, send }: { row: DashboardRow; viewId: string; send: ReturnType<typeof useDashboardRun> }) {
   const [shown, setShown] = useState<number | null>(null)
   const save = (height: number) => { if (height !== row.height) void send(() => ({ kind: 'sizeRow', viewId, rowId: row.id, height }), 'Height saved') }
+  const rowEl = useRef<HTMLElement | null>(null)
+  const drag = useHandleDrag<number>(value => { setShown(value); rowEl.current?.style.setProperty('--row-height', `${value ?? row.height}px`) }, save)
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault(); e.stopPropagation()
     const y0 = e.clientY
-    let value = row.height
-    const rowEl = e.currentTarget.closest<HTMLElement>('.dashboard-row')!
-    const move = (ev: PointerEvent) => { value = snapHeight(row.height + ev.clientY - y0); setShown(value); rowEl.style.setProperty('--row-height', `${value}px`) }
-    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); setShown(null); rowEl.style.setProperty('--row-height', `${row.height}px`); save(value) }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
+    rowEl.current = e.currentTarget.closest<HTMLElement>('.dashboard-row')
+    drag(row.height, ev => snapHeight(row.height + ev.clientY - y0))
   }
   return <button type="button" className={`dashboard-row-size${shown !== null ? ' is-held' : ''}`} aria-label={`Height of this row: ${row.height} px`}
     onPointerDown={onPointerDown} onKeyDown={e => { if (e.key === 'ArrowUp') { e.preventDefault(); save(snapHeight(row.height - rowHeights.step)) } if (e.key === 'ArrowDown') { e.preventDefault(); save(snapHeight(row.height + rowHeights.step)) } }}>
@@ -243,9 +273,10 @@ function WidgetFrame({ workspace, host, view, row, widget, width, editing, block
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); void send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed') }
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector<HTMLButtonElement>('.dashboard-widget-more')?.click() }
   }
-  return <section className="dashboard-widget" data-widget={id} style={{ ['--widget-width' as string]: width }} aria-label={widget.view.name} tabIndex={editing ? 0 : undefined} onKeyDown={onKeyDown} {...(onPointerDown ? { onPointerDown } : {})}>
+  const label = source && isDatabase(source) ? `${sourceTitle(source)} · ${widget.view.name}` : widget.view.name
+  return <section className="dashboard-widget" data-widget={id} style={{ ['--widget-width' as string]: width }} aria-label={label} tabIndex={editing ? 0 : undefined} onKeyDown={onKeyDown} {...(onPointerDown ? { onPointerDown } : {})}>
     {split && <SplitHandle row={row} left={split.left} right={split.right} viewId={viewId} send={send} />}
-    {editing && <span className="dashboard-widget-menu"><RowMenu label={`Actions for ${widget.view.name}`} triggerClass="dashboard-widget-more" groups={[{ items }]} /></span>}
+    {editing && <span className="dashboard-widget-menu"><RowMenu label={`Actions for ${label}`} triggerClass="dashboard-widget-more" groups={[{ items }]} /></span>}
     <div ref={body} className="dashboard-widget-body">
       {!source || !isDatabase(source)
         ? <><div className="database-title-row"><span className="database-title is-static">{widget.view.name}</span></div><p className="database-empty">Source deleted{editing ? '' : <> · <button type="button" className="app-link" onClick={() => void send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed')}>Remove</button></>}</p></>
@@ -266,11 +297,12 @@ function WidgetView({ workspace, source, host, view, widget, blockId }: { worksp
   const json = JSON.stringify(widget.view)
   useLayoutEffect(() => { setLinkedBlock(blockId, { view: widget.view, json, change }) })
   useLayoutEffect(() => () => setLinkedBlock(blockId, null), [blockId])
+  // Its heading is its database, and its tab is its view ("Table"), as a linked view's is (Jazz 6f0ebb20).
   return <LaidOutView workspace={workspace} db={source} view={widget.view} changeView={change} blockId={blockId} pageDate={null} cap={rowCaps.inline}
-    linked={{ title: widget.view.name, rename: name => { if (name.trim() && name !== widget.view.name) change(() => ({ name })) }, source: <SourceLine workspace={workspace} db={source} /> }} />
+    linked={{ title: sourceTitle(source), rename: () => {}, source: <SourceLine workspace={workspace} db={source} />, fixedTitle: true }} />
 }
 
-/** `+ Add widget`: a database (To-dos too) and its first view a widget can be, named after the database, as a full-width row at the end. */
+/** `+ Add widget`: a database (To-dos too) and its first view a widget can be, as a full-width row at the end. */
 function AddWidget({ workspace, onPick }: { workspace: Workspace; onPick: (source: string, view: View) => void }) {
   const [open, setOpen] = useState(false)
   const sources = [
@@ -279,7 +311,7 @@ function AddWidget({ workspace, onPick }: { workspace: Workspace; onPick: (sourc
   ]
   if (!open) return <button type="button" className="dashboard-add" onClick={() => setOpen(true)}>+ Add widget</button>
   return <div className="dashboard-add-pick app-menu" role="menu" aria-label="Add widget" onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false) } }}>
-    {sources.map(s => <button key={s.id} type="button" role="menuitem" onClick={() => { setOpen(false); onPick(s.id, { ...firstWidgetView(s.database, newId()), name: s.id === todosSourceId ? todosTitle : displayPageTitle(s) }) }}>{s.id === todosSourceId ? todosTitle : displayPageTitle(s)}</button>)}
+    {sources.map(s => <button key={s.id} type="button" role="menuitem" onClick={() => { setOpen(false); onPick(s.id, firstWidgetView(s.database, newId())) }}>{s.id === todosSourceId ? todosTitle : displayPageTitle(s)}</button>)}
     <button type="button" role="menuitem" onClick={() => setOpen(false)}>Cancel</button>
   </div>
 }

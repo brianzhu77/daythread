@@ -1258,7 +1258,7 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   // It opens with one widget: a copy of this database's first view a widget can be (dashboard.md §3).
   const addDashboard = () => {
     const id = newId()
-    change({ kind: 'addDashboard', view: { id, name: 'Dashboard' }, rows: [{ id: newId(), widgets: [{ id: newId(), source: db.id, view: { ...firstWidgetView(db.database, newId()), name: db.title.trim() || 'Untitled' } }] }] })
+    change({ kind: 'addDashboard', view: { id, name: 'Dashboard' }, rows: [{ id: newId(), widgets: [{ id: newId(), source: db.id, view: firstWidgetView(db.database, newId()) }] }] })
     setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id)
   }
   // Its questions and a Responses view come with it (forms.md §3, §4).
