@@ -16,6 +16,8 @@ for(const [engine,launcher] of Object.entries({chromium,webkit})){
  const height=p.locator('.dashboard-row-size').first(),hb=await height.boundingBox(),start=await left.boundingBox();
  await p.mouse.move(hb.x+hb.width/2,hb.y+hb.height/2);await p.mouse.down();await p.mouse.move(hb.x+hb.width/2,hb.y+hb.height/2+80,{steps:5});await p.waitForTimeout(100);
  await p.keyboard.press('Escape');await p.mouse.up();await p.waitForTimeout(500);
+ ok(await p.locator('.dashboard-edit').innerText()==='Done','first Escape cancels resize and keeps edit mode',{});
+ await p.keyboard.press('Escape');ok(await p.locator('.dashboard-edit').innerText()==='Edit','second Escape leaves edit mode',{});
  const end=await left.boundingBox();ok(Math.abs(end.height-start.height)<2,'Escape during height drag cancels rather than saving after edit mode ends',{before:start.height,after:end.height,editVisible:await p.getByRole('button',{name:'Edit',exact:true}).isVisible()});
  await p.reload();await p.locator('.dashboard-widget').first().waitFor();ok(Math.abs((await left.boundingBox()).height-start.height)<2,'cancelled height stays unchanged after reload',{});
  ok(errors.length===0,'no page errors',errors);
