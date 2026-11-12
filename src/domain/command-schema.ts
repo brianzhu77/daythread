@@ -48,6 +48,7 @@ const dashboardChanges = [
   z.object({ kind: z.literal("sizeRow"), viewId: id, rowId: id, height: z.number().int() }),
   z.object({ kind: z.literal("duplicateWidget"), viewId: id, widgetId: id, newId: id, newViewId: id, newRowId: id }),
   z.object({ kind: z.literal("removeWidget"), viewId: id, widgetId: id }),
+  z.object({ kind: z.literal("duplicateDashboard"), viewId: id, newViewId: id, ids: z.record(id, id) }),
 ] as const;
 const change = z.discriminatedUnion("kind", [
   ...dashboardChanges,

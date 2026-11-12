@@ -3,7 +3,7 @@
 // an older build keeps it (its `updateView` spreads the fields it doesn't know) and draws a table of the host's rows.
 // Every row is full: its widths add up to 12 twelfths (Jazz df571c9f). Changes are per widget or row (database.ts), so a
 // move in one tab and a filter edit in another touch different fields and both survive.
-import { checkId, cleanView, DatabaseError, updatedView, type Condition, type Database, type View, type ViewChange } from './database.ts'
+import { checkId, cleanView, DatabaseError, limits, updatedView, type Condition, type Database, type View, type ViewChange } from './database.ts'
 
 export interface DashboardWidget {
   id: string
@@ -71,7 +71,9 @@ export type DashboardChange =
   | { kind: 'sizeRow'; viewId: string; rowId: string; height: number }
   | { kind: 'duplicateWidget'; viewId: string; widgetId: string; newId: string; newViewId: string; newRowId: string }
   | { kind: 'removeWidget'; viewId: string; widgetId: string }
-export const dashboardKinds: ReadonlySet<string> = new Set(['addDashboard', 'addWidget', 'updateWidget', 'moveWidget', 'swapWidget', 'sizeSplit', 'sizeRow', 'duplicateWidget', 'removeWidget'])
+  /** Duplicate view on a dashboard (Lead ad6dae7b): a copy as stored, every row, widget and widget view under the new id `ids` gives it. */
+  | { kind: 'duplicateDashboard'; viewId: string; newViewId: string; ids: Record<string, string> }
+export const dashboardKinds: ReadonlySet<string> = new Set(['addDashboard', 'addWidget', 'updateWidget', 'moveWidget', 'swapWidget', 'sizeSplit', 'sizeRow', 'duplicateWidget', 'removeWidget', 'duplicateDashboard'])
 export const isDashboardChange = (change: { kind?: string } | undefined): change is DashboardChange => Boolean(change?.kind && dashboardKinds.has(change.kind))
 
 /** A database page's own database, or To-dos', when it's there to show; null once it's in Trash or gone. */
@@ -109,6 +111,8 @@ const placeIn = <T>(list: T[], item: T, before: T | undefined): void => { const 
  * a widget joins or leaves is split equally again; no other row changes.
  */
 export function changeDashboard(db: Database, change: DashboardChange, sourceOf: SourceOf): string {
+  // A new view either way, so under the views' own limit as `addView` is (Ratchet 32073b65).
+  if ((change.kind === 'addDashboard' || change.kind === 'duplicateDashboard') && db.views.length >= limits.views) throw new DatabaseError('Too many views')
   if (change.kind === 'addDashboard') {
     if (db.views.some(v => v.id === change.view?.id)) throw new DatabaseError('Invalid id')
     const taken = idsIn(db)
@@ -130,6 +134,20 @@ export function changeDashboard(db: Database, change: DashboardChange, sourceOf:
   }
   const host = db.views.find(v => v.id === change.viewId)
   if (!host || host.layout !== 'dashboard') throw new DatabaseError('View not found')
+  if (change.kind === 'duplicateDashboard') {
+    const taken = idsIn(db), fresh = new Set<string>()
+    const idFor = (old: string) => {
+      const id = checkId(change.ids?.[old])
+      if (taken.has(id) || fresh.has(id) || db.views.some(v => v.id === id)) throw new DatabaseError('Invalid id')
+      fresh.add(id)
+      return id
+    }
+    const newViewId = checkId(change.newViewId)
+    if (db.views.some(v => v.id === newViewId) || taken.has(newViewId)) throw new DatabaseError('Invalid id')
+    const rows = (host.dashboard?.rows ?? []).map(r => ({ ...r, id: idFor(r.id), widgets: r.widgets.map(w => ({ ...structuredClone(w), id: idFor(w.id), view: { ...structuredClone(w.view), id: idFor(w.view.id) } })) }))
+    db.views.push({ ...structuredClone(host), id: newViewId, name: `${host.name} (copy)`, dashboard: { ...structuredClone(host.dashboard ?? { rows: [] }), rows } })
+    return `Added ${host.name} (copy)`
+  }
   const dashboard: Dashboard = host.dashboard ?? (host.dashboard = { rows: [] })
   const found = (id: string) => { const at = findWidget(dashboard, id); if (!at) throw new DatabaseError("That widget's gone"); return at }
   const rowOf = (id: string) => { const row = dashboard.rows.find(r => r.id === id); if (!row) throw new DatabaseError("That row's gone"); return row }
@@ -163,12 +181,21 @@ export function changeDashboard(db: Database, change: DashboardChange, sourceOf:
       return 'View saved'
     }
     case 'moveWidget': {
-      const { row: from, widget } = found(change.widgetId)
+      const { row: from, widget, index } = found(change.widgetId)
+      if (change.toRowId === from.id) {
+        // Within its own row: only its order changes, and each keeps its width. Back where it was is refused (Ratchet 29f73fd7).
+        const others = from.widgets.filter(w => w !== widget), before = change.beforeId ? others.find(w => w.id === change.beforeId) : undefined
+        const at = before ? others.indexOf(before) : others.length
+        if (at === index) throw new DatabaseError('Already there')
+        others.splice(at, 0, widget)
+        from.widgets = others
+        return 'Widget moved'
+      }
+      if (change.toRowId === null && from.widgets.length === 1 && (change.rowBeforeId ?? null) === (dashboard.rows[dashboard.rows.indexOf(from) + 1]?.id ?? null)) throw new DatabaseError('Already there')
       const before = change.rowBeforeId ? dashboard.rows.find(r => r.id === change.rowBeforeId) : undefined
       const to = change.toRowId === null ? newRow(change.newRowId, before, from.height) : rowOf(change.toRowId)
-      if (to !== from && to.widgets.length >= dashboardLimits.perRow) throw new DatabaseError(`${dashboardLimits.perRow} widgets to a row at most`)
+      if (to.widgets.length >= dashboardLimits.perRow) throw new DatabaseError(`${dashboardLimits.perRow} widgets to a row at most`)
       leave(from, widget)
-      if (to !== from && !dashboard.rows.includes(to)) dashboard.rows.push(to)
       placeIn(to.widgets, widget, change.beforeId ? to.widgets.find(w => w.id === change.beforeId) : undefined)
       resplit(to)
       return 'Widget moved'
@@ -203,11 +230,13 @@ export function changeDashboard(db: Database, change: DashboardChange, sourceOf:
     }
     case 'duplicateWidget': {
       const { row, widget, index } = found(change.widgetId)
-      const taken = idsIn(db)
-      const copy = newWidget(sourceOf, { id: change.newId, source: widget.source, view: { ...structuredClone(widget.view), id: change.newViewId } }, taken)
+      // The stored copy as it is, held settings and all (Ratchet 29f73fd7): only its ids are new, so nothing is cleaned away.
+      const taken = idsIn(db), newWidgetId = checkId(change.newId), newViewId = checkId(change.newViewId)
+      if (taken.has(newWidgetId) || taken.has(newViewId) || newWidgetId === newViewId) throw new DatabaseError('Invalid id')
+      const copy: DashboardWidget = { id: newWidgetId, width: widget.width, source: widget.source, view: { ...structuredClone(widget.view), id: newViewId } }
       // After the original, in its row if there's room, or in a new row under it (Jazz f547a588).
       if (row.widgets.length < dashboardLimits.perRow) { row.widgets.splice(index + 1, 0, copy); resplit(row) }
-      else newRow(change.newRowId, dashboard.rows[dashboard.rows.indexOf(row) + 1], row.height).widgets.push(copy)
+      else { copy.width = 12; newRow(change.newRowId, dashboard.rows[dashboard.rows.indexOf(row) + 1], row.height).widgets.push(copy) }
       checkCount(dashboard)
       return 'Widget duplicated'
     }
