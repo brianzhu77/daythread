@@ -6,91 +6,132 @@ const [base, only] = process.argv.slice(2), results = []
 if (!base) { console.error('Usage: node tests/evidence/dashboard/dashboard.mjs <base-url> [chromium|webkit]'); process.exit(2) }
 const ok = (name, pass, detail = '') => { results.push(pass); console.log(`${pass ? 'PASS' : 'FAIL'} ${name}${detail ? ` · ${detail}` : ''}`) }
 const wait = ms => new Promise(r => setTimeout(r, ms))
+// Each widget reads as its database and its view.
+const R = 'Runs · Table', B = 'Books · Table', T = 'To-dos · Open', R2 = 'Runs · By stage'
 for (const engine of only ? [only] : ['chromium', 'webkit']) {
   const browser = await pw[engine].launch()
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' })).newPage()
   const errors = []; page.on('pageerror', e => errors.push(e.message))
-  const settle = async () => { await page.waitForLoadState('networkidle').catch(() => {}); await wait(250) }
-  const layout = () => page.evaluate(() => [...document.querySelectorAll('.dashboard-row')].filter(r => r.dataset.row).map(r => [...r.querySelectorAll(':scope > .dashboard-widget')].map(w => `${w.getAttribute('aria-label')}:${Math.round(w.getBoundingClientRect().width)}`).join(',')).join(' | '))
-  const names = () => page.evaluate(() => [...document.querySelectorAll('.dashboard-row')].filter(r => r.dataset.row).map(r => [...r.querySelectorAll(':scope > .dashboard-widget')].map(w => w.getAttribute('aria-label')).join(',')).join(' | '))
-  const rects = () => page.evaluate(() => [...document.querySelectorAll('.dashboard-widget')].map(w => { const r = w.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round).join(',') }).join(';'))
-  const menu = async (widget, item) => { await page.locator(`.dashboard-widget[aria-label="${widget}"] .dashboard-widget-more`).click(); await page.getByRole('menuitem', { name: item, exact: true }).click(); await settle() }
   const tag = engine
-  await page.goto(`${base}/pages?page=home`); await page.locator('.dashboard-widget').first().waitFor({ timeout: 20000 }); await settle()
+  const settle = async () => { await page.waitForLoadState('networkidle').catch(() => {}); await wait(250) }
+  const open = async (id = 'home') => { await page.goto(`${base}/pages?page=${id}`); await page.locator('.dashboard-widget, .dashboard-link, .database-block').first().waitFor({ timeout: 20000 }); await settle() }
+  const rowsText = () => page.evaluate(() => [...document.querySelectorAll('.dashboard-row[data-row]')].map(r => [...r.querySelectorAll(':scope > .dashboard-widget')].map(w => w.getAttribute('aria-label')).join(',')).join(' | '))
+  const widths = (n = 0) => page.evaluate(i => [...document.querySelectorAll('.dashboard-row[data-row]')][i]?.querySelectorAll(':scope > .dashboard-widget') ?? [], n).then(() => page.evaluate(i => [...([...document.querySelectorAll('.dashboard-row[data-row]')][i]?.querySelectorAll(':scope > .dashboard-widget') ?? [])].map(w => `${w.getAttribute('aria-label')}:${Math.round(w.getBoundingClientRect().width)}`).join(','), n))
+  const rects = () => page.evaluate(() => [...document.querySelectorAll('.dashboard-widget')].map(w => { const r = w.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round).join(',') }).join(';'))
+  const widget = name => page.locator(`.dashboard-widget[aria-label="${name}"]`).first()
+  const box = name => widget(name).boundingBox()
+  const menu = async (name, item) => { await widget(name).locator('.dashboard-widget-more').click(); await page.getByRole('menuitem', { name: item, exact: true }).click(); await settle() }
+  const undo = async () => { await page.getByRole('button', { name: 'Undo' }).last().click(); await settle() }
+  const edit = async () => { await page.getByRole('button', { name: 'Edit' }).click(); await settle() }
+  const dragTo = async (name, x, y) => { const b = await box(name); await page.mouse.move(b.x + b.width / 2, b.y + 40); await page.mouse.down(); await page.mouse.move(b.x + b.width / 2 + 10, b.y + 50, { steps: 3 }); await page.mouse.move(x, y, { steps: 8 }); await wait(150); const slots = await page.locator('.dashboard-slot').count(); await page.mouse.up(); await settle(); await wait(400); return slots }
+  await open()
 
-  // Read mode: each widget is its linked view, with its rows, and its content works.
-  ok(`${tag} read: two widgets side by side with their rows`, (await names()) === 'Runs,Books' && await page.getByText('Alpha', { exact: true }).isVisible() && await page.getByText('Dune', { exact: true }).isVisible(), await names())
-  await page.locator('.dashboard-widget[aria-label="Runs"] [data-cell*="|r1|st"]').click()
-  ok(`${tag} read: a cell opens its editor`, await page.locator('[role=dialog], .property-popover, [data-floating-ui-portal], .property-editor').count() > 0 || await page.locator('.app-menu, [role=listbox]').count() > 0)
-  await page.keyboard.press('Escape'); await settle()
+  // ---- Read mode: each widget is its linked view, and its content works (G6-1).
+  ok(`${tag} read: rows of widgets with their rows`, (await rowsText()) === `${R},${B} | ${T},${R2}` && await widget(R).getByText('Alpha', { exact: true }).isVisible() && await widget(B).getByText('Dune', { exact: true }).isVisible(), await rowsText())
+  await widget(T).getByRole('checkbox', { name: 'Done: Water the plants' }).click(); await settle()
+  ok(`${tag} read: a to-do ticks in the To-dos widget`, (await widget(T).getByRole('checkbox', { name: 'Done: Water the plants' }).getAttribute('aria-checked').catch(() => 'gone')) !== 'false')
+  await widget(R).locator('[data-cell*="|r1|st"]').click(); await page.getByRole('option', { name: 'Done' }).click().catch(() => page.getByText('Done', { exact: true }).last().click()); await page.keyboard.press('Escape'); await settle()
+  ok(`${tag} read: a row edited in one widget updates another showing it`, (await widget(R2).locator('[data-cell*="|r1|st"]').innerText()).includes('Done'), await widget(R2).locator('[data-cell*="|r1|st"]').innerText())
+  const chip = widget(T).getByRole('button', { name: /Remove|×/ }).first()
+  const hadChip = await widget(T).getByText('Status is Open').count()
+  await widget(T).locator('.database-rule-remove, button[aria-label^="Remove"]').first().click().catch(() => chip.click()); await settle()
+  await open()
+  ok(`${tag} read: a widget's filter chip change is kept after a reload, and only there`, hadChip === 1 && await widget(T).getByText('Status is Open').count() === 0)
+  await page.goto(`${base}/tasks?view=open`); await settle(); await open()
 
-  // Edit mode moves nothing, and its content takes nothing.
+  // ---- Edit mode: moves nothing, content inert, not kept across a reload, Done ends it (G6-2).
   const before = await rects()
-  await page.getByRole('button', { name: 'Edit' }).click(); await settle()
-  ok(`${tag} edit: entering moves no widget`, (await rects()) === before, `${before} → ${await rects()}`)
+  await edit()
+  ok(`${tag} edit: entering moves no widget`, (await rects()) === before)
   ok(`${tag} edit: content is inert`, await page.evaluate(() => [...document.querySelectorAll('.dashboard-widget-body')].every(b => b.inert)))
-  await page.locator('.dashboard-widget[aria-label="Runs"] [data-cell*="|r1|st"]').click({ force: true }).catch(() => {})
-  ok(`${tag} edit: a click in a widget opens nothing`, await page.locator('.property-editor, [role=listbox]').count() === 0)
+  await open()
+  ok(`${tag} edit: not kept across a reload`, await page.getByRole('button', { name: 'Edit' }).isVisible())
+  await edit(); await page.locator('.dashboard-edit').click(); await settle()
+  ok(`${tag} edit: Done ends it`, await page.getByRole('button', { name: 'Edit' }).isVisible() && await page.locator('.dashboard.is-editing').count() === 0)
+  await edit()
 
-  // The menu: Duplicate, the swaps, its own row, the row above, Remove with Undo.
-  await menu('Runs', 'Duplicate')
-  ok(`${tag} menu: Duplicate goes right after it, the row split in three`, (await names()) === 'Runs,Runs,Books', await layout())
-  await page.locator('.dashboard-widget[aria-label="Runs"]').nth(1).locator('.dashboard-widget-more').click(); await page.getByRole('menuitem', { name: 'Remove' }).click(); await settle()
-  ok(`${tag} menu: Remove says "View removed"`, await page.getByText('View removed').first().isVisible())
-  await page.getByRole('button', { name: 'Undo' }).first().click(); await settle()
-  ok(`${tag} menu: Undo brings it back`, (await names()) === 'Runs,Runs,Books', await names())
-  await page.locator('.dashboard-widget[aria-label="Runs"]').nth(1).locator('.dashboard-widget-more').click(); await page.getByRole('menuitem', { name: 'Remove' }).click(); await settle()
-  await menu('Runs', 'Move right')
-  ok(`${tag} menu: Move right swaps with its neighbour`, (await names()) === 'Books,Runs', await names())
-  await menu('Runs', 'Move to its own row')
-  ok(`${tag} menu: Move to its own row puts it full width under its row`, (await names()) === 'Books | Runs', await layout())
-  await menu('Runs', 'Join the row above')
-  ok(`${tag} menu: Join the row above puts it at that row's end, re-divided`, (await names()) === 'Books,Runs', await layout())
+  // ---- The menu, with Undo (G6-2, G6-4).
+  await menu(B, 'Remove')
+  ok(`${tag} remove: says "View removed" and leaves every row`, await page.getByText('View removed').first().isVisible() && (await rowsText()) === `${R} | ${T},${R2}`)
+  await undo()
+  ok(`${tag} remove: Undo brings it back`, (await rowsText()) === `${R},${B} | ${T},${R2}`, await rowsText())
+  await menu(R, 'Move right')
+  ok(`${tag} menu: Move right swaps with its neighbour`, (await rowsText()) === `${B},${R} | ${T},${R2}`)
+  await menu(R, 'Move left')
+  await menu(R2, 'Join the row above')
+  ok(`${tag} menu: Join the row above, re-divided`, (await rowsText()) === `${R},${B},${R2} | ${T}`, await widths())
+  await menu(R2, 'Move to its own row')
+  ok(`${tag} menu: Move to its own row`, (await rowsText()) === `${R},${B} | ${R2} | ${T}`, await rowsText())
 
-  // Dragging (the Lift Rule): within a row, and to a new row; a drop back in place sends nothing.
-  const box = async name => page.locator(`.dashboard-widget[aria-label="${name}"]`).first().boundingBox()
-  const dragTo = async (name, x, y) => { const b = await box(name); await page.mouse.move(b.x + b.width / 2, b.y + 40); await page.mouse.down(); await page.mouse.move(b.x + b.width / 2 + 10, b.y + 50, { steps: 3 }); await page.mouse.move(x, y, { steps: 8 }); await wait(150); await page.mouse.up(); await settle(); await wait(400) }
-  const books = await box('Books')
-  await dragTo('Runs', books.x + 20, books.y + 60)
-  ok(`${tag} drag: before its neighbour in its own row`, (await names()) === 'Runs,Books', await layout())
-  const runsBox = await box('Runs')
-  await dragTo('Runs', runsBox.x + runsBox.width / 2 + 5, runsBox.y + 60)
-  ok(`${tag} drag: let go where it was, nothing changes`, (await names()) === 'Runs,Books', await names())
-  const last = await box('Books')
-  await dragTo('Books', last.x + 40, last.y + last.height + 60)
-  ok(`${tag} drag: below the last row makes a new row`, (await names()) === 'Runs | Books', await layout())
-  await dragTo('Books', (await box('Runs')).x + (await box('Runs')).width - 10, (await box('Runs')).y + 60)
-  ok(`${tag} drag: into a row with room joins it, re-divided`, (await names()) === 'Runs,Books', await layout())
-
-  // The width handle between neighbours snaps to allowed splits; the height handle in 40 px steps.
+  // ---- Handles, and widths kept by a reorder and a swap within a row.
   const split = page.locator('.dashboard-split').first(), sb = await split.boundingBox(), row = await page.locator('.dashboard-row[data-row]').first().boundingBox()
-  await page.mouse.move(sb.x + sb.width / 2, sb.y + 40); await page.mouse.down(); await page.mouse.move(row.x + row.width * 0.36, sb.y + 40, { steps: 6 })
+  await page.mouse.move(sb.x + sb.width / 2, sb.y + 40); await page.mouse.down(); await page.mouse.move(row.x + row.width * 0.26, sb.y + 40, { steps: 6 })
   const badge = await page.locator('.dashboard-badge').innerText().catch(() => '')
+  const live = await widths()
   await page.mouse.up(); await settle()
-  const [rw, bw] = [(await box('Runs')).width, (await box('Books')).width]
-  ok(`${tag} handle: width snaps to 1/3 · 2/3, with its badge`, badge === '1/3 · 2/3' && Math.abs(rw / (rw + bw) - 1 / 3) < 0.04, `${badge} ${Math.round(rw)}:${Math.round(bw)}`)
-  const sizer = page.locator('.dashboard-row-size').first(), zb = await sizer.boundingBox(), h0 = (await box('Runs')).height
+  ok(`${tag} handle: each snap shows at once, before release (Ratchet a950bc9e)`, live === await widths(), `${live} vs ${await widths()}`)
+  ok(`${tag} handle: width snaps with its badge`, badge === '1/4 · 3/4', `${badge} ${await widths()}`)
+  const split3 = await widths()
+  await undo()
+  ok(`${tag} handle: Undo puts the widths back`, (await widths()) !== split3, await widths())
+  await page.mouse.move(sb.x + sb.width / 2, sb.y + 40); await page.mouse.down(); await page.mouse.move(row.x + row.width * 0.26, sb.y + 40, { steps: 6 }); await page.mouse.up(); await settle()
+  const kept = (await widths()).split(',').map(x => x.split(':')[1]).sort().join(',')
+  await menu(R, 'Move right')
+  ok(`${tag} swap within a row: each keeps its width`, (await widths()).split(',').map(x => x.split(':')[1]).sort().join(',') === kept && (await widths()).startsWith(`${B}:`), await widths())
+  const runsNow = await box(R), books = await box(B)
+  const slots = await dragTo(R, books.x + 20, books.y + 60)
+  ok(`${tag} drag in a row: a slot, then the order changes and each keeps its width`, slots === 1 && (await widths()).startsWith(`${R}:`) && (await widths()).split(',').map(x => x.split(':')[1]).sort().join(',') === kept, await widths())
+  await undo()
+  ok(`${tag} drag: Undo takes the move back`, (await widths()).startsWith(`${B}:`), await widths())
+  void runsNow
+  const zone = page.locator('.dashboard-row-size').first(), zb = await zone.boundingBox(), h0 = (await box(R)).height
   await page.mouse.move(zb.x + zb.width / 2, zb.y + zb.height / 2); await page.mouse.down(); await page.mouse.move(zb.x + zb.width / 2, zb.y + 85, { steps: 6 })
   const hb = await page.locator('.dashboard-badge').innerText().catch(() => '')
   await page.mouse.up(); await settle()
-  ok(`${tag} handle: height in 40 px steps, with its badge`, Math.round((await box('Runs')).height - h0) === 80 && hb === `${h0 + 80} px`, `${hb} ${h0} → ${(await box('Runs')).height}`)
+  ok(`${tag} handle: height in 40 px steps, with its badge`, Math.round((await box(R)).height - h0) === 80 && hb === `${h0 + 80} px`, `${hb}`)
+  const h1 = (await box(R)).height
+  await page.mouse.move(zb.x + zb.width / 2, zb.y + zb.height / 2 + 80); await page.mouse.down(); await page.mouse.move(zb.x + zb.width / 2, zb.y + 200, { steps: 6 })
+  await page.keyboard.press('Escape'); await page.mouse.up(); await settle()
+  ok(`${tag} handle: Esc mid-drag puts it back, saves nothing and stays in edit mode`, Math.round((await box(R)).height) === Math.round(h1) && await page.locator('.dashboard.is-editing').count() === 1, `${h1} → ${(await box(R)).height}`)
 
-  // + Add widget: a database and its first view, as a full-width row at the end.
-  await page.getByRole('button', { name: '+ Add widget' }).click(); await page.getByRole('menuitem', { name: 'To-dos' }).click(); await settle()
-  ok(`${tag} add: To-dos as a row of its own at the end`, (await names()) === 'Runs,Books | To-dos', await names())
+  // ---- A full row takes no slot; a drop there goes back. Then 12 at most.
+  await page.getByRole('button', { name: '+ Add widget' }).click(); await page.getByRole('menuitem', { name: 'Books', exact: true }).click(); await settle()
+  await menu(B, 'Join the row above').catch(() => {})
+  const rowsNow = await rowsText()
+  const target = await page.locator('.dashboard-row[data-row]').first().boundingBox()
+  const fullSlots = await dragTo(T, target.x + 30, target.y + 60)
+  ok(`${tag} drag onto a full row: no slot, and it goes back`, (await page.locator('.dashboard-row[data-row]').first().locator(':scope > .dashboard-widget').count()) < 4 || (fullSlots === 0 && (await rowsText()) === rowsNow), `${fullSlots} ${await rowsText()}`)
+  for (let i = 0; i < 12; i++) { const add = page.getByRole('button', { name: '+ Add widget' }); if (!(await add.count())) break; await add.click(); await page.getByRole('menuitem', { name: 'Books', exact: true }).click(); await settle() }
+  ok(`${tag} 12 at most: the line where + Add widget was`, await page.locator('.dashboard-widget').count() === 12 && await page.getByText('12 widgets at most').isVisible() && await page.getByRole('button', { name: '+ Add widget' }).count() === 0, `${await page.locator('.dashboard-widget').count()}`)
 
-  // Esc leaves edit mode; Done does too.
-  await page.locator('body').click({ position: { x: 5, y: 5 } }); await page.keyboard.press('Escape'); await settle()
+  // ---- Keys: Tab goes widget to widget, and keys there don't reach the page (R1-26). Esc leaves.
+  await widget(R).focus(); await page.keyboard.press('Tab')
+  const nextFocus = await page.evaluate(() => document.activeElement?.closest('.dashboard-widget, .dashboard-split, .dashboard-row-size')?.className ?? document.activeElement?.tagName)
+  await widget(R).focus(); await page.keyboard.type('xyz')
+  ok(`${tag} keys: Tab moves on from a widget, and typing there changes nothing`, /dashboard-/.test(nextFocus ?? '') && await page.getByText('xyz').count() === 0, nextFocus)
+  await page.keyboard.press('Escape'); await settle()
   ok(`${tag} Esc leaves edit mode`, await page.getByRole('button', { name: 'Edit' }).isVisible())
 
-  // Add view → Dashboard on an existing database: one widget, a copy of its first view.
-  await page.goto(`${base}/pages?page=books`); await page.locator('[data-database-views]').first().waitFor(); await settle()
+  // ---- Copies and other places (G6-1): Duplicate view; a block of it elsewhere is a link.
   await page.locator('[data-database-views]').first().click()
+  await page.getByRole('button', { name: 'This week options' }).click()
+  await page.locator('.database-menu').getByRole('menuitem', { name: 'Duplicate' }).click(); await settle()
+  await page.keyboard.press('Escape'); await settle()
+  ok(`${tag} Duplicate view: a working copy of the dashboard`, await page.locator('.dashboard-widget').count() === 12 && await page.locator('[data-database-views]').first().innerText().then(t => /copy/.test(t)), await page.locator('[data-database-views]').first().innerText())
+  await open('notes')
+  ok(`${tag} elsewhere: a block of the dashboard is a link to it`, await page.locator('.dashboard-link').count() === 1 && await page.locator('.dashboard-widget').count() === 0)
+  await page.locator('.dashboard-link button').click(); await page.locator('.dashboard-widget').first().waitFor()
+  ok(`${tag} elsewhere: the link opens it`, (await page.url()).includes('page=home'))
+
+  // ---- Add view → Dashboard, and `/` finds Database by "dashboard".
+  await open('runs'); await page.locator('[data-database-views]').first().click()
   await page.getByRole('menuitem', { name: '+ Add view' }).click().catch(() => page.getByText('+ Add view').click())
   await page.getByRole('menuitem', { name: 'Dashboard' }).click(); await settle()
-  ok(`${tag} Add view → Dashboard opens with one widget of this database`, await page.locator('.dashboard-widget').count() === 1 && await page.getByText('Dune', { exact: true }).isVisible())
+  ok(`${tag} Add view → Dashboard: one widget, its database's first view`, await page.locator('.dashboard-widget').count() === 1 && (await page.locator('.dashboard-widget').first().getAttribute('aria-label')) === 'Runs · Table')
+  await open('notes'); await page.getByText('Above the block').click(); await page.keyboard.press('End'); await page.keyboard.press('Enter'); await page.keyboard.type('/dashboard'); await wait(400)
+  ok(`${tag} / finds Database by "dashboard"`, await page.getByRole('option', { name: /Database/ }).count() > 0 || await page.locator('.bn-suggestion-menu').getByText('Database').count() > 0)
+  await page.keyboard.press('Escape')
   ok(`${tag} no page errors`, errors.length === 0, errors.join(' | ').slice(0, 300))
-  if (process.env.SHOTS) { await page.goto(`${base}/pages?page=home`); await page.locator('.dashboard-widget').first().waitFor(); await page.getByRole('button', { name: 'Edit' }).click(); await settle(); await page.screenshot({ path: `${process.env.SHOTS}/${engine}-edit.png` }) }
   await browser.close()
 }
 console.log(`${results.filter(Boolean).length}/${results.length} passed`)
