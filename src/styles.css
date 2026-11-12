@@ -1036,8 +1036,10 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .continuous-editor .bn-editor { padding-top:0; }
 .continuous-editor { margin-top:2px; }
 .continuous-editor .bn-editor > .bn-block-group > .bn-block-outer:first-child { margin-top:0; }
-.editor-date-tag { margin-left:auto; flex:none; }
+.editor-date-tag { margin-left:auto; flex:none; display:inline-flex; gap:4px; }
 .editor-date-tag .app-tag { font-size:var(--text-caption); }
+/* B92: the app noting how long it has waited, in the margin: plain Ink-soft words, no fill, so it never reads as something he set (Jazz 535b6fff). */
+.editor-since { align-self:center; color:var(--ink-2); font-size:var(--text-meta); line-height:20px; white-space:nowrap; }
 /* Desktop: + sits just outside the content column so it never covers right-aligned date tags; the phone tab bar owns + below 900px. */
 @media(max-width:899px) { .desktop-capture-plus { display:none; } }
 @media(min-width:900px) {
@@ -1576,6 +1578,8 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .editor-selection-bar.is-row-actions > button, .editor-bar-button { min-height:44px; padding:0 10px; border:0; border-radius:var(--radius-inline); background:transparent; color:var(--ink); font-size:var(--text-small); white-space:nowrap; }
 .editor-selection-bar.is-row-actions .app-menu { top:auto; bottom:calc(100% + 8px); }
 @media(hover:none) { .editor-row-more { display:none; } }
+/* With its ⋯ hidden on touch the menu is 0 px wide but still took a 10 px gap, enough to push a short to-do's date onto a line of its own (B92, Jazz 535b6fff). */
+@media(hover:none) { .editor-row-menu:not(:has(.app-menu)) { margin-left:-10px; } }
 @media(hover:hover) { .bn-block-outer:hover .editor-row-more { opacity:1; } }
 
 /* Sign-in (empty-start-states.md §2) on the v1 tokens (tokens.md §7). */

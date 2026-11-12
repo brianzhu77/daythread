@@ -39,6 +39,7 @@ import { buttonChanging, useRunButton } from './button-run'
 import { readSteps } from '../domain/buttons'
 import { announceSave, changedBy, claim, clearOwn, landedSave, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn, type DraftSlot } from './draft-slots'
 import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../domain/workspace'
+import { carriedSince } from '../domain/carried'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
 import { recentPages, visiblePages, parentOf } from '../domain/page-tree'
@@ -263,6 +264,9 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const copy = model ? rows!.copyLink(blockId) : null
   // data-status: the task's real state, for checks such as scripts/check-alignment.mjs (Lead a2428bb1). Display only.
   const taskLine = useRef<HTMLDivElement>(null)
+  // B92: on today's page, how long carry-over has brought it, from 7 days on. Older pages show what was, so nothing there.
+  const today = todayIso()
+  const since = useMemo(() => (seen && workspace && role === 'plan' && planDate === today ? carriedSince(workspace, seen, today) : null), [workspace, seen?.status, seen?.paused, t, role, planDate, today]) // eslint-disable-line react-hooks/exhaustive-deps
   return <div ref={taskLine} className="editor-task" data-role={role} data-draft={t ? undefined : true} data-status={t?.status ?? 'draft'}>
     <input contentEditable={false} type="checkbox" {...tickOnly} aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={shown === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && tick.toggle((to, r) => ({ text: to === 'done' ? 'Task completed' : 'Task reopened', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${shown === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
@@ -274,7 +278,11 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {/* A done or cancelled task keeps the button's space, hidden, so a long title doesn't reflow when it's ticked (#9). */}
     {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(seen?.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: todayIso(), today: todayIso() }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
     {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(t!.status === 'open' && workspace ? [{ items: [{ label: blockedByLabel(workspace, t!.id), onSelect: () => openBlockerPicker(t!.id, taskLine.current) }] }] : []), { items: [{ label: 'Copy', onSelect: () => rows!.copyRow(blockId) }, ...(copy ? [{ label: 'Copy link to line', onSelect: copy }] : [])] }]} onEscape={() => rows!.focusRow(blockId)} /></span>}
-    {seen && seen.status === 'open' && hasDateFacts(seen) && <span contentEditable={false} className="editor-date-tag"><DateTag task={seen} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
+    {/* One group at the line's end, so a deadline and "Since" sit together rather than one wrapping under the other at 390. */}
+    {seen && seen.status === 'open' && (hasDateFacts(seen) || since) && <span contentEditable={false} className="editor-date-tag">
+      {hasDateFacts(seen) && <DateTag task={seen} today={todayIso()} pageDate={planDate || todayIso()} />}
+      {since && <span className="editor-since is-since">Since {sinceLabel(since, todayIso())}</span>}
+    </span>}
     {t && <BlockedMark taskId={t.id} />}
   </div>
 }
@@ -445,6 +453,10 @@ function dayLabel(day: string): string {
 }
 
 // Inside a document only real dates earn a chip; "Unscheduled" is list-screen vocabulary and would be noise here.
+/** "Nov 3", with the year when it isn't this one: the date chip's words without its weekday, which a long line has no room for. */
+function sinceLabel(day: string, today: string): string {
+  return fromIso(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(day.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }) })
+}
 function hasDateFacts(task: Task): boolean {
   return Boolean(task.deadlineOn || task.attentionOn)
 }
