@@ -119,7 +119,15 @@ only between two neighbours, and it trades width between them.
   Move up and Move down, the same swap as 1280's Move left and Move right (§3). In a one-column list that reads as up
   and down, and the 1280 layout keeps every other widget where it was. After a move the page scrolls to the widget
   and gives it the moved-line flash (Thread Blue wash, 1 s, as `DESIGN.md` lists).
-- **Edit and Done** sit in the head as at 1280. `+ Add widget` is under the last widget. The row `+` doesn't exist.
+- **Edit and Done** sit in the head as at 1280: the dashboard's name and ⋯ on the left, the button on the right, on
+  one row, with a long name ending in "…" before the button. `+ Add widget` is under the last widget. The row `+`
+  doesn't exist.
+- **A widget** is full width inside the page's 20 px gutters, with its head as at 1280 and a 44 px `⋯`. The edit ring
+  sits 8 px outside it, inside the gutters. A wide table still scrolls sideways inside its widget, as on any page.
+  Only scrolling down inside a widget is ruled out. "Show more" stays open for the session, with "Show less".
+- **Off-screen widgets** hold their last known height, or 360 px on a first load, until they load.
+- **Two tabs (G6-5)** have no look of their own. A refused change uses the app's "Saved elsewhere" and reloads, as any
+  view does.
 - **Between 900 and 1100, or with the Comments pane open,** a row wraps when a widget would go under 200 px
   (`--widget-min`; Roadbuster 94fa8ad0: four quarters at 1280 are 213 px, so 280 would always wrap a row of four). This
   isn't stored. In edit mode a width handle shows only between neighbours that sit side by side.
