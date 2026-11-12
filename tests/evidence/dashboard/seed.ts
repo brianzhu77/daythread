@@ -2,6 +2,7 @@
 // Books in one row, To-dos and a second view of Runs in another. A page "Notes" holds a block of Home turned to the dashboard.
 // Usage: node --no-warnings tests/evidence/dashboard/seed.ts <store-path>  (a throwaway path; it's replaced)
 import { rmSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
 import { SqliteWorkspaceRepository as R } from '../../../src/server/sqlite-repository.ts'
 import { firstWidgetView } from '../../../src/domain/dashboard.ts'
 import { todosSourceId } from '../../../src/domain/todos-id.ts'
@@ -35,6 +36,14 @@ await C('home', { kind: 'moveView', viewId: 'dash', beforeId: home.views[0].id }
 await run({ type: 'create-database', pageId: 'wall', homeBlockId: null, title: 'Wall' })
 await C('wall', { kind: 'addDashboard', view: { id: 'quad', name: 'Four' }, rows: [{ id: 'q', widgets: ['a', 'b', 'c', 'd'].map((x, i) => ({ id: `q${x}`, width: 3, source: i % 2 ? 'books' : 'runs', view: { ...firstWidgetView(db(i % 2 ? 'books' : 'runs'), `qv${x}`), name: `Quarter ${x}` } })) }] })
 await C('wall', { kind: 'moveView', viewId: 'quad', beforeId: w.pages.find((p: any) => p.id === 'wall').database.views[0].id })
+// Shelf: Books and Runs in a row, and under them a widget whose database has since gone for good (as Trash's sweep leaves it).
+await run({ type: 'create-database', pageId: 'temp', homeBlockId: null, title: 'Temp' })
+await run({ type: 'create-database', pageId: 'shelf', homeBlockId: null, title: 'Shelf' })
+await C('shelf', { kind: 'addDashboard', view: { id: 'shelfdash', name: 'Shelf board' }, rows: [
+  { id: 's1', widgets: [{ id: 's-books', source: 'books', view: firstWidgetView(db('books'), 'sv-books') }, { id: 's-runs', source: 'runs', view: firstWidgetView(db('runs'), 'sv-runs') }] },
+  { id: 's2', widgets: [{ id: 's-gone', source: 'temp', view: firstWidgetView(db('temp'), 'sv-gone') }] },
+] })
+await C('shelf', { kind: 'moveView', viewId: 'shelfdash', beforeId: w.pages.find((p: any) => p.id === 'shelf').database.views[0].id })
 // A to-do planned for today, for the To-dos widget's tick.
 const today = new Date().toLocaleDateString('en-CA')
 await run({ type: 'ensure-day', date: today })
@@ -46,4 +55,6 @@ const notes = w.pages.find((p: any) => p.id === 'notes')
 const dash = w.pages.find((p: any) => p.id === 'home').database.views.find((v: any) => v.id === 'dash')
 const doc = JSON.parse(notes.document)
 await run({ type: 'save-editor', pageId: 'notes', expectedContent: pageContentKey(notes), document: JSON.stringify([...doc, { id: 'home-block', type: 'database', props: { pageId: 'home', view: JSON.stringify({ ...dash, id: 'linked-dash' }) }, children: [] }]), today })
+// Temp gone for good: out of the store, as the sweep takes a page from Trash after its time.
+{ const sql = new DatabaseSync(S); const row: any = sql.prepare('select data from workspace').get(); const data = JSON.parse(row.data); data.pages = data.pages.filter((p: any) => p.id !== 'temp'); sql.prepare('update workspace set data = ?').run(JSON.stringify(data)); sql.close() }
 console.log('views', w.pages.find((p: any) => p.id === 'home').database.views.map((v: any) => `${v.id}:${v.layout}`).join(','), todosSourceId)

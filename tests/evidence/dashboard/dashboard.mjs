@@ -75,7 +75,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
 
   // ---- Handles, and widths kept by a reorder and a swap within a row.
   const split = page.locator('.dashboard-split').first(), sb = await split.boundingBox(), row = await page.locator('.dashboard-row[data-row]').first().boundingBox()
-  await page.mouse.move(sb.x + sb.width / 2, sb.y + 40); await page.mouse.down(); await page.mouse.move(row.x + row.width * 0.26, sb.y + 40, { steps: 6 })
+  await page.mouse.move(sb.x + sb.width / 2, sb.y + 40); await page.mouse.down(); await page.mouse.move(row.x + row.width * 0.22, sb.y + 40, { steps: 6 })
   const badge = await page.locator('.dashboard-badge').innerText().catch(() => '')
   const live = await widths()
   await page.mouse.up(); await settle()
@@ -84,7 +84,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   const split3 = await widths()
   await undo()
   ok(`${tag} handle: Undo puts the widths back`, (await widths()) !== split3, await widths())
-  await page.mouse.move(sb.x + sb.width / 2, sb.y + 40); await page.mouse.down(); await page.mouse.move(row.x + row.width * 0.26, sb.y + 40, { steps: 6 }); await page.mouse.up(); await settle()
+  await page.mouse.move(sb.x + sb.width / 2, sb.y + 40); await page.mouse.down(); await page.mouse.move(row.x + row.width * 0.22, sb.y + 40, { steps: 6 }); await page.mouse.up(); await settle()
   const kept = (await widths()).split(',').map(x => x.split(':')[1]).sort().join(',')
   await menu(R, 'Move right')
   ok(`${tag} swap within a row: each keeps its width`, (await widths()).split(',').map(x => x.split(':')[1]).sort().join(',') === kept && (await widths()).startsWith(`${B}:`), await widths())
@@ -151,6 +151,28 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   ok(`${tag} wrap: with the Comments pane open the row wraps, no widget under 200 px`, (await lines()) > 1 && narrow >= 200, `${await lines()} lines, ${narrow} px`)
   await page.getByRole('button', { name: 'Close comments' }).click(); await settle()
   ok(`${tag} wrap: closing it puts the row back on one line, nothing stored`, (await lines()) === 1)
+  // ---- G6-4: a source in Trash, one gone for good, and the whole dashboard removed (Bumblebee 0e05db08).
+  await open('books'); await page.getByRole('button', { name: 'Page actions' }).click(); await page.getByRole('menuitem', { name: 'Delete' }).click(); await settle()
+  await open('shelf')
+  const shelf = name => page.locator(`.dashboard-widget[aria-label^="${name}"]`).first()
+  ok(`${tag} source in Trash: its one line with Restore, the others working`, await page.getByText('Books is in Trash').isVisible() && await page.locator('.dashboard-widget').filter({ hasText: 'Alpha' }).count() === 1, await page.locator('.dashboard-widget').allInnerTexts().then(x => x.map(y => y.slice(0, 30)).join(' / ')))
+  await page.locator('.dashboard-widget').filter({ hasText: 'Alpha' }).locator('[data-cell*="|r2|st"]').click()
+  ok(`${tag} source in Trash: the other widgets still edit`, await page.locator('[role=dialog], [role=listbox], .property-editor').count() > 0)
+  await page.keyboard.press('Escape'); await settle()
+  ok(`${tag} source deleted for good: "Source deleted" with Remove, in its place`, await page.getByText('Source deleted').isVisible() && await page.getByRole('button', { name: 'Remove' }).isVisible())
+  await page.getByRole('button', { name: 'Remove' }).click(); await settle()
+  ok(`${tag} source deleted for good: Remove takes the widget, with Undo`, await page.getByText('Source deleted').count() === 0 && await page.getByText('View removed').first().isVisible())
+  await page.getByRole('button', { name: 'Restore' }).click(); await settle()
+  ok(`${tag} source restored: the widget is back as it was`, await page.locator('.dashboard-widget').filter({ hasText: 'Dune' }).count() === 1)
+  void shelf
+  const runsRows = await (await fetch(`${base}/`)).ok
+  await page.locator('[data-database-views]').first().click(); await page.getByRole('button', { name: 'Shelf board options' }).click()
+  await page.locator('.database-menu').getByRole('menuitem', { name: 'Delete' }).click(); await settle(); await page.keyboard.press('Escape'); await settle()
+  ok(`${tag} removing the whole dashboard says so, with Undo`, await page.locator('.dashboard').count() === 0 && await page.getByText(/Shelf board deleted/).first().isVisible())
+  await undo()
+  ok(`${tag} removing the whole dashboard: Undo brings it back`, await page.locator('.dashboard-widget').count() === 2)
+  await open('runs')
+  ok(`${tag} removing the whole dashboard leaves every row`, runsRows && await page.getByText('Alpha', { exact: true }).isVisible() && await page.getByText('Charlie', { exact: true }).isVisible())
   ok(`${tag} no page errors`, errors.length === 0, errors.join(' | ').slice(0, 300))
   await browser.close()
 }
