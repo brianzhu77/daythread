@@ -9,6 +9,7 @@ import { openAutomations } from './automation-sheet'
 import { openButtonEditor } from './button-editor'
 import { filterTree, hasFilter, limits, ruleCount, rulesIn, type FilterGroup, tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View, type Repeat } from '../domain/database.ts'
 import { chartForms, chartKinds, chartSettings, type ChartForm, type ChartKind, type ChartSettings } from '../domain/chart'
+import { firstWidgetView } from '../domain/dashboard'
 import { addGroup, atPath, canHoldGroup, moveIntoGroup, moveIntoNewGroup, moveOutOfGroup, moveRulesOut, removeGroup, treeFields, withoutRule, type FilterPath } from '../domain/filter-tree'
 import { timelineUnits, viewDateEnd, type TimelineUnit } from '../domain/timeline'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
@@ -1229,6 +1230,14 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
   const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'feed' = 'table', dateBy?: string) => {
     const id = newId()
+    // A dashboard's copy is made on the server from it as stored, every id new (Lead ad6dae7b).
+    if (from?.layout === 'dashboard') {
+      const ids: Record<string, string> = {}
+      for (const r of from.dashboard?.rows ?? []) { ids[r.id] = newId(); for (const w of r.widgets) { ids[w.id] = newId(); ids[w.view.id] = newId() } }
+      change({ kind: 'duplicateDashboard', viewId: from.id, newViewId: id, ids })
+      setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id)
+      return
+    }
     // A new view is named after its type, with the name ready to rename (design §7.1); Duplicate copies one. A new board's or
     // gallery's cards start as titles alone: Properties adds what he wants on them (§7.5).
     const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : layoutLabels[layout], layout: groupBy ? 'board' : layout, columns: groupBy || layout === 'gallery' || layout === 'calendar' || layout === 'timeline' ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}), ...(dateBy ? { dateBy } : {}) }
@@ -1244,6 +1253,12 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id)
   }
   const addChart = () => { const only = groupableProperties(db.database, 'chart'); if (only.length > 1) setAdding('chart'); else addChartBy(only[0]?.id) }
+  // It opens with one widget: a copy of this database's first view a widget can be (dashboard.md §3).
+  const addDashboard = () => {
+    const id = newId()
+    change({ kind: 'addDashboard', view: { id, name: 'Dashboard' }, rows: [{ id: newId(), widgets: [{ id: newId(), source: db.id, view: firstWidgetView(db.database, newId()) }] }] })
+    setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id)
+  }
   // Its questions and a Responses view come with it (forms.md §3, §4).
   const addForm = () => { const id = newId(); change({ kind: 'addView', view: { id, name: 'Form', layout: 'form', columns: [], sort: [], filter: [] } }); setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id) }
   const addCalendar = () => { const only = dateProperties(db.database); if (only.length === 1) add(undefined, undefined, 'calendar', only[0]!.id); else setAdding('calendar') }
@@ -1262,6 +1277,8 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     <button type="button" role="menuitem" onClick={addChart}>Chart</button>
     {!db.database.fixed && <button type="button" role="menuitem" onClick={addForm}>Form</button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'feed')}>Feed</button>}
+    {/* A dashboard only ever opens on its database's own page; a linked block has one view of its own, so none there (dashboard.md §5). */}
+    {!db.database.fixed && !isLinkedBlock(blockId) && <button type="button" role="menuitem" onClick={addDashboard}>Dashboard</button>}
   </>
   return <>
     <Head title="Views" />
