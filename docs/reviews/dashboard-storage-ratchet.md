@@ -27,3 +27,9 @@ All three original findings are repaired. No-op moves now refuse `Already there`
 On 4d1074c1, complete suite: **1,046 pass, 13 skip, zero fail**. Typecheck found the author's reported nullable-array guard issue; 97f8987e changes only that cast in the domain, plus initial unverified menu wiring.
 
 A newly accepted rule remains unmet on 97f8987e: Jazz c80ba341 specifies that a same-row swap keeps each widget's own width (cross-row swaps exchange). Independent 4/8 same-row swap fixture fails: code exchanges the widths. This is a new specification delta, not failure to repair an original finding. Reported51b5bef4.
+
+## Early storage verdict: clear at 69bca6de
+
+The final delta changes only swap behavior and its test. All **seven independent fixtures plus 22 author tests pass (29/29)**, and typecheck passes on the shipping dependencies. Same-row swaps preserve each widget's width; cross-row swaps exchange widths. Original move-loss, held-settings duplication and host-limit findings are repaired. The full-suite 1,046-pass result above applies to 4d1074c1; later domain changes were the nullable guard cast and this swap delta, covered by focused reruns.
+
+This clears the reviewed storage/command layer for UI work. It does not clear the unbuilt UI, floor rollback, actual two-browser synchronization or speed gates. No runtime fixes were made by this reviewer.
