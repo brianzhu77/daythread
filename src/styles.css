@@ -3252,3 +3252,29 @@ textarea.form-input { resize: vertical; }
 .feed-link.is-quiet { color: var(--ink-3); }
 .feed-children { padding-left: 24px; }
 .feed-synced { padding-left: 10px; border-left: 2px solid var(--line-soft); }
+
+/* ---------------------------------------------------------------- Dashboard (dashboard.md, dashboard-edit.md) */
+.dashboard { --dash-gap: 24px; display: flex; flex-direction: column; gap: var(--dash-gap); }
+.dashboard-head { display: flex; align-items: flex-start; gap: 12px; }
+.dashboard-head-main { flex: 1; min-width: 0; }
+.dashboard-edit { flex: none; min-width: 72px; margin-top: 2px; border-color: var(--line-strong); color: var(--ink); font-size: var(--text-ui); }
+@media (hover: hover) { .dashboard-edit:hover { background: var(--fill); } }
+.dashboard-edit.is-on { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+/* A row wraps, in order, where a widget would go under about 280 px (Jazz): not stored. */
+.dashboard-row { display: flex; flex-wrap: wrap; gap: var(--dash-gap); }
+.dashboard-widget { position: relative; display: flex; flex: var(--widget-width) 1 0; flex-direction: column; min-width: 280px; height: var(--row-height); min-height: 0; }
+.dashboard-widget-body { flex: 1; min-height: 0; overflow: auto; }
+.dashboard-link { margin: 4px 0; }
+/* Edit mode draws on top and moves nothing: the ring sits outside the content (dashboard-edit.md §3). */
+.dashboard.is-editing .dashboard-widget { cursor: grab; }
+.dashboard.is-editing .dashboard-widget::before { content: ''; position: absolute; inset: -8px; border-radius: var(--radius-block); box-shadow: inset 0 0 0 1px var(--line); pointer-events: none; transition: box-shadow 120ms; }
+@media (hover: hover) { .dashboard.is-editing .dashboard-widget:hover::before { box-shadow: inset 0 0 0 1px var(--line-strong); } }
+.dashboard.is-editing .dashboard-widget:focus-visible { outline: none; }
+.dashboard.is-editing .dashboard-widget:focus-visible::before { box-shadow: inset 0 0 0 1px var(--line), 0 0 0 4px var(--paper), 0 0 0 6px var(--focus); }
+.dashboard.is-editing .dashboard-widget .database-more-button { visibility: hidden; }
+.dashboard-widget-menu { position: absolute; top: -10px; right: -10px; z-index: 3; }
+.dashboard-widget-more { width: 44px; min-height: 44px; padding: 0; color: var(--ink-2); font-size: var(--text-row); }
+@media (hover: hover) { .dashboard-widget-more:hover { background: var(--fill); } }
+.dashboard-add { align-self: flex-start; min-height: 36px; padding: 6px 8px; color: var(--ink-2); font-size: var(--text-ui); }
+.dashboard-limit { color: var(--ink-2); font-size: var(--text-meta); }
+.dashboard-add-pick { position: static; align-self: flex-start; }

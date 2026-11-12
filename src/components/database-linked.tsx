@@ -64,7 +64,8 @@ export function DatabasePicker({ workspace, at, allowNew, onNew, onPick, onClose
   const sources = workspace.pages.filter((p): p is DatabasePage => isDatabase(p) && !p.trashedAt && (!q || displayPageTitle(p).toLocaleLowerCase().includes(q)))
   const items = [...(allowNew && !q ? [null] : []), ...sources]
   const take = (item: DatabasePage | null | undefined) => {
-    if (item) onPick(item, linkedViewJson(item.database.views[0]!))
+    // A linked view starts from the first view a block can show: a dashboard only ever opens on its own page (Ratchet).
+    if (item) onPick(item, linkedViewJson(item.database.views.find(v => v.layout !== 'dashboard') ?? item.database.views[0]!))
     else if (allowNew) onNew()
     else onClose()
   }

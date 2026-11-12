@@ -182,16 +182,18 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     if (!inline) void navigate({ to: '/pages', search: db.parentId ? { page: db.parentId } : {} })
   }
   const copyLink = () => { close(); void navigator.clipboard?.writeText(new URL(`/pages?page=${encodeURIComponent(db.id)}`, window.location.origin).href) }
+  // A dashboard's own settings are its widgets', in edit mode; its filter across them comes with step 3 (dashboard.md §4).
+  const dash = view.layout === 'dashboard'
   return <>
-    <div className="database-menu-tiles">
+    {!dash && <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
       {view.layout !== 'calendar' && view.layout !== 'chart' && <button type="button" onClick={() => go('group')}>Group</button>}
-    </div>
+    </div>}
     {(!db.database.fixed || db.id === todosSourceId) && <button type="button" role="menuitem" onClick={e => { const anchor = document.querySelector(`[data-database-menu="${CSS.escape(blockId)}"]`) ?? e.currentTarget; setOpenMenu(null); openAutomations(db.id, anchor) }}>Automations{(() => { const n = workspace ? db.database.automations?.filter(r => r.paused || automationProblem(workspace, db.database, r)).length ?? 0 : 0; return n ? ` · ${n} paused` : '' })()}</button>}
-    {view.layout !== 'chart' && <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>}
-    <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
-    {view.layout !== 'calendar' && view.layout !== 'timeline' && view.layout !== 'chart' && !wide && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
+    {view.layout !== 'chart' && !dash && <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>}
+    {!dash && <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>}
+    {view.layout !== 'calendar' && view.layout !== 'timeline' && view.layout !== 'chart' && !dash && !wide && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
     {(view.layout === 'table' || view.layout === 'board' || (view.layout === 'timeline' && view.timelineTable)) && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('more')}>More settings<span className="database-menu-chevron">›</span></button>}
@@ -200,7 +202,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     {(inline || linked) && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.duplicate(blockId) }}>Duplicate</button>}
     {inline && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.turnIntoPage(blockId, db.id) }}>Turn into page</button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={copyLink}>Copy link</button>}
-    <button type="button" role="menuitem" onClick={() => go('export')}>Export<span className="database-menu-chevron">›</span></button>
+    {!dash && <button type="button" role="menuitem" onClick={() => go('export')}>Export<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); chooseCsv({ kind: 'merge', databaseId: db.id }) }}>Merge with CSV</button>}
     <hr />
     {linked
