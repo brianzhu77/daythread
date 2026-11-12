@@ -36,7 +36,10 @@
 | Focus (keyboard) | the 2 px Thread Blue focus ring at 2 px outside the Hairline ring | as every focus ring |
 
 **The widget's menu (`⋯`):** View settings… (opens the linked view's own menu: layout, filter, sort, properties),
-Duplicate, then Move left and Move right, each only where it can move, then Remove. Remove says "View removed", with
+Duplicate, then Move left and Move right, each only where it can move, then "Move to its own row" (a full-width row
+right under its current one, hidden when it's already alone) and "Join the row above" (at that row's end, re-divided,
+hidden when that row has 4 or there's none), then Remove. With the swaps these reach any layout a drag can, so arranging
+by keyboard is complete (Bumblebee 9337a4b0). Both are `moveWidget`; neither shows at 390, where rows aren't visible. Remove says "View removed", with
 Undo, and takes no rows, as R2-3. The Move items are how a keyboard arranges, and they're the whole of arranging at
 390 (§7).
 
