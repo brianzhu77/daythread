@@ -1,5 +1,5 @@
 // Comments step 4 in the built app (comments.md §4, §6, P2-6): Comment from a property's name on a row page and from a table cell's editor,
-// its quote, count and cell mark, a property hidden in the view, and an empty one with a comment kept out of the fold. 1280 and 390.
+// its quote (naming the row away from its page), count and cell mark, a property hidden in the view, and an empty one with a comment kept out of the fold. 1280 and 390.
 // Usage: node tests/evidence/comments-property/comments-property.mjs <base-url> [chromium|webkit]
 //   The server at <base-url> runs on a store fresh from seed.ts: seed it and start the server again before each engine, as each adds comments.
 import * as pw from '@playwright/test'
@@ -62,7 +62,7 @@ for (const [engineName, engine] of engines) {
     await foot.click()
     await pane.waitFor({ timeout: 5000 })
     const q2 = await pane.locator('.comment-quote.is-composing').innerText().catch(() => '')
-    ok(`${tag} it saves what was typed, then comments on it`, q2 === 'Note: Long run', q2)
+    ok(`${tag} it saves what was typed, then comments on it`, q2 === `${{ r2: 'Bravo', r4: 'Delta' }[noteRow]} · Note: Long run`, q2)
     await page.getByRole('textbox', { name: 'New comment' }).fill('Felt good')
     await send(); await settle(page); await page.waitForTimeout(300)
     ok(`${tag} the second cell gets its mark`, await page.locator(`td:has([data-cell*="|${noteRow}|note"])`).evaluate(td => td.classList.contains('has-comment')))

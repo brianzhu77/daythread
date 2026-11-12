@@ -18,6 +18,7 @@ const measure = async (variant) => {
     await page.getByText('Line 39 of the day').waitFor({ timeout: 60000 })
     // A chart is drawn when its second bar is, after its code has loaded; a table when its 25th row is.
     if (variant === 'chart') await page.locator('.database-chart-bar').nth(1).waitFor({ timeout: 60000 })
+    else if (variant === 'feed') await page.locator('.feed-card').nth(24).waitFor({ timeout: 60000 })
     else if (variant !== 'plain') await page.locator('.database-row').nth(24).waitFor({ timeout: 60000 })
     const ms = Date.now() - start
     if (i > 0) times.push(ms) // the first load warms the dev server's module cache

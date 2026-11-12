@@ -105,11 +105,11 @@ export function workspaceOf(rows: Rows): Workspace {
 /** A synced block's lines take a page row, hidden from the domain: its one row is all an edit writes. */
 const recordRow = (r: SyncedRecord, position: number): PageRow => ({
   id: `synced:${r.id}`, position, type: 'synced', date: null, title: '', url: null, parent_id: null, trashed_at: null, trash_id: null, document: r.lines,
-  handoff_done: false, review_saved: false, database_json: null, row_values: JSON.stringify({ rev: r.rev, original: r.original }), created_at: null, edited_at: null, icon: null, cover: null, cover_position: null,
+  handoff_done: false, review_saved: false, database_json: null, row_values: JSON.stringify({ rev: r.rev, original: r.original }), created_at: null, edited_at: r.editedAt ?? null, icon: null, cover: null, cover_position: null,
 })
 function recordOf(row: PageRow): SyncedRecord {
   const { rev, original } = JSON.parse(row.row_values ?? '{}') as { rev: number; original: string }
-  return { id: row.id.slice('synced:'.length), lines: row.document, rev, original }
+  return { id: row.id.slice('synced:'.length), lines: row.document, rev, original, ...(row.edited_at != null ? { editedAt: row.edited_at } : {}) }
 }
 /** The pages' rows and the records', in that order: each record's row sits after every page. */
 const pageEntities = (ws: Workspace): { id: string; row(position: number): PageRow }[] => [
