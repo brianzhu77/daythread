@@ -67,7 +67,18 @@ test('independent: duplicate dashboard preserves missing-source settings and fut
 });
 test('independent: swapping within one row keeps each widget own width',()=>{
  const {h,D,d}=setup();D({kind:'addWidget',widget:{id:'two',source:'source',view:firstWidgetView(h.page('source').database!,'twoview')},rowId:'row',beforeId:null});
- D({kind:'sizeSplit',rowId:'row',leftId:'w',rightId:'two',leftWidth:4});
+ D({kind:'sizeSplit',rowId:'row',widgetIds:['w','two'],widths:[4,8]});
  D({kind:'swapWidget',widgetId:'w',withId:'two'});
  assert.deepEqual(d().rows[0]!.widgets.map(w=>[w.id,w.width]),[['two',8],['w',4]]);
+});
+test('independent: whole-row resize preserves concurrent settings, Undo and stale membership checks',()=>{
+ const {h,D,d}=setup();for(const id of ['two','three'])D({kind:'addWidget',widget:{id,source:'source',view:firstWidgetView(h.page('source').database!,id+'view')},rowId:'row',beforeId:null});
+ const change={kind:'sizeSplit',rowId:'row',widgetIds:['w','two','three'],widths:[3,6,3]};
+ D({kind:'updateWidget',widgetId:'three',fields:{name:'Concurrent name'}});
+ const resized=D(change);
+ assert.deepEqual(d().rows[0]!.widgets.map(w=>w.width),[3,6,3]);assert.equal(d().rows[0]!.widgets[2]!.view.name,'Concurrent name');
+ h.run({type:'undo',targetOperationId:resized.receipt.operationId});
+ assert.deepEqual(d().rows[0]!.widgets.map(w=>w.width),[4,4,4]);assert.equal(d().rows[0]!.widgets[2]!.view.name,'Concurrent name');
+ D({kind:'swapWidget',widgetId:'w',withId:'two'});const before=JSON.stringify(h.ws);
+ assert.throws(()=>D(change),/changed since/);assert.equal(JSON.stringify(h.ws),before);
 });

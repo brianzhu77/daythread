@@ -26,3 +26,11 @@ Source review: `useHandleDrag` removes document move/up/Escape listeners on rele
 I also executed the author's `floor.ts` against an **own checkout of actual floor9417eea2 code** and an isolated synthetic SQLite store: **7/7 pass**. Floor commands rename the dashboard and its own filter, a source property and an unrelated page. New code reads back widths4/8, row height400, widget filters and reserved dashboard.filter unchanged. This is SQLite data compatibility, not a floor browser or Worker/Postgres check.
 
 This clears my two resize findings on this candidate. It does not clear the whole step for release: Jazz's newly accepted three-widget full-row resize contract still needs implementation and review, the floor browser run remains separate, and this report does not replace the full acceptance/performance gates.
+
+## PR204 delta review: 4e22306a
+
+Independent new three-widget browser fixture `ratchet-three.mjs` passes **12/12** across Chromium and WebKit: keyboard grows left/middle through equal widths, pointer previews all three widths with the full badge, Escape restores all three, and reload confirms no cancelled write. The saved two-widget handle/cancel suites also pass again (**22/22**) on this candidate. These runs use an isolated synthetic store and built app at1280.
+
+Actual floor9417eea2 SQLite data fixture was rerun with the new command shape: **7/7 pass**. No independent floor browser or Worker/Postgres run. Author reports floor browser separately. Shared lift's optional context path was source-reviewed; non-dashboard drag regressions belong to Lead's broader gate.
+
+The reviewed resize/storage code is clear. This is not acceptance of unfinished G6-2 controls: row-gutter + and specified Tab order are listed gaps. G6-7 speed measurement (12widgets) remains required before release; no speed measurement was made by this reviewer. G6-4 browser Trash/hard deletion and whole-dashboard removal were requested separately by Product and are not covered by these focused runs.

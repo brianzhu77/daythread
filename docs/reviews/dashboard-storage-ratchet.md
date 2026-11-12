@@ -33,3 +33,9 @@ A newly accepted rule remains unmet on 97f8987e: Jazz c80ba341 specifies that a 
 The final delta changes only swap behavior and its test. All **seven independent fixtures plus 22 author tests pass (29/29)**, and typecheck passes on the shipping dependencies. Same-row swaps preserve each widget's width; cross-row swaps exchange widths. Original move-loss, held-settings duplication and host-limit findings are repaired. The full-suite 1,046-pass result above applies to 4d1074c1; later domain changes were the nullable guard cast and this swap delta, covered by focused reruns.
 
 This clears the reviewed storage/command layer for UI work. It does not clear the unbuilt UI, floor rollback, actual two-browser synchronization or speed gates. No runtime fixes were made by this reviewer.
+
+## PR204 delta review: 4e22306a
+
+Adapted existing split fixture to `widgetIds`/whole-row `widths`. Added an independent three-widget command fixture: resize preserves concurrently edited widget settings, Undo restores widths while preserving that prior edit, and a resize prepared for the old widget order refuses atomically after a swap. Eight independent plus 23 author tests pass (31/31). Full suite **1,049 passed, 13 skipped, zero failures**; typecheck passes on shipping dependencies.
+
+No new confirmed code blocker in the reviewed command delta. The browser resize delta is recorded in the UI report; known incomplete controls and release speed measurement remain explicit.
