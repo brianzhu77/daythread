@@ -17,3 +17,7 @@ Candidate a7793b0b; 349883fd changes only two task-id assertions. Synthetic fixt
 - Context is bounded (5,000 characters/page, 30,000 earlier context); long pages preserve beginning/end while omitting middle lines. Nested source lines are represented with indentation but suggested output remains flat. These are implementation limits, not proof that every seven-day word reaches the model.
 - Model priority is a prompt instruction, not a deterministic completeness guarantee. Author's real-model evaluation was read but not repeated. Its calculated `order` warning does not affect its pass/fail boolean.
 - No independent browser, Worker, Postgres or real-model run for this review yet.
+
+## Retry confirmation
+
+`tests/ratchet-draft-retry.test.ts` executes the actual hook body with controlled hook bindings, fake focus events, an old ready draft and the server's failed-remake null response. It observes **four requests** (initial plus three focus events), exceeding the two-failure automatic limit. This confirms the client control-flow finding independently; it is a controlled hook test, not a browser or actual model failure. The unchanged draft and mock refresh reproduce the server path above.
