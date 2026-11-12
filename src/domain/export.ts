@@ -64,7 +64,7 @@ export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>)
   const parent = p.parentId && !template ? names.get(p.parentId) : undefined
   // A row's values are its properties, written as front matter so Obsidian reads them as such.
   const db = databaseOfRow(ws, p)
-  const values = db ? db.database.properties.flatMap(property => { const v = cellValue(db.database, p, property.id); return isEmptyValue(v) ? [] : [`${yamlString(property.name)}: ${yamlString(valueText(db.database, property.id, v))}`] }) : []
+  const values = db ? db.database.properties.flatMap(property => { const v = cellValue(db.database, p, property.id, ws.timezone); return isEmptyValue(v) ? [] : [`${yamlString(property.name)}: ${yamlString(valueText(db.database, property.id, v))}`] }) : []
   const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(p.url ? [`url: ${yamlString(p.url)}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), ...(template && p.parentId ? [`template-for: ${yamlString(p.parentId)}`] : []), ...values, '---']
   const title = p.type === 'daily' && p.date ? p.date : p.title || 'Untitled'
   const body = [p.url ? `<${p.url}>` : '', isDatabase(p) ? databaseMarkdown(ws, p, names) : '', blocksMarkdown(editorSeed(p, ws), ws, names)].filter(Boolean).join('\n\n')
@@ -174,7 +174,7 @@ function databaseMarkdown(ws: Workspace, p: Page & { database: Database }, names
   const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim()
   const columns = p.database.properties
   const header = `| Name |${columns.map(c => ` ${cell(c.name)} |`).join('')}`
-  const rows = databaseRows(ws, p.id).map(r => `| ${names.has(r.id) ? `[[${names.get(r.id)}]]` : cell(r.title || 'Untitled')} |${columns.map(c => ` ${cell(valueText(p.database, c.id, cellValue(p.database, r, c.id)))} |`).join('')}`)
+  const rows = databaseRows(ws, p.id).map(r => `| ${names.has(r.id) ? `[[${names.get(r.id)}]]` : cell(r.title || 'Untitled')} |${columns.map(c => ` ${cell(valueText(p.database, c.id, cellValue(p.database, r, c.id, ws.timezone)))} |`).join('')}`)
   return [header, `|${' --- |'.repeat(columns.length + 1)}`, ...rows].join('\n')
 }
 

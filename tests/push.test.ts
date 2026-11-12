@@ -101,25 +101,49 @@ test('runTick: each due reminder once per subscription, never twice; a gone endp
   // Signed up before this story's October, as the clock here is what the test says it is.
   await db.query(`update daythread.push_subscriptions set created_at = '2026-10-01'`)
   const first = await runTick({ store: push, loadWorkspace, send, now })
-  assert.deepEqual(first, { workspaces: 2, due: 1, sent: 2, gone: 0, failed: 0 })
+  assert.deepEqual(first, { workspaces: 2, due: 1, sent: 2, gone: 0, failed: 0, broken: 0 })
   assert.deepEqual(sent.map(([e, p]) => [e, p.title, p.body, p.url]), [[sub(1).endpoint, 'Dentist', 'Wed, Oct 28 · 3pm', '/day/2026-10-28'], [sub(2).endpoint, 'Dentist', 'Wed, Oct 28 · 3pm', '/day/2026-10-28']])
   sent.length = 0
-  assert.deepEqual(await runTick({ store: push, loadWorkspace, send, now: new Date(now.getTime() + 60_000) }), { workspaces: 2, due: 0, sent: 0, gone: 0, failed: 0 }, 'a second tick sends nothing')
+  assert.deepEqual(await runTick({ store: push, loadWorkspace, send, now: new Date(now.getTime() + 60_000) }), { workspaces: 2, due: 0, sent: 0, gone: 0, failed: 0, broken: 0 }, 'a second tick sends nothing')
   // The next reminder: for wsA one endpoint is gone (410) and the other fails (5xx): the gone one is dropped and the
   // reminder counts as taken. For wsB the only endpoint fails, so its reminder stays unsent.
   results.set(sub(1).endpoint, 'gone'); results.set(sub(2).endpoint, 'failed'); results.set(sub(3).endpoint, 'failed')
   const later = new Date(vancouver(2026, 10, 29, 8, 31))
   const freshWs = workspace('America/Vancouver', [{ id: 'p-doc', type: 'document', date: null, title: 'Trip', nodes: [line('l3', [chip('e3', '2026-10-29', '08:30'), text(' Flight')])] }])
-  assert.deepEqual(await runTick({ store: push, loadWorkspace: async () => freshWs, send, now: later }), { workspaces: 2, due: 2, sent: 0, gone: 1, failed: 2 })
+  assert.deepEqual(await runTick({ store: push, loadWorkspace: async () => freshWs, send, now: later }), { workspaces: 2, due: 2, sent: 0, gone: 1, failed: 2, broken: 0 })
   assert.deepEqual((await push.subscriptionsOf(wsA)).map(s => s.endpoint), [sub(2).endpoint], 'the gone endpoint is dropped')
   // wsB's send failed: still unsent, so the next tick tries again within the window; wsA is done with it.
   results.set(sub(2).endpoint, 'ok')
   sent.length = 0
   const again = await runTick({ store: push, loadWorkspace: async () => freshWs, send, now: new Date(later.getTime() + 60_000) })
-  assert.deepEqual(again, { workspaces: 2, due: 1, sent: 0, gone: 0, failed: 1 }, 'wsA took it already (sub 1 was gone); wsB tries again')
+  assert.deepEqual(again, { workspaces: 2, due: 1, sent: 0, gone: 0, failed: 1, broken: 0 }, 'wsA took it already (sub 1 was gone); wsB tries again')
   assert.deepEqual(sent.map(([e]) => e), [sub(3).endpoint])
   await db.close()
   void repo
+})
+
+test('runTick: a workspace that cannot be read is counted and skipped; the ones after it still get their reminders', async () => {
+  const { db, push, wsA, wsB } = await stores()
+  await push.subscribe(wsA, sub(1)); await push.subscribe(wsB, sub(3))
+  await db.query(`update daythread.push_subscriptions set created_at = '2026-10-01'`)
+  // The store decides the order, and ids are random, so ask it which workspace comes first.
+  const [first, second] = (await push.subscribed()).map(w => w.workspaceId)
+  const loadWorkspace = async (id: string) => { if (id === first) throw new Error('unreadable'); return ws }
+  const sent: string[] = []
+  const send = async (s: { endpoint: string }) => { sent.push(s.endpoint); return 'ok' as SendResult }
+  const logged: string[] = []
+  const original = console.error
+  console.error = (line: unknown) => { logged.push(String(line)) }
+  try {
+    const summary = await runTick({ store: push, loadWorkspace, send, now: new Date(vancouver(2026, 10, 28, 15, 2)) })
+    assert.deepEqual(summary, { workspaces: 2, due: 1, sent: 1, gone: 0, failed: 0, broken: 1 })
+  } finally { console.error = original }
+  const secondEndpoint = (await push.subscriptionsOf(second)).map(s => s.endpoint)
+  assert.deepEqual(sent, secondEndpoint, 'only the device of the readable workspace was sent to')
+  const failures = logged.map(l => JSON.parse(l)).filter(l => l.event === 'push.tick.workspace-failed')
+  assert.equal(failures.length, 1)
+  assert.equal(failures[0].workspaceId, first)
+  await db.close()
 })
 
 test('tickAllowed: CRON_SECRET in the header or the query, nothing without it', () => {

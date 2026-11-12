@@ -6,6 +6,7 @@ import { SqliteWorkspaceRepository } from './sqlite-repository.ts'
 import { PostgresWorkspaceRepository } from './postgres-repository.ts'
 import { postgresClient, type SqlClient } from './db/sql.ts'
 import { onHostingPlatform, onWorkers } from './hosting.ts'
+import { authRequired } from './auth/config.ts'
 let repository: ServerRepository | undefined
 let client: SqlClient | undefined
 /**
@@ -80,7 +81,7 @@ function requestScopedClient(): SqlClient {
 export function getRepository(): ServerRepository {
   if (repository) return repository
   const storage = storageKind()
-  if (storage === 'postgres') return repository = new PostgresWorkspaceRepository(postgresSql())
+  if (storage === 'postgres') return repository = new PostgresWorkspaceRepository(postgresSql(), undefined, { requireOwner: authRequired() })
   if (storage !== 'sqlite') throw new Error('Configure DAYTHREAD_STORAGE=sqlite or postgres. No fallback storage is enabled.')
   if (onHostingPlatform()) throw new Error('Unauthenticated local SQLite storage is disabled on hosting platforms')
   return repository = new SqliteWorkspaceRepository(resolve(process.env.DAYTHREAD_SQLITE_PATH ?? '.daythread-local/workspace.sqlite'), resolve(process.env.DAYTHREAD_LOCAL_DATA_PATH ?? '.daythread-local/workspace.json'), { allowMissingLegacy: process.env.DAYTHREAD_LOCAL_DATA_PATH === undefined })

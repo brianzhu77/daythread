@@ -1,13 +1,42 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { animate, type AnimationOptions } from 'motion'
 import { fixedOffset } from './fixed-coords'
 
 // One feel wherever something is dragged (Brian, Nov 8): the thing itself lifts under the pointer, a copy that keeps the
 // grab point under it, tilts a little and takes the floating shadow. A hatched slot of its size waits where it would
 // land, and its neighbours slide to make room: their places are measured before the redraw and they're moved after it
-// (FLIP). On release the copy glides into the slot and flattens, and the real thing shows as it lands. Under reduced
-// motion it still lifts and the slot still shows; nothing tilts, slides or glides.
+// (FLIP). On release the copy glides into the slot and flattens, and the real thing shows as it lands.
+//
+// Every movement is a spring (Motion; Brian, Nov 9: "use motion.dev to improve the texture"): the copy springs up as it
+// lifts, leans with the hand's speed while held, and lands with the momentum it was let go with; the neighbours' slide
+// is a stiff spring too. Under reduced motion it still lifts and the slot still shows; nothing tilts, slides or glides.
 
-const SETTLE_MS = 220, GONE_MS = 150, SHIFT_MS = 180
+const GONE_MS = 150
+/** Degrees the copy leans at full speed, and the hand speed (px/s) that is full. */
+const LEAN_MAX = 2.5, LEAN_FULL_SPEED = 800
+/** Without a move for this long, the hand counts as still: the lean comes back and a release carries no momentum. */
+const STILL_MS = 60
+/** The most of the hand's speed (px/s) that goes into the landing: enough to feel, not enough to fly past the slot. */
+const CARRY_MAX = 600
+
+/** The physics of each movement, in Motion's terms. Damping against stiffness decides what overshoots, and by how little. */
+const SPRING = {
+  /** Up in about 200 ms with a hair of overshoot, so the lift is felt as a pick-up and not a fade. */
+  lift: { type: 'spring', stiffness: 520, damping: 32 },
+  /** The lean follows the hand a beat behind it. */
+  lean: { type: 'spring', stiffness: 320, damping: 26 },
+  /** The landing carries the hand's momentum and settles in about 300 ms, overshooting a touch. */
+  settle: { type: 'spring', stiffness: 400, damping: 34 },
+  /** The neighbours get out of the way briskly, without bouncing. */
+  shift: { type: 'spring', stiffness: 700, damping: 50 },
+} satisfies Record<string, AnimationOptions>
+/** A slide in pixels is over within half a pixel; a turn or a scale has to come all the way to rest. */
+const PIXELS = { restDelta: 0.5, restSpeed: 10 }
+
+/** A running animation: what's needed to cut it short and to know when it's done. */
+type Playing = { stop(): void; finished: Promise<unknown> }
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
 
 export const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -22,10 +51,13 @@ export interface Lift {
 
 /**
  * Lifts a copy of `source` with the pointer at (x, y). A table row is cloned with its table, so its cells keep their
- * widths. `raise` keeps the copy that far above a finger, which would otherwise cover it; `badge` is a count on it.
+ * widths. `tilt` is the copy's angle in degrees and `grow` how much bigger it gets (a wide row grows less, so its far
+ * end doesn't swing out). `raise` keeps the copy that far above a finger, which would otherwise cover it; `badge` is a
+ * count on it.
  */
-export function lift(source: HTMLElement, x: number, y: number, options: { tilt?: number; raise?: number; badge?: string } = {}): Lift {
+export function lift(source: HTMLElement, x: number, y: number, options: { tilt?: number; grow?: number; raise?: number; badge?: string } = {}): Lift {
   const origin = source.getBoundingClientRect()
+  const tilt = options.tilt ?? 3, grow = options.grow ?? 0.02
   const clone = source.cloneNode(true) as HTMLElement
   // Nothing finds the copy where it looks for the real thing.
   for (const name of ['id', 'data-card', 'data-row', 'data-page', 'data-dragging']) clone.removeAttribute(name)
@@ -48,7 +80,6 @@ export function lift(source: HTMLElement, x: number, y: number, options: { tilt?
   inner.className = 'drag-lift-body'
   inner.style.width = `${origin.width}px`
   inner.style.height = `${origin.height}px`
-  inner.style.setProperty('--lift-tilt', `${options.tilt ?? 3}deg`)
   inner.append(body)
   if (options.badge) {
     const badge = document.createElement('span')
@@ -59,26 +90,71 @@ export function lift(source: HTMLElement, x: number, y: number, options: { tilt?
   wrap.append(inner)
   document.body.append(wrap)
   const grab = { x: x - origin.left, y: y - origin.top + (options.raise ?? 0) }
-  // It turns about the grab point, so it stays under the pointer as it tilts.
+  // It turns about the grab point, so it stays under the pointer as it tilts and leans.
   inner.style.transformOrigin = `${grab.x}px ${grab.y}px`
   // Placed from the layout viewport, as the pointer is measured from the visible part (fixed-coords.ts).
-  const at = (left: number, top: number) => { wrap.style.transform = `translate(${left}px, ${top + fixedOffset()}px)` }
-  const move = (px: number, py: number) => at(px - grab.x, py - grab.y)
+  let pos = { left: 0, top: 0 }
+  const at = (left: number, top: number) => {
+    pos = { left, top: top + fixedOffset() }
+    wrap.style.transform = `translate(${pos.left}px, ${pos.top}px)`
+  }
+  // The hand's speed in px/s, smoothed over the last moves: it leans the copy while held and carries it on release.
+  const velocity = { x: 0, y: 0 }
+  let last = { x, y, t: performance.now() }
+  let lifted = false, lean = 0, leanRest = 0
+  /** The copy's own springs, cut short if it's removed under them. */
+  let playing: Playing[] = []
+  const leanTo = (deg: number) => {
+    if (Math.abs(deg - lean) < 0.3) return
+    lean = deg
+    playing.push(animate(inner, { rotate: -tilt - lean }, SPRING.lean))
+  }
+  const move = (px: number, py: number) => {
+    const now = performance.now(), dt = now - last.t
+    if (dt > 0) {
+      // A move after a pause starts the estimate over; otherwise one jittery frame can't swing the copy.
+      const keep = dt > 100 ? 0 : 0.5
+      velocity.x = velocity.x * keep + ((px - last.x) / dt) * 1000 * (1 - keep)
+      velocity.y = velocity.y * keep + ((py - last.y) / dt) * 1000 * (1 - keep)
+    }
+    last = { x: px, y: py, t: now }
+    at(px - grab.x, py - grab.y)
+    if (lifted && !reducedMotion()) {
+      // Moving right, the copy trails about the hand like a card held by one corner; still, it comes back to its tilt.
+      leanTo(clamp(velocity.x / LEAN_FULL_SPEED, -1, 1) * LEAN_MAX)
+      clearTimeout(leanRest)
+      leanRest = window.setTimeout(() => leanTo(0), STILL_MS)
+    }
+  }
   move(x, y)
   // Flat where it was for a frame, then up: the lift itself is seen.
-  requestAnimationFrame(() => inner.classList.add('is-up'))
+  requestAnimationFrame(() => {
+    lifted = true
+    inner.classList.add('is-up')
+    if (!reducedMotion()) playing.push(animate(inner, { rotate: -tilt, scale: 1 + grow }, SPRING.lift))
+  })
   const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, reducedMotion() ? 0 : ms))
   return {
     origin,
     move,
     settle(home) {
+      clearTimeout(leanRest)
       inner.classList.remove('is-up')
       if (!home) { wrap.classList.add('is-gone'); return wait(GONE_MS) }
-      wrap.classList.add('is-settling')
-      at(home.left, home.top)
-      return wait(SETTLE_MS)
+      if (reducedMotion()) { at(home.left, home.top); return Promise.resolve() }
+      // Let go mid-move, it keeps some of its momentum into the slot; held still first, it just drops in.
+      const still = performance.now() - last.t > STILL_MS
+      const carry = (v: number) => (still ? 0 : clamp(v, -CARRY_MAX, CARRY_MAX))
+      const to = { left: home.left, top: home.top + fixedOffset() }
+      const glide = [
+        animate(wrap, { x: [pos.left, to.left] }, { ...SPRING.settle, ...PIXELS, velocity: carry(velocity.x) }),
+        animate(wrap, { y: [pos.top, to.top] }, { ...SPRING.settle, ...PIXELS, velocity: carry(velocity.y) }),
+      ]
+      // Flattening rides along; the last hundredth of a degree isn't waited for.
+      playing.push(...glide, animate(inner, { rotate: 0, scale: 1 }, SPRING.settle))
+      return Promise.all(glide.map(run => run.finished)).then(() => undefined)
     },
-    remove() { wrap.remove() },
+    remove() { for (const run of playing) run.stop(); playing = []; wrap.remove() },
   }
 }
 
@@ -87,6 +163,9 @@ export type Rects = Map<Element, DOMRect>
 /** Where each element is now, to the eye: a slide still under way counts. */
 export const measure = (els: Iterable<Element>): Rects => new Map([...els].map(el => [el, el.getBoundingClientRect()]))
 
+/** The slide each element is on, so a new one can take over from where the eye has it. */
+const shifting = new WeakMap<Element, Playing>()
+
 /** After a redraw, each element slides from where it was (`before`, measured first) to where it is now. */
 export function flip(before: Rects, els: Iterable<Element>) {
   if (reducedMotion()) return
@@ -94,12 +173,12 @@ export function flip(before: Rects, els: Iterable<Element>) {
     const was = before.get(el)
     // Not drawn before (the lifted card), so it has nowhere to come from.
     if (!was || (!was.width && !was.height)) continue
-    // A slide still under way goes before measuring, so the new one starts from where the eye had it.
-    for (const a of el.getAnimations()) if (a.id === 'flip') a.cancel()
-    const now = el.getBoundingClientRect()
+    // Its place now, read under any slide still under way: the new slide starts where the eye had it.
+    const now = layoutRect(el)
     const dx = was.left - now.left, dy = was.top - now.top
     if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue
-    el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { id: 'flip', duration: SHIFT_MS, easing: 'cubic-bezier(.2, 0, 0, 1)' })
+    shifting.get(el)?.stop()
+    shifting.set(el, animate(el, { x: [dx, 0], y: [dy, 0] }, { ...SPRING.shift, ...PIXELS }))
   }
 }
 

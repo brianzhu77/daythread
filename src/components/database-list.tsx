@@ -77,7 +77,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
     }
     const move = (ev: PointerEvent) => {
       // A press on the handle is nothing until it moves.
-      if (!held) { if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 3) return; held = true; room.pickUp(line, ev.clientX, ev.clientY, { tilt: 1 }) }
+      if (!held) { if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 3) return; held = true; room.pickUp(line, ev.clientX, ev.clientY, { tilt: 1, grow: 0.01 }) }
       room.copy.current?.move(ev.clientX, ev.clientY)
       place(ev.clientY, room.copy.current?.origin.height ?? line.offsetHeight)
     }

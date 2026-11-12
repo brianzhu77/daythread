@@ -130,7 +130,7 @@ for (const [typed, message] of refused) test(`refused: ${typed}`, () => {
 
 test('a row that breaks a formula reads Error on that row only, and an empty date reads empty', () => {
   assert.equal(shown(run('at(Tags, 5)')), null)
-  assert.equal(shown(run('dateAdd(prop("Due date"), 1, "days").format()').valueOf() as Value), 'September 2, 2023')
+  assert.equal(shown(run('dateAdd(prop("Due date"), 1, "days").format()')!.valueOf() as Value), 'September 2, 2023')
   const empty = { ...row, values: {} } as Page
   const p: Property = { id: 'f', name: 'F', type: 'formula', formula: storedFormula('dateAdd(prop("Due date"), 1, "days")', world, 'db') }
   const { value, error } = runRow([...properties, p], p, empty)

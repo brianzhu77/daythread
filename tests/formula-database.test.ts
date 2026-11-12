@@ -1,7 +1,7 @@
 // Formulas as a column (design §3, §5, R4-3): read-only and never stored, with the cell, a filter, a sort, a sum and the export reading one value.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cellValue, columnCalc, databaseRows, groupableProperties, isReadOnly, propertyOf, viewRows, type Database, type DatabaseChange } from '../src/domain/database.ts'
+import { cellValue, columnCalc, databaseRows, groupableProperties, isReadOnly, propertyOf, viewRows, type Database, type DatabaseChange, type PropertyInput } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import { clockIn, formulaErrorOf, formulaRunsOf, storedFormula, worldOf } from '../src/domain/formula.ts'
@@ -151,7 +151,7 @@ function library() {
   const make = (pageId: string, title: string) => h.run({ type: 'create-database', pageId, homeBlockId: null, title })
   make('books', 'Books'); make('authors', 'Authors')
   const change = (pageId: string, c: DatabaseChange) => h.run({ type: 'change-database', pageId, change: c })
-  const prop = (pageId: string, property: Parameters<typeof change>[1] extends { property: infer P } ? P : never) => change(pageId, { kind: 'addProperty', property } as DatabaseChange)
+  const prop = (pageId: string, property: PropertyInput) => change(pageId, { kind: 'addProperty', property } as DatabaseChange)
   prop('authors', { id: 'age', name: 'Age', type: 'number' })
   prop('authors', { id: 'state', name: 'Status', type: 'status' })
   prop('books', { id: 'pages', name: 'Pages', type: 'number' })

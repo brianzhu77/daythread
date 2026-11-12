@@ -74,6 +74,23 @@ test('one workspace per account: each account reads and writes only its own rows
   } finally { await db.close() }
 })
 
+test('with sign-in required, a request with no account is refused; the local workspace is neither read nor made', async () => {
+  const db = await PGlite.create()
+  try {
+    const sql = pgliteClient(db), repo = new PostgresWorkspaceRepository(sql, undefined, { today, requireOwner: true })
+    await repo.prepare()
+    await sql.transaction(tx => repo.createWorkspace(tx, A, 'America/Vancouver'))
+    await assert.rejects(repo.load(), /No signed-in account/)
+    await assert.rejects(repo.execute({ operationId: 'x1', expectedRevision: 0, action: { type: 'ensure-day', date: today } }), /No signed-in account/)
+    await assert.rejects(repo.heldText(), /No signed-in account/)
+    await assert.rejects(repo.workspaceIdFor(null), /No signed-in account/)
+    const shared = await db.query<{ n: number }>(`select count(*)::int as n from daythread.workspaces where user_id is null`)
+    assert.equal(shared.rows[0]!.n, 0)
+    assert.equal((await asOwner(A, () => repo.load())).revision, 0)
+    assert.ok((await repo.workspaceIdFor(A)).length > 0)
+  } finally { await db.close() }
+})
+
 test('Undo comes from the operation\'s inverse, survives a restart, and is refused once anything changed since; no second copy of the workspace is stored', async () => {
   const db = await PGlite.create()
   try {

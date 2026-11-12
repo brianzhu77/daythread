@@ -1,13 +1,16 @@
 import { useEffect } from 'react'
 import { getAppInfo } from '../server/functions'
 import { flushAllEditors } from './editor-flush'
-import { commandsPending } from './use-day'
+import { commandFailed, commandsPending } from './use-day'
+import { cellsUnsaved } from './database-block'
+import { uploadsUnfinished } from './body-files'
 import { draftAskPending } from './use-day-draft'
 
 // An open tab moves onto a new release by itself (Lead 115ea14a): he rarely reloads, so a fix otherwise waits on him.
 // A return to the tab finds the server on another build and marks the move; the next time he leaves, the tab reloads
 // while hidden, so he never sees it (Jazz, Lead 9c08dbcc). It goes only when nothing is on its way and nothing is in his
-// hands: every editor saved, no command or draft ask out, no IME composition, no key in the last 2 s, no menu, dialog
+// hands: every editor saved, no command or draft ask out, no failed command, failed cell or unfinished upload waiting
+// only in the tab's memory, no IME composition, no key in the last 2 s, no menu, dialog
 // or list open. It comes back on the same page, scroll and (with a mouse) caret, with no notice. A tab frozen as it was
 // hidden (the Home Screen app) finishes the reload when he opens it again, the one case where it shows.
 
@@ -43,6 +46,8 @@ const undoShowing = () => Boolean(document.querySelector('.app-toasts [role="ale
 const quiet = () => !composing && Date.now() - lastKey >= 2000 && ![...document.querySelectorAll(openUi)].some(e => !e.closest('.app-toasts'))
 /** Nothing on its way to the server: no queued command (a tick, a drag, a set-draft) and no draft ask (Lead ea5dc1fb). */
 const idle = () => !commandsPending() && !draftAskPending()
+/** Work that failed or is unfinished and is kept only in this tab's memory: a reload would lose it, so the tab stays. */
+const held = () => commandFailed() || cellsUnsaved() || uploadsUnfinished()
 /** Waits up to `ms` for the tab to go idle; false if it didn't. */
 async function settled(ms: number): Promise<boolean> {
   for (const until = Date.now() + ms; !idle(); ) {
@@ -161,9 +166,10 @@ export function useMoveToNewBuild() {
       busy = true
       try {
         const left = { scroll: { window: window.scrollY, sidebar: sidebar()?.scrollTop ?? 0 }, caret: finePointer() ? caretNow() : null }
-        // A save going (or failing, offline), a command or draft ask still out, or an Undo notice showing keeps the tab
-        // as it is until the next time he leaves; a short wait covers a command about to land.
-        if (!quiet() || undoShowing() || !(await flushAllEditors()) || !(await settled(10_000)) || !(await flushAllEditors()) || !idle() || !quiet() || undoShowing()) return
+        // A save going (or failing, offline), a command or draft ask still out, a failed command or cell waiting on Retry,
+        // a file still uploading, or an Undo notice showing keeps the tab as it is until the next time he leaves; a short
+        // wait covers a command about to land.
+        if (!quiet() || undoShowing() || held() || !(await flushAllEditors()) || !(await settled(10_000)) || !(await flushAllEditors()) || !idle() || held() || !quiet() || undoShowing()) return
         sessionStorage.setItem(movedKey, build)
         sessionStorage.setItem(resumeKey, JSON.stringify({ href: location.href, ...left } satisfies Resume))
         location.reload()
