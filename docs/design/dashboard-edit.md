@@ -88,6 +88,9 @@ only between two neighbours, and it trades width between them.
 
 - **At rest the bars show only on the row being hovered,** so twelve widgets don't carry twenty bars. While dragging,
   the bar is Ink-faint.
+- **In a row of three** (Roadbuster e46e76d0): no single pair trade from 4 + 4 + 4 is an allowed split, so a handle
+  steps the whole row. Between A and B in A | B | C: 3 + 6 + 3 dragged left, 4 + 4 + 4 in the middle, 6 + 3 + 3 dragged
+  right, and the same for B and C. The badge shows all three ("1/4 · 1/2 · 1/4"), and it's one `sizeSplit` and one Undo.
 - **Snapping:** a width moves only between snap points. Each snap the pointer passes shows at once, and neighbours never
   go under 1/4. A height moves in 40 px steps from 160 to 800.
 - **The value while dragging:** a Meta-size badge (Paper-fill, Ink-soft, 6 px corners) centred on the handle at the
