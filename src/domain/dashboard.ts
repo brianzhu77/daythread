@@ -191,7 +191,8 @@ export function changeDashboard(db: Database, change: DashboardChange, sourceOf:
         from.widgets = others
         return 'Widget moved'
       }
-      if (change.toRowId === null && from.widgets.length === 1 && (change.rowBeforeId ?? null) === (dashboard.rows[dashboard.rows.indexOf(from) + 1]?.id ?? null)) throw new DatabaseError('Already there')
+      // A lone widget to a new row just above or below its own is where it already is.
+      if (change.toRowId === null && from.widgets.length === 1 && [from.id, dashboard.rows[dashboard.rows.indexOf(from) + 1]?.id ?? null].includes(change.rowBeforeId ?? null)) throw new DatabaseError('Already there')
       const before = change.rowBeforeId ? dashboard.rows.find(r => r.id === change.rowBeforeId) : undefined
       const to = change.toRowId === null ? newRow(change.newRowId, before, from.height) : rowOf(change.toRowId)
       if (to.widgets.length >= dashboardLimits.perRow) throw new DatabaseError(`${dashboardLimits.perRow} widgets to a row at most`)
