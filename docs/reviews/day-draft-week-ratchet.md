@@ -33,3 +33,7 @@ One new confirmed gap remains from the synced timestamp repair: `tests/ratchet-d
 The synced recency finding is repaired. Record `editedAt` is persisted in the existing row column; input uses the later page/record edit time, preserving the one-record write. My original fixture was rerun on 517a7d58 and still failed with no conflict copy and its page timestamp unchanged; on 96537d45 it passes. Additional assertions verify that only `synced:record` is written, its timestamp survives the row round trip, and the loaded workspace still selects the words. Lead corrected an earlier attribution to the fixture in message 56e0053e; no fixture repair was required to get this before/after result.
 
 49 targeted tests pass, including both original remake regressions, the seven-day baseline, synced recency and synced-record/storage invariants. No independent browser, deployed Worker or external model run was added. No remaining confirmed blocker in the reviewed changes.
+
+## Shipping dependency correction
+
+Lead f4d7794d identified shared `daythread/node_modules` as stale (seroval 1.6.9). The earlier runs above used that shared directory. Relinked this review tree to `/Users/dogrod/Developer/daythread-ci/node_modules`, confirmed seroval **1.8.0**, and reran the complete suite and `npm run typecheck`. Both pass; complete suite **1,022 passed, 13 skipped, zero failures**. This supersedes the dependency basis of the prior results. No reviewed runtime source changed.
