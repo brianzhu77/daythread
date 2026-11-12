@@ -3,7 +3,8 @@
 // inert, and arranges them with the dashboard's own commands (dashboard.ts), one command and one Undo each.
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { dashboardLimits, findWidget, firstWidgetView, shownWidths, type Dashboard, type DashboardChange, type DashboardRow, type DashboardWidget } from '../domain/dashboard'
+import { allowedSplit, dashboardLimits, findWidget, firstWidgetView, rowHeights, shownWidths, snapHeight, type Dashboard, type DashboardChange, type DashboardRow, type DashboardWidget } from '../domain/dashboard'
+import { useRoom } from './drag-lift'
 import { isDatabase, type Database, type View } from '../domain/database'
 import { readingWorkspace, todosSourceId, todosTitle } from '../domain/todos-source'
 import type { Page, Workspace } from '../domain/types'
@@ -20,7 +21,7 @@ const newId = (): string => crypto.randomUUID()
 /** The commands' common part, built from the dashboard as the workspace holds it when the command goes. */
 function useDashboardRun(hostId: string, viewId: string) {
   const { run } = useWorkspace()
-  return (build: (dashboard: Dashboard) => DashboardChange | null, notice?: string) => void run(ws => {
+  return (build: (dashboard: Dashboard) => DashboardChange | null, notice?: string) => run(ws => {
     const host = ws.pages.find(p => p.id === hostId), view = isDatabase(host) ? host.database.views.find(v => v.id === viewId) : undefined
     const change = view?.dashboard ? build(view.dashboard) : null
     return change ? { type: 'change-database', pageId: hostId, change } : null
@@ -40,39 +41,188 @@ export function DatabaseDashboard(props: Props) {
   return <FullDashboard {...props} />
 }
 
+/** Where a dragged widget would land: into a row before a widget (last when null), or a new row before a row (last when null). */
+type Landing = { rowId: string; beforeId: string | null } | { newRowBefore: string | null }
+const sameLanding = (a: Landing | null, b: Landing | null) => JSON.stringify(a) === JSON.stringify(b)
+/** "1/3" for 4 twelfths. */
+const fraction = (twelfths: number) => ({ 3: '1/4', 4: '1/3', 6: '1/2', 8: '2/3', 9: '3/4', 12: '1' } as Record<number, string>)[twelfths] ?? `${twelfths}/12`
+
 function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: Props) {
   const [editing, setEditing] = useState(false)
   const dashboard: Dashboard = view.dashboard ?? { rows: [] }
   const send = useDashboardRun(db.id, view.id)
   const count = dashboard.rows.reduce((n, r) => n + r.widgets.length, 0)
+  const root = useRef<HTMLDivElement>(null)
+  const room = useRoom(() => [...(root.current?.querySelectorAll('.dashboard-widget, .dashboard-row') ?? [])], id => root.current?.querySelector<HTMLElement>(`[data-widget="${CSS.escape(id)}"]`) ?? null)
+  // The widget being dragged and where it would land; the rows are drawn without it, and a slot where it would go.
+  const [drag, setDrag] = useState<{ widgetId: string; landing: Landing | null } | null>(null)
   // Esc leaves edit mode, unless a menu, sheet or drag has it first (dashboard-edit.md §2).
   useEffect(() => {
     if (!editing) return
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('.app-menu, .database-menu, [role=dialog]')) setEditing(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !drag && !document.querySelector('.app-menu, .database-menu, [role=dialog]')) setEditing(false) }
     document.addEventListener('keydown', esc)
     return () => document.removeEventListener('keydown', esc)
-  }, [editing])
+  }, [editing, drag])
   const order = dashboard.rows.flatMap(r => r.widgets.map(w => w.id))
-  return <div className={`dashboard${editing ? ' is-editing' : ''}`} data-dashboard={view.id}>
+  const moving = drag ? findWidget(dashboard, drag.widgetId) : null
+
+  /** The landing under the pointer: a row's side of a widget, or the gap between rows. A full row takes nothing (§4). */
+  const landingAt = (x: number, y: number, widgetId: string): Landing | null => {
+    // The rows as stored: a slot's own row isn't one of them.
+    const rows = [...(root.current?.querySelectorAll<HTMLElement>('.dashboard-row[data-row]') ?? [])]
+    for (let i = 0; i < rows.length; i++) {
+      const el = rows[i]!, rect = el.getBoundingClientRect(), id = el.dataset.row!
+      if (y < rect.top) return { newRowBefore: id }
+      if (y > rect.bottom) continue
+      const row = dashboard.rows.find(r => r.id === id)
+      if (!row) continue
+      const own = row.widgets.some(w => w.id === widgetId)
+      if (!own && row.widgets.length >= dashboardLimits.perRow) return null
+      const others = [...el.querySelectorAll<HTMLElement>('.dashboard-widget:not(.is-lifted)')]
+      const before = others.find(w => { const r = w.getBoundingClientRect(); return x < r.left + r.width / 2 && y >= r.top && y <= r.bottom })
+      return { rowId: id, beforeId: before?.dataset.widget ?? null }
+    }
+    return { newRowBefore: null }
+  }
+  /** Whether landing there would put it where it is: then nothing is sent (Jazz 06c36e09). */
+  const inPlace = (landing: Landing, widgetId: string): boolean => {
+    const at = findWidget(dashboard, widgetId)
+    if (!at) return true
+    if ('rowId' in landing) {
+      if (landing.rowId !== at.row.id) return false
+      const others = at.row.widgets.filter(w => w.id !== widgetId)
+      const index = landing.beforeId ? others.findIndex(w => w.id === landing.beforeId) : others.length
+      return index === at.index
+    }
+    const next = dashboard.rows[dashboard.rows.indexOf(at.row) + 1]?.id ?? null
+    return at.row.widgets.length === 1 && (landing.newRowBefore === at.row.id || landing.newRowBefore === next)
+  }
+  const startDrag = (e: React.PointerEvent<HTMLElement>, widgetId: string) => {
+    if (!editing || e.button !== 0 || e.pointerType !== 'mouse' || (e.target as Element).closest('button, [role=menu], .dashboard-split, .dashboard-row-size')) return
+    const el = e.currentTarget, x0 = e.clientX, y0 = e.clientY
+    let lifted = false, landing: Landing | null = null
+    const move = (ev: PointerEvent) => {
+      if (!lifted) {
+        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return
+        lifted = true
+        room.pickUp(el, ev.clientX, ev.clientY)
+        setDrag({ widgetId, landing: null })
+      }
+      room.copy.current?.move(ev.clientX, ev.clientY)
+      const next = landingAt(ev.clientX, ev.clientY, widgetId)
+      if (!sameLanding(next, landing)) { landing = next; room.willRedraw(); setDrag({ widgetId, landing }) }
+    }
+    const end = (ev: PointerEvent, cancel = false) => {
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('keydown', key, true)
+      if (!lifted) return
+      const target = cancel ? null : landingAt(ev.clientX, ev.clientY, widgetId) ?? landing
+      if (!target || inPlace(target, widgetId)) { setDrag(null); room.land(widgetId); return }
+      // Saved first and drawn in place; then the copy settles into it (§4).
+      const change: DashboardChange = 'rowId' in target
+        ? { kind: 'moveWidget', viewId: view.id, widgetId, toRowId: target.rowId, beforeId: target.beforeId }
+        : { kind: 'moveWidget', viewId: view.id, widgetId, toRowId: null, newRowId: newId(), rowBeforeId: target.newRowBefore, beforeId: null }
+      void send(() => change, 'Widget moved').finally(() => { setDrag(null); room.land(widgetId) })
+    }
+    const up = (ev: PointerEvent) => end(ev)
+    const key = (ev: KeyboardEvent) => { if (ev.key === 'Escape' && lifted) { ev.preventDefault(); ev.stopPropagation(); end(new PointerEvent('pointerup', { clientX: x0, clientY: y0 }), true) } }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('keydown', key, true)
+  }
+  const slot = (width: number, key: string) => <div key={key} className="drag-slot dashboard-slot" style={{ ['--widget-width' as string]: width }} aria-hidden="true" />
+  const landing = drag?.landing ?? null
+  return <div ref={root} className={`dashboard${editing ? ' is-editing' : ''}${drag ? ' is-dragging' : ''}`} data-dashboard={view.id}>
     <div className="dashboard-head">
       <div className="dashboard-head-main"><DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle ?? true} onTitleEnter={() => {}} /></div>
       <button type="button" className={`dashboard-edit${editing ? ' is-on' : ''}`} aria-pressed={editing} onClick={() => setEditing(e => !e)}>{editing ? 'Done' : 'Edit'}</button>
     </div>
-    {dashboard.rows.map((row, r) => <div key={row.id} className="dashboard-row" data-row={row.id} style={{ ['--row-height' as string]: `${row.height}px` }}>
-      {row.widgets.map((widget, i) => <WidgetFrame key={widget.id} workspace={workspace} host={db} view={view} row={row} widget={widget} width={shownWidths(row)[i]!} editing={editing} blockId={`${blockId}|widget:${widget.id}`}
-        previous={order[order.indexOf(widget.id) - 1]} next={order[order.indexOf(widget.id) + 1]} rowAbove={dashboard.rows[r - 1]} rowBelow={dashboard.rows[r + 1]} send={send} />)}
-    </div>)}
-    {editing && (count >= dashboardLimits.widgets
+    {dashboard.rows.map((row, r) => {
+      const ownRow = moving?.row.id === row.id
+      // While dragging, the widget leaves its row (whose neighbours make room) and a slot shows where it would go.
+      const shown = drag ? row.widgets.filter(w => w.id !== drag.widgetId) : row.widgets
+      const into = landing && 'rowId' in landing && landing.rowId === row.id
+      const widths = drag
+        ? (into ? (ownRow ? null : Array.from({ length: shown.length + 1 }, () => 12 / (shown.length + 1))) : shown.length ? Array.from({ length: shown.length }, () => 12 / shown.length) : [])
+        : shownWidths(row)
+      const items = shown.map((widget, i) => {
+        const width = drag && ownRow && into ? widget.width : widths?.[i] ?? 12 / Math.max(1, shown.length)
+        return <WidgetFrame key={widget.id} workspace={workspace} host={db} view={view} row={row} widget={widget} width={width} editing={editing} blockId={`${blockId}|widget:${widget.id}`}
+          previous={order[order.indexOf(widget.id) - 1]} next={order[order.indexOf(widget.id) + 1]} rowAbove={dashboard.rows[r - 1]} rowBelow={dashboard.rows[r + 1]} send={send}
+          onPointerDown={e => startDrag(e, widget.id)} split={!drag && i > 0 && editing ? { left: shown[i - 1]!, right: widget } : undefined} />
+      })
+      if (into && landing && 'rowId' in landing) {
+        const at = landing.beforeId ? shown.findIndex(w => w.id === landing.beforeId) : shown.length
+        items.splice(at < 0 ? shown.length : at, 0, slot(ownRow ? moving!.widget.width : 12 / (shown.length + 1), 'slot'))
+      }
+      const rowEl = (shown.length || into) ? <div key={row.id} className="dashboard-row" data-row={row.id} style={{ ['--row-height' as string]: `${into && !ownRow ? row.height : row.height}px` }}>
+        {items}
+        {editing && !drag && <RowSize row={row} viewId={view.id} send={send} />}
+      </div> : null
+      const newRowSlot = landing && 'newRowBefore' in landing && landing.newRowBefore === row.id
+        ? <div key={`new-${row.id}`} className="dashboard-row" style={{ ['--row-height' as string]: `${moving?.row.height ?? rowHeights.initial}px` }}>{slot(12, 'slot')}</div> : null
+      return [newRowSlot, rowEl]
+    })}
+    {landing && 'newRowBefore' in landing && landing.newRowBefore === null && <div className="dashboard-row" style={{ ['--row-height' as string]: `${moving?.row.height ?? rowHeights.initial}px` }}>{slot(12, 'slot')}</div>}
+    {editing && !drag && (count >= dashboardLimits.widgets
       ? <p className="dashboard-limit">{dashboardLimits.widgets} widgets at most</p>
-      : <AddWidget workspace={workspace} onPick={(source, sourceView) => send(() => ({ kind: 'addWidget', viewId: view.id, widget: { id: newId(), source, view: sourceView }, rowId: null, newRowId: newId(), beforeId: null }), 'Widget added')} />)}
+      : <AddWidget workspace={workspace} onPick={(source, sourceView) => void send(() => ({ kind: 'addWidget', viewId: view.id, widget: { id: newId(), source, view: sourceView }, rowId: null, newRowId: newId(), beforeId: null }), 'Widget added')} />)}
     {!dashboard.rows.length && !editing && <p className="database-empty">No widgets · <button type="button" className="app-link" onClick={() => setEditing(true)}>Edit</button></p>}
   </div>
 }
 
+/** The width a handle may give the left widget: each value that leaves the row an allowed split, in order. */
+function splitChoices(row: DashboardRow, left: DashboardWidget, right: DashboardWidget): number[] {
+  const total = left.width + right.width
+  return [3, 4, 6, 8, 9].filter(w => total - w >= 3 && allowedSplit(row.widgets.map(x => (x === left ? w : x === right ? total - w : x.width))))
+}
+
+/** The handle between two neighbours: it trades width between them, snapping to allowed splits; one drag, one command (§5). */
+function SplitHandle({ row, left, right, viewId, send }: { row: DashboardRow; left: DashboardWidget; right: DashboardWidget; viewId: string; send: ReturnType<typeof useDashboardRun> }) {
+  const [shown, setShown] = useState<number | null>(null)
+  const choices = splitChoices(row, left, right), total = left.width + right.width
+  const save = (leftWidth: number) => { if (leftWidth !== left.width) void send(() => ({ kind: 'sizeSplit', viewId, rowId: row.id, leftId: left.id, rightId: right.id, leftWidth }), 'Width saved') }
+  const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault(); e.stopPropagation()
+    const rowEl = e.currentTarget.closest<HTMLElement>('.dashboard-row')!, leftEl = rowEl.querySelector<HTMLElement>(`[data-widget="${CSS.escape(left.id)}"]`)!, rightEl = rowEl.querySelector<HTMLElement>(`[data-widget="${CSS.escape(right.id)}"]`)!
+    const from = leftEl.getBoundingClientRect().left, span = rightEl.getBoundingClientRect().right - from
+    let value = left.width
+    const move = (ev: PointerEvent) => {
+      const want = ((ev.clientX - from) / span) * total
+      value = choices.reduce((best, c) => (Math.abs(c - want) < Math.abs(best - want) ? c : best), left.width)
+      setShown(value)
+    }
+    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); setShown(null); save(value) }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
+  }
+  const step = (d: number) => { const at = choices.indexOf(left.width), next = choices[at + d]; if (next !== undefined) save(next) }
+  return <button type="button" className={`dashboard-split${shown !== null ? ' is-held' : ''}`} aria-label={`Width of ${left.view.name} and ${right.view.name}: ${fraction(left.width)} · ${fraction(right.width)}`}
+    onPointerDown={onPointerDown} onKeyDown={e => { if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1) } if (e.key === 'ArrowRight') { e.preventDefault(); step(1) } }}>
+    {shown !== null && <span className="dashboard-badge">{fraction(shown)} · {fraction(total - shown)}</span>}
+  </button>
+}
+
+/** The handle under a row: its height in 40 px steps from 160 to 800, saved on release (§5). */
+function RowSize({ row, viewId, send }: { row: DashboardRow; viewId: string; send: ReturnType<typeof useDashboardRun> }) {
+  const [shown, setShown] = useState<number | null>(null)
+  const save = (height: number) => { if (height !== row.height) void send(() => ({ kind: 'sizeRow', viewId, rowId: row.id, height }), 'Height saved') }
+  const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault(); e.stopPropagation()
+    const y0 = e.clientY
+    let value = row.height
+    const rowEl = e.currentTarget.closest<HTMLElement>('.dashboard-row')!
+    const move = (ev: PointerEvent) => { value = snapHeight(row.height + ev.clientY - y0); setShown(value); rowEl.style.setProperty('--row-height', `${value}px`) }
+    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); setShown(null); rowEl.style.setProperty('--row-height', `${row.height}px`); save(value) }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
+  }
+  return <button type="button" className={`dashboard-row-size${shown !== null ? ' is-held' : ''}`} aria-label={`Height of this row: ${row.height} px`}
+    onPointerDown={onPointerDown} onKeyDown={e => { if (e.key === 'ArrowUp') { e.preventDefault(); save(snapHeight(row.height - rowHeights.step)) } if (e.key === 'ArrowDown') { e.preventDefault(); save(snapHeight(row.height + rowHeights.step)) } }}>
+    {shown !== null && <span className="dashboard-badge">{shown} px</span>}
+  </button>
+}
+
 /** One widget: in read mode its linked view as any; in edit mode the same, inert, under a frame with its menu. */
-function WidgetFrame({ workspace, host, view, row, widget, width, editing, blockId, previous, next, rowAbove, rowBelow, send }: {
+function WidgetFrame({ workspace, host, view, row, widget, width, editing, blockId, previous, next, rowAbove, rowBelow, send, onPointerDown, split }: {
   workspace: Workspace; host: DatabasePage; view: View; row: DashboardRow; widget: DashboardWidget; width: number; editing: boolean; blockId: string
   previous?: string; next?: string; rowAbove?: DashboardRow; rowBelow?: DashboardRow; send: ReturnType<typeof useDashboardRun>
+  onPointerDown?: (e: React.PointerEvent<HTMLElement>) => void; split?: { left: DashboardWidget; right: DashboardWidget }
 }) {
   const body = useRef<HTMLDivElement>(null)
   // `inert` keeps every click, tap, key and focus out of the content while arranging (dashboard-edit.md §3).
@@ -81,23 +231,24 @@ function WidgetFrame({ workspace, host, view, row, widget, width, editing, block
   const source = reading.pages.find(p => p.id === widget.source)
   const viewId = view.id, id = widget.id
   const items: MenuItem[] = [
-    { label: 'Duplicate', onSelect: () => send(() => ({ kind: 'duplicateWidget', viewId, widgetId: id, newId: newId(), newViewId: newId(), newRowId: newId() }), 'Widget duplicated') },
-    ...(previous ? [{ label: 'Move left', onSelect: () => send(() => ({ kind: 'swapWidget', viewId, widgetId: id, withId: previous }), 'Widget moved') }] : []),
-    ...(next ? [{ label: 'Move right', onSelect: () => send(() => ({ kind: 'swapWidget', viewId, widgetId: id, withId: next }), 'Widget moved') }] : []),
-    ...(row.widgets.length > 1 ? [{ label: 'Move to its own row', onSelect: () => send(() => ({ kind: 'moveWidget', viewId, widgetId: id, toRowId: null, newRowId: newId(), rowBeforeId: rowBelow?.id ?? null, beforeId: null }), 'Widget moved') }] : []),
-    ...(rowAbove && rowAbove.widgets.length < dashboardLimits.perRow ? [{ label: 'Join the row above', onSelect: () => send(() => ({ kind: 'moveWidget', viewId, widgetId: id, toRowId: rowAbove.id, beforeId: null }), 'Widget moved') }] : []),
-    { label: 'Remove', danger: true, onSelect: () => send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed') },
+    { label: 'Duplicate', onSelect: () => void send(() => ({ kind: 'duplicateWidget', viewId, widgetId: id, newId: newId(), newViewId: newId(), newRowId: newId() }), 'Widget duplicated') },
+    ...(previous ? [{ label: 'Move left', onSelect: () => void send(() => ({ kind: 'swapWidget', viewId, widgetId: id, withId: previous }), 'Widget moved') }] : []),
+    ...(next ? [{ label: 'Move right', onSelect: () => void send(() => ({ kind: 'swapWidget', viewId, widgetId: id, withId: next }), 'Widget moved') }] : []),
+    ...(row.widgets.length > 1 ? [{ label: 'Move to its own row', onSelect: () => void send(() => ({ kind: 'moveWidget', viewId, widgetId: id, toRowId: null, newRowId: newId(), rowBeforeId: rowBelow?.id ?? null, beforeId: null }), 'Widget moved') }] : []),
+    ...(rowAbove && rowAbove.widgets.length < dashboardLimits.perRow ? [{ label: 'Join the row above', onSelect: () => void send(() => ({ kind: 'moveWidget', viewId, widgetId: id, toRowId: rowAbove.id, beforeId: null }), 'Widget moved') }] : []),
+    { label: 'Remove', danger: true, onSelect: () => void send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed') },
   ]
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (!editing || e.target !== e.currentTarget) return
-    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed') }
+    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); void send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed') }
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector<HTMLButtonElement>('.dashboard-widget-more')?.click() }
   }
-  return <section className="dashboard-widget" data-widget={id} style={{ ['--widget-width' as string]: width }} aria-label={widget.view.name} tabIndex={editing ? 0 : undefined} onKeyDown={onKeyDown}>
+  return <section className="dashboard-widget" data-widget={id} style={{ ['--widget-width' as string]: width }} aria-label={widget.view.name} tabIndex={editing ? 0 : undefined} onKeyDown={onKeyDown} {...(onPointerDown ? { onPointerDown } : {})}>
+    {split && <SplitHandle row={row} left={split.left} right={split.right} viewId={viewId} send={send} />}
     {editing && <span className="dashboard-widget-menu"><RowMenu label={`Actions for ${widget.view.name}`} triggerClass="dashboard-widget-more" groups={[{ items }]} /></span>}
     <div ref={body} className="dashboard-widget-body">
       {!source || !isDatabase(source)
-        ? <><div className="database-title-row"><span className="database-title is-static">{widget.view.name}</span></div><p className="database-empty">Source deleted{editing ? '' : <> · <button type="button" className="app-link" onClick={() => send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed')}>Remove</button></>}</p></>
+        ? <><div className="database-title-row"><span className="database-title is-static">{widget.view.name}</span></div><p className="database-empty">Source deleted{editing ? '' : <> · <button type="button" className="app-link" onClick={() => void send(() => ({ kind: 'removeWidget', viewId, widgetId: id }), 'View removed')}>Remove</button></>}</p></>
         : source.trashedAt ? <TrashedSource db={source} label={widget.view.name} />
         : <WidgetView workspace={reading} source={source} host={host} view={view} widget={widget} blockId={blockId} />}
     </div>
@@ -108,7 +259,7 @@ function WidgetFrame({ workspace, host, view, row, widget, width, editing, block
 function WidgetView({ workspace, source, host, view, widget, blockId }: { workspace: Workspace; source: DatabasePage; host: DatabasePage; view: View; widget: DashboardWidget; blockId: string }) {
   const send = useDashboardRun(host.id, view.id)
   // Built from the widget as the workspace holds it when it goes, so it carries only this edit.
-  const change: ChangeView = (build, notice) => send(dashboard => {
+  const change: ChangeView = (build, notice) => void send(dashboard => {
     const now = findWidget(dashboard, widget.id)?.widget
     return now ? { kind: 'updateWidget', viewId: view.id, widgetId: widget.id, fields: build(now.view) } : null
   }, notice)
@@ -119,7 +270,7 @@ function WidgetView({ workspace, source, host, view, widget, blockId }: { worksp
     linked={{ title: widget.view.name, rename: name => { if (name.trim() && name !== widget.view.name) change(() => ({ name })) }, source: <SourceLine workspace={workspace} db={source} /> }} />
 }
 
-/** `+ Add widget`: a database (To-dos too) and its first view a widget can be, as a full-width row at the end. */
+/** `+ Add widget`: a database (To-dos too) and its first view a widget can be, named after the database, as a full-width row at the end. */
 function AddWidget({ workspace, onPick }: { workspace: Workspace; onPick: (source: string, view: View) => void }) {
   const [open, setOpen] = useState(false)
   const sources = [
@@ -128,7 +279,7 @@ function AddWidget({ workspace, onPick }: { workspace: Workspace; onPick: (sourc
   ]
   if (!open) return <button type="button" className="dashboard-add" onClick={() => setOpen(true)}>+ Add widget</button>
   return <div className="dashboard-add-pick app-menu" role="menu" aria-label="Add widget" onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false) } }}>
-    {sources.map(s => <button key={s.id} type="button" role="menuitem" onClick={() => { setOpen(false); onPick(s.id, firstWidgetView(s.database, newId())) }}>{s.id === todosSourceId ? todosTitle : displayPageTitle(s)}</button>)}
+    {sources.map(s => <button key={s.id} type="button" role="menuitem" onClick={() => { setOpen(false); onPick(s.id, { ...firstWidgetView(s.database, newId()), name: s.id === todosSourceId ? todosTitle : displayPageTitle(s) }) }}>{s.id === todosSourceId ? todosTitle : displayPageTitle(s)}</button>)}
     <button type="button" role="menuitem" onClick={() => setOpen(false)}>Cancel</button>
   </div>
 }

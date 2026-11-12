@@ -3262,7 +3262,13 @@ textarea.form-input { resize: vertical; }
 .dashboard-edit.is-on { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 /* A row wraps, in order, where a widget would go under about 280 px (Jazz): not stored. */
 .dashboard-row { display: flex; flex-wrap: wrap; gap: var(--dash-gap); }
-.dashboard-widget { position: relative; display: flex; flex: var(--widget-width) 1 0; flex-direction: column; min-width: 280px; height: var(--row-height); min-height: 0; }
+.dashboard-widget { position: relative; display: flex; flex: var(--widget-width) 1 0; flex-direction: column; min-width: var(--widget-min); height: var(--row-height); min-height: 0; }
+.dashboard { --widget-min: 200px; }
+/* Its own width, from the sidebar's edge to the window's less the page's 48 px gutters, up to 1100 (dashboard-edit.md §1):
+   it starts left of the reading column. With the Comments pane open it keeps to the page as any database does (#191). */
+@media (min-width: 900px) {
+  body:not(:has(.comments-pane:not(.is-sheet))) .database-block.is-page:has(> .dashboard) { width: min(1100px, calc(100vw - 260px - 96px)); margin-left: calc(28px - (100vw - 300px - var(--column)) / 2); }
+}
 .dashboard-widget-body { flex: 1; min-height: 0; overflow: auto; }
 .dashboard-link { margin: 4px 0; }
 /* Edit mode draws on top and moves nothing: the ring sits outside the content (dashboard-edit.md §3). */
@@ -3278,3 +3284,18 @@ textarea.form-input { resize: vertical; }
 .dashboard-add { align-self: flex-start; min-height: 36px; padding: 6px 8px; color: var(--ink-2); font-size: var(--text-ui); }
 .dashboard-limit { color: var(--ink-2); font-size: var(--text-meta); }
 .dashboard-add-pick { position: static; align-self: flex-start; }
+.dashboard-slot { flex: var(--widget-width) 1 0; min-width: var(--widget-min); height: var(--row-height); border-radius: var(--radius-block); }
+.dashboard.is-dragging .dashboard-widget { cursor: grabbing; }
+.dashboard-row { position: relative; }
+/* Handles sit in the 24 px gaps: a bar between two neighbours and one under each row, shown on the row being hovered (§5). */
+.dashboard-split { position: absolute; top: 0; bottom: 0; left: -20px; z-index: 2; display: grid; place-items: center; width: 16px; min-height: 0; padding: 0; border: 0; background: none; cursor: col-resize; }
+.dashboard-row-size { position: absolute; left: 0; right: 0; bottom: -20px; z-index: 2; display: grid; place-items: center; height: 16px; min-height: 0; padding: 0; border: 0; background: none; cursor: row-resize; }
+.dashboard-split::after, .dashboard-row-size::after { content: ''; border-radius: 1px; background: var(--line-strong); opacity: 0; transition: opacity 120ms; }
+.dashboard-split::after { width: 2px; height: 32px; }
+.dashboard-row-size::after { width: 32px; height: 2px; }
+.dashboard-row:hover > .dashboard-row-size::after, .dashboard-row:hover > .dashboard-widget > .dashboard-split::after,
+.dashboard-split:focus-visible::after, .dashboard-row-size:focus-visible::after { opacity: 1; }
+.dashboard-split.is-held::after, .dashboard-row-size.is-held::after { opacity: 1; background: var(--ink-3); }
+.dashboard-badge { position: absolute; z-index: 4; padding: 1px 7px; border-radius: 6px; background: var(--fill); color: var(--ink-2); font-size: var(--text-meta); line-height: 20px; white-space: nowrap; pointer-events: none; }
+.dashboard-split .dashboard-badge { top: 8px; left: 14px; }
+.dashboard-row-size .dashboard-badge { top: 18px; }
