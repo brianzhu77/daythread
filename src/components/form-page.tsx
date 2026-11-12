@@ -90,7 +90,7 @@ function FilesField({ label, value, disabled, onChange, onBusy }: { label: strin
     {pending.map(p => <span key={p.key} className={`form-file${p.failed ? ' is-failed' : ''}`}>{p.file.name}
       {p.failed ? <> · {p.retry ? <button type="button" className="app-link" onClick={() => start(p.file, p.key)}>Not uploaded · Try again</button> : p.failed}</> : <> · {p.progress}%</>}
       <button type="button" aria-label={`Remove ${p.file.name}`} onClick={() => put(p.key, null)}>×</button></span>)}
-    {!disabled && room > 0 && <button type="button" className="form-add" onClick={() => picker.current?.click()}>Add a file</button>}
+    {room > 0 && <button type="button" className="form-add" disabled={disabled} onClick={() => picker.current?.click()}>+ Add a file</button>}
     <input ref={picker} type="file" multiple hidden onChange={e => { for (const file of [...(e.target.files ?? [])].slice(0, Math.max(0, room))) start(file); e.target.value = '' }} />
   </div>
 }

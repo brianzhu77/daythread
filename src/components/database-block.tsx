@@ -31,6 +31,7 @@ import { blockedByColumn, newTodo, newTodoRowId, taskIdOfRow, todoBarColumns, to
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseTimeline } from './database-timeline'
+import { DatabaseFeed } from './database-feed'
 import { useColumnHeads } from './database-column-heads'
 import { drawnRows, openPeek, peekFloor } from './peek-state'
 import { DatabaseGallery } from './database-gallery'
@@ -433,7 +434,7 @@ export function DatabaseCellEditor() {
         const saved = justCommitted?.key === cellKey(cell) ? justCommitted : null
         justCommitted = null
         setOpenCell(null)
-        openComments(row.id, { composing: true, property: commentOn(db, row, property, saved ? readValue(property, saved.raw) : value as CellValue) })
+        openComments(row.id, { composing: true, property: commentOn(db, row, property, saved ? readValue(property, saved.raw) : value as CellValue), clear: anchor.closest('td') ?? anchor })
       } : undefined
   return <PropertyEditor key={cellKey(cell)}
     property={loopTask ? { ...property, options: property.options?.filter(o => o.id !== row.id) } : property} value={value as CellValue} rowTitle={displayPageTitle(row)} anchor={anchor}
@@ -931,6 +932,7 @@ export function LaidOutView(props: LaidOutProps) {
   if (props.view.layout === 'gallery') return <DatabaseGallery {...props} />
   if (props.view.layout === 'calendar') return <DatabaseCalendar {...props} />
   if (props.view.layout === 'timeline') return <DatabaseTimeline {...props} />
+  if (props.view.layout === 'feed') return <DatabaseFeed {...props} />
   // The header first, and a placeholder about the height of what's drawn, so the lines below don't jump when the chart arrives.
   if (props.view.layout === 'chart') return <>
     <DatabaseHeader db={props.db} view={props.view} changeView={props.changeView} blockId={props.blockId} showTitle={props.showTitle ?? true} linked={props.linked} onTitleEnter={() => {}} />

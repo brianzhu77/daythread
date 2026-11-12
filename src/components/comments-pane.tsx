@@ -1,6 +1,6 @@
 // Comments on a page or row (docs/design/comments.md §2, step 1 of §6). At the side at 1280, a sheet at 390. Nothing shows until there's a comment.
 // A note is written to its own table and never to the page, so it causes no save and a save can't touch it. What's typed stays until it's saved, with Retry if it wasn't.
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from '@heroui/react'
 import { useRouterState } from '@tanstack/react-router'
@@ -8,18 +8,20 @@ import { commentLimit, propertyQuote, threadLineIds, threadsShownOn, type Commen
 import { databaseOfRow } from '../domain/database'
 import type { Page } from '../domain/types'
 import { CloseIcon, CommentIcon } from './icons'
+import { displayPageTitle } from './page-title'
 import { useKeyboardTop } from './keyboard'
 import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
-type Open = { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null; property: CommentProperty | null }
+/** `clear`: what it was opened from, kept in sight beside the pane where its table can scroll (Jazz 73cd2b32). */
+type Open = { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null; property: CommentProperty | null; clear: Element | null }
 let open: Open | null = null
 /** A pane waiting for the page it's about, as a search hit opens it and goes there. */
 let arriving: Open | null = null
 const listeners = new Set<() => void>()
 const changed = () => listeners.forEach(l => l())
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
-export function openComments(pageId: string, options: { composing?: boolean; threadId?: string; afterGoing?: boolean; anchor?: CommentAnchor; property?: CommentProperty } = {}) {
-  const opening = { pageId, composing: Boolean(options.composing), threadId: options.threadId ?? null, anchor: options.anchor ?? null, property: options.property ?? null }
+export function openComments(pageId: string, options: { composing?: boolean; threadId?: string; afterGoing?: boolean; anchor?: CommentAnchor; property?: CommentProperty; clear?: Element } = {}) {
+  const opening = { pageId, composing: Boolean(options.composing), threadId: options.threadId ?? null, anchor: options.anchor ?? null, property: options.property ?? null, clear: options.clear ?? null }
   if (options.afterGoing) { arriving = opening; return }
   open = opening; changed()
 }
@@ -119,12 +121,19 @@ function goToProperty(propertyId: string) {
   setTimeout(() => row.classList.remove('is-comment-target'), 1600)
 }
 /** What a thread on a property reads as, with the row's properties as they are now. */
+/** The row's name, where the pane isn't on the row's own page or its peek, as in a table: "Alpha · Extra 6", not which row's (Jazz b03eeba4). */
+function useRowNameAway(rowId: string): string | null {
+  const { workspace } = useWorkspace(), row = workspace?.pages.find(p => p.id === rowId)
+  const here = useRouterState({ select: r => { const { page, peek } = r.location.search as { page?: string; peek?: string }; return page === rowId || peek === rowId } })
+  return row && !here ? displayPageTitle(row) : null
+}
+const onRow = (row: string | null, words: string) => (row ? `${row} · ${words}` : words)
 function useRowProperties(rowId: string) {
   const { workspace } = useWorkspace(), row = workspace?.pages.find(p => p.id === rowId)
   return workspace && row ? databaseOfRow(workspace, row)?.database.properties : undefined
 }
 function PropertyQuote({ on, rowId }: { on: CommentProperty; rowId: string }) {
-  const { text, gone } = propertyQuote(on, useRowProperties(rowId))
+  const away = useRowNameAway(rowId), quote = propertyQuote(on, useRowProperties(rowId)), gone = quote.gone, text = gone ? quote.text : onRow(away, quote.text)
   // Folded away with the empty ones, or not on screen (a table): its words, and no button that seems to do nothing.
   return gone ? <p className="comment-quote is-gone">{text}</p> : propertyOf(on.propertyId) ? <button type="button" className="comment-quote" onClick={() => goToProperty(on.propertyId)}>{text}</button> : <p className="comment-quote">{text}</p>
 }
@@ -167,6 +176,18 @@ function ThreadView({ thread, focused }: { thread: CommentThread; focused: boole
   </div>
 }
 
+const clearance = 12
+/** Scrolls a table sideways until a cell sits clear of the pane, or as far as it goes; never so far its left edge goes under a frozen column. */
+export function keepClear(cell: Element, paneLeft: number) {
+  const scroller = cell.closest<HTMLElement>('.database-scroll')
+  if (!cell.isConnected || !scroller) return
+  const box = cell.getBoundingClientRect(), room = scroller.getBoundingClientRect()
+  const over = box.right - (Math.min(room.right, paneLeft) - clearance)
+  if (over <= 0) return
+  // A frozen column (the title always is) stays put as the rest scrolls under it.
+  const row = cell.closest('tr'), frozen = Math.max(room.left, ...[...(row?.children ?? [])].filter(td => td !== cell && getComputedStyle(td).position === 'sticky').map(td => td.getBoundingClientRect().right))
+  scroller.scrollLeft += Math.min(over, Math.max(0, box.left - frozen - clearance))
+}
 export function CommentsPaneHost() {
   const current = useSyncExternalStore(subscribe, () => open, () => null)
   const place = useRouterState({ select: r => placeOf(r.location) }), seen = useRef(place)
@@ -175,9 +196,9 @@ export function CommentsPaneHost() {
     seen.current = place
     open = arriving; arriving = null; changed()
   }, [place])
-  return current ? <CommentsPane key={`${current.pageId}|${current.anchor?.blockId ?? ''}|${current.property?.propertyId ?? ''}`} pageId={current.pageId} composing={current.composing} threadId={current.threadId} anchor={current.anchor} property={current.property} /> : null
+  return current ? <CommentsPane key={`${current.pageId}|${current.anchor?.blockId ?? ''}|${current.property?.propertyId ?? ''}`} pageId={current.pageId} composing={current.composing} threadId={current.threadId} anchor={current.anchor} property={current.property} clear={current.clear} /> : null
 }
-function CommentsPane({ pageId, composing, threadId, anchor, property }: { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null; property: CommentProperty | null }) {
+function CommentsPane({ pageId, composing, threadId, anchor, property, clear }: { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null; property: CommentProperty | null; clear: Element | null }) {
   const { workspace, run } = useWorkspace()
   const threads = workspace ? threadsShownOn(workspace, pageId) : []
   const opened = threads.find(t => t.id === threadId)
@@ -186,6 +207,14 @@ function CommentsPane({ pageId, composing, threadId, anchor, property }: { pageI
   const keyboardTop = useKeyboardTop()
   const phone = window.matchMedia('(max-width: 899px)').matches
   const properties = useRowProperties(pageId)
+  const rowAway = useRowNameAway(pageId)
+  const pane = useRef<HTMLElement>(null)
+  // After the page has made room for the pane, as its own layout does from 1100 px.
+  useLayoutEffect(() => {
+    if (phone || !clear) return
+    const frame = requestAnimationFrame(() => { if (pane.current) keepClear(clear, pane.current.getBoundingClientRect().left) })
+    return () => cancelAnimationFrame(frame)
+  }, [clear]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !(e.target as Element).closest?.('.comment-field')) { e.preventDefault(); e.stopPropagation(); closeComments() } }
     document.addEventListener('keydown', esc, true)
@@ -198,7 +227,7 @@ function CommentsPane({ pageId, composing, threadId, anchor, property }: { pageI
   // Written on that line, the next one in this pane is on the page again, unless a line is asked for. Not while there are words typed since: they're for this line (Ratchet).
   const written = useRef<string | null>(null)
   const afterSent = (left: string) => { if ((anchor || property) && !left && written.current) openComments(pageId, { threadId: written.current }) }
-  return createPortal(<aside className={`comments-pane${phone ? ' is-sheet' : ''}`} aria-label="Comments" style={phone && keyboardTop !== null ? { bottom: window.innerHeight - keyboardTop, height: Math.min(window.innerHeight * 0.7, (window.visualViewport?.height ?? window.innerHeight) - 8) } : undefined}>
+  return createPortal(<aside ref={pane} className={`comments-pane${phone ? ' is-sheet' : ''}`} aria-label="Comments" style={phone && keyboardTop !== null ? { bottom: window.innerHeight - keyboardTop, height: Math.min(window.innerHeight * 0.7, (window.visualViewport?.height ?? window.innerHeight) - 8) } : undefined}>
     <header className="comments-pane-head">
       <h2>Comments</h2>
       <span role="tablist" className="comments-pane-tabs">
@@ -212,8 +241,8 @@ function CommentsPane({ pageId, composing, threadId, anchor, property }: { pageI
       {!shown.length && <p className="comment-note">{show === 'open' ? (other ? `No open comments · ${other} resolved` : 'No comments') : 'Nothing resolved'}</p>}
     </div>
     {show === 'open' && anchor && <p className="comment-quote is-composing">{anchor.quote || 'An empty line'}</p>}
-    {show === 'open' && property && <p className="comment-quote is-composing">{propertyQuote(property, properties).text}</p>}
-    {show === 'open' && <CommentField draftKey={anchor ? `new:${pageId}:${anchor.blockId}` : property ? `new:${pageId}:property:${property.propertyId}` : `new:${pageId}`} label="New comment" action="Comment" placeholder={anchor ? 'Comment on this line' : property ? `Comment on ${property.name}` : 'Add a comment'} autoFocus={composing && !phone} onDone={add} onSaved={afterSent} />}
+    {show === 'open' && property && <p className="comment-quote is-composing">{onRow(rowAway, propertyQuote(property, properties).text)}</p>}
+    {show === 'open' && <CommentField draftKey={anchor ? `new:${pageId}:${anchor.blockId}` : property ? `new:${pageId}:property:${property.propertyId}` : `new:${pageId}`} label="New comment" action="Comment" placeholder={anchor ? 'Comment on this line' : property ? `Comment on ${onRow(rowAway, property.name)}` : 'Add a comment'} autoFocus={composing && !phone} onDone={add} onSaved={afterSent} />}
   </aside>, document.body)
 }
 

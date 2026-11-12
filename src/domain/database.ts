@@ -74,7 +74,7 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 export interface Condition { by: string; op: FilterOp; value?: Json }
 export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
-export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart", "form"] as const;
+export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart", "form", "feed"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
 /** Values a new row takes from a template: not its number, which is its own. */
 export function templateValues(template: Pick<Page, "values">): NonNullable<Page["values"]> {
@@ -235,7 +235,7 @@ export function rowTime(property: Property, row: Page, zone?: string): DateValue
 }
 const wallFormats = new Map<string, Intl.DateTimeFormat>();
 /** An ISO time as a wall clock: what a date cell holds. On this device, or in `zone` for a reader that isn't one (the server, with the account's zone). */
-function localWall(iso: string, zone?: string): string {
+export function localWall(iso: string, zone?: string): string {
   const d = new Date(iso), two = (n: number) => String(n).padStart(2, "0");
   if (zone) {
     try {

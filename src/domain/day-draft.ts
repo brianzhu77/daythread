@@ -20,15 +20,42 @@ export interface DraftItem {
   source: 'model' | 'fallback'
   state: 'open' | 'applied' | 'skipped'
 }
-export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: string[] }
+/** `recipe`: how the server made it (`DRAFT_RECIPE`); absent on a draft from before it was kept. */
+export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: string[]; recipe?: number }
+
+/**
+ * How day drafts are made now: 2 reads every page edited in the last 7 days and puts what he wrote for the day first
+ * (Brian 3d7aca46). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
+ */
+export const DRAFT_RECIPE = 2
+const recipeOf = (d: DayDraft): number => d.recipe ?? 1
 
 /** The day's draft for good: a ready one, or a failed one he already applied or skipped something from. */
 export const draftSettled = (d: DayDraft): boolean => d.status === 'ready' || d.items.some(i => i.state !== 'open')
+/** A settled draft an older recipe made: today's is made again once, keeping what he applied or skipped from it. */
+export const draftStale = (d: DayDraft): boolean => draftSettled(d) && recipeOf(d) < DRAFT_RECIPE
+/** Whether a new draft by `recipe` may take the place of `old`: one not settled yet, or one settled by an older recipe. */
+export const draftReplaceable = (old: DayDraft, recipe: number): boolean => !draftSettled(old) || recipeOf(old) < recipe
 
 export function draftOf(ws: Workspace, dayPageId: string): DayDraft | null {
   const p = ws.pages.find(x => x.id === draftPageId(dayPageId) && isDraft(x) && !x.trashedAt)
   if (!p) return null
   try { return JSON.parse(p.document) as DayDraft } catch { return null }
+}
+
+/** Words compared for "the same line": case, spacing and a trailing stop don't count. */
+export const sameWords = (s: string): string => s.toLocaleLowerCase().replace(/\s+/g, ' ').replace(/[\s.。!！]+$/u, '').trim()
+
+/**
+ * The items of a draft made again over `old` (Brian 3d7aca46): what he applied or skipped stays as he left it, and the
+ * new suggestions follow, without a to-do or words he has already decided on.
+ */
+export function remadeItems(old: DayDraft | null, items: readonly DraftItem[]): DraftItem[] {
+  const decided = old?.items.filter(i => i.state !== 'open') ?? []
+  if (!decided.length) return [...items]
+  const ids = new Set(decided.map(i => i.id)), tasks = new Set(decided.flatMap(i => (i.taskId ? [i.taskId] : [])))
+  const words = new Set(decided.flatMap(i => (i.block ? [sameWords(inlineText(i.block.content))] : [])))
+  return [...decided, ...items.filter(i => !ids.has(i.id) && !(i.taskId && tasks.has(i.taskId)) && !(i.block && words.has(sameWords(inlineText(i.block.content)))))]
 }
 
 /** A carried to-do can still be applied: it exists, is open and wasn't set aside. A rename doesn't matter. */

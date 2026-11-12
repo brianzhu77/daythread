@@ -550,7 +550,7 @@ function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () 
 // ---------------------------------------------------------------- group and layout (design §7.2, §7.3)
 
 const unitLabels: Record<TimelineUnit, string> = { hours: 'Hours', day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' }
-const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', chart: 'Chart', form: 'Form' }
+const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', chart: 'Chart', form: 'Form', feed: 'Feed' }
 /** "Status", "Status 2", …: never a name the database already has. */
 function newPropertyName(db: Database, base: string): string {
   const taken = new Set(['name', ...db.properties.map(p => p.name.toLocaleLowerCase())])
@@ -644,6 +644,12 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
 }
 
 /** A view named after its type keeps following it; one he named keeps his name. */
+/** A Feed starts newest first, with Created time on its cards, when the database has one and the view has no order of its own (feed.md §2). */
+const feedStart = (db: Database, view: Pick<View, 'sort' | 'columns'>): Partial<View> => {
+  const created = db.properties.find(p => p.type === 'createdTime')
+  if (!created || view.sort.length) return {}
+  return { sort: [{ by: created.id, direction: 'desc' }], ...(view.columns.some(c => c.id === created.id) ? {} : { columns: [{ id: created.id }, ...view.columns] }) }
+}
 const renamedFor = (view: View, layout: View['layout']) => (view.name === layoutLabels[view.layout] ? { name: layoutLabels[layout] } : {})
 function ChartAxisChoices({ db, onPick }: { db: DatabasePage; onPick: (propertyId: string) => void }) {
   return <>
@@ -731,6 +737,7 @@ function LayoutPanel({ db, view, back, go, formOk }: { db: DatabasePage; view: V
       if (kept) toChart(kept.id); else if (only.length === 1) toChart(only[0]!.id); else if (!only.length) toChart(); else setAskingAxis(true)
       return
     }
+    if (layout === 'feed') { changeView(current => ({ layout, ...feedStart(db.database, current), ...renamedFor(current, layout) })); return }
     if (layout !== 'board') { changeView(current => ({ layout, ...renamedFor(current, layout) })); return }
     // Grouped already by what a board can use: those are its columns.
     const kept = viewGroupBy(db.database, { ...view, layout: 'board' })
@@ -742,7 +749,7 @@ function LayoutPanel({ db, view, back, go, formOk }: { db: DatabasePage; view: V
   if (askingDate) return <><Head title={layoutLabels[askingDate]} back={() => setAskingDate(null)} /><CalendarDateChoices db={db} label={`Show ${askingDate} by`} onPick={id => toDated(askingDate, id)} /></>
   return <>
     <Head title="Layout" back={back} />
-    {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline', 'chart', ...(formOk || view.layout === 'form' ? ['form' as const] : [])] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline', 'chart', ...(formOk || view.layout === 'form' ? ['form' as const] : []), ...(db.database.fixed ? [] : ['feed' as const])] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
     {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
     </label>}
@@ -1220,12 +1227,12 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   const [adding, setAdding] = useState<null | 'type' | 'board' | 'calendar' | 'timeline' | 'chart'>(null)
   const views = db.database.views
   const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
-  const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' | 'calendar' | 'timeline' = 'table', dateBy?: string) => {
+  const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'feed' = 'table', dateBy?: string) => {
     const id = newId()
     // A new view is named after its type, with the name ready to rename (design §7.1); Duplicate copies one. A new board's or
     // gallery's cards start as titles alone: Properties adds what he wants on them (§7.5).
     const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : layoutLabels[layout], layout: groupBy ? 'board' : layout, columns: groupBy || layout === 'gallery' || layout === 'calendar' || layout === 'timeline' ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}), ...(dateBy ? { dateBy } : {}) }
-    change({ kind: 'addView', view })
+    change({ kind: 'addView', view: layout === 'feed' && !from ? { ...view, columns: [], ...feedStart(db.database, { sort: [], columns: [] }) } : view })
     setShownView(blockId, id)
     setActions(null); setAdding(null); setRenaming(id)
   }
@@ -1254,6 +1261,7 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     <button type="button" role="menuitem" onClick={addTimeline}>Timeline</button>
     <button type="button" role="menuitem" onClick={addChart}>Chart</button>
     {!db.database.fixed && <button type="button" role="menuitem" onClick={addForm}>Form</button>}
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'feed')}>Feed</button>}
   </>
   return <>
     <Head title="Views" />
