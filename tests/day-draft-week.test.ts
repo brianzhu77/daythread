@@ -147,6 +147,8 @@ test('day draft: one an older recipe made is made again once, keeping what he ap
   assert.equal(d.recipe, DRAFT_RECIPE)
   assert.equal(draftStale(d), false)
   assert.deepEqual(d.items.map(i => [i.id, i.state]), [['a', 'applied'], ['b', 'skipped'], ['n2', 'open'], ['n3', 'open']], 'the skipped to-do isn\'t offered again; the open line is offered anew')
+  // Its task id too: B92 tells a carried day from a chosen one by the applied items of that day's draft (Roadbuster 0983f2da).
+  assert.deepEqual(d.items.filter(i => i.state !== 'open').map(i => i.taskId), [book, dog])
   assert.equal(nodesOf(h.page(dayId(tomorrow))).filter(n => n.type === 'task' && n.props?.taskId === book).length, 1, 'what he applied stays on the page')
   // Made by this recipe, it's the day's draft for good.
   assert.throws(() => set([line('n4', 'Again')]), /already has its draft/)
