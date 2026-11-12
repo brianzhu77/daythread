@@ -201,3 +201,44 @@ test('the schema bounds every command', () => {
   assert.equal(ok({ kind: 'sizeSplit', viewId: 'd', rowId: 'r', leftId: 'a', rightId: 'b', leftWidth: 4.5 }), false)
   assert.equal(ok({ kind: 'addDashboard', view: { id: 'd', name: 'D' }, rows: Array.from({ length: 13 }, (_, i) => ({ id: `r${i}`, widgets: [] })) }), false)
 })
+
+test("a drop back where it was is refused and changes nothing: in its own row, or a lone widget's own row (Ratchet 29f73fd7)", () => {
+  const { add, dash, D } = setup()
+  const before = shape(dash())
+  assert.throws(() => D({ kind: 'moveWidget', widgetId: 'w1', toRowId: 'row1', beforeId: null }), /Already there/)
+  assert.throws(() => D({ kind: 'moveWidget', widgetId: 'w1', toRowId: null, newRowId: 'x', rowBeforeId: null, beforeId: null }), /Already there/)
+  assert.equal(shape(dash()), before)
+  add('w2'); D({ kind: 'sizeSplit', rowId: 'row1', leftId: 'w1', rightId: 'w2', leftWidth: 4 })
+  D({ kind: 'moveWidget', widgetId: 'w2', toRowId: 'row1', beforeId: 'w1' })
+  assert.equal(shape(dash()), 'row1:w2/8,w1/4', 'reordered in its row, each keeping its width')
+})
+
+test('duplicating a widget keeps settings its source can no longer read (Ratchet 29f73fd7)', () => {
+  const { C, D, widget } = setup()
+  D({ kind: 'updateWidget', widgetId: 'w1', fields: { filter: [{ by: 'st', op: 'isAnyOf', value: ['a'] }] } })
+  C('runs', { kind: 'removeProperty', propertyId: 'st' })
+  D({ kind: 'duplicateWidget', widgetId: 'w1', newId: 'w2', newViewId: 'v2', newRowId: 'row2' })
+  assert.equal(widget('w2')!.view.filter[0]?.by, 'st')
+})
+
+test('Duplicate view on a dashboard: a copy as stored, every id new, the original untouched', () => {
+  const { h, C, add, dash } = setup()
+  add('w2')
+  const ids = { row1: 'R1', w1: 'W1', v1: 'V1', w2: 'W2', 'v-w2': 'V2' }
+  C('home', { kind: 'duplicateDashboard', viewId: 'dash', newViewId: 'dash2', ids })
+  const copy = h.page('home').database!.views.find(v => v.id === 'dash2')!
+  assert.equal(copy.name, 'Dashboard (copy)')
+  assert.equal(shape(copy.dashboard!), 'R1:W1/6,W2/6')
+  assert.deepEqual(copy.dashboard!.rows[0]!.widgets.map(w => w.view.id), ['V1', 'V2'])
+  assert.equal(shape(dash()), 'row1:w1/6,w2/6')
+  assert.throws(() => C('home', { kind: 'duplicateDashboard', viewId: 'dash', newViewId: 'dash3', ids: { ...ids, w1: 'W2' } }), /Invalid id/, 'two old ids to one new one')
+  assert.throws(() => C('home', { kind: 'duplicateDashboard', viewId: 'dash', newViewId: 'dash3', ids: { row1: 'X' } }), /Invalid id/, 'every id needs a new one')
+})
+
+test('a new dashboard counts against the views limit', () => {
+  const { h, C, runs } = setup()
+  const db = h.page('home').database!
+  while (db.views.length < 50) db.views.push({ ...db.views[0]!, id: `pad${db.views.length}` })
+  assert.throws(() => C('home', { kind: 'addDashboard', view: { id: 'dx', name: 'X' }, rows: [{ id: 'rx', widgets: [{ id: 'wx', source: 'runs', view: firstWidgetView(runs(), 'vx') }] }] }), /Too many views/)
+  assert.throws(() => C('home', { kind: 'duplicateDashboard', viewId: 'dash', newViewId: 'dy', ids: { row1: 'a', w1: 'b', v1: 'c' } }), /Too many views/)
+})
