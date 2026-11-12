@@ -21,3 +21,9 @@ Candidate a7793b0b; 349883fd changes only two task-id assertions. Synthetic fixt
 ## Retry confirmation
 
 `tests/ratchet-draft-retry.test.ts` executes the actual hook body with controlled hook bindings, fake focus events, an old ready draft and the server's failed-remake null response. It observes **four requests** (initial plus three focus events), exceeding the two-failure automatic limit. This confirms the client control-flow finding independently; it is a controlled hook test, not a browser or actual model failure. The unchanged draft and mock refresh reproduce the server path above.
+
+## Retest 517a7d58
+
+Both original findings are repaired. The skipped-task test passes unchanged. The hook test now supplies the new server response's `remakeFailed: true`, and passes the two-request ceiling. 47 targeted checks pass (own seven-day/remake/hook tests plus author week/synced-record tests). Source review confirms no-model and failed-model remakes return that flag while preserving the stored old draft.
+
+One new confirmed gap remains from the synced timestamp repair: `tests/ratchet-draft-synced-recency.test.ts` creates an ordinary note with a synced block, dates its own document October 1, edits only the block's words October 21, and prepares October 22. The words are stored, but the note retains its old timestamp, the record has no edit timestamp, and input says `EARLIER PAGES (none)`. Thus the new seven-day input rule misses recently edited synced content on old pages. Keeping synced edits to one record write can remain an invariant; the draft corpus needs another recency signal for that content, or an explicit accepted limitation. Reported cf5f7beb. This is a domain/model-request fixture, not a browser run.

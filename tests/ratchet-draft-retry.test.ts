@@ -14,7 +14,7 @@ test('independent: failed old-recipe remakes stop after two automatic asks',asyn
  const context={draftOf,draftStale,draftView,Date,Map,Set,JSON,Promise,setTimeout,clearTimeout,
  useCallback:(fn:unknown)=>fn,useEffect:(fn:()=>unknown)=>effects.push(fn),useMemo:(fn:()=>unknown)=>fn(),useRef:(v:unknown)=>({current:v}),useSyncExternalStore:(_:unknown,get:()=>unknown)=>get(),
  useWorkspace:()=>({workspace:h.ws,latest:()=>h.ws,offline:false,refresh:async()=>{},run:async()=>true}),workspaceOwner:()=>null,newOperationId:()=>crypto.randomUUID(),todayIso:()=>today,flushEditor:async()=>true,
- prepareDayDraft:async()=>{calls++;return {setDraft:null,owner:'local',modelOn:true}},
+ prepareDayDraft:async()=>{calls++;return {setDraft:null,owner:'local',modelOn:true,remakeFailed:true}},
  document:{visibilityState:'visible',addEventListener:(name:string,fn:()=>unknown)=>events.set(name,fn),removeEventListener:()=>{}},window:{addEventListener:(name:string,fn:()=>unknown)=>events.set(name,fn),removeEventListener:()=>{}}};
  const hook=runInNewContext(`${source}\nuseDayDraft`,context);hook(h.page(dayId(today)));for(const effect of effects)effect();
  const settle=()=>new Promise<void>(resolve=>setImmediate(resolve));await settle();
