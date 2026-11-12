@@ -320,7 +320,7 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
       message = "1 row changed";
     });
     else if (step.kind === "edit-rows") named(step, () => {
-      const context = { today, pageDate: on.date };
+      const context = { today, pageDate: on.date, zone: state.timezone };
       if (isTodosTarget(step.databaseId)) {
         // A copy's projection: the one kept for `state` itself can be from before an earlier step changed it.
         const rows = databaseRows(withTodos({ ...state }), todosSourceId).filter((r) => inView(todosDatabase, r, { filter: step.filter, ...(step.any ? { filterAny: true } : {}) }, context));
@@ -1773,7 +1773,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   } else {
     result = execute(state, command.action, command.operationId);
     result = { ...result, ...settleSynced(state) };
-    const fired = firedRules(input, state, command.action, { today: localDay(state, isoTime(undefined)), pageDate: null }, () => todoSources(input, state));
+    const fired = firedRules(input, state, command.action, { today: localDay(state, isoTime(undefined)), pageDate: null, zone: state.timezone }, () => todoSources(input, state));
     if (fired.length) { const run = runAutomations(state, fired, command.operationId); state = run.state; result = { ...result, automations: run.automations }; }
   }
   state.revision = input.revision + 1;

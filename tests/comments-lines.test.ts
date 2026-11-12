@@ -162,8 +162,8 @@ test('its home in Trash: the other places still show it, and search opens the fi
   const h = shared()
   h.run({ type: 'delete-page', pageId: 'a', at } as never)
   assert.deepEqual(shownOn(h, 'b'), ['sh'])
-  const hit = search(buildSearchIndex(h.ws), 'shared line').comments.find(c => c.threadId === 'sh')
-  assert.ok(hit && ['b', 'c'].includes(hit.page.id), hit?.page.id)
+  const hit = search(buildSearchIndex(h.ws), 'shared line', today).comments.find(c => c.threadId === 'sh')
+  assert.ok(hit && ['b', 'c'].includes(hit.page.id), hit?.page.id ?? 'no hit')
 })
 test('every place in Trash: it comes back with whichever is restored first', () => {
   const h = shared()

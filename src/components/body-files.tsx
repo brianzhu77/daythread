@@ -13,6 +13,8 @@ type UploadState = 'waiting' | 'uploading' | 'failed' | 'offline' | 'refused' | 
 interface Upload { id: string; file: File; preview: string | null; state: UploadState; percent: number; message: string; abort?: () => void }
 
 const uploads = new Map<string, Upload>(), listeners = new Set<() => void>()
+/** A file still on its way exists only in this tab: a reload would drop it (new-build.ts). A failed one doesn't count: its block may be long gone, and it would hold the tab for good. */
+export const uploadsUnfinished = (): boolean => [...uploads.values()].some(u => u.state === 'waiting' || u.state === 'uploading')
 const atOnce = 3
 const change = (id: string, next: Partial<Upload>) => { const was = uploads.get(id); if (was) uploads.set(id, { ...was, ...next }); listeners.forEach(l => l()) }
 function pump() {

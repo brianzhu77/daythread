@@ -208,6 +208,8 @@ export const blockPlaces = new Map<string, { scrollLeft: number; limit: number; 
 /** `beforeId`: the place a dropped card is going to, so it shows there until it's saved. */
 interface PendingCell { databaseId: string; rowId: string; columnId: string; raw: Json | undefined; failed: boolean; retry: () => void; discard: () => void; beforeId?: string | null; /** The rest of one change, whose first cell speaks for it. */ part?: true }
 export const pendingCells = new Map<string, PendingCell>()
+/** A cell whose save failed shows Retry and is kept only here: a reload would drop it (new-build.ts). */
+export const cellsUnsaved = (): boolean => [...pendingCells.values()].some(p => p.failed)
 const pendingCellListeners = new Set<() => void>()
 let pendingCellVersion = 0
 export const pendingKey = (rowId: string, columnId: string) => `${rowId}|${columnId}`
@@ -1045,7 +1047,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     }
     const move = (ev: PointerEvent) => {
       // A press on the handle is nothing until it moves.
-      if (!held) { if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 3) return; held = true; room.pickUp(line, ev.clientX, ev.clientY, { tilt: 1 }) }
+      if (!held) { if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 3) return; held = true; room.pickUp(line, ev.clientX, ev.clientY, { tilt: 1, grow: 0.01 }) }
       room.copy.current?.move(ev.clientX, ev.clientY)
       place(ev.clientY, room.copy.current?.origin.height ?? line.offsetHeight)
     }

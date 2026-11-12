@@ -16,10 +16,10 @@ test('brake: 20 simultaneous tries from 4 instances: only the free ones reach Su
     const stores = pools.map(sql => new SessionStore(postgresClient(sql), schema))
     let calls = 0
     const results = await Promise.all(Array.from({ length: 20 }, (_, i) =>
-      stores[i % stores.length]!.attempt(async () => { calls++; await new Promise(r => setTimeout(r, 20)); return 'fail' as const })))
+      stores[i % stores.length]!.attempt('owner@example.com', async () => { calls++; await new Promise(r => setTimeout(r, 20)); return 'fail' as const })))
     assert.equal(calls, freeFailures, 'no two tries read the same old count')
     assert.equal(results.filter(r => r.waitMs > 0).length, 20 - freeFailures)
-    const [row] = await pools[0]!.unsafe(`select count(*)::int as n from ${schema}.sign_in_failures`)
+    const [row] = await pools[0]!.unsafe(`select count(*)::int as n from ${schema}.sign_in_failures_by_key`)
     assert.equal(row!.n, freeFailures, 'refused tries recorded nothing')
   } finally {
     try { await pools[0]!.unsafe(`drop schema if exists ${schema} cascade`) }

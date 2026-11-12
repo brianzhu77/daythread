@@ -40,7 +40,9 @@ export class PostgresWorkspaceRepository implements ServerRepository {
   private readonly sql: SqlClient
   private readonly schema: string
   private readonly today: string
-  constructor(sql: SqlClient, schema = schemaName(), options: { today?: string } = {}) { this.sql = sql; this.schema = schema; this.today = options.today ?? todayIn() }
+  /** When true, a request with no signed-in account is refused instead of served the local workspace; storage.ts sets it whenever sign-in is on. */
+  private readonly requireOwner: boolean
+  constructor(sql: SqlClient, schema = schemaName(), options: { today?: string; requireOwner?: boolean } = {}) { this.sql = sql; this.schema = schema; this.today = options.today ?? todayIn(); this.requireOwner = options.requireOwner ?? false }
   private t(name: string): string { return `${this.schema}.${name}` }
 
   /**
@@ -192,6 +194,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
   }
   /** The workspace an account works in (null: this machine's, with sign-in off), made now if it has none. Returns its id. */
   async workspaceIdFor(userId: string | null): Promise<string> {
+    if (userId === null && this.requireOwner) throw new Error('No signed-in account for this request')
     await this.init()
     return this.sql.transaction(tx => this.createWorkspaceIn(tx, userId, 'America/Vancouver'))
   }
@@ -212,6 +215,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
   /** The workspace this request works on: the signed-in account's, or the local one with sign-in off. */
   private async scope(tx: SqlClient, lock: boolean): Promise<Scope> {
     const owner = currentOwner() ?? null
+    if (owner === null && this.requireOwner) throw new Error('No signed-in account for this request')
     const forUpdate = lock ? ' for update' : ''
     if (owner === null) {
       const [local] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", todo_automations as "todoAutomations", revision from ${this.t('workspaces')} where user_id is null${forUpdate}`)
