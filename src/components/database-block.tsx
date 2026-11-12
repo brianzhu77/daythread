@@ -31,6 +31,7 @@ import { blockedByColumn, newTodo, newTodoRowId, taskIdOfRow, todoBarColumns, to
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseTimeline } from './database-timeline'
+import { DatabaseFeed } from './database-feed'
 import { useColumnHeads } from './database-column-heads'
 import { drawnRows, openPeek, peekFloor } from './peek-state'
 import { DatabaseGallery } from './database-gallery'
@@ -931,6 +932,7 @@ export function LaidOutView(props: LaidOutProps) {
   if (props.view.layout === 'gallery') return <DatabaseGallery {...props} />
   if (props.view.layout === 'calendar') return <DatabaseCalendar {...props} />
   if (props.view.layout === 'timeline') return <DatabaseTimeline {...props} />
+  if (props.view.layout === 'feed') return <DatabaseFeed {...props} />
   // The header first, and a placeholder about the height of what's drawn, so the lines below don't jump when the chart arrives.
   if (props.view.layout === 'chart') return <>
     <DatabaseHeader db={props.db} view={props.view} changeView={props.changeView} blockId={props.blockId} showTitle={props.showTitle ?? true} linked={props.linked} onTitleEnter={() => {}} />

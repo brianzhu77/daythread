@@ -1,6 +1,6 @@
 // Seeds a disposable SQLite store (path as the argument, never his data) for the render budget (R1-18): today's day page
 // with 40 lines and, unless the second argument is `plain`, an inline database of 25 rows with all 8 R1 types. `linked`: the
-// database's home is on another page and today shows a linked view of it, as a view from the Day template does (R2-7). `chart`: that linked view as a bar chart by Genre (G4-7). `todos`: a To-dos view of 25 open tasks. `relation`: the table, with a relation and a rollup.
+// database's home is on another page and today shows a linked view of it, as a view from the Day template does (R2-7). `chart`: that linked view as a bar chart by Genre (G4-7). `feed`: as a Feed of its 25 cards (G5-8). `todos`: a To-dos view of 25 open tasks. `relation`: the table, with a relation and a rollup.
 // Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|chart|todos|relation|formula|sub-items|cover]
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../../../src/domain/editor-document.ts'
@@ -8,7 +8,7 @@ import { storedFormula, worldOf } from '../../../src/domain/formula.ts'
 import { todosSourceId } from '../../../src/domain/todos-source.ts'
 import type { Action } from '../../../src/domain/types.ts'
 if (!process.argv[2]) { console.error('Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|todos|relation|formula|sub-items]'); process.exit(2) }
-const chart = process.argv[3] === 'chart', plain = process.argv[3] === 'plain', linked = process.argv[3] === 'linked' || chart, todos = process.argv[3] === 'todos', relation = process.argv[3] === 'relation', formula = process.argv[3] === 'formula', subItems = process.argv[3] === 'sub-items'
+const feed = process.argv[3] === 'feed', chart = process.argv[3] === 'chart' || feed, plain = process.argv[3] === 'plain', linked = process.argv[3] === 'linked' || chart, todos = process.argv[3] === 'todos', relation = process.argv[3] === 'relation', formula = process.argv[3] === 'formula', subItems = process.argv[3] === 'sub-items'
 const repo = new SqliteWorkspaceRepository(process.argv[2], undefined, { allowMissingLegacy: true })
 let ws = await repo.load()
 const run = async (action: Action) => { ws = (await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: ws.revision, action })).workspace }
@@ -17,7 +17,7 @@ const at = new Date().toISOString()
 await run({ type: 'ensure-day', date: today })
 const day = ws.pages.find(p => p.date === today)!
 const line = (i: number) => ({ id: `l${i}`, type: 'bulletListItem', props: {}, content: [{ type: 'text', text: `Line ${i} of the day, with a few words in it`, styles: {} }], children: [] })
-const doc = [...JSON.parse(day.document), ...Array.from({ length: 20 }, (_, i) => line(i)), ...(plain ? [] : [{ id: linked ? 'view' : 'home', type: 'database', props: { pageId: todos ? todosSourceId : 'list', view: chart ? JSON.stringify({ id: 'chart', name: 'Chart', layout: 'chart', columns: [], sort: [], filter: [], groupBy: 'genre', chart: { form: 'bar' } }) : '' }, children: [] }]), ...Array.from({ length: 20 }, (_, i) => line(i + 20))]
+const doc = [...JSON.parse(day.document), ...Array.from({ length: 20 }, (_, i) => line(i)), ...(plain ? [] : [{ id: linked ? 'view' : 'home', type: 'database', props: { pageId: todos ? todosSourceId : 'list', view: feed ? JSON.stringify({ id: 'feed', name: 'Feed', layout: 'feed', columns: [{ id: 'genre' }], sort: [], filter: [] }) : chart ? JSON.stringify({ id: 'chart', name: 'Chart', layout: 'chart', columns: [], sort: [], filter: [], groupBy: 'genre', chart: { form: 'bar' } }) : '' }, children: [] }]), ...Array.from({ length: 20 }, (_, i) => line(i + 20))]
 await run({ type: 'save-editor', pageId: day.id, expectedContent: pageContentKey(day), document: JSON.stringify(doc), today })
 if (todos) {
   // To-dos: 25 open tasks written on a page of their own.
