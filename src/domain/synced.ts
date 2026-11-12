@@ -14,6 +14,8 @@ export interface SyncedRecord {
   rev: number
   /** The block it was made as (design §2). */
   original: string
+  /** When its lines last changed (ISO time): an edit inside a block is the block's, not a page's (Brian 3d7aca46). */
+  editedAt?: string
 }
 type Roles = Record<string, { role: string; planDate: string }>
 
@@ -110,9 +112,9 @@ export function strippedWorkspace(ws: Workspace): Workspace {
  * to the page, with a record already, arrives as a copy and brings nothing of its own. A place on an older revision hasn't
  * seen the latest. If its lines are what it last read, it just takes the latest. If he changed them, both can't be right, so
  * the block takes the latest and his version goes right below it as ordinary lines, so nothing he typed goes (states §5).
- * Returns the blocks that happened to.
+ * Returns the blocks that happened to. `at`: the save's time, a new record's Edited time.
  */
-export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNode[], refuse: (message: string) => never): string[] {
+export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNode[], refuse: (message: string) => never, at: string = new Date().toISOString()): string[] {
   if (!nodes.length || !JSON.stringify(nodes).includes(`"${syncedBlockType}"`)) return []
   const here = new Set<string>(), conflicts: string[] = [], editedHere = new Map<string, string>()
   walk(pageNodes(page), n => { if (isBlock(n)) here.add(n.id) })
@@ -125,7 +127,7 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
       const record = state.synced?.find(r => r.id === syncId)
       // Its record isn't here and it brings no lines: nothing to make, and the block stays as it is.
       if (!record && !n.children?.length) continue
-      if (!record) { (state.synced ??= []).push({ id: syncId as string, lines: JSON.stringify(unplaced(n)), rev: 1, original: n.id }); continue }
+      if (!record) { (state.synced ??= []).push({ id: syncId as string, lines: JSON.stringify(unplaced(n)), rev: 1, original: n.id, editedAt: at }); continue }
       if (!here.has(n.id)) { n.children = []; continue }
       let changed = false
       if (Number(n.props?.rev) >= record.rev) {
@@ -172,7 +174,8 @@ function detachLostHomes(state: Workspace, lost: readonly EditorNode[]): void {
   }
 }
 const databasesIn = (lines: readonly EditorNode[]): EditorNode[] => { const out: EditorNode[] = []; walk(lines as EditorNode[], n => { if (n.type === 'database') out.push(n) }); return out }
-export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
+/** `at`: the command's time (ISO), a record's Edited time when its lines change; now when it has none. */
+export function settleSynced(state: Workspace, at: string = new Date().toISOString()): { linesRemovedFrom?: number } {
   // A block only comes from a template or a duplicate where a record exists already, so with none this costs nothing (B21-14).
   if (!hasRecords(state)) return {}
   let linesRemovedFrom: number | undefined
@@ -185,7 +188,7 @@ export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
       if (!isBlock(n) || !n.children?.length) return
       const record = state.synced!.find(r => r.id === n.props?.syncId)
       // Made outside a save, on a new page from a template: its own, starting here.
-      if (!record) { state.synced!.push({ id: String(n.props?.syncId), lines: JSON.stringify(unplaced(n)), rev: 1, original: n.id }); return }
+      if (!record) { state.synced!.push({ id: String(n.props?.syncId), lines: JSON.stringify(unplaced(n)), rev: 1, original: n.id, editedAt: at }); return }
       const lines = unplaced(n)
       if (linesKey(lines) !== was.get(record.id)) {
         // Fewer lines than it had, on a block shown elsewhere too.
@@ -197,7 +200,7 @@ export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
       }
     })
   }
-  for (const record of state.synced!) if (was.has(record.id) && recordKey(record) !== was.get(record.id)) record.rev++
+  for (const record of state.synced!) if (was.has(record.id) && recordKey(record) !== was.get(record.id)) { record.rev++; record.editedAt = at }
   dropUnheldRecords(state)
   for (const page of state.pages) {
     if (!mentionsBlock(page.document)) continue

@@ -938,7 +938,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const ids = new Set<string>();
       for (const n of all) { if (!n || typeof n.id !== "string" || !n.id || typeof n.type !== "string" || ids.has(n.id)) throw new DomainError("Duplicate editor block identity"); ids.add(n.id); }
       const renamed = claimLineIds(state, p, all);
-      const conflicted = acceptSavedBlocks(state, p, nodes, (message) => { throw new DomainError(message); });
+      const conflicted = acceptSavedBlocks(state, p, nodes, (message) => { throw new DomainError(message); }, isoTime(action.at));
       if (isTemplate(p)) { setDocument(p, templateRows(nodes)); return { message: "Template saved" }; }
       const before = flatNodes(pageNodes(p));
       const on = action.today ?? p.date ?? new Date().toISOString().slice(0, 10);
@@ -1778,7 +1778,9 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
     result = { message: "Previous operation restored" };
   } else {
     result = execute(state, command.action, command.operationId);
-    result = { ...result, ...settleSynced(state) };
+    // A block's lines changed by this command take its time as their Edited time (Ratchet cf5f7beb).
+    const at = (command.action as { at?: unknown }).at;
+    result = { ...result, ...settleSynced(state, typeof at === "string" && Number.isFinite(Date.parse(at)) ? at : undefined) };
     const fired = firedRules(input, state, command.action, { today: localDay(state, isoTime(undefined)), pageDate: null, zone: state.timezone }, () => todoSources(input, state));
     if (fired.length) { const run = runAutomations(state, fired, command.operationId); state = run.state; result = { ...result, automations: run.automations }; }
   }
