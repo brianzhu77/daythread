@@ -9,6 +9,7 @@ import { openAutomations } from './automation-sheet'
 import { openButtonEditor } from './button-editor'
 import { filterTree, hasFilter, limits, ruleCount, rulesIn, type FilterGroup, tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View, type Repeat } from '../domain/database.ts'
 import { chartForms, chartKinds, chartSettings, type ChartForm, type ChartKind, type ChartSettings } from '../domain/chart'
+import { firstWidgetView } from '../domain/dashboard'
 import { addGroup, atPath, canHoldGroup, moveIntoGroup, moveIntoNewGroup, moveOutOfGroup, moveRulesOut, removeGroup, treeFields, withoutRule, type FilterPath } from '../domain/filter-tree'
 import { timelineUnits, viewDateEnd, type TimelineUnit } from '../domain/timeline'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
@@ -181,16 +182,18 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     if (!inline) void navigate({ to: '/pages', search: db.parentId ? { page: db.parentId } : {} })
   }
   const copyLink = () => { close(); void navigator.clipboard?.writeText(new URL(`/pages?page=${encodeURIComponent(db.id)}`, window.location.origin).href) }
+  // A dashboard's own settings are its widgets', in edit mode; its filter across them comes with step 3 (dashboard.md §4).
+  const dash = view.layout === 'dashboard'
   return <>
-    <div className="database-menu-tiles">
+    {!dash && <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
       {view.layout !== 'calendar' && view.layout !== 'chart' && <button type="button" onClick={() => go('group')}>Group</button>}
-    </div>
+    </div>}
     {(!db.database.fixed || db.id === todosSourceId) && <button type="button" role="menuitem" onClick={e => { const anchor = document.querySelector(`[data-database-menu="${CSS.escape(blockId)}"]`) ?? e.currentTarget; setOpenMenu(null); openAutomations(db.id, anchor) }}>Automations{(() => { const n = workspace ? db.database.automations?.filter(r => r.paused || automationProblem(workspace, db.database, r)).length ?? 0 : 0; return n ? ` · ${n} paused` : '' })()}</button>}
-    {view.layout !== 'chart' && <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>}
-    <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
-    {view.layout !== 'calendar' && view.layout !== 'timeline' && view.layout !== 'chart' && !wide && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
+    {view.layout !== 'chart' && !dash && <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>}
+    {!dash && <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>}
+    {view.layout !== 'calendar' && view.layout !== 'timeline' && view.layout !== 'chart' && !dash && !wide && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
     {(view.layout === 'table' || view.layout === 'board' || (view.layout === 'timeline' && view.timelineTable)) && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('more')}>More settings<span className="database-menu-chevron">›</span></button>}
@@ -199,7 +202,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     {(inline || linked) && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.duplicate(blockId) }}>Duplicate</button>}
     {inline && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.turnIntoPage(blockId, db.id) }}>Turn into page</button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={copyLink}>Copy link</button>}
-    <button type="button" role="menuitem" onClick={() => go('export')}>Export<span className="database-menu-chevron">›</span></button>
+    {!dash && <button type="button" role="menuitem" onClick={() => go('export')}>Export<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); chooseCsv({ kind: 'merge', databaseId: db.id }) }}>Merge with CSV</button>}
     <hr />
     {linked
@@ -550,7 +553,7 @@ function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () 
 // ---------------------------------------------------------------- group and layout (design §7.2, §7.3)
 
 const unitLabels: Record<TimelineUnit, string> = { hours: 'Hours', day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' }
-const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', chart: 'Chart', form: 'Form', feed: 'Feed' }
+const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', chart: 'Chart', form: 'Form', feed: 'Feed', dashboard: 'Dashboard' }
 /** "Status", "Status 2", …: never a name the database already has. */
 function newPropertyName(db: Database, base: string): string {
   const taken = new Set(['name', ...db.properties.map(p => p.name.toLocaleLowerCase())])
@@ -1229,6 +1232,14 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
   const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'feed' = 'table', dateBy?: string) => {
     const id = newId()
+    // A dashboard's copy is made on the server from it as stored, every id new (Lead ad6dae7b).
+    if (from?.layout === 'dashboard') {
+      const ids: Record<string, string> = {}
+      for (const r of from.dashboard?.rows ?? []) { ids[r.id] = newId(); for (const w of r.widgets) { ids[w.id] = newId(); ids[w.view.id] = newId() } }
+      change({ kind: 'duplicateDashboard', viewId: from.id, newViewId: id, ids })
+      setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id)
+      return
+    }
     // A new view is named after its type, with the name ready to rename (design §7.1); Duplicate copies one. A new board's or
     // gallery's cards start as titles alone: Properties adds what he wants on them (§7.5).
     const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : layoutLabels[layout], layout: groupBy ? 'board' : layout, columns: groupBy || layout === 'gallery' || layout === 'calendar' || layout === 'timeline' ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}), ...(dateBy ? { dateBy } : {}) }
@@ -1244,6 +1255,12 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id)
   }
   const addChart = () => { const only = groupableProperties(db.database, 'chart'); if (only.length > 1) setAdding('chart'); else addChartBy(only[0]?.id) }
+  // It opens with one widget: a copy of this database's first view a widget can be (dashboard.md §3).
+  const addDashboard = () => {
+    const id = newId()
+    change({ kind: 'addDashboard', view: { id, name: 'Dashboard' }, rows: [{ id: newId(), widgets: [{ id: newId(), source: db.id, view: firstWidgetView(db.database, newId()) }] }] })
+    setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id)
+  }
   // Its questions and a Responses view come with it (forms.md §3, §4).
   const addForm = () => { const id = newId(); change({ kind: 'addView', view: { id, name: 'Form', layout: 'form', columns: [], sort: [], filter: [] } }); setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id) }
   const addCalendar = () => { const only = dateProperties(db.database); if (only.length === 1) add(undefined, undefined, 'calendar', only[0]!.id); else setAdding('calendar') }
@@ -1262,6 +1279,8 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     <button type="button" role="menuitem" onClick={addChart}>Chart</button>
     {!db.database.fixed && <button type="button" role="menuitem" onClick={addForm}>Form</button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'feed')}>Feed</button>}
+    {/* A dashboard only ever opens on its database's own page; a linked block has one view of its own, so none there (dashboard.md §5). */}
+    {!db.database.fixed && !isLinkedBlock(blockId) && <button type="button" role="menuitem" onClick={addDashboard}>Dashboard</button>}
   </>
   return <>
     <Head title="Views" />

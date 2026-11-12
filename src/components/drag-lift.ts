@@ -53,9 +53,9 @@ export interface Lift {
  * Lifts a copy of `source` with the pointer at (x, y). A table row is cloned with its table, so its cells keep their
  * widths. `tilt` is the copy's angle in degrees and `grow` how much bigger it gets (a wide row grows less, so its far
  * end doesn't swing out). `raise` keeps the copy that far above a finger, which would otherwise cover it; `badge` is a
- * count on it.
+ * count on it; `context`, the classes of the ancestors its styles need.
  */
-export function lift(source: HTMLElement, x: number, y: number, options: { tilt?: number; grow?: number; raise?: number; badge?: string } = {}): Lift {
+export function lift(source: HTMLElement, x: number, y: number, options: { tilt?: number; grow?: number; raise?: number; badge?: string; context?: string } = {}): Lift {
   const origin = source.getBoundingClientRect()
   const tilt = options.tilt ?? 3, grow = options.grow ?? 0.02
   const clone = source.cloneNode(true) as HTMLElement
@@ -72,6 +72,15 @@ export function lift(source: HTMLElement, x: number, y: number, options: { tilt?
     const tbody = document.createElement('tbody')
     tbody.append(clone); table.append(tbody)
     body = table
+  }
+  // A copy whose styles come from its place's ancestors (a dashboard widget's table): it keeps them under wrappers of
+  // those classes, laid out as if they weren't there (`display: contents`), so only the selectors see them.
+  if (options.context) {
+    const context = document.createElement('div')
+    context.className = options.context
+    context.style.display = 'contents'
+    context.append(body)
+    body = context
   }
   const wrap = document.createElement('div')
   wrap.className = 'drag-lift'

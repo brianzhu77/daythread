@@ -74,7 +74,7 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 export interface Condition { by: string; op: FilterOp; value?: Json }
 export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
-export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart", "form", "feed"] as const;
+export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart", "form", "feed", "dashboard"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
 /** Values a new row takes from a template: not its number, which is its own. */
 export function templateValues(template: Pick<Page, "values">): NonNullable<Page["values"]> {
@@ -149,6 +149,8 @@ export interface View {
   frozenThrough?: string;
   /** Table at 1280: Name's width, dragged on its head (R4-18); the default when absent. */
   nameWidth?: number;
+  /** A Dashboard's rows of widgets (dashboard.ts). Changed only by its own commands; an older build keeps it and draws a table. */
+  dashboard?: import("./dashboard.ts").Dashboard;
 }
 export const tints = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"] as const;
 export type Tint = (typeof tints)[number];
@@ -1024,7 +1026,10 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
 /** A property as `addProperty` sends it: options without ids get them; a Status with none gets the three groups. */
 export interface PropertyInput { button?: { label: string; steps: string }; id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
 /** One schema or view change: one write, the database page. */
+/** What `updateView` changes, also what a dashboard widget's `updateWidget` carries. */
+export type ViewChange = Omit<Extract<DatabaseChange, { kind: "updateView" }>, "kind" | "viewId">;
 export type DatabaseChange =
+  | import("./dashboard.ts").DashboardChange
   | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string; /** in that view, placed before this column (R4-18's Insert); last otherwise */ beforeId?: string }
   | { kind: "updateProperty"; propertyId: string; button?: { label: string; steps: string }; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
   /** "Show on Books": a relation's other side, made as a property of the target, or gone with null. */
@@ -1154,12 +1159,12 @@ function cleanCalculations(db: Database, input: unknown): Record<string, CalcKin
 export const typeLabels: Record<PropertyType, string> = { button: "Button", text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", files: "Files", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
 const hasOptions = (type: PropertyType): boolean => type === "select" || type === "multiSelect" || type === "status";
 
-function cleanName(value: unknown, what: string): string {
+export function cleanName(value: unknown, what: string): string {
   const name = typeof value === "string" ? value.replace(/\u0000/g, "").replace(/\s+/g, " ").trim() : "";
   if (!name || name.length > limits.name) throw new DatabaseError(`${what} needs a name`);
   return name;
 }
-function checkId(value: unknown): string {
+export function checkId(value: unknown): string {
   if (typeof value !== "string" || !value || value.length > 200 || value === titleId) throw new DatabaseError("Invalid id");
   return value;
 }
@@ -1406,7 +1411,7 @@ function addResponses(db: Database): void {
   const form = db.views.find((v) => v.layout === "form")!;
   db.views.push({ id: `${form.id}:responses`, name: "Responses", layout: "table", columns: (form.form?.questions ?? []).filter((q) => q.propertyId !== titleId).map((q) => ({ id: q.propertyId })), sort: [], filter: [] });
 }
-function cleanView(db: Database, input: View): View {
+export function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
   return { ...(input.subItemsDisplay === 'flat' ? { subItemsDisplay: 'flat' as const } : {}), ...(input.subItemsShow === 'parents' || input.subItemsShow === 'subs' ? { subItemsShow: input.subItemsShow } : {}), id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.filterGroups?.length ? { filterGroups: cleanFilterGroups(db, input.filterGroups, []) } : {}), ...(input.chart ? { chart: cleanChart(db, input.chart) } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...(input.form || layout === "form" ? { form: input.form ? cleanForm(db, input.form) : defaultForm(db, titleId) } : {}), ...cleanGroup(db, input, layout, input) };
@@ -1454,6 +1459,54 @@ function cleanAutomation(input: Automation): Automation {
   const triggers = (Array.isArray(input.triggers) ? input.triggers : []).map((t) => t.kind === "every" ? { kind: t.kind, repeat: t.repeat, ...(t.until ? { until: t.until } : {}) } : t.kind === "row-added" ? { kind: t.kind } : { kind: t.kind, propertyId: checkId(t.propertyId), name: String(t.name ?? "").slice(0, limits.name), ...(t.condition ? { condition: t.condition } : {}) }) as Automation["triggers"];
   if (typeof input.steps !== "string" || input.steps.length > limits.buttonSteps) throw new DatabaseError("Invalid automation");
   return { id: checkId(input.id), name: cleanName(input.name, "An automation"), active: input.active !== false, triggers, ...(input.any ? { any: true as const } : {}), ...(input.viewId ? { viewId: checkId(input.viewId) } : {}), steps: input.steps };
+}
+/** A view after `change`, cleaned against `db`: the database's own view, or a dashboard widget's copy against its source. */
+export function updatedView(db: Database, old: View, change: ViewChange): View {
+    // A rule on a deleted property stays where it's moved to: it's only new ones that must be on a column.
+    const heldRules = [...old.filter, ...rulesIn(old.filterGroups)];
+    const { chart: _chart, filterAny: _filterAny, filterGroups: _filterGroups, cardImage: _cardImage, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
+    const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
+    const group = cleanGroup(db, {
+      groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
+      groupDateBy: change.groupDateBy ?? old.groupDateBy,
+      hideEmptyGroups: change.hideEmptyGroups ?? old.hideEmptyGroups,
+      hiddenGroups: change.hiddenGroups ?? old.hiddenGroups,
+      ...(change.subGroupBy === null ? {} : { subGroupBy: change.subGroupBy ?? old.subGroupBy }),
+      subGroupDateBy: change.subGroupDateBy ?? old.subGroupDateBy,
+      hiddenSubGroups: change.hiddenSubGroups ?? old.hiddenSubGroups,
+      dateBy: change.dateBy ?? old.dateBy,
+      ...(change.calendarSpan === null ? {} : { calendarSpan: change.calendarSpan ?? old.calendarSpan }),
+      ...(change.timelineEnd === null ? {} : { timelineEnd: change.timelineEnd ?? old.timelineEnd }),
+      timelineUnit: change.timelineUnit ?? old.timelineUnit,
+      ...(change.timelineTable === null ? {} : { timelineTable: change.timelineTable ?? old.timelineTable }),
+      ...(change.openIn === null ? {} : { openIn: change.openIn ?? old.openIn }),
+      colourRules: change.colourRules ?? old.colourRules,
+      ...(change.frozenThrough === null ? {} : { frozenThrough: change.frozenThrough ?? old.frozenThrough }),
+      ...(change.nameWidth === null ? {} : { nameWidth: change.nameWidth ?? old.nameWidth }),
+    }, layout, old);
+    const next: View = {
+      ...rest,
+      layout,
+      ...(change.name !== undefined ? { name: cleanName(change.name, "A view") } : {}),
+      ...(change.subItemsDisplay ? { subItemsDisplay: change.subItemsDisplay } : {}),
+      ...(change.subItemsShow ? { subItemsShow: change.subItemsShow } : {}),
+      ...(change.cardImage !== undefined ? (change.cardImage ? { cardImage: change.cardImage } : {}) : (old.cardImage ? { cardImage: old.cardImage } : {})),
+      ...(change.columns !== undefined ? { columns: cleanColumns(db, change.columns) } : {}),
+      ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
+      ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, heldRules) } : {}),
+      ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
+      ...(() => { const groups = change.filterGroups === undefined ? old.filterGroups : cleanFilterGroups(db, change.filterGroups, heldRules); return groups?.length ? { filterGroups: groups } : {}; })(),
+      ...(() => { const chart = change.chart === undefined ? old.chart : cleanChart(db, change.chart, old.chart); return chart ? { chart } : {}; })(),
+      // The questions it opens with, the first time it's a form; after that its own, kept when the layout changes (forms.md §3).
+      ...(() => { const form = change.form !== undefined ? cleanForm(db, change.form) : old.form ?? (layout === "form" ? defaultForm(db, titleId) : undefined); return form ? { form } : {}; })(),
+      ...((change.wrapName ?? old.wrapName) ? { wrapName: true as const } : {}),
+      ...(() => { const chosen = change.boardCalculation === undefined ? old.boardCalculation : change.boardCalculation; return chosen ? { boardCalculation: cleanBoardCalculation(db, chosen) } : {}; })(),
+      ...(() => { const template = change.defaultTemplate === undefined ? old.defaultTemplate : change.defaultTemplate; return template ? { defaultTemplate: template } : {}; })(),
+      ...(() => { const calculations = change.calculations !== undefined ? cleanCalculations(db, change.calculations) : old.calculations; return calculations && Object.keys(calculations).length ? { calculations } : {}; })(),
+      ...group,
+    };
+  checkRuleCount(next);
+  return next;
 }
 export function changeDatabase(ws: Workspace, page: Page & { database: Database }, change: DatabaseChange): string {
   const db = page.database;
@@ -1606,6 +1659,8 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       return "Property moved";
     case "addView": {
       if (db.views.length >= limits.views) throw new DatabaseError("Too many views");
+      // A dashboard comes only as `addDashboard`, which makes its widgets' ids and checks their sources (dashboard.ts).
+      if (change.view?.layout === "dashboard") throw new DatabaseError("Unknown view type");
       const added = cleanView(db, change.view);
       checkRuleCount(added);
       if (db.views.some((v) => v.id === added.id)) throw new DatabaseError("Invalid id");
@@ -1615,50 +1670,10 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      // A rule on a deleted property stays where it's moved to: it's only new ones that must be on a column.
-      const heldRules = [...old.filter, ...rulesIn(old.filterGroups)];
-      const { chart: _chart, filterAny: _filterAny, filterGroups: _filterGroups, cardImage: _cardImage, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
-      const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
-      const group = cleanGroup(db, {
-        groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
-        groupDateBy: change.groupDateBy ?? old.groupDateBy,
-        hideEmptyGroups: change.hideEmptyGroups ?? old.hideEmptyGroups,
-        hiddenGroups: change.hiddenGroups ?? old.hiddenGroups,
-        ...(change.subGroupBy === null ? {} : { subGroupBy: change.subGroupBy ?? old.subGroupBy }),
-        subGroupDateBy: change.subGroupDateBy ?? old.subGroupDateBy,
-        hiddenSubGroups: change.hiddenSubGroups ?? old.hiddenSubGroups,
-        dateBy: change.dateBy ?? old.dateBy,
-        ...(change.calendarSpan === null ? {} : { calendarSpan: change.calendarSpan ?? old.calendarSpan }),
-        ...(change.timelineEnd === null ? {} : { timelineEnd: change.timelineEnd ?? old.timelineEnd }),
-        timelineUnit: change.timelineUnit ?? old.timelineUnit,
-        ...(change.timelineTable === null ? {} : { timelineTable: change.timelineTable ?? old.timelineTable }),
-        ...(change.openIn === null ? {} : { openIn: change.openIn ?? old.openIn }),
-        colourRules: change.colourRules ?? old.colourRules,
-        ...(change.frozenThrough === null ? {} : { frozenThrough: change.frozenThrough ?? old.frozenThrough }),
-        ...(change.nameWidth === null ? {} : { nameWidth: change.nameWidth ?? old.nameWidth }),
-      }, layout, old);
-      const next: View = {
-        ...rest,
-        layout,
-        ...(change.name !== undefined ? { name: cleanName(change.name, "A view") } : {}),
-        ...(change.subItemsDisplay ? { subItemsDisplay: change.subItemsDisplay } : {}),
-        ...(change.subItemsShow ? { subItemsShow: change.subItemsShow } : {}),
-        ...(change.cardImage !== undefined ? (change.cardImage ? { cardImage: change.cardImage } : {}) : (old.cardImage ? { cardImage: old.cardImage } : {})),
-        ...(change.columns !== undefined ? { columns: cleanColumns(db, change.columns) } : {}),
-        ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
-        ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, heldRules) } : {}),
-        ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
-        ...(() => { const groups = change.filterGroups === undefined ? old.filterGroups : cleanFilterGroups(db, change.filterGroups, heldRules); return groups?.length ? { filterGroups: groups } : {}; })(),
-        ...(() => { const chart = change.chart === undefined ? old.chart : cleanChart(db, change.chart, old.chart); return chart ? { chart } : {}; })(),
-        // The questions it opens with, the first time it's a form; after that its own, kept when the layout changes (forms.md §3).
-        ...(() => { const form = change.form !== undefined ? cleanForm(db, change.form) : old.form ?? (layout === "form" ? defaultForm(db, titleId) : undefined); return form ? { form } : {}; })(),
-        ...((change.wrapName ?? old.wrapName) ? { wrapName: true as const } : {}),
-        ...(() => { const chosen = change.boardCalculation === undefined ? old.boardCalculation : change.boardCalculation; return chosen ? { boardCalculation: cleanBoardCalculation(db, chosen) } : {}; })(),
-        ...(() => { const template = change.defaultTemplate === undefined ? old.defaultTemplate : change.defaultTemplate; return template ? { defaultTemplate: template } : {}; })(),
-        ...(() => { const calculations = change.calculations !== undefined ? cleanCalculations(db, change.calculations) : old.calculations; return calculations && Object.keys(calculations).length ? { calculations } : {}; })(),
-        ...group,
-      };
-      checkRuleCount(next);
+      // A dashboard is its own kind of view: no other layout turns into one, and it turns into no other (its rows would be lost from sight).
+      if (change.layout !== undefined && (change.layout === "dashboard") !== (old.layout === "dashboard")) throw new DatabaseError("A dashboard stays a dashboard");
+      const next = updatedView(db, old, change);
+      const layout = next.layout;
       db.views[db.views.indexOf(old)] = next;
       if (layout === "form" && old.layout !== "form") addResponses(db);
       return "View saved";
