@@ -45,7 +45,8 @@ function useDashboardRun(hostId: string, viewId: string) {
     // Sent again and still refused (its neighbour moved, or it's been removed): said, and the dashboard as it is now is
     // drawn, so a change never fails silently (Bumblebee ba4322f2).
     const again = await once()
-    if (!again.r && (again.stale || again.refusal || again.gone)) toast('Changed in another tab, so nothing was changed', { timeout: 6000 })
+    if (!again.r && again.gone) toast("That widget's gone · removed in another tab", { timeout: 6000 })
+    else if (!again.r && (again.stale || again.refusal)) toast('Changed in another tab, so nothing was changed', { timeout: 6000 })
     return again.r
   }
 }
