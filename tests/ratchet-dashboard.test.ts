@@ -25,7 +25,9 @@ test('independent: duplicating a widget retains a held rule on a deleted propert
  assert.deepEqual(d().rows[0]!.widgets[1]!.view.filter,d().rows[0]!.widgets[0]!.view.filter);
 });
 test('independent: a stale placement refuses unchanged, then retry preserves concurrent settings and replay is inert',()=>{
- const {h,D,d}=setup();const rev=h.ws.revision;
+ const {h,D,d}=setup();
+ D({kind:'addWidget',widget:{id:'second',source:'source',view:firstWidgetView(h.page('source').database!,'secondview')},rowId:null,newRowId:'secondrow',beforeId:null});
+ const rev=h.ws.revision;
  const change={kind:'moveWidget',viewId:'dash',widgetId:'w',toRowId:null,newRowId:'newrow',rowBeforeId:null,beforeId:null} as const;
  D({kind:'updateWidget',widgetId:'w',fields:{name:'Concurrent name'}});
  const before=JSON.stringify(h.ws);
@@ -34,7 +36,7 @@ test('independent: a stale placement refuses unchanged, then retry preserves con
  assert.throws(()=>applyCommand(h.ws,{operationId:'retry-id',expectedRevision:rev,action}),/Saved elsewhere/);
  assert.equal(JSON.stringify(h.ws),before);
  h.ws=applyCommand(h.ws,{operationId:'retry-id',expectedRevision:h.ws.revision,action}).workspace;
- assert.equal(d().rows[0]!.widgets[0]!.view.name,'Concurrent name');
+ assert.equal(d().rows.find(r=>r.id==='newrow')!.widgets[0]!.view.name,'Concurrent name');
  const after=JSON.stringify(h.ws);
  h.ws=applyCommand(h.ws,{operationId:'retry-id',expectedRevision:rev,action}).workspace;
  assert.equal(JSON.stringify(h.ws),after);
@@ -48,4 +50,24 @@ test('independent: dashboard creation respects the database view count cap',()=>
  const {C,h}=setup();const db=h.page('host').database!;
  while(db.views.length<50) db.views.push({...structuredClone(db.views[0]!),id:`v${db.views.length}`});
  assert.throws(()=>C('host',{kind:'addDashboard',view:{id:'extra',name:'Extra'},rows:[]}),/Too many views/);
+});
+test('independent: duplicate dashboard preserves missing-source settings and future placement independently',()=>{
+ const {h,C,D,d}=setup();D({kind:'updateWidget',widgetId:'w',fields:{filter:[{by:'st',op:'isAnyOf',value:['a']}]}});
+ d().rows[0]!.widgets[0]!.width=11;d().filter=[{by:'future',op:'is',value:'value'}] as never;
+ h.run({type:'delete-page',pageId:'source',at:'2026-11-12T12:00:00Z'});
+ const before=structuredClone(d());
+ D({kind:'duplicateDashboard',newViewId:'copydash',ids:{row:'copyrow',w:'copywidget',wv:'copywidgetview'}});
+ const copy=h.page('host').database!.views.find(v=>v.id==='copydash')!.dashboard!;
+ assert.deepEqual(d(),before);assert.equal(copy.rows[0]!.widgets[0]!.width,11);assert.deepEqual(copy.filter,before.filter);
+ assert.deepEqual(copy.rows[0]!.widgets[0]!.view.filter,before.rows[0]!.widgets[0]!.view.filter);
+ copy.rows[0]!.widgets[0]!.view.filter=[];assert.equal(d().rows[0]!.widgets[0]!.view.filter.length,1);
+ const stable=JSON.stringify(h.ws);
+ assert.throws(()=>D({kind:'duplicateDashboard',newViewId:'baddash',ids:{row:'collision',w:'collision',wv:'v-fresh'}}),/Invalid id/);
+ assert.equal(JSON.stringify(h.ws),stable,'invalid id mapping refuses atomically');
+});
+test('independent: swapping within one row keeps each widget own width',()=>{
+ const {h,D,d}=setup();D({kind:'addWidget',widget:{id:'two',source:'source',view:firstWidgetView(h.page('source').database!,'twoview')},rowId:'row',beforeId:null});
+ D({kind:'sizeSplit',rowId:'row',leftId:'w',rightId:'two',leftWidth:4});
+ D({kind:'swapWidget',widgetId:'w',withId:'two'});
+ assert.deepEqual(d().rows[0]!.widgets.map(w=>[w.id,w.width]),[['two',8],['w',4]]);
 });

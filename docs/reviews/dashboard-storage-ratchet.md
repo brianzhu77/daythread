@@ -19,3 +19,11 @@ All reproduced in `tests/ratchet-dashboard.test.ts`. Author's 18 dashboard tests
 ## Remaining step-1 checks
 
 UI is unbuilt: full-page/day-link presentation, inert edit mode/gestures/no-op saves, per-block registration, source Trash/deletion states, performance and keyboard/menu behavior are not verified here. Floor9417eea2 rollback/persistence remains unrun. Whole-dashboard Duplicate is separately tracked by Lead ad6dae7b (plain menu `addView` currently refuses), including fresh widget/view ids. Per Lead's corrected contract, copying a database with its page/template can retain widget ids under a new host; verify commands stay host-scoped.
+
+## Retest 4d1074c1 / 97f8987e
+
+All three original findings are repaired. No-op moves now refuse `Already there` with state intact; widget duplication copies held settings as stored; host view cap applies to both add and duplicate-dashboard. The stale-placement fixture now includes a second row to keep its move meaningful under the accepted no-op rule. Independent whole-dashboard duplication preserves a missing source's held filters, future placement widths and reserved rules, deep-copies settings, and refuses a duplicate-id map atomically. Six independent fixtures pass.
+
+On 4d1074c1, complete suite: **1,046 pass, 13 skip, zero fail**. Typecheck found the author's reported nullable-array guard issue; 97f8987e changes only that cast in the domain, plus initial unverified menu wiring.
+
+A newly accepted rule remains unmet on 97f8987e: Jazz c80ba341 specifies that a same-row swap keeps each widget's own width (cross-row swaps exchange). Independent 4/8 same-row swap fixture fails: code exchanges the widths. This is a new specification delta, not failure to repair an original finding. Reported51b5bef4.
