@@ -1,11 +1,12 @@
 // B77: the day draft on a day page (Jazz 259d2c55's interface). The bands read `draftView`; every write saves what
 // he typed on the page first and does nothing if that save fails, like the morning card. The model is asked once
-// per day page per tab, when today's page is open and has no draft yet, and once more when he comes back to the page
-// after an ask that failed or was lost in this tab; the page itself never waits on it.
+// per day page per tab, when today's page is open and has no draft yet (or only one an older recipe made, Brian
+// 3d7aca46), and once more when he comes back to the page after an ask that failed or was lost in this tab; the page
+// itself never waits on it.
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { EditorNode } from '../domain/editor-document'
-import { draftOf, draftView, type DraftItemView } from '../domain/day-draft'
-import type { Action, LocalDate, Page, Task } from '../domain/types'
+import { draftOf, draftStale, draftView, type DraftItemView } from '../domain/day-draft'
+import type { Action, LocalDate, Page, Task, Workspace } from '../domain/types'
 import { prepareDayDraft } from '../server/functions'
 import { todayIso } from './dates'
 import { flushEditor } from './editor-flush'
@@ -45,6 +46,8 @@ const inFlight = (ask: Ask | undefined): boolean => ask?.state === 'asking' && D
 export const draftAskPending = (): boolean => [...asks.values()].some(inFlight)
 const failuresOf = (ask: Ask | undefined): number => !ask || ask.state === 'done' ? 0 : ask.state === 'failed' ? ask.failures : ask.failures + 1
 const AUTO_ASKS = 2
+/** A draft that stands for the day. One an older recipe made doesn't: today's is asked for again, its bands shown meanwhile. */
+const standingDraft = (ws: Workspace, pageId: string): boolean => { const d = draftOf(ws, pageId); return Boolean(d && !draftStale(d)) }
 
 export function useDayDraft(page: Page): DayDraftHook {
   const { workspace, run, latest, offline, refresh } = useWorkspace()
@@ -86,7 +89,7 @@ export function useDayDraft(page: Page): DayDraftHook {
     }
   }, [page.id, page.date, refresh, run])
 
-  const hasDraft = Boolean(workspace && draftOf(workspace, page.id))
+  const hasDraft = Boolean(workspace && standingDraft(workspace, page.id))
   const eligible = !offline && !hasDraft && page.type === 'daily' && page.date === todayIso()
   useEffect(() => {
     if (eligible && !asks.has(page.id)) void prepare(true)
@@ -98,7 +101,7 @@ export function useDayDraft(page: Page): DayDraftHook {
     if (page.type !== 'daily') return
     const again = () => {
       const ws = latest()
-      if (document.visibilityState !== 'visible' || offlineRef.current || !ws || draftOf(ws, page.id) || page.date !== todayIso()) return
+      if (document.visibilityState !== 'visible' || offlineRef.current || !ws || standingDraft(ws, page.id) || page.date !== todayIso()) return
       if (asks.has(page.id)) void prepare(true)
     }
     document.addEventListener('visibilitychange', again)

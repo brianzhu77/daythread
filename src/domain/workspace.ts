@@ -3,7 +3,7 @@
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
-import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
+import { draftOf, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, remadeItems, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { automationProblem, dueRules, firedRules, type Automation, type FiredRule, type RuleSource } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, usesFormulas, valueAtTap, type ButtonStep, type ButtonValue } from "./buttons.ts";
@@ -975,8 +975,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (n.type === "pageLink" && n.props?.at === undefined) n.props = { ...n.props, at };
         if (Array.isArray(n.content)) for (const c of n.content as { type?: string; props?: Record<string, unknown> }[]) if (c?.type === "pageRef" && c.props && c.props.at === undefined) c.props.at = at;
       }
-      // A row's body edited moves its Edited time; a save with nothing new, as on opening, doesn't (R3-9).
-      if (isRow(state, p) && JSON.stringify(nodes) !== JSON.stringify(pageNodes(p))) p.editedAt = isoTime(action.at);
+      // A page's body edited moves its Edited time, a day page's as any other's (Brian bb1d8ff7): a row's Edited
+      // property and what a day draft reads. A save with nothing new, as on opening, doesn't (R3-9).
+      if (JSON.stringify(nodes) !== JSON.stringify(pageNodes(p))) p.editedAt = isoTime(action.at);
       setDocument(p, nodes);
       for (const [id, rows] of gone) {
         const t = state.tasks.find((x) => x.id === id);
@@ -1378,10 +1379,12 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const old = draftOf(state, day.id);
       // One draft per day; the first ready one wins (Lead 98cb503a). A failed one (fallback only) is replaced only
       // until his first Apply or Skip on it (Jazz 283476c5, Bumblebee 8666b96e); after that it is the day's draft.
-      if (old && draftSettled(old)) throw new DomainError("This day already has its draft");
-      const items = normalizeDraftItems(state, day, action.items, allowed);
+      // One a newer recipe makes again (Brian 3d7aca46) replaces it only when ready, and keeps what he applied or skipped.
+      const recipe = action.recipe ?? 1;
+      if (old && (!draftReplaceable(old, recipe) || (draftSettled(old) && action.status !== "ready"))) throw new DomainError("This day already has its draft");
+      const items = remadeItems(old, normalizeDraftItems(state, day, action.items, allowed));
       const moreOpen = action.moreOpen.filter((id) => allowed.has(id));
-      const draft: DayDraft = { status: action.status, items, moreOpen };
+      const draft: DayDraft = { status: action.status, items, moreOpen, ...(action.recipe ? { recipe: action.recipe } : {}) };
       const existing = state.pages.find((p) => p.id === draftPageId(day.id));
       if (existing) existing.document = JSON.stringify(draft);
       else state.pages.push({ id: draftPageId(day.id), type: "draft", date: null, title: "", parentId: day.id, document: JSON.stringify(draft) });

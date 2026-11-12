@@ -54,12 +54,15 @@ test('an edit in any place reaches them all, in one command with one Undo, and w
   const h = shown()
   const before = rowsOf(h.ws)
   const was = h.page('b').document
-  const r = h.save('c', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [...n.children!, line('l3', 'Third')] } : n))
+  const at = '2030-01-01T00:00:00.000Z'
+  const r = h.save('c', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [...n.children!, line('l3', 'Third')] } : n), { at })
   assert.deepEqual(lines(h.page('a')).slice(-1), ['Third'])
   assert.deepEqual(lines(h.page('b')).slice(-1), ['Third'])
   assert.equal(h.ws.synced![0]!.rev, 2)
   const { write } = planWrites(before, h.ws)
-  assert.deepEqual(write.pages.upsert.map(row => row.id), ['synced:s1'])
+  // The block's one row, and the page it was edited on for its Edited time (Brian bb1d8ff7), never the other places.
+  assert.deepEqual(write.pages.upsert.map(row => row.id).sort(), ['c', 'synced:s1'])
+  assert.deepEqual(['a', 'b', 'c'].map(id => h.page(id).editedAt === at), [false, false, true])
   h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
   assert.equal(h.page('b').document, was)
 })

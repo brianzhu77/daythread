@@ -51,7 +51,7 @@ export const runCommand = createServerFn({ method: "POST" })
 export const prepareDayDraft = createServerFn({ method: "POST" })
   .validator((input: unknown) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), operationId: z.string().min(1).max(200) }).parse(input))
   .handler(async ({ data }) => {
-    const [{ getRepository }, { currentOwner }, { currentAccount }, { modelConfig }, { runDayDraft }, { draftOf, draftSettled }] = await Promise.all([
+    const [{ getRepository }, { currentOwner }, { currentAccount }, { modelConfig }, { runDayDraft }, { draftOf, draftSettled, draftStale, DRAFT_RECIPE }] = await Promise.all([
       import("./storage"), import("./auth/request-owner"), import("./auth/server"), import("./model/openrouter"), import("./model/day-draft"), import("../domain/day-draft"),
     ]);
     const account = await currentAccount();
@@ -60,11 +60,15 @@ export const prepareDayDraft = createServerFn({ method: "POST" })
     const ws = await getRepository().load();
     const page = ws.pages.find((p) => p.type === "daily" && p.date === data.date && !p.trashedAt);
     if (!page) throw new Error("Day page not found");
-    // The first ready draft wins: a second tab or a reload never pays for, or replaces, another one.
-    { const d = draftOf(ws, page.id); if (d && draftSettled(d)) return { setDraft: null, owner: currentOwner() ?? "local", modelOn: Boolean(config) }; }
-    const run = await runDayDraft(ws, page, config, () => crypto.randomUUID());
-    console.info(JSON.stringify({ level: "info", event: "draft.prepare", operationId: data.operationId, model: Boolean(config), status: run.status, items: run.items.length, moreOpen: run.moreOpen.length, elapsedMs: run.ms, costUsd: run.costUsd }));
-    const action = { type: "set-draft" as const, pageId: page.id, status: run.status, items: run.items, moreOpen: run.moreOpen, allowedTaskIds: run.allowedTaskIds };
+    // The first ready draft wins: a second tab or a reload never pays for, or replaces, another one. One an older
+    // recipe made is made again, once, and only a ready one takes its place (Brian 3d7aca46).
+    const old = draftOf(ws, page.id);
+    const none = { setDraft: null, owner: currentOwner() ?? "local", modelOn: Boolean(config) };
+    if (old && draftSettled(old) && (!draftStale(old) || !config)) return none;
+    const run = await runDayDraft(ws, page, config, () => crypto.randomUUID(), account?.timezone);
+    console.info(JSON.stringify({ level: "info", event: "draft.prepare", operationId: data.operationId, model: Boolean(config), remade: Boolean(old && draftStale(old)), status: run.status, ...(run.error ? { error: run.error } : {}), items: run.items.length, moreOpen: run.moreOpen.length, elapsedMs: run.ms, costUsd: run.costUsd }));
+    if (old && draftSettled(old) && run.status !== "ready") return none;
+    const action = { type: "set-draft" as const, pageId: page.id, status: run.status, items: run.items, moreOpen: run.moreOpen, allowedTaskIds: run.allowedTaskIds, recipe: DRAFT_RECIPE };
     return { setDraft: JSON.stringify(action), owner: currentOwner() ?? "local", modelOn: Boolean(config) };
   });
 

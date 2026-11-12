@@ -34,6 +34,10 @@ Two parts, which can ship separately:
    off, offline or fails, filled by today's deterministic rules (open to-dos into the first to-do section, as B74).
 2. **The model filling the draft** from yesterday's page, every open to-do and today's events, following the template.
    Needs Brian's yes on privacy, provider and when it runs.
+   - **Since Nov 12 (Brian 3d7aca46, recipe 2):** it reads every page edited in the last 7 days, newest first, not just
+     yesterday's, and what he wrote down for the day (a next-day list on yesterday's page, a line naming the date)
+     comes first, each line as a to-do in his words. Every page now records when its content was last edited. Today's
+     draft made by an older recipe is made again once when today's page is opened, keeping what he applied or skipped.
 
 ## Cut list (what each current component does, against the new flow)
 
