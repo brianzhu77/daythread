@@ -44,7 +44,7 @@ const dashboardChanges = [
   z.object({ kind: z.literal("updateWidget"), viewId: id, widgetId: id, fields: viewChange }),
   z.object({ kind: z.literal("moveWidget"), viewId: id, widgetId: id, toRowId: id.nullable(), newRowId: id.optional(), rowBeforeId: id.nullable().optional(), beforeId: id.nullable() }),
   z.object({ kind: z.literal("swapWidget"), viewId: id, widgetId: id, withId: id }),
-  z.object({ kind: z.literal("sizeSplit"), viewId: id, rowId: id, leftId: id, rightId: id, leftWidth: z.number().int() }),
+  z.object({ kind: z.literal("sizeSplit"), viewId: id, rowId: id, widgetIds: z.array(id).max(4), widths: z.array(z.number().int()).max(4) }),
   z.object({ kind: z.literal("sizeRow"), viewId: id, rowId: id, height: z.number().int() }),
   z.object({ kind: z.literal("duplicateWidget"), viewId: id, widgetId: id, newId: id, newViewId: id, newRowId: id }),
   z.object({ kind: z.literal("removeWidget"), viewId: id, widgetId: id }),

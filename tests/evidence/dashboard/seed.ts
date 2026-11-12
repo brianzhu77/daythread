@@ -31,6 +31,10 @@ await C('home', { kind: 'addDashboard', view: { id: 'dash', name: 'This week' },
 // Shown first on Home's page, as a fresh dashboard is (the views panel turns to it).
 const home = w.pages.find((p: any) => p.id === 'home').database
 await C('home', { kind: 'moveView', viewId: 'dash', beforeId: home.views[0].id })
+// Wall: a dashboard of four quarter widgets in one row, for wrapping with the Comments pane open.
+await run({ type: 'create-database', pageId: 'wall', homeBlockId: null, title: 'Wall' })
+await C('wall', { kind: 'addDashboard', view: { id: 'quad', name: 'Four' }, rows: [{ id: 'q', widgets: ['a', 'b', 'c', 'd'].map((x, i) => ({ id: `q${x}`, width: 3, source: i % 2 ? 'books' : 'runs', view: { ...firstWidgetView(db(i % 2 ? 'books' : 'runs'), `qv${x}`), name: `Quarter ${x}` } })) }] })
+await C('wall', { kind: 'moveView', viewId: 'quad', beforeId: w.pages.find((p: any) => p.id === 'wall').database.views[0].id })
 // A to-do planned for today, for the To-dos widget's tick.
 const today = new Date().toLocaleDateString('en-CA')
 await run({ type: 'ensure-day', date: today })
