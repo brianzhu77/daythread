@@ -207,6 +207,7 @@ test("a drop back where it was is refused and changes nothing: in its own row, o
   const before = shape(dash())
   assert.throws(() => D({ kind: 'moveWidget', widgetId: 'w1', toRowId: 'row1', beforeId: null }), /Already there/)
   assert.throws(() => D({ kind: 'moveWidget', widgetId: 'w1', toRowId: null, newRowId: 'x', rowBeforeId: null, beforeId: null }), /Already there/)
+  assert.throws(() => D({ kind: 'moveWidget', widgetId: 'w1', toRowId: null, newRowId: 'x', rowBeforeId: 'row1', beforeId: null }), /Already there/)
   assert.equal(shape(dash()), before)
   add('w2'); D({ kind: 'sizeSplit', rowId: 'row1', leftId: 'w1', rightId: 'w2', leftWidth: 4 })
   D({ kind: 'moveWidget', widgetId: 'w2', toRowId: 'row1', beforeId: 'w1' })
