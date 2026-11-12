@@ -44,8 +44,9 @@ Undo, and takes no rows, as R2-3. The Move items are how a keyboard arranges, an
 390 (§7).
 
 **A menu move is a swap (Bumblebee cb8dc72e).** It trades places with the previous or next widget in reading order
-(left to right, then down), and each takes the other's place and width. So the first widget in a row, moved left,
-swaps with the last widget of the row above. Both rows stay full and nothing else in the layout changes. It's one
+(left to right, then down). **Within a row each keeps its own width,** so a 1/3 · 2/3 split he set stays his. **Across
+two rows each takes the other's width,** as the place's width is what keeps both rows full: the first widget in a row,
+moved left, swaps with the last widget of the row above. Nothing else in the layout changes. It's one
 command and one Undo, `swapWidget {viewId, widgetId, withId}`, refused unless the two are next to each other in
 reading order. A drag is still `moveWidget`, with its re-divide (§4).
 
@@ -61,7 +62,11 @@ opens its `⋯`. Delete removes it, with Undo. Keys inside a widget never act, s
     row's widgets then share its width equally (1/2, 1/3 or 1/4), as Notion does, and the moved widget takes the row's
     height.
   - Between rows, or above the first or below the last: a new row of its own, full width, keeping its own height.
+  - **Within its own row,** a drag reorders it and every widget keeps its width (Bumblebee 1e0d2d51), so the slot is
+    the widget's own width, and the others slide past it at theirs.
   - A full row (4) shows no slot. Let go there and it goes back.
+  - **Back where it started** sends no command at all: no Undo entry, nothing saved, and the copy settles back as a
+    cancel does (the command refuses it too, "Already there").
 - **The slot:** a hatched `.drag-slot` the widget's landing size, with the row's neighbours sliding to their new widths
   (`measure`/`flip`, `SPRING.shift`). Between rows the slot is full width and the rows below slide down.
 - **Release:** the change is saved first and drawn in place, then the copy settles into it (`SPRING.settle`). One
