@@ -60,9 +60,9 @@ test('an edit in any place reaches them all, in one command with one Undo, and w
   assert.deepEqual(lines(h.page('b')).slice(-1), ['Third'])
   assert.equal(h.ws.synced![0]!.rev, 2)
   const { write } = planWrites(before, h.ws)
-  // The block's one row, and the page it was edited on for its Edited time (Brian bb1d8ff7), never the other places.
-  assert.deepEqual(write.pages.upsert.map(row => row.id).sort(), ['c', 'synced:s1'])
-  assert.deepEqual(['a', 'b', 'c'].map(id => h.page(id).editedAt === at), [false, false, true])
+  assert.deepEqual(write.pages.upsert.map(row => row.id), ['synced:s1'])
+  // An edit inside the block changes its record, not a page's own document, so no page's Edited time moves.
+  assert.deepEqual(['a', 'b', 'c'].map(id => h.page(id).editedAt === at), [false, false, false])
   h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
   assert.equal(h.page('b').document, was)
 })
