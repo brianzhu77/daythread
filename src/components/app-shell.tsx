@@ -21,6 +21,7 @@ import { flushAllEditors } from './editor-flush'
 import { useMoveToNewBuild } from './new-build'
 import { dueRules } from '../domain/automations'
 import { BlockerPickerHost } from './blockers'
+import { useInputModality } from './input-modality'
 
 /** Files nothing holds any more go from the store when the app opens, at most once a day (R3-11). It can't hurt to miss one: the next open asks again. */
 function SweepFiles() {
@@ -79,6 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useVisibleTop()
   useServiceWorker()
   useMoveToNewBuild()
+  useInputModality()
   return (
     <WorkspaceProvider>
       <div className="app">
