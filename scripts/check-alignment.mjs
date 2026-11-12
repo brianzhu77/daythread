@@ -447,7 +447,18 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       const range = document.createRange(); if (words) range.selectNodeContents(words)
       return { label: select.getAttribute('aria-label'), text: words?.textContent ?? '', over: !box ? null : Math.max(range.getBoundingClientRect().right - box.right, box.right - clip.right), full: Boolean(box) && select.getBoundingClientRect().width >= box.width - 0.5 }
     }))
-    if (!selects.length) results.push({ at: `${width}`, check: 'account line selects: not on /pages', ok: 'missing', detail: 'nothing to measure' })
+    // From 900 px the account's choices are in the sidebar footer's menu (bb12a273): each value shows whole, inside the menu.
+    if (!selects.length && await page.locator('.side-account-row').isVisible().catch(() => false)) {
+      await page.locator('.side-account-row').click(); await page.waitForTimeout(300)
+      const picks = await page.evaluate(() => [...document.querySelectorAll('.side-account-menu .menu-pick')].map(pick => {
+        const value = pick.querySelector('.menu-pick-value'), menu = pick.closest('.side-account-menu').getBoundingClientRect(), range = document.createRange()
+        if (value) range.selectNodeContents(value)
+        const words = value ? range.getBoundingClientRect() : null, box = value?.getBoundingClientRect()
+        return { label: pick.querySelector('select')?.getAttribute('aria-label') ?? '', text: value?.textContent ?? '', over: words ? Math.max(words.right - box.right, box.right - menu.right) : null }
+      }))
+      for (const r of picks) results.push({ at: `${width} /pages`, check: `account menu "${r.label}" shows all its words: "${r.text}"`, ok: r.over !== null && r.over <= 0.5, detail: r.over === null ? 'no value shown' : `${fmt(r.over)}px past its box` })
+      if (!picks.length) results.push({ at: `${width}`, check: 'account menu choices: none on /pages', ok: 'missing', detail: 'nothing to measure' })
+    } else if (!selects.length) results.push({ at: `${width}`, check: 'account line selects: not on /pages', ok: 'missing', detail: 'nothing to measure' })
     for (const r of selects) results.push({ at: `${width} /pages`, check: `account line "${r.label}" shows all its words: "${r.text}"`, ok: r.over !== null && r.over <= 0.5 && r.full, detail: r.over === null ? 'a bare select, which clips' : `${fmt(r.over)}px past its box` })
     await page.close()
   }

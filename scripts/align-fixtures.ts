@@ -56,6 +56,9 @@ for (const [pageId, title, icon] of [[iconPageId, 'Fixture icon page', '🌲'], 
   ws = await run({ type: 'create-document', title, body: 'A first line', pageId, parentId: scratchId })
   ws = await run({ type: 'set-page-icon', pageId, icon })
 }
+// The sidebar lists Pages only since bb12a273, so pages under the scratch day aren't in it: one at the top level is.
+ws = await run({ type: 'create-document', title: 'Fixture icon in the sidebar', body: '', pageId: 'fixture-icon-sidebar' })
+ws = await run({ type: 'set-page-icon', pageId: 'fixture-icon-sidebar', icon: '🌲' })
 ws = await run({ type: 'ensure-day', date: iconDay })
 ws = await run({ type: 'set-page-icon', pageId: dayPage(ws, iconDay).id, icon: '🌲' })
 
