@@ -148,8 +148,16 @@ function measure() {
   const cy = r => r.top + r.height / 2
   // The first text line of an element: its first line box, or for an empty row the line its caret would sit on.
   const firstLine = e => {
-    const range = document.createRange(); range.selectNodeContents(e)
-    const rect = [...range.getClientRects()].find(r => r.width > 0 && r.height > 0)
+    // The first line of its words, from its first text node: a range over the element's contents also returns the boxes
+    // of elements inside it, which for a wrapped line span every line, so its middle isn't the first line's (B93).
+    const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT)
+    let rect = null
+    for (let n = walker.nextNode(); n && !rect; n = walker.nextNode()) {
+      if (!n.textContent.trim()) continue
+      const words = document.createRange(); words.selectNodeContents(n)
+      rect = [...words.getClientRects()].find(r => r.width > 0 && r.height > 0) ?? null
+    }
+    if (!rect) { const range = document.createRange(); range.selectNodeContents(e); rect = [...range.getClientRects()].find(r => r.width > 0 && r.height > 0) }
     const box = e.getBoundingClientRect(), style = getComputedStyle(e)
     const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2
     const lineTop = rect ? rect.top : box.top + parseFloat(style.paddingTop), lineBottom = rect ? rect.bottom : lineTop + lineHeight

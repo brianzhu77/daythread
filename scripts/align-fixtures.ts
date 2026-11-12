@@ -80,6 +80,9 @@ const boardId = crypto.randomUUID(), boardBlock = crypto.randomUUID(), groupedId
 const document: EditorNode[] = [
   headingNode('TODO'),
   todo('Fixture open to-do', 'plan'),
+  // B93: to-dos that wrap to 2 and 3 lines at 390 (and 2 at 1280), so a box, tag or ⋯ is measured against a first line that isn't the whole row.
+  todo('Fixture wrapped to-do: 提交加拿大临时居民签证续签申请材料并预约生物信息采集', 'plan'),
+  todo('Fixture wrapped to-do in three lines at a phone width, long enough to wrap once more on a laptop, as some of his long notes do', 'plan'),
   todo('Fixture done to-do', 'plan'),
   todo('Fixture cancelled to-do', 'plan'),
   // B39: a nested to-do's checkbox starts at its parent's text; two levels deep.

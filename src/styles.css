@@ -827,6 +827,18 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
    an empty draft row has no ⋯ yet, so it takes that height up front and no longer grows under his first letter
    (Brian cf4c4e65). Touch screens hide the ⋯, so their rows keep their height. */
 @media (hover:hover) { .editor-task { min-height:44px; } }
+/* B93 (Jazz 2e6a6159): every marker sits on the words' first line, however many lines they wrap to (DESIGN.md, Geometry
+   gate). The words are padded to the row's own height, so a one-line row is drawn as before; a wrapped one keeps the same
+   space above and below its words instead of none, and its box, tags and ⋯ stay with the first line. */
+.editor-task { --task-pad:4px; --task-line:24px; align-items:flex-start; }
+@media (hover:hover) { .editor-task { --task-pad:10px; } }
+/* With a Blocked-by mark under it, a touch row keeps its words at the top, the mark tight beneath (#168's 32 to 48 px). */
+@media (hover:none) { .editor-task:has(> .blocked-mark, > .blocked-mark-menu) { --task-pad:0px; } }
+.editor-task > .editor-task-title { margin-block:var(--task-pad); }
+.editor-task > input { margin-top:calc(var(--task-pad) + (var(--task-line) - 18px) / 2); }
+.editor-task > :is(.editor-cancelled-tag, .editor-reference-tag) { line-height:var(--task-line); margin-top:var(--task-pad); }
+.editor-task > .editor-date-tag { display:inline-flex; align-items:center; min-height:var(--task-line); margin-top:var(--task-pad); }
+.editor-task > .editor-plan-action { align-self:flex-start; min-height:calc(var(--task-line) + 2 * var(--task-pad)); }
 /* Page card (Jazz): one quiet row in the note, no border or fill; hover/selection come from the block like any other. */
 /* Same columns as a task row: icon in the checkbox/dot column, title on the text column; icon and chevron centre on the title's first line. */
 .editor-page-card { display: flex; align-items: flex-start; gap: 13px; width: 100%; min-height: 32px; padding: 3px 0 3px 14px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
