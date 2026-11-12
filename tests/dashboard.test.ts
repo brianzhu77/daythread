@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { commandSchema } from '../src/domain/command-schema.ts'
-import { allowedSplit, firstWidgetView, shownWidths, type Dashboard } from '../src/domain/dashboard.ts'
+import { allowedSplit, firstWidgetView, handleChoices, shownWidths, type Dashboard } from '../src/domain/dashboard.ts'
 import type { View } from '../src/domain/database.ts'
 import { todosSourceId } from '../src/domain/todos-id.ts'
 import { harness } from './v2-helpers.ts'
@@ -77,7 +77,7 @@ test('moving: into another row re-divides both, an emptied row goes, and a new r
 test('a swap trades place and width with its neighbour in reading order, across rows too; nothing else moves', () => {
   const { add, dash, D } = setup()
   add('w2'); add('w3', 'books', null, 'row2')
-  D({ kind: 'sizeSplit', rowId: 'row1', leftId: 'w1', rightId: 'w2', leftWidth: 4 })
+  D({ kind: 'sizeSplit', rowId: 'row1', widgetIds: ['w1', 'w2'], widths: [4, 8] })
   D({ kind: 'swapWidget', widgetId: 'w2', withId: 'w3' })
   assert.equal(shape(dash()), 'row1:w1/4,w3/8 | row2:w2/12')
   assert.throws(() => D({ kind: 'swapWidget', widgetId: 'w1', withId: 'w2' }), /Not next to each other/)
@@ -88,13 +88,13 @@ test('a swap trades place and width with its neighbour in reading order, across 
 test('a split is between neighbours, and only to an allowed split', () => {
   const { h, add, dash, D, C, runs } = setup()
   add('w2')
-  D({ kind: 'sizeSplit', rowId: 'row1', leftId: 'w1', rightId: 'w2', leftWidth: 4 })
+  D({ kind: 'sizeSplit', rowId: 'row1', widgetIds: ['w1', 'w2'], widths: [4, 8] })
   assert.equal(shape(dash()), 'row1:w1/4,w2/8')
-  assert.throws(() => D({ kind: 'sizeSplit', rowId: 'row1', leftId: 'w1', rightId: 'w2', leftWidth: 5 }), /can't split/)
-  assert.throws(() => D({ kind: 'sizeSplit', rowId: 'row1', leftId: 'w2', rightId: 'w1', leftWidth: 6 }), /Not next to each other/)
-  // Three widgets: 4+4+4, or 3+3+6 in any order, so a handle trades a 3 and a 6.
+  assert.throws(() => D({ kind: 'sizeSplit', rowId: 'row1', widgetIds: ['w1', 'w2'], widths: [5, 7] }), /can't split/)
+  assert.throws(() => D({ kind: 'sizeSplit', rowId: 'row1', widgetIds: ['w2', 'w1'], widths: [6, 6] }), /changed since/, 'its widgets as the handle saw them')
+  // Three widgets: 4+4+4, or 3+3+6 in any order, one whole-row command.
   C('home', { kind: 'addDashboard', view: { id: 'd3', name: 'Three' }, rows: [{ id: 'r3', widgets: ['a', 'b', 'c'].map((x, i) => ({ id: `t${x}`, width: [3, 3, 6][i], source: 'runs', view: firstWidgetView(runs(), `tv${x}`) })) }] })
-  C('home', { kind: 'sizeSplit', viewId: 'd3', rowId: 'r3', leftId: 'tb', rightId: 'tc', leftWidth: 6 })
+  C('home', { kind: 'sizeSplit', viewId: 'd3', rowId: 'r3', widgetIds: ['ta', 'tb', 'tc'], widths: [3, 6, 3] })
   const d3 = h.page('home').database!.views.find(v => v.id === 'd3')!.dashboard!
   assert.equal(shape(d3), 'r3:ta/3,tb/6,tc/3')
 })
@@ -178,7 +178,7 @@ test('two tabs: a move in one and a filter edit in the other both survive, in ei
 test('Undo of a widget change is refused once anything has changed since', () => {
   const { h, D, add } = setup()
   add('w2')
-  const r = D({ kind: 'sizeSplit', rowId: 'row1', leftId: 'w1', rightId: 'w2', leftWidth: 4 })
+  const r = D({ kind: 'sizeSplit', rowId: 'row1', widgetIds: ['w1', 'w2'], widths: [4, 8] })
   D({ kind: 'updateWidget', widgetId: 'w1', fields: { name: 'Later' } })
   assert.throws(() => h.run({ type: 'undo', targetOperationId: r.receipt.operationId } as never), /Cannot undo after later changes/)
 })
@@ -198,9 +198,9 @@ test('widths read as stored when allowed, and as an equal split otherwise, witho
 
 test('the schema bounds every command', () => {
   const ok = (change: unknown) => commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action: { type: 'change-database', pageId: 'home', change } }).success
-  assert.ok(ok({ kind: 'sizeSplit', viewId: 'd', rowId: 'r', leftId: 'a', rightId: 'b', leftWidth: 4 }))
+  assert.ok(ok({ kind: 'sizeSplit', viewId: 'd', rowId: 'r', widgetIds: ['a', 'b'], widths: [4, 8] }))
   assert.ok(ok({ kind: 'updateWidget', viewId: 'd', widgetId: 'w', fields: { name: 'x' } }))
-  assert.equal(ok({ kind: 'sizeSplit', viewId: 'd', rowId: 'r', leftId: 'a', rightId: 'b', leftWidth: 4.5 }), false)
+  assert.equal(ok({ kind: 'sizeSplit', viewId: 'd', rowId: 'r', widgetIds: ['a', 'b'], widths: [4.5, 7.5] }), false)
   assert.equal(ok({ kind: 'addDashboard', view: { id: 'd', name: 'D' }, rows: Array.from({ length: 13 }, (_, i) => ({ id: `r${i}`, widgets: [] })) }), false)
 })
 
@@ -211,7 +211,7 @@ test("a drop back where it was is refused and changes nothing: in its own row, o
   assert.throws(() => D({ kind: 'moveWidget', widgetId: 'w1', toRowId: null, newRowId: 'x', rowBeforeId: null, beforeId: null }), /Already there/)
   assert.throws(() => D({ kind: 'moveWidget', widgetId: 'w1', toRowId: null, newRowId: 'x', rowBeforeId: 'row1', beforeId: null }), /Already there/)
   assert.equal(shape(dash()), before)
-  add('w2'); D({ kind: 'sizeSplit', rowId: 'row1', leftId: 'w1', rightId: 'w2', leftWidth: 4 })
+  add('w2'); D({ kind: 'sizeSplit', rowId: 'row1', widgetIds: ['w1', 'w2'], widths: [4, 8] })
   D({ kind: 'moveWidget', widgetId: 'w2', toRowId: 'row1', beforeId: 'w1' })
   assert.equal(shape(dash()), 'row1:w2/8,w1/4', 'reordered in its row, each keeping its width')
 })
@@ -244,4 +244,12 @@ test('a new dashboard counts against the views limit', () => {
   while (db.views.length < 50) db.views.push({ ...db.views[0]!, id: `pad${db.views.length}` })
   assert.throws(() => C('home', { kind: 'addDashboard', view: { id: 'dx', name: 'X' }, rows: [{ id: 'rx', widgets: [{ id: 'wx', source: 'runs', view: firstWidgetView(runs(), 'vx') }] }] }), /Too many views/)
   assert.throws(() => C('home', { kind: 'duplicateDashboard', viewId: 'dash', newViewId: 'dy', ids: { row1: 'a', w1: 'b', v1: 'c' } }), /Too many views/)
+})
+
+test("a handle's layouts: every allowed split with two; with three, the right grown, equal, the left grown; none to choose with four", () => {
+  assert.equal(handleChoices(2, 1).length, 5)
+  assert.deepEqual(handleChoices(3, 1), [[3, 6, 3], [4, 4, 4], [6, 3, 3]])
+  assert.deepEqual(handleChoices(3, 2), [[3, 3, 6], [4, 4, 4], [3, 6, 3]])
+  assert.deepEqual(handleChoices(4, 2), [[3, 3, 3, 3]])
+  for (const n of [2, 3]) for (let k = 1; k < n; k++) assert.ok(handleChoices(n, k).every(allowedSplit))
 })

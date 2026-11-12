@@ -66,8 +66,8 @@ export type DashboardChange =
   | { kind: 'moveWidget'; viewId: string; widgetId: string; toRowId: string | null; newRowId?: string; rowBeforeId?: string | null; beforeId: string | null }
   /** A menu move: trades place and width with the next or previous widget in reading order (Jazz 3810eb22). */
   | { kind: 'swapWidget'; viewId: string; widgetId: string; withId: string }
-  /** A handle between neighbours: the right one takes what the left gives up, and the row must be an allowed split. */
-  | { kind: 'sizeSplit'; viewId: string; rowId: string; leftId: string; rightId: string; leftWidth: number }
+  /** A handle: the row's widths, left to right, for its widgets as the handle saw them; an allowed split, or refused (Jazz 36988993). */
+  | { kind: 'sizeSplit'; viewId: string; rowId: string; widgetIds: string[]; widths: number[] }
   | { kind: 'sizeRow'; viewId: string; rowId: string; height: number }
   | { kind: 'duplicateWidget'; viewId: string; widgetId: string; newId: string; newViewId: string; newRowId: string }
   | { kind: 'removeWidget'; viewId: string; widgetId: string }
@@ -215,12 +215,10 @@ export function changeDashboard(db: Database, change: DashboardChange, sourceOf:
     }
     case 'sizeSplit': {
       const row = rowOf(change.rowId)
-      const i = row.widgets.findIndex(w => w.id === change.leftId)
-      if (i < 0 || row.widgets[i + 1]?.id !== change.rightId) throw new DatabaseError('Not next to each other')
-      const left = row.widgets[i]!, right = row.widgets[i + 1]!, total = left.width + right.width
-      const widths = row.widgets.map(w => (w === left ? change.leftWidth : w === right ? total - change.leftWidth : w.width))
-      if (!Number.isInteger(change.leftWidth) || !allowedSplit(widths)) throw new DatabaseError("That row can't split that way")
-      left.width = change.leftWidth; right.width = total - change.leftWidth
+      // Its widgets as the handle saw them, in order: a row changed since (a widget in or out, or moved) is refused, not resized.
+      if (!Array.isArray(change.widgetIds) || change.widgetIds.join() !== row.widgets.map(w => w.id).join()) throw new DatabaseError("That row's changed since")
+      if (!Array.isArray(change.widths) || change.widths.length !== row.widgets.length || !change.widths.every(Number.isInteger) || !allowedSplit(change.widths)) throw new DatabaseError("That row can't split that way")
+      row.widgets.forEach((w, i) => { w.width = change.widths[i]! })
       return 'Width saved'
     }
     case 'sizeRow': {
@@ -260,4 +258,16 @@ export const shownWidths = (row: DashboardRow): number[] => {
 export function firstWidgetView(source: Database, id: string): View {
   const first = source.views.find(v => v.layout !== 'dashboard' && v.layout !== 'form')
   return first ? { ...structuredClone(first), id } : { id, name: 'Table', layout: 'table', columns: source.properties.map(p => ({ id: p.id })), sort: [], filter: [] }
+}
+
+/**
+ * The layouts a handle between widget `k - 1` and widget `k` snaps through, left to right as the handle moves
+ * (dashboard-edit.md §5): with two, every allowed split; with three, the right one grown to 1/2, all equal, then the
+ * left one grown; with four, only equal, so nothing to move.
+ */
+export function handleChoices(count: number, k: number): number[][] {
+  if (count === 2) return [[3, 9], [4, 8], [6, 6], [8, 4], [9, 3]]
+  if (count !== 3) return [equalSplit(count)]
+  const grow = (i: number) => [0, 1, 2].map(j => (j === i ? 6 : 3))
+  return [grow(k), [4, 4, 4], grow(k - 1)]
 }

@@ -60,6 +60,16 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   await menu(R, 'Move left')
   await menu(R2, 'Join the row above')
   ok(`${tag} menu: Join the row above, re-divided`, (await rowsText()) === `${R},${B},${R2} | ${T}`, await widths())
+  // Three in a row: the handle between the first two snaps through 3+6+3, 4+4+4 and 6+3+3, as one whole-row change (Jazz 36988993).
+  {
+    const h = await page.locator('.dashboard-row[data-row]').first().locator('.dashboard-split').first().boundingBox(), r = await page.locator('.dashboard-row[data-row]').first().boundingBox()
+    await page.mouse.move(h.x + h.width / 2, h.y + 40); await page.mouse.down(); await page.mouse.move(r.x + r.width * 0.2, h.y + 40, { steps: 6 })
+    const three = await page.locator('.dashboard-badge').innerText().catch(() => '')
+    await page.mouse.up(); await settle()
+    const ws = (await widths()).split(',').map(x => Number(x.split(':')[1]))
+    ok(`${tag} three in a row: a handle grows the middle one to 1/2`, three === '1/4 · 1/2 · 1/4' && ws[1] > ws[0] * 1.8 && Math.abs(ws[0] - ws[2]) < 3, `${three} ${ws}`)
+    await undo()
+  }
   await menu(R2, 'Move to its own row')
   ok(`${tag} menu: Move to its own row`, (await rowsText()) === `${R},${B} | ${R2} | ${T}`, await rowsText())
 
@@ -131,6 +141,16 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   await open('notes'); await page.getByText('Above the block').click(); await page.keyboard.press('End'); await page.keyboard.press('Enter'); await page.keyboard.type('/dashboard'); await wait(400)
   ok(`${tag} / finds Database by "dashboard"`, await page.getByRole('option', { name: /Database/ }).count() > 0 || await page.locator('.bn-suggestion-menu').getByText('Database').count() > 0)
   await page.keyboard.press('Escape')
+  // ---- Four quarters fit a row at 1280, and wrap, unstored, at 200 px with the Comments pane open (Jazz, Bumblebee 3d09beed).
+  await page.keyboard.press('Escape'); await open('wall')
+  const tops = () => page.evaluate(() => [...document.querySelectorAll('.dashboard-widget')].map(w => Math.round(w.getBoundingClientRect().top)))
+  const lines = async () => new Set(await tops()).size
+  ok(`${tag} wrap: four quarters on one line at 1280`, (await lines()) === 1, JSON.stringify(await tops()))
+  await page.getByRole('button', { name: 'Page actions' }).click(); await page.getByRole('menuitem', { name: 'Comment' }).click(); await page.locator('.comments-pane').waitFor(); await settle()
+  const narrow = await page.evaluate(() => Math.round(document.querySelector('.dashboard-widget').getBoundingClientRect().width))
+  ok(`${tag} wrap: with the Comments pane open the row wraps, no widget under 200 px`, (await lines()) > 1 && narrow >= 200, `${await lines()} lines, ${narrow} px`)
+  await page.getByRole('button', { name: 'Close comments' }).click(); await settle()
+  ok(`${tag} wrap: closing it puts the row back on one line, nothing stored`, (await lines()) === 1)
   ok(`${tag} no page errors`, errors.length === 0, errors.join(' | ').slice(0, 300))
   await browser.close()
 }

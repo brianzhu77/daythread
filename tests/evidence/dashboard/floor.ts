@@ -12,7 +12,7 @@ execFileSync(process.execPath, ['--no-warnings', new URL('./seed.ts', import.met
 const step = async (repo: any, action: any) => { const w = await repo.load(); return (await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action })).workspace }
 const C = (pageId: string, change: any) => ({ type: 'change-database', pageId, change })
 let now: any = new Now(S, undefined, { allowMissingLegacy: true })
-await step(now, C('home', { kind: 'sizeSplit', viewId: 'dash', rowId: 'row1', leftId: 'w-runs', rightId: 'w-books', leftWidth: 4 }))
+await step(now, C('home', { kind: 'sizeSplit', viewId: 'dash', rowId: 'row1', widgetIds: ['w-runs', 'w-books'], widths: [4, 8] }))
 await step(now, C('home', { kind: 'sizeRow', viewId: 'dash', rowId: 'row1', height: 400 }))
 await step(now, C('home', { kind: 'updateWidget', viewId: 'dash', widgetId: 'w-runs', fields: { filter: [{ by: 'st', op: 'isAnyOf', value: ['a'] }] } }))
 // Step 3's field, reserved now (Lead 3e548c4e): nothing writes it yet, so it's put in the store directly.

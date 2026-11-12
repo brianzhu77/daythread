@@ -3,7 +3,7 @@
 // inert, and arranges them with the dashboard's own commands (dashboard.ts), one command and one Undo each.
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { allowedSplit, dashboardLimits, findWidget, firstWidgetView, rowHeights, shownWidths, snapHeight, type Dashboard, type DashboardChange, type DashboardRow, type DashboardWidget } from '../domain/dashboard'
+import { dashboardLimits, findWidget, firstWidgetView, handleChoices, rowHeights, shownWidths, snapHeight, type Dashboard, type DashboardChange, type DashboardRow, type DashboardWidget } from '../domain/dashboard'
 import { useRoom } from './drag-lift'
 import { isDatabase, type Database, type View } from '../domain/database'
 import { readingWorkspace, todosSourceId, todosTitle } from '../domain/todos-source'
@@ -147,7 +147,7 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
         const width = drag && ownRow && into ? widget.width : widths?.[i] ?? 12 / Math.max(1, shown.length)
         return <WidgetFrame key={widget.id} workspace={workspace} host={db} view={view} row={row} widget={widget} width={width} editing={editing} blockId={`${blockId}|widget:${widget.id}`}
           previous={order[order.indexOf(widget.id) - 1]} next={order[order.indexOf(widget.id) + 1]} rowAbove={dashboard.rows[r - 1]} rowBelow={dashboard.rows[r + 1]} send={send}
-          onPointerDown={e => startDrag(e, widget.id)} split={!drag && i > 0 && editing ? { left: shown[i - 1]!, right: widget } : undefined} />
+          onPointerDown={e => startDrag(e, widget.id)} split={!drag && i > 0 && editing ? i : undefined} />
       })
       if (into && landing && 'rowId' in landing) {
         const at = landing.beforeId ? shown.findIndex(w => w.id === landing.beforeId) : shown.length
@@ -169,13 +169,6 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
   </div>
 }
 
-/** The width a handle may give the left widget: each value that leaves the row an allowed split, in order. */
-function splitChoices(row: DashboardRow, left: DashboardWidget, right: DashboardWidget): number[] {
-  const total = left.width + right.width
-  return [3, 4, 6, 8, 9].filter(w => total - w >= 3 && allowedSplit(row.widgets.map(x => (x === left ? w : x === right ? total - w : x.width))))
-}
-
-/** The handle between two neighbours: it trades width between them, snapping to allowed splits; one drag, one command (§5). */
 /**
  * A handle's drag: the value shows at once as `preview` draws it, saves on release, and Esc puts it back and saves
  * nothing (Ratchet a950bc9e). Its listeners go with it, as does a drag still held when the handle goes.
@@ -200,33 +193,43 @@ function useHandleDrag<T>(preview: (value: T | null) => void, save: (value: T) =
   }
 }
 
-function SplitHandle({ row, left, right, viewId, send }: { row: DashboardRow; left: DashboardWidget; right: DashboardWidget; viewId: string; send: ReturnType<typeof useDashboardRun> }) {
-  const [shown, setShown] = useState<number | null>(null)
-  // The badge rides at the pointer's height on the handle, inside the row, so it never covers a widget's name (Jazz 6f0ebb20).
+/** The handle between widget `k - 1` and widget `k` of a row: it snaps through `handleChoices`, by where the boundary between the two
+ * would sit, each showing at once on the widgets; one drag or one arrow key is one whole-row command and one Undo (§5). */
+function SplitHandle({ row, k, viewId, send }: { row: DashboardRow; k: number; viewId: string; send: ReturnType<typeof useDashboardRun> }) {
+  const [shown, setShown] = useState<number[] | null>(null)
   const [badgeY, setBadgeY] = useState(0)
-  const choices = splitChoices(row, left, right), total = left.width + right.width
-  const save = (leftWidth: number) => { if (leftWidth !== left.width) void send(() => ({ kind: 'sizeSplit', viewId, rowId: row.id, leftId: left.id, rightId: right.id, leftWidth }), 'Width saved') }
-  const els = useRef<{ left: HTMLElement; right: HTMLElement } | null>(null)
-  // Each snap shows at once on the two widgets themselves (§5), and the render puts the saved widths back.
-  const drag = useHandleDrag<number>(value => {
-    setShown(value)
-    const pair = els.current
-    if (!pair) return
-    pair.left.style.setProperty('--widget-width', String(value ?? left.width)); pair.right.style.setProperty('--widget-width', String(value === null ? right.width : total - value))
+  const ids = row.widgets.map(w => w.id), now = row.widgets.map(w => w.width)
+  const choices = handleChoices(row.widgets.length, k)
+  const boundary = (widths: number[]) => widths.slice(0, k).reduce((a, b) => a + b, 0)
+  const save = (widths: number[]) => { if (widths.join() !== now.join()) void send(() => ({ kind: 'sizeSplit', viewId, rowId: row.id, widgetIds: ids, widths }), 'Width saved') }
+  const els = useRef<HTMLElement[]>([])
+  const drag = useHandleDrag<number[]>(widths => {
+    setShown(widths)
+    els.current.forEach((el, i) => el.style.setProperty('--widget-width', String((widths ?? now)[i])))
   }, save)
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault(); e.stopPropagation()
-    const rowEl = e.currentTarget.closest<HTMLElement>('.dashboard-row')!, leftEl = rowEl.querySelector<HTMLElement>(`[data-widget="${CSS.escape(left.id)}"]`)!, rightEl = rowEl.querySelector<HTMLElement>(`[data-widget="${CSS.escape(right.id)}"]`)!
-    els.current = { left: leftEl, right: rightEl }
-    const from = leftEl.getBoundingClientRect().left, span = rightEl.getBoundingClientRect().right - from, rowBox = rowEl.getBoundingClientRect()
+    const rowEl = e.currentTarget.closest<HTMLElement>('.dashboard-row')!
+    els.current = ids.map(id => rowEl.querySelector<HTMLElement>(`[data-widget="${CSS.escape(id)}"]`)!).filter(Boolean)
+    const rowBox = rowEl.getBoundingClientRect(), first = els.current[0]!.getBoundingClientRect().left, span = els.current.at(-1)!.getBoundingClientRect().right - first
+    // The badge rides at the pointer's height on the handle, inside the row, so it never covers a widget's name (Jazz 6f0ebb20).
     const placeBadge = (y: number) => setBadgeY(Math.min(rowBox.height - 14, Math.max(14, y - rowBox.top)))
     placeBadge(e.clientY)
-    drag(left.width, ev => { placeBadge(ev.clientY); const want = ((ev.clientX - from) / span) * total; return choices.reduce((best, c) => (Math.abs(c - want) < Math.abs(best - want) ? c : best), left.width) })
+    drag(now, ev => {
+      placeBadge(ev.clientY)
+      const want = ((ev.clientX - first) / span) * 12
+      return choices.reduce((best, c) => (Math.abs(boundary(c) - want) < Math.abs(boundary(best) - want) ? c : best), choices[0]!)
+    })
   }
-  const step = (d: number) => { const at = choices.indexOf(left.width), next = choices[at + d]; if (next !== undefined) save(next) }
-  return <button type="button" className={`dashboard-split${shown !== null ? ' is-held' : ''}`} aria-label={`Width of ${left.view.name} and ${right.view.name}: ${fraction(left.width)} · ${fraction(right.width)}`}
+  const step = (d: number) => {
+    const at = choices.findIndex(c => c.join() === now.join())
+    const next = at < 0 ? choices.find(c => c.join() === '4,4,4') ?? choices[0] : choices[at + d]
+    if (next) save(next)
+  }
+  if (choices.length < 2) return null
+  return <button type="button" className={`dashboard-split${shown !== null ? ' is-held' : ''}`} aria-label={`Widths: ${now.map(fraction).join(' · ')}`}
     onPointerDown={onPointerDown} onKeyDown={e => { if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1) } if (e.key === 'ArrowRight') { e.preventDefault(); step(1) } }}>
-    {shown !== null && <span className="dashboard-badge" style={{ top: badgeY }}>{fraction(shown)} · {fraction(total - shown)}</span>}
+    {shown !== null && <span className="dashboard-badge" style={{ top: badgeY }}>{shown.map(fraction).join(' · ')}</span>}
   </button>
 }
 
@@ -252,7 +255,7 @@ function RowSize({ row, viewId, send }: { row: DashboardRow; viewId: string; sen
 function WidgetFrame({ workspace, host, view, row, widget, width, editing, blockId, previous, next, rowAbove, rowBelow, send, onPointerDown, split }: {
   workspace: Workspace; host: DatabasePage; view: View; row: DashboardRow; widget: DashboardWidget; width: number; editing: boolean; blockId: string
   previous?: string; next?: string; rowAbove?: DashboardRow; rowBelow?: DashboardRow; send: ReturnType<typeof useDashboardRun>
-  onPointerDown?: (e: React.PointerEvent<HTMLElement>) => void; split?: { left: DashboardWidget; right: DashboardWidget }
+  onPointerDown?: (e: React.PointerEvent<HTMLElement>) => void; /** The handle on its left edge, between it and widget `split - 1`. */ split?: number
 }) {
   const body = useRef<HTMLDivElement>(null)
   // `inert` keeps every click, tap, key and focus out of the content while arranging (dashboard-edit.md §3).
@@ -275,7 +278,7 @@ function WidgetFrame({ workspace, host, view, row, widget, width, editing, block
   }
   const label = source && isDatabase(source) ? `${sourceTitle(source)} · ${widget.view.name}` : widget.view.name
   return <section className="dashboard-widget" data-widget={id} style={{ ['--widget-width' as string]: width }} aria-label={label} tabIndex={editing ? 0 : undefined} onKeyDown={onKeyDown} {...(onPointerDown ? { onPointerDown } : {})}>
-    {split && <SplitHandle row={row} left={split.left} right={split.right} viewId={viewId} send={send} />}
+    {split !== undefined && <SplitHandle row={row} k={split} viewId={viewId} send={send} />}
     {editing && <span className="dashboard-widget-menu"><RowMenu label={`Actions for ${label}`} triggerClass="dashboard-widget-more" groups={[{ items }]} /></span>}
     <div ref={body} className="dashboard-widget-body">
       {!source || !isDatabase(source)

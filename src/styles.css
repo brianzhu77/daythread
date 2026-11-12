@@ -3275,6 +3275,8 @@ textarea.form-input { resize: vertical; }
 .dashboard-link { margin: 4px 0; }
 /* Edit mode draws on top and moves nothing: the ring sits outside the content (dashboard-edit.md §3). */
 .dashboard.is-editing .dashboard-widget { cursor: grab; }
+/* Nothing in it is editable while arranging, so a press and move from a handle selects no glyph (Jazz 273c3383). */
+.dashboard.is-editing { user-select: none; -webkit-user-select: none; }
 .dashboard.is-editing .dashboard-widget::before { content: ''; position: absolute; inset: -8px; border-radius: var(--radius-block); box-shadow: inset 0 0 0 1px var(--line); pointer-events: none; transition: box-shadow 120ms; }
 @media (hover: hover) { .dashboard.is-editing .dashboard-widget:hover::before { box-shadow: inset 0 0 0 1px var(--line-strong); } }
 .dashboard.is-editing .dashboard-widget:focus-visible { outline: none; }
