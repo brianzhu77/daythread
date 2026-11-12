@@ -1,0 +1,28 @@
+// The store dashboard.mjs runs on: Runs and Books with rows, and a Dashboard view on Home with a Runs widget and a To-dos one.
+// Usage: node --no-warnings tests/evidence/dashboard/seed.ts <store-path>  (a throwaway path; it's replaced)
+import { rmSync } from 'node:fs'
+import { SqliteWorkspaceRepository as R } from '../../../src/server/sqlite-repository.ts'
+import { firstWidgetView } from '../../../src/domain/dashboard.ts'
+import { todosSourceId } from '../../../src/domain/todos-id.ts'
+const S = process.argv[2]
+if (!S) { console.error('Usage: node --no-warnings tests/evidence/dashboard/seed.ts <store-path>'); process.exit(2) }
+for (const x of ['', '-wal', '-shm']) rmSync(S + x, { force: true })
+const r = new R(S, undefined, { allowMissingLegacy: true }); let w: any = await r.load()
+const run = async (action: any) => { w = (await r.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action })).workspace }
+const C = (pageId: string, change: any) => run({ type: 'change-database', pageId, change })
+const at = new Date().toISOString()
+await run({ type: 'create-database', pageId: 'runs', homeBlockId: null, title: 'Runs' })
+await C('runs', { kind: 'addProperty', property: { id: 'st', name: 'Stage', type: 'select', options: [{ id: 'a', name: 'Idea', color: 'gray' }, { id: 'b', name: 'Done', color: 'gray' }] } })
+for (const [id, title, st] of [['r1', 'Alpha', 'a'], ['r2', 'Bravo', 'b'], ['r3', 'Charlie', 'a']]) await run({ type: 'add-row', databaseId: 'runs', pageId: id, title, values: { st }, at })
+await run({ type: 'create-database', pageId: 'books', homeBlockId: null, title: 'Books' })
+for (const [id, title] of [['b1', 'Dune'], ['b2', 'Emma']]) await run({ type: 'add-row', databaseId: 'books', pageId: id, title, at })
+await run({ type: 'create-database', pageId: 'home', homeBlockId: null, title: 'Home' })
+const db = (id: string) => w.pages.find((p: any) => p.id === id).database
+await C('home', { kind: 'addDashboard', view: { id: 'dash', name: 'This week' }, rows: [{ id: 'row1', widgets: [
+  { id: 'w-runs', source: 'runs', view: { ...firstWidgetView(db('runs'), 'v-runs'), name: 'Runs' } },
+  { id: 'w-books', source: 'books', view: { ...firstWidgetView(db('books'), 'v-books'), name: 'Books' } },
+] }] })
+// Shown first on Home's page, as a fresh dashboard is (the views panel turns to it).
+const home = w.pages.find((p: any) => p.id === 'home').database
+await C('home', { kind: 'moveView', viewId: 'dash', beforeId: home.views[0].id })
+console.log('views', w.pages.find((p: any) => p.id === 'home').database.views.map((v: any) => `${v.id}:${v.layout}`).join(','), todosSourceId)
