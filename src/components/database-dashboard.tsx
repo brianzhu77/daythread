@@ -2,6 +2,7 @@
 // copy of its settings. Read mode draws each as any linked view; edit mode draws a frame over them, makes their content
 // inert, and arranges them with the dashboard's own commands (dashboard.ts), one command and one Undo each.
 import { useNavigate } from '@tanstack/react-router'
+import { toast } from '@heroui/react'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { dashboardLimits, findWidget, firstWidgetView, handleChoices, rowHeights, shownWidths, snapHeight, type Dashboard, type DashboardChange, type DashboardRow, type DashboardWidget } from '../domain/dashboard'
 import { useRoom } from './drag-lift'
@@ -20,23 +21,32 @@ const sourceTitle = (source: DatabasePage) => (source.id === todosSourceId ? tod
 type Props = DatabaseViewProps & { view: View; changeView: ChangeView }
 const newId = (): string => crypto.randomUUID()
 
+/** What a dashboard command can be refused for once the dashboard has changed under it: said in place, nothing to Retry. */
+const refusals = /Saved elsewhere|That widget's gone|That row's gone|That row's changed since|Not next to each other|Already there|widgets to a row at most|widgets at most|That database is gone/
 /** The commands' common part, built from the dashboard as the workspace holds it when the command goes. */
 function useDashboardRun(hostId: string, viewId: string) {
   const { run } = useWorkspace()
   return async (build: (dashboard: Dashboard) => DashboardChange | null, notice?: string) => {
-    const once = (inline: boolean) => {
-      let stale = false
+    const once = () => {
+      let stale = false, refusal: string | null = null, gone = false
       const receipt = run(ws => {
         const host = ws.pages.find(p => p.id === hostId), view = isDatabase(host) ? host.database.views.find(v => v.id === viewId) : undefined
         const change = view?.dashboard ? build(view.dashboard) : null
+        // Nothing to send: what it was for isn't there any more (a widget removed in another tab).
+        if (!change) gone = true
         return change ? { type: 'change-database', pageId: hostId, change } : null
-      }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined, undefined, inline ? { inlineRefusal: /Saved elsewhere/, onRefused: () => { stale = true } } : {})
-      return receipt.then(r => ({ r, stale }))
+      }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined, undefined, { inlineRefusal: refusals, onRefused: m => { if (/Saved elsewhere/.test(m)) stale = true; else refusal = m } })
+      return receipt.then(r => ({ r, stale, refusal, gone }))
     }
     // A tab behind the workspace is refused whatever it sends, and comes back up to date (G6-5). Each command names only
     // its own widget or row, so it's built again from what's there now and sent once more; a real refusal says so.
-    const first = await once(true)
-    return first.stale ? (await once(false)).r : first.r
+    const first = await once()
+    if (first.r || !first.stale) { if (!first.r && first.refusal) toast(first.refusal, { timeout: 6000 }); return first.r }
+    // Sent again and still refused (its neighbour moved, or it's been removed): said, and the dashboard as it is now is
+    // drawn, so a change never fails silently (Bumblebee ba4322f2).
+    const again = await once()
+    if (!again.r && (again.stale || again.refusal || again.gone)) toast('Changed in another tab, so nothing was changed', { timeout: 6000 })
+    return again.r
   }
 }
 

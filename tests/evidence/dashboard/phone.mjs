@@ -60,6 +60,23 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   await wide.goto(`${base}/pages?page=home`); await wide.locator('.dashboard-widget').first().waitFor(); await settle(wide)
   const rows = await wide.evaluate(() => [...document.querySelectorAll('.dashboard-row[data-row]')].map(r => [...r.querySelectorAll(':scope > .dashboard-widget')].map(w => w.getAttribute('aria-label')).join(',')).join(' | '))
   ok(`${tag} a move at 390 is a swap at 1280 too, nothing else moved`, rows === `${R},${T} | ${B},${R2}`, rows)
+  // Show more stays open for the session: away to another page and back, still open (Jazz 352627d8).
+  await page.keyboard.press('Escape'); await page.locator('.dashboard-edit').click(); await settle()
+  await page.goto(`${base}/pages?page=home`); await page.locator('.dashboard-widget').first().waitFor(); await settle()
+  await widget(B).scrollIntoViewIfNeeded(); await wait(300)
+  if (await widget(B).getByRole('button', { name: 'Show more' }).count()) await widget(B).getByRole('button', { name: 'Show more' }).click()
+  await page.getByRole('link', { name: 'Pages' }).first().click().catch(() => page.locator('a[href*="/pages"]').first().click()); await settle()
+  await page.goBack(); await page.locator('.dashboard-widget').first().waitFor(); await settle()
+  await widget(B).scrollIntoViewIfNeeded(); await wait(300)
+  ok(`${tag} Show more stays open after leaving and coming back`, await widget(B).getByRole('button', { name: 'Show less' }).isVisible())
+  // A long name ends in "…" before Edit; a wide table scrolls sideways inside its widget.
+  await page.goto(`${base}/pages?page=wall`); await page.locator('.dashboard-widget').first().waitFor(); await settle()
+  const head = await page.evaluate(() => { const l = document.querySelector('.dashboard-head .database-view-label'), e = document.querySelector('.dashboard-edit'); return { cut: l.scrollWidth > l.clientWidth, ellipsis: getComputedStyle(l).textOverflow, clear: l.getBoundingClientRect().right <= e.getBoundingClientRect().left } })
+  ok(`${tag} a long name ends in … before Edit`, head.cut && head.ellipsis === 'ellipsis' && head.clear, JSON.stringify(head))
+  const wideW = page.locator('.dashboard-widget[aria-label^="Wide"]')
+  await wideW.scrollIntoViewIfNeeded(); await wait(500)
+  const sideways = await wideW.evaluate(w => { const s = w.querySelector('.database-scroll'); if (!s) return null; const before = s.scrollLeft; s.scrollLeft = 200; return { over: s.scrollWidth > s.clientWidth, moved: s.scrollLeft > before } })
+  ok(`${tag} a wide table scrolls sideways inside its widget`, Boolean(sideways?.over && sideways?.moved), JSON.stringify(sideways))
   ok(`${tag} no page errors`, errors.length === 0, errors.join(' | ').slice(0, 300))
 
   // ---- G6-5, two tabs at 1280: a move in one and a filter edit in the other, from a tab that hadn't seen the move, both survive.
@@ -86,6 +103,10 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   await widget(B, other).locator('.dashboard-widget-more').click(); await other.getByRole('menuitem', { name: 'Move right' }).click(); await settle(other)
   await wide.getByRole('button', { name: 'Undo' }).last().click(); await settle(wide)
   ok(`two tabs (${engine}): Undo refuses a widget change that's no longer the newest`, await wide.getByText("Can't undo · edited since").first().isVisible().catch(() => false))
+  // Refused twice: the other tab, behind, moves a widget this tab has just removed; it says so and draws the dashboard as it is.
+  await widget(R2, wide).locator('.dashboard-widget-more').click(); await wide.getByRole('menuitem', { name: 'Remove' }).click(); await settle(wide)
+  await widget(R2, other).locator('.dashboard-widget-more').click(); await other.getByRole('menuitem', { name: /Move (left|right)/ }).first().click(); await settle(other); await wait(500)
+  ok(`two tabs (${engine}): refused again, it says so and shows the dashboard as it is now`, await other.getByText('Changed in another tab, so nothing was changed').first().isVisible().catch(() => false) && await widget(R2, other).count() === 0)
   await desk.close()
   await browser.close()
 }
