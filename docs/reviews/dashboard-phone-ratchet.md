@@ -17,7 +17,7 @@ Reproduction: `node tests/evidence/dashboard/ratchet-stale-remove.mjs http://127
 
 ## Evidence
 
-- Built successfully using daythread-ci node_modules.
+- Build and typecheck pass using daythread-ci node_modules.
 - Executed author's `phone.mjs` against my own built preview: Chromium 18/18 passes, including stale move + filter replay and stale Undo refusal.
 - Independent `ratchet-phone.mjs`: Chromium and WebKit, five assertions each pass: tall-content clipping, expansion retained through SPA leave/return, expansion retained through responsive remount, no page horizontal overflow, no page errors.
 - Independent stale-widget reproduction fails in both engines as described above.
