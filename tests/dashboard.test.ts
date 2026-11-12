@@ -81,6 +81,8 @@ test('a swap trades place and width with its neighbour in reading order, across 
   D({ kind: 'swapWidget', widgetId: 'w2', withId: 'w3' })
   assert.equal(shape(dash()), 'row1:w1/4,w3/8 | row2:w2/12')
   assert.throws(() => D({ kind: 'swapWidget', widgetId: 'w1', withId: 'w2' }), /Not next to each other/)
+  D({ kind: 'swapWidget', widgetId: 'w1', withId: 'w3' })
+  assert.equal(shape(dash()), 'row1:w3/8,w1/4 | row2:w2/12', 'within one row each keeps its own width')
 })
 
 test('a split is between neighbours, and only to an allowed split', () => {

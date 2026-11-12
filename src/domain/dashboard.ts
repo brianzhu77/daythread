@@ -207,10 +207,10 @@ export function changeDashboard(db: Database, change: DashboardChange, sourceOf:
       if (a < 0 || b < 0) throw new DatabaseError("That widget's gone")
       if (Math.abs(a - b) !== 1) throw new DatabaseError('Not next to each other')
       const one = order[a]!, two = order[b]!, i = one.row.widgets.indexOf(one.widget), j = two.row.widgets.indexOf(two.widget)
-      // Each takes the other's place and width, so both rows stay full and nothing else moves.
-      const [w1, w2] = [one.widget.width, two.widget.width]
+      // Across two rows each takes the other's place and width, so both rows stay full; within one row each keeps its own
+      // width, as a reorder there does (Jazz c80ba341). Nothing else moves either way.
       one.row.widgets[i] = two.widget; two.row.widgets[j] = one.widget
-      two.widget.width = w1; one.widget.width = w2
+      if (one.row !== two.row) { const width = one.widget.width; one.widget.width = two.widget.width; two.widget.width = width }
       return 'Widget moved'
     }
     case 'sizeSplit': {
