@@ -4,6 +4,8 @@ import { harness, dayId, today, yesterday, tomorrow, text, todo, bullet, para, h
 import { inlineText, type EditorNode } from '../src/domain/editor-document.ts'
 import { DRAFT_RECIPE, draftOf, draftStale, draftView, type DraftItem } from '../src/domain/day-draft.ts'
 import { addDays } from '../src/domain/workspace.ts'
+import { syncedBlockType } from '../src/domain/synced.ts'
+import { rowsOf, workspaceOf } from '../src/server/workspace-rows.ts'
 import { buildDayDraftRequest, itemsFromModel, type DayDraftRequest, type ModelSuggestion } from '../src/server/model/day-draft.ts'
 
 // Brian 3d7aca46: a day draft reads every page edited in the last 7 days, and what he wrote for the day comes first.
@@ -163,4 +165,21 @@ test('day draft: a remake that failed, or one from an older build, leaves a sett
   assert.throws(() => set([line('n1', 'Fallback only')], 'failed'), /already has its draft/)
   assert.throws(() => set([line('n1', 'From an older tab')], 'ready', null), /already has its draft/)
   assert.equal(JSON.stringify(draft()), before)
+})
+
+test('day draft: a recent edit inside a synced block on an old page counts as that page edited (Ratchet cf5f7beb)', () => {
+  const h = harness()
+  const block = (words: string): EditorNode => ({ id: 's', type: syncedBlockType, props: { syncId: 'record', roles: '' }, children: [para('l', text(words))] })
+  h.run({ type: 'create-document', title: 'Old project note', body: '', pageId: 'note' })
+  h.save('note', () => [block('Earlier words')], { at: '2026-09-01T12:00:00.000Z' })
+  h.day(yesterday); h.day(today)
+  const sent = () => sentText(buildDayDraftRequest(h.ws, h.page(dayId(today)), 'UTC'))
+  assert.doesNotMatch(sent(), /Earlier words/, 'written seven weeks before')
+  // Edited in place, as the editor sends it: the block as it was read, with new lines.
+  h.save('note', d => d.map(n => (n.type === syncedBlockType ? { ...n, children: [para('l', text('Deliver the signed contract'))] } : n)), { at: at(yesterday, '18:00') })
+  assert.equal(nodesOf(h.page('note')).length, 1, 'no conflict copy below it')
+  assert.equal(h.page('note').editedAt, '2026-09-01T12:00:00.000Z', 'the page itself is as it was')
+  assert.equal(h.ws.synced![0]!.editedAt, at(yesterday, '18:00'))
+  assert.equal(workspaceOf(rowsOf(h.ws)).synced![0]!.editedAt, at(yesterday, '18:00'), 'kept in its stored row')
+  assert.match(sent(), /== Page "Old project note", last edited 2026-10-21 18:00 ==\nL1 Deliver the signed contract/)
 })

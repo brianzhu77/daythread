@@ -57,8 +57,15 @@ export const DRAFT_DAYS = 7
  */
 const PAGE_CHARS = 5000, PAGE_HEAD_CHARS = 1200, EARLIER_CHARS = 30_000, LINE_CHARS = 400
 
-/** When `p`'s content last changed, as a wall clock in `zone`; a day page from before pages kept it counts by its date. */
-const editedWall = (p: Page, zone: string | undefined): string | null => (p.editedAt ? localWall(p.editedAt, zone) : null)
+/**
+ * When `p`'s content last changed, as a wall clock in `zone`: its own edit, or one inside a synced block it shows,
+ * which is the block's (Ratchet cf5f7beb). Null for a page from before pages kept it.
+ */
+function editedWall(ws: Workspace, p: Page, zone: string | undefined): string | null {
+  const shown = new Set(flatNodes(pageNodes(p)).filter(isSyncedBlock).map(n => n.props?.syncId))
+  const times = [p.editedAt, ...(ws.synced ?? []).filter(r => shown.has(r.id)).map(r => r.editedAt)].filter((t): t is string => Boolean(t))
+  return times.length ? localWall(times.reduce((a, b) => (a > b ? a : b)), zone) : null
+}
 
 /**
  * The pages a draft for `page` reads besides the day itself, most recently edited first: every page edited since the
@@ -67,9 +74,9 @@ const editedWall = (p: Page, zone: string | undefined): string | null => (p.edit
  */
 export function earlierPages(ws: Workspace, page: Page, zone?: string): Page[] {
   const day = page.date!, from = addDays(day, -DRAFT_DAYS), last = previousDayPage(ws, day)
-  const recency = (p: Page) => editedWall(p, zone) ?? (p.date ? `${p.date}T23:59` : '')
+  const recency = (p: Page) => editedWall(ws, p, zone) ?? (p.date ? `${p.date}T23:59` : '')
   const shown = (p: Page) => {
-    const edited = editedWall(p, zone)
+    const edited = editedWall(ws, p, zone)
     return p.id === last?.id || (edited !== null && edited.slice(0, 10) >= from) || (p.type === 'daily' && p.date !== null && p.date >= from && p.date < day)
   }
   return ws.pages.filter(p => p.id !== page.id && !isTrashed(p) && !isTemplate(p) && !isDraft(p) && !isDatabase(p) && shown(p))
@@ -145,7 +152,7 @@ export function buildDayDraftRequest(ws: Workspace, page: Page, zone?: string): 
     const size = kept.reduce((s, r) => s + ('gap' in r ? 0 : r.size), 0)
     if (size > budget) { left++; continue }
     budget -= size
-    const edited = editedWall(p, zone)
+    const edited = editedWall(ws, p, zone)
     const db = p.type === 'daily' ? null : databaseOfRow(ws, p)
     const name = p.type === 'daily' ? `Day page ${weekday(p.date!)} ${p.date}` : `Page "${p.title.trim() || 'Untitled'}"${db ? ` (a row of "${db.title.trim() || 'Untitled'}")` : ''}`
     earlier.push([`== ${name}${edited ? `, last edited ${edited.replace('T', ' ')}` : ''} ==`, ...kept.map(r => {
