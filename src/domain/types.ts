@@ -33,7 +33,7 @@ export interface Page {
   database?: import("./database.ts").Database;
   /** A row (a page whose parent has `database`): its stored values, by property id; read through `readValue`. */
   values?: import("./database.ts").RawValues;
-  /** Rows: when it was made, and when its title or a value last changed (ISO time, from the command's `at`). */
+  /** Rows: when it was made. Every page: when its content last changed, and a row's title or a value too (ISO time, from the command's `at`). */
   createdAt?: string;
   editedAt?: string;
 }
@@ -119,7 +119,7 @@ export type Action =
       /** Database blocks this save makes the home of a database with none (Turn into inline, a paste after a cut). */
       adoptDatabaseBlocks?: { blockId: string; pageId: string }[];
       today?: LocalDate;
-      /** ISO time: when a deleted home block trashes its database. */
+      /** ISO time: the page's Edited time, and when a deleted home block trashes its database. */
       at?: string;
     }
   | { type: "ensure-day"; date: LocalDate }
@@ -177,7 +177,7 @@ export type Action =
   | { type: "set-template-target"; pageId: string; target: string | null }
   /** The template goes for good (no Trash); Undo brings it back. */
   | { type: "delete-template"; pageId: string }
-  | { type: "set-draft"; pageId: string; status: import("./day-draft.ts").DraftStatus; items: import("./day-draft.ts").DraftItem[]; moreOpen: string[]; allowedTaskIds: string[] }
+  | { type: "set-draft"; pageId: string; status: import("./day-draft.ts").DraftStatus; items: import("./day-draft.ts").DraftItem[]; moreOpen: string[]; allowedTaskIds: string[]; recipe?: number }
   | { type: "apply-draft"; pageId: string; itemIds: string[]; edits?: Record<string, string>; today?: LocalDate }
   | { type: "skip-draft"; pageId: string; itemIds: string[] }
   /** A database page with the default schema; `homeBlockId`: its `database` block in the parent page, null for a full page. */

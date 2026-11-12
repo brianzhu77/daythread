@@ -3,7 +3,7 @@
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
-import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
+import { draftOf, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, remadeItems, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { automationProblem, dueRules, firedRules, type Automation, type FiredRule, type RuleSource } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, usesFormulas, valueAtTap, type ButtonStep, type ButtonValue } from "./buttons.ts";
@@ -24,7 +24,7 @@ import { blockedByColumn, newTodo, taskIdOfRow, todoBarColumns, todoChange, todo
 import { inView, titleId, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
-import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
+import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, storedDocument, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
 import { askedQuestions, formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
 
 export class DomainError extends Error {}
@@ -938,7 +938,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const ids = new Set<string>();
       for (const n of all) { if (!n || typeof n.id !== "string" || !n.id || typeof n.type !== "string" || ids.has(n.id)) throw new DomainError("Duplicate editor block identity"); ids.add(n.id); }
       const renamed = claimLineIds(state, p, all);
-      const conflicted = acceptSavedBlocks(state, p, nodes, (message) => { throw new DomainError(message); });
+      const conflicted = acceptSavedBlocks(state, p, nodes, (message) => { throw new DomainError(message); }, isoTime(action.at));
       if (isTemplate(p)) { setDocument(p, templateRows(nodes)); return { message: "Template saved" }; }
       const before = flatNodes(pageNodes(p));
       const on = action.today ?? p.date ?? new Date().toISOString().slice(0, 10);
@@ -975,8 +975,10 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (n.type === "pageLink" && n.props?.at === undefined) n.props = { ...n.props, at };
         if (Array.isArray(n.content)) for (const c of n.content as { type?: string; props?: Record<string, unknown> }[]) if (c?.type === "pageRef" && c.props && c.props.at === undefined) c.props.at = at;
       }
-      // A row's body edited moves its Edited time; a save with nothing new, as on opening, doesn't (R3-9).
-      if (isRow(state, p) && JSON.stringify(nodes) !== JSON.stringify(pageNodes(p))) p.editedAt = isoTime(action.at);
+      // A page's body edited moves its Edited time, a day page's as any other's (Brian bb1d8ff7): a row's Edited
+      // property and what a day draft reads. A save with nothing new, as on opening, doesn't (R3-9); nor does an edit
+      // inside a synced block, which changes its record, not this page's own document.
+      if (storedDocument(JSON.stringify(nodes)) !== storedDocument(p.document)) p.editedAt = isoTime(action.at);
       setDocument(p, nodes);
       for (const [id, rows] of gone) {
         const t = state.tasks.find((x) => x.id === id);
@@ -1378,10 +1380,14 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const old = draftOf(state, day.id);
       // One draft per day; the first ready one wins (Lead 98cb503a). A failed one (fallback only) is replaced only
       // until his first Apply or Skip on it (Jazz 283476c5, Bumblebee 8666b96e); after that it is the day's draft.
-      if (old && draftSettled(old)) throw new DomainError("This day already has its draft");
-      const items = normalizeDraftItems(state, day, action.items, allowed);
-      const moreOpen = action.moreOpen.filter((id) => allowed.has(id));
-      const draft: DayDraft = { status: action.status, items, moreOpen };
+      // One a newer recipe makes again (Brian 3d7aca46) replaces it only when ready, and keeps what he applied or skipped.
+      const recipe = action.recipe ?? 1;
+      if (old && (!draftReplaceable(old, recipe) || (draftSettled(old) && action.status !== "ready"))) throw new DomainError("This day already has its draft");
+      const items = remadeItems(old, normalizeDraftItems(state, day, action.items, allowed));
+      // A to-do he already applied or skipped from the day's draft isn't offered again under "more open" (Ratchet ea6ab2bd).
+      const decided = new Set(items.flatMap((i) => (i.state !== "open" && i.taskId ? [i.taskId] : [])));
+      const moreOpen = action.moreOpen.filter((id) => allowed.has(id) && !decided.has(id));
+      const draft: DayDraft = { status: action.status, items, moreOpen, ...(action.recipe ? { recipe: action.recipe } : {}) };
       const existing = state.pages.find((p) => p.id === draftPageId(day.id));
       if (existing) existing.document = JSON.stringify(draft);
       else state.pages.push({ id: draftPageId(day.id), type: "draft", date: null, title: "", parentId: day.id, document: JSON.stringify(draft) });
@@ -1772,7 +1778,9 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
     result = { message: "Previous operation restored" };
   } else {
     result = execute(state, command.action, command.operationId);
-    result = { ...result, ...settleSynced(state) };
+    // A block's lines changed by this command take its time as their Edited time (Ratchet cf5f7beb).
+    const at = (command.action as { at?: unknown }).at;
+    result = { ...result, ...settleSynced(state, typeof at === "string" && Number.isFinite(Date.parse(at)) ? at : undefined) };
     const fired = firedRules(input, state, command.action, { today: localDay(state, isoTime(undefined)), pageDate: null, zone: state.timezone }, () => todoSources(input, state));
     if (fired.length) { const run = runAutomations(state, fired, command.operationId); state = run.state; result = { ...result, automations: run.automations }; }
   }
