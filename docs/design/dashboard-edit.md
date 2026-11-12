@@ -36,9 +36,15 @@
 | Focus (keyboard) | the 2 px Thread Blue focus ring at 2 px outside the Hairline ring | as every focus ring |
 
 **The widget's menu (`⋯`):** View settings… (opens the linked view's own menu: layout, filter, sort, properties),
-Duplicate, then Move left, Move right, Move up, Move down, each only where it can move, then Remove. Remove says
-"View removed", with Undo, and takes no rows, as R2-3. The Move items are how a keyboard arranges, and they're the
-whole of arranging at 390 (§7).
+Duplicate, then Move left and Move right, each only where it can move, then Remove. Remove says "View removed", with
+Undo, and takes no rows, as R2-3. The Move items are how a keyboard arranges, and they're the whole of arranging at
+390 (§7).
+
+**A menu move is a swap (Bumblebee cb8dc72e).** It trades places with the previous or next widget in reading order
+(left to right, then down), and each takes the other's place and width. So the first widget in a row, moved left,
+swaps with the last widget of the row above. Both rows stay full and nothing else in the layout changes. It's one
+command and one Undo, `swapWidget {viewId, widgetId, withId}`, refused unless the two are next to each other in
+reading order. A drag is still `moveWidget`, with its re-divide (§4).
 
 **Keys (R1-26):** in edit mode, Tab moves from widget to widget in order (left to right, then down). Enter or Space
 opens its `⋯`. Delete removes it, with Undo. Keys inside a widget never act, since its content is inert.
@@ -94,9 +100,10 @@ only between two neighbours, and it trades width between them.
 - **Height follows content,** up to 360 px. Past that comes a fade into the page colour and "Show more" (the link
   button, as Feed's), and the widget never scrolls inside, so a thumb can't get trapped. Off-screen widgets hold their
   space until they load.
-- **Edit mode:** the same Edge ring and `⋯` (44 px). There's no dragging and there are no handles. The `⋯` menu's Move
-  up and Move down move it in reading order, which across a stored row means left and right. After a move the page
-  scrolls to the widget and gives it the moved-line flash (Thread Blue wash, 1 s, as `DESIGN.md` lists).
+- **Edit mode:** the same Edge ring and `⋯` (44 px). There's no dragging and there are no handles. The `⋯` menu says
+  Move up and Move down, the same swap as 1280's Move left and Move right (§3). In a one-column list that reads as up
+  and down, and the 1280 layout keeps every other widget where it was. After a move the page scrolls to the widget
+  and gives it the moved-line flash (Thread Blue wash, 1 s, as `DESIGN.md` lists).
 - **Edit and Done** sit in the head as at 1280. `+ Add widget` is under the last widget. The row `+` doesn't exist.
 - **Between 900 and 1100, or with the Comments pane open,** a row wraps when a widget would go under 280 px. This
   isn't stored. In edit mode a width handle shows only between neighbours that sit side by side.
