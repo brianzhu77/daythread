@@ -24,7 +24,7 @@ import { blockedByColumn, newTodo, taskIdOfRow, todoBarColumns, todoChange, todo
 import { inView, titleId, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
-import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
+import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, storedDocument, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
 import { askedQuestions, formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
 
 export class DomainError extends Error {}
@@ -976,8 +976,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (Array.isArray(n.content)) for (const c of n.content as { type?: string; props?: Record<string, unknown> }[]) if (c?.type === "pageRef" && c.props && c.props.at === undefined) c.props.at = at;
       }
       // A page's body edited moves its Edited time, a day page's as any other's (Brian bb1d8ff7): a row's Edited
-      // property and what a day draft reads. A save with nothing new, as on opening, doesn't (R3-9).
-      if (JSON.stringify(nodes) !== JSON.stringify(pageNodes(p))) p.editedAt = isoTime(action.at);
+      // property and what a day draft reads. A save with nothing new, as on opening, doesn't (R3-9); nor does an edit
+      // inside a synced block, which changes its record, not this page's own document.
+      if (storedDocument(JSON.stringify(nodes)) !== storedDocument(p.document)) p.editedAt = isoTime(action.at);
       setDocument(p, nodes);
       for (const [id, rows] of gone) {
         const t = state.tasks.find((x) => x.id === id);
@@ -1383,7 +1384,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const recipe = action.recipe ?? 1;
       if (old && (!draftReplaceable(old, recipe) || (draftSettled(old) && action.status !== "ready"))) throw new DomainError("This day already has its draft");
       const items = remadeItems(old, normalizeDraftItems(state, day, action.items, allowed));
-      const moreOpen = action.moreOpen.filter((id) => allowed.has(id));
+      // A to-do he already applied or skipped from the day's draft isn't offered again under "more open" (Ratchet ea6ab2bd).
+      const decided = new Set(items.flatMap((i) => (i.state !== "open" && i.taskId ? [i.taskId] : [])));
+      const moreOpen = action.moreOpen.filter((id) => allowed.has(id) && !decided.has(id));
       const draft: DayDraft = { status: action.status, items, moreOpen, ...(action.recipe ? { recipe: action.recipe } : {}) };
       const existing = state.pages.find((p) => p.id === draftPageId(day.id));
       if (existing) existing.document = JSON.stringify(draft);

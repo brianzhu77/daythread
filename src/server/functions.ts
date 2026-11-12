@@ -63,13 +63,17 @@ export const prepareDayDraft = createServerFn({ method: "POST" })
     // The first ready draft wins: a second tab or a reload never pays for, or replaces, another one. One an older
     // recipe made is made again, once, and only a ready one takes its place (Brian 3d7aca46).
     const old = draftOf(ws, page.id);
-    const none = { setDraft: null, owner: currentOwner() ?? "local", modelOn: Boolean(config) };
-    if (old && draftSettled(old) && (!draftStale(old) || !config)) return none;
+    const none = { setDraft: null, owner: currentOwner() ?? "local", modelOn: Boolean(config), remakeFailed: false };
+    if (old && draftSettled(old) && !draftStale(old)) return none;
+    // Today's stale draft that can't be made again (no model for this account, or a failed answer) stays as it is, and the
+    // tab counts it as a failed ask, so it stops after two rather than asking on every focus (Ratchet 6f69e359).
+    const notRemade = { ...none, remakeFailed: true };
+    if (old && draftSettled(old) && !config) return notRemade;
     const run = await runDayDraft(ws, page, config, () => crypto.randomUUID(), account?.timezone);
     console.info(JSON.stringify({ level: "info", event: "draft.prepare", operationId: data.operationId, model: Boolean(config), remade: Boolean(old && draftStale(old)), status: run.status, ...(run.error ? { error: run.error } : {}), items: run.items.length, moreOpen: run.moreOpen.length, elapsedMs: run.ms, costUsd: run.costUsd }));
-    if (old && draftSettled(old) && run.status !== "ready") return none;
+    if (old && draftSettled(old) && run.status !== "ready") return notRemade;
     const action = { type: "set-draft" as const, pageId: page.id, status: run.status, items: run.items, moreOpen: run.moreOpen, allowedTaskIds: run.allowedTaskIds, recipe: DRAFT_RECIPE };
-    return { setDraft: JSON.stringify(action), owner: currentOwner() ?? "local", modelOn: Boolean(config) };
+    return { setDraft: JSON.stringify(action), owner: currentOwner() ?? "local", modelOn: Boolean(config), remakeFailed: false };
   });
 
 /**

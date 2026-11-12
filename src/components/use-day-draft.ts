@@ -68,10 +68,12 @@ export function useDayDraft(page: Page): DayDraftHook {
     try {
       // The server only computes the draft; storing it goes through this tab's queue, after any save he typed
       // meanwhile, so neither is sent against a revision the other has moved on (Lead 1d5e2e28).
-      const { setDraft, owner } = await prepareDayDraft({ data: { date: page.date, operationId: newOperationId() } })
+      const { setDraft, owner, remakeFailed } = await prepareDayDraft({ data: { date: page.date, operationId: newOperationId() } })
       // Made from another account's workspace (the session changed meanwhile): its words never go into this one.
       outcome = { state: 'done' }
       if (owner !== (workspaceOwner() ?? 'local')) return
+      // Today's older draft couldn't be made again: it stays, its bands showing, and this counts as a failed ask.
+      if (remakeFailed) { outcome = { state: 'failed', failures: failures + 1 }; return }
       if (!setDraft) { await refresh(); return }
       outcome = { state: 'failed', failures: failures + 1 }
       const action = JSON.parse(setDraft) as Action

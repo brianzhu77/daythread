@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { harness, dayId, today, yesterday, tomorrow, text, todo, bullet, para, heading, chip, nodesOf, under } from './v2-helpers.ts'
 import { inlineText, type EditorNode } from '../src/domain/editor-document.ts'
-import { DRAFT_RECIPE, draftOf, draftStale, type DraftItem } from '../src/domain/day-draft.ts'
+import { DRAFT_RECIPE, draftOf, draftStale, draftView, type DraftItem } from '../src/domain/day-draft.ts'
 import { addDays } from '../src/domain/workspace.ts'
 import { buildDayDraftRequest, itemsFromModel, type DayDraftRequest, type ModelSuggestion } from '../src/server/model/day-draft.ts'
 
@@ -134,20 +134,25 @@ function remade() {
   ] })
   h.run({ type: 'apply-draft', pageId: dayId(tomorrow), itemIds: ['a'], today })
   h.run({ type: 'skip-draft', pageId: dayId(tomorrow), itemIds: ['b'] })
-  const set = (items: DraftItem[], status: 'ready' | 'failed' = 'ready', recipe: number | null = DRAFT_RECIPE) =>
-    h.run({ type: 'set-draft', pageId: dayId(tomorrow), status, moreOpen: [], allowedTaskIds: [book, dog], items, ...(recipe ? { recipe } : {}) })
+  const set = (items: DraftItem[], status: 'ready' | 'failed' = 'ready', recipe: number | null = DRAFT_RECIPE, moreOpen: string[] = []) =>
+    h.run({ type: 'set-draft', pageId: dayId(tomorrow), status, moreOpen, allowedTaskIds: [book, dog], items, ...(recipe ? { recipe } : {}) })
   return { h, book, dog, line, set, draft: () => draftOf(h.ws, dayId(tomorrow))! }
 }
 
 test('day draft: one an older recipe made is made again once, keeping what he applied or skipped', () => {
   const { h, book, dog, line, set, draft } = remade()
   assert.equal(draftStale(draft()), true)
-  set([{ id: 'n1', anchor: '', place: 'after', taskId: dog, source: 'model', state: 'open' }, line('n2', 'Sort the screws'), line('n3', 'Pack the charger')])
+  set([{ id: 'n1', anchor: '', place: 'after', taskId: dog, source: 'model', state: 'open' }, line('n2', 'Sort the screws'), line('n3', 'Pack the charger')], 'ready', DRAFT_RECIPE, [dog])
   const d = draft()
   assert.equal(d.recipe, DRAFT_RECIPE)
   assert.equal(draftStale(d), false)
   assert.deepEqual(d.items.map(i => [i.id, i.state]), [['a', 'applied'], ['b', 'skipped'], ['n2', 'open'], ['n3', 'open']], 'the skipped to-do isn\'t offered again; the open line is offered anew')
+  // Its task id too: B92 tells a carried day from a chosen one by the applied items of that day's draft (Roadbuster 0983f2da).
+  assert.deepEqual(d.items.filter(i => i.state !== 'open').map(i => i.taskId), [book, dog])
   assert.equal(nodesOf(h.page(dayId(tomorrow))).filter(n => n.type === 'task' && n.props?.taskId === book).length, 1, 'what he applied stays on the page')
+  // Nor under "more open", where the new run lists it as an open to-do it didn't place (Ratchet ea6ab2bd).
+  assert.deepEqual(d.moreOpen, [])
+  assert.deepEqual(draftView(h.ws, h.page(dayId(tomorrow)))!.moreOpen, [])
   // Made by this recipe, it's the day's draft for good.
   assert.throws(() => set([line('n4', 'Again')]), /already has its draft/)
 })

@@ -1,11 +1,13 @@
 // Brian 3d7aca46, on the store seed.ts made (invented words), served with the model on: today's page, whose draft an
 // older build made, asks once, keeps the to-do he applied from it, and shows yesterday's next-day lines as to-dos;
 // a reload asks nothing more.
-//   node tests/evidence/day-draft-week/remake.mjs <base> <server log> <chromium|webkit> [shots dir]
+//   node tests/evidence/day-draft-week/remake.mjs <base> <server log> <chromium|webkit> [shots dir] [failing]
+// `failing`: served with a model that always fails. The older draft stays, and the tab stops after two asks however often
+// it's focused again (Ratchet 6f69e359).
 // Asks are counted in the server's log (its `draft.prepare` lines carry counts only).
 import { readFileSync } from 'node:fs'
 import { chromium, webkit } from '/Users/dogrod/Developer/daythread/node_modules/playwright/index.mjs'
-const [base, log, engine = 'chromium', shots] = process.argv.slice(2)
+const [base, log, engine = 'chromium', shots, mode] = process.argv.slice(2)
 const prepared = () => readFileSync(log, 'utf8').split('\n').filter(l => l.includes('"event":"draft.prepare"')).map(l => JSON.parse(l.slice(l.indexOf('{'))))
 const before = prepared().length
 let fail = 0; const ok = (v, s) => { console.log(v ? 'PASS' : 'FAIL', s); if (!v) fail++ }
@@ -17,6 +19,18 @@ const open = async () => { await p.goto(base + '/'); await p.locator('.continuou
 const bands = () => p.locator('.draft-band').allTextContents().then(t => t.map(s => s.replace(/\s+/g, ' ').trim()))
 const lines = ['Book the venue visit', 'Fix the broken footer link', 'Swap the team photo']
 
+if (mode === 'failing') {
+  await open(); await p.waitForTimeout(4000)
+  const focus = () => p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('focus')) })
+  for (let i = 0; i < 5; i++) { await focus(); await p.waitForTimeout(2500) }
+  ok(asks().length === 2 && asks().every(a => a.remade === true && a.status === 'failed'), `two asks, then none (${JSON.stringify(asks().map(a => [a.remade, a.status, a.error]))})`)
+  ok(await p.locator('.editor-task-title', { hasText: 'Renew the parking permit' }).count() === 1, 'what he applied is still on the page')
+  ok(!(await p.locator('.draft-warn').count()), 'no "Couldn\'t draft": the older draft stands')
+  ok(errors.length === 0, `no page errors ${JSON.stringify(errors.slice(0, 2))}`)
+  await b.close()
+  console.log(fail ? `FAIL ${fail}` : 'ALL PASS')
+  process.exit(fail ? 1 : 0)
+}
 await open()
 const started = Date.now()
 let shown = []
