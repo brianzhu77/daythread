@@ -49,6 +49,7 @@ const dashboardChanges = [
   z.object({ kind: z.literal("duplicateWidget"), viewId: id, widgetId: id, newId: id, newViewId: id, newRowId: id }),
   z.object({ kind: z.literal("removeWidget"), viewId: id, widgetId: id }),
   z.object({ kind: z.literal("duplicateDashboard"), viewId: id, newViewId: id, ids: z.record(id, id) }),
+  z.object({ kind: z.literal("setDashboardFilter"), viewId: id, rules: z.array(z.object({ id, name: z.string().max(200), type: z.enum(propertyTypes), op: z.enum(filterOpList), value: json.optional(), target: id.optional() })).max(20), any: z.boolean().optional() }),
 ] as const;
 const change = z.discriminatedUnion("kind", [
   ...dashboardChanges,

@@ -253,3 +253,144 @@ test("a handle's layouts: every allowed split with two; with three, the right gr
   assert.deepEqual(handleChoices(4, 2), [[3, 3, 3, 3]])
   for (const n of [2, 3]) for (let k = 1; k < n; k++) assert.ok(handleChoices(n, k).every(allowedSplit))
 })
+
+// ---------------------------------------------------------------- rules across widgets (G6-6)
+import { filterState, filteredView, ruleIn, widgetRules } from '../src/domain/dashboard.ts'
+import { newRowValues, viewRows } from '../src/domain/database.ts'
+function ruled() {
+  const s = setup()
+  // Books gets a Stage of its own, with an Idea and a Done but different ids, and Runs gets a Done.
+  s.C('books', { kind: 'addProperty', property: { id: 'bst', name: 'Stage', type: 'select', options: [{ id: 'x', name: 'Done', color: 'gray' }, { id: 'y', name: 'Idea', color: 'gray' }] } })
+  s.C('runs', { kind: 'updateProperty', propertyId: 'st', options: [{ id: 'a', name: 'Idea', color: 'gray' }, { id: 'd', name: 'Done', color: 'gray' }] })
+  s.h.run({ type: 'add-row', databaseId: 'books', pageId: 'k1', title: 'Dune', values: { bst: 'y' }, at } as never)
+  s.h.run({ type: 'add-row', databaseId: 'books', pageId: 'k2', title: 'Emma', values: { bst: 'x' }, at } as never)
+  s.add('w2')
+  const filter = (rules: unknown[], any = false) => s.D({ kind: 'setDashboardFilter', rules, any })
+  const rule = (id: string, value: unknown, extra: object = {}) => ({ id, name: 'Stage', type: 'select', op: 'isAnyOf', value, ...extra })
+  const rows = (widgetId: string) => {
+    const w = s.widget(widgetId)!, db = s.h.page(w.source).database!, { applied } = widgetRules(s.dash(), w, db)
+    return viewRows(s.h.ws, w.source, filteredView(w.view, applied, Boolean(s.dash().filterAny)), { today: '2026-11-13', pageDate: null, weekStart: 0 }).map(r => r.title).sort()
+  }
+  return { ...s, filter, rule, rows }
+}
+
+test('a rule applies by name and type, its options by name, in each source with its own ids', () => {
+  const { filter, rule, rows, dash } = ruled()
+  filter([rule('r1', ['Idea'])])
+  assert.deepEqual(dash().filter![0]!.on, { runs: { propertyId: 'st', optionIds: ['a'] }, books: { propertyId: 'bst', optionIds: ['y'] } })
+  assert.deepEqual(rows('w1'), ['One'])
+  assert.deepEqual(rows('w2'), ['Dune'])
+})
+
+test('an option a widget lacks counts neither way there; Not filtered and Partly filtered say so', () => {
+  const { filter, rule, widget, dash, h } = ruled()
+  h.run({ type: 'change-database', pageId: 'books', change: { kind: 'updateProperty', propertyId: 'bst', options: [{ id: 'x', name: 'Done', color: 'gray' }, { id: 'y', name: 'Idea', color: 'gray' }, { id: 'z', name: 'Later', color: 'gray' }] } } as never)
+  filter([rule('r1', ['Later']), { id: 'r2', name: 'Name', type: 'text', op: 'contains', value: 'e' }])
+  const state = (id: string) => { const w = widget(id)!; return filterState(widgetRules(dash(), w, h.page(w.source).database!)) }
+  assert.equal(ruleIn(dash().filter![0]!, 'runs', h.page('runs').database!), null, "Runs has no Later")
+  assert.equal(state('w1'), 'none', 'no Stage Later and no Name property by that name in Runs')
+  assert.equal(state('w2'), 'partly', 'Books has Later, but no Name property by that name')
+})
+
+test('a renamed property or option keeps its rule; a deleted one leaves it unreadable; another renamed to the old name never takes it', () => {
+  const { C, filter, rule, rows, dash, h } = ruled()
+  filter([rule('r1', ['Idea'])])
+  C('runs', { kind: 'updateProperty', propertyId: 'st', name: 'Phase' })
+  C('runs', { kind: 'updateProperty', propertyId: 'st', options: [{ id: 'a', name: 'Thinking', color: 'gray' }, { id: 'd', name: 'Done', color: 'gray' }] })
+  assert.deepEqual(rows('w1'), ['One'], 'still on Phase, still on that option')
+  C('runs', { kind: 'addProperty', property: { id: 'st2', name: 'Stage', type: 'select', options: [{ id: 'q', name: 'Idea', color: 'gray' }] } })
+  assert.equal(dash().filter![0]!.on.runs!.propertyId, 'st')
+  filter([rule('r1', ['Idea'])])
+  assert.equal(dash().filter![0]!.on.runs!.propertyId, 'st', 'a save never moves a binding')
+  C('runs', { kind: 'removeProperty', propertyId: 'st' })
+  assert.equal(ruleIn(dash().filter![0]!, 'runs', h.page('runs').database!), null)
+})
+
+test('a source never bound reads by name at draw time, and is bound on the next save; a widget arriving binds only a new source', () => {
+  const { C, D, filter, rule, dash, add, h } = ruled()
+  C('books', { kind: 'removeProperty', propertyId: 'bst' })
+  filter([rule('r1', ['Idea'])])
+  assert.equal(dash().filter![0]!.on.books, undefined)
+  C('books', { kind: 'addProperty', property: { id: 'bst2', name: 'Stage', type: 'select', options: [{ id: 'i', name: 'Idea', color: 'gray' }] } })
+  assert.deepEqual(ruleIn(dash().filter![0]!, 'books', h.page('books').database!), { by: 'bst2', op: 'isAnyOf', value: ['i'] }, 'read by name at draw time, nothing written (Bumblebee 4cea29f6)')
+  assert.equal(dash().filter![0]!.on.books, undefined)
+  filter([rule('r1', ['Idea'])])
+  assert.deepEqual(dash().filter![0]!.on.books, { propertyId: 'bst2', optionIds: ['i'] }, 'Lead ad03bcd0, Bumblebee 012cf5ed')
+  D({ kind: 'removeWidget', widgetId: 'w2' })
+  const before = dash().filter![0]!.on.books
+  add('w3', 'books', null, 'r9')
+  assert.deepEqual(dash().filter![0]!.on.books, before, 'already bound, kept')
+})
+
+test("the rule's value changed: options read again within the same bound property", () => {
+  const { filter, rule, dash, rows } = ruled()
+  filter([rule('r1', ['Idea'])])
+  filter([rule('r1', ['Done'])])
+  assert.deepEqual(dash().filter![0]!.on.books, { propertyId: 'bst', optionIds: ['x'] })
+  assert.deepEqual(rows('w2'), ['Emma'])
+})
+
+test("whole groups: the widget's own filter and the dashboard's rules, neither flattened, and nothing saved into the widget", () => {
+  const { D, filter, rule, widget, h, dash } = ruled()
+  D({ kind: 'updateWidget', widgetId: 'w2', fields: { filter: [{ by: 'title', op: 'contains', value: 'u' }, { by: 'title', op: 'contains', value: 'm' }], filterAny: true } })
+  filter([rule('r1', ['Idea', 'Done'])], true)
+  const w = widget('w2')!, { applied } = widgetRules(dash(), w, h.page('books').database!)
+  const v = filteredView(w.view, applied, true)
+  assert.deepEqual(v.filter, [])
+  assert.equal(v.filterAny, undefined)
+  assert.deepEqual(v.filterGroups!.map(g => [Boolean(g.any), g.rules.length]), [[true, 2], [true, 1]])
+  assert.equal(widget('w2')!.view.filter.length, 2, 'the widget keeps only its own')
+  assert.equal(widget('w2')!.view.filterGroups, undefined)
+})
+
+test('the filter command is bounded and keeps ids unique', () => {
+  const { filter, rule } = ruled()
+  assert.throws(() => filter([rule('r1', ['Idea']), rule('r1', ['Done'])]), /Invalid id/)
+  assert.throws(() => filter(Array.from({ length: 21 }, (_, i) => rule(`r${i}`, ['Idea']))), /20 rules at most/)
+  assert.throws(() => filter([{ id: 'r', name: 'Stage', type: 'select', op: 'gt', value: 1 }]), /Invalid rule/)
+  filter([])
+})
+
+test("a rule moved to another property (name, type or Relation database) is bound afresh, never kept on the old one", () => {
+  const { C, filter, rule, dash } = ruled()
+  C('runs', { kind: 'addProperty', property: { id: 'pr', name: 'Priority', type: 'select', options: [{ id: 'h', name: 'High', color: 'gray' }] } })
+  filter([rule('r1', ['Idea'])])
+  filter([{ id: 'r1', name: 'Priority', type: 'select', op: 'isAnyOf', value: ['High'] }])
+  assert.deepEqual(dash().filter![0]!.on.runs, { propertyId: 'pr', optionIds: ['h'] })
+  assert.equal(dash().filter![0]!.on.books, undefined, 'Books has no Priority')
+})
+
+test('another widget of a source already on the dashboard binds nothing: an unbound source stays unbound, a deleted binding stays', () => {
+  const { C, filter, rule, dash, add } = ruled()
+  C('books', { kind: 'removeProperty', propertyId: 'bst' })
+  filter([rule('r1', ['Idea'])])
+  C('books', { kind: 'addProperty', property: { id: 'bst3', name: 'Stage', type: 'select', options: [{ id: 'i', name: 'Idea', color: 'gray' }] } })
+  add('w3', 'books', null, 'r9')
+  assert.equal(dash().filter![0]!.on.books, undefined, 'Books was on the dashboard already (Ratchet 1fc10a66)')
+})
+
+test("+ New in a widget: its own filter's values win, a dashboard rule fills only what's left, and it says whether the row shows", () => {
+  const { h, C, D, filter, rule, widget, dash } = ruled()
+  C('books', { kind: 'addProperty', property: { id: 'ok', name: 'Owned', type: 'checkbox' } })
+  C('runs', { kind: 'addProperty', property: { id: 'ok', name: 'Owned', type: 'checkbox' } })
+  const make = (id: string) => { const w = widget(id)!, db = h.page(w.source).database!, { applied } = widgetRules(dash(), w, db); return newRowValues(db, filteredView(w.view, applied, Boolean(dash().filterAny)), { today: '2026-11-13', pageDate: null, weekStart: 0 }) }
+  // Contradictory select: the widget asks for Done, the dashboard for Idea.
+  D({ kind: 'updateWidget', widgetId: 'w2', fields: { filter: [{ by: 'bst', op: 'isAnyOf', value: ['x'] }] } })
+  filter([rule('r1', ['Idea']), { id: 'r2', name: 'Owned', type: 'checkbox', op: 'is', value: true }])
+  let made = make('w2')
+  assert.equal(made.values.bst, 'x', 'its own Done, not the dashboard Idea')
+  assert.equal(made.values.ok, true, 'the dashboard fills what its own filter says nothing about')
+  assert.equal(made.visible, false, 'Done and Idea both holding: hidden, and the notice says so')
+  // A checkbox its own filter wants unticked stays unticked.
+  D({ kind: 'updateWidget', widgetId: 'w2', fields: { filter: [{ by: 'ok', op: 'is', value: false }] } })
+  made = make('w2')
+  assert.equal(made.values.ok, undefined)
+  assert.equal(made.values.bst, 'y', 'Stage left to the dashboard, which asks for Idea')
+  // Under "any", its own group needs only one value.
+  D({ kind: 'updateWidget', widgetId: 'w2', fields: { filter: [{ by: 'bst', op: 'isAnyOf', value: ['x'] }, { by: 'title', op: 'is', value: 'X' }], filterAny: true } })
+  made = make('w2')
+  assert.equal(made.values.bst, 'x')
+  // An ordinary view is unchanged: later rules still fill as before.
+  const plain = newRowValues(h.page('books').database!, { ...widget('w2')!.view, filter: [{ by: 'bst', op: 'isAnyOf', value: ['x'] }, { by: 'bst', op: 'isAnyOf', value: ['y'] }], filterAny: undefined } as never, { today: '2026-11-13', pageDate: null, weekStart: 0 })
+  assert.equal(plain.values.bst, 'y')
+})

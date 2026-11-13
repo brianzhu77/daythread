@@ -149,6 +149,8 @@ export interface View {
   frozenThrough?: string;
   /** Table at 1280: Name's width, dragged on its head (R4-18); the default when absent. */
   nameWidth?: number;
+  /** Drawn only, never stored: a dashboard widget's own view and the dashboard's rules that apply to it (dashboard.ts `filteredView`). */
+  widgetFilter?: { own: View; dashboard: FilterGroup };
   /** A Dashboard's rows of widgets (dashboard.ts). Changed only by its own commands; an older build keeps it and draws a table. */
   dashboard?: import("./dashboard.ts").Dashboard;
 }
@@ -792,6 +794,17 @@ function valueForRule(property: Property, c: Condition, context: ViewContext): J
  * whether the row will be shown at all ("Added · hidden by this view's filter · Show" when not).
  */
 export function newRowValues(db: Database, view: View, context: ViewContext, groupKey?: string): { title: string; values: RawValues; visible: boolean } {
+  // In a dashboard widget: what its own filter asks for first, and a dashboard rule only fills a property its own filter
+  // doesn't speak to, so it never overwrites a contradictory one (dashboard.md §4, Ratchet 1fc10a66). Shown or not as both have it.
+  if (view.widgetFilter) {
+    const { own, dashboard } = view.widgetFilter
+    const mine = newRowValues(db, own, context, groupKey)
+    const theirs = newRowValues(db, { ...own, filter: dashboard.rules, filterAny: dashboard.any, filterGroups: undefined, widgetFilter: undefined } as View, context)
+    const spoken = new Set([...own.filter, ...rulesIn(own.filterGroups)].map((c) => c.by))
+    const values: RawValues = { ...Object.fromEntries(Object.entries(theirs.values).filter(([id]) => !spoken.has(id))), ...mine.values };
+    const title = mine.title || (spoken.has(titleId) ? "" : theirs.title);
+    return { title, values, visible: inView(db, newRowProbe(db, title, values), view, context) };
+  }
   let title = "";
   let values: RawValues = {};
   const fits = (node: FilterGroup, t: string, v: RawValues) => groupHolds(db, newRowProbe(db, t, v), node, context) !== false;
