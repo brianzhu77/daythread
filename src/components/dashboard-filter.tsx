@@ -33,7 +33,7 @@ export function dashboardSources(workspace: Workspace, d: Dashboard): Source[] {
 
 /** A property as the sheet lists it: once by name and type (and a Relation's database), with its options once by name. */
 interface Entry { key: string; name: string; type: Property['type']; target?: string; options: Option[]; widgets: number }
-const keyOf = (p: { name: string; type: string; target?: string }) => `${named(p.name)}|${p.type}|${p.type === 'relation' ? p.target ?? '' : ''}`
+const keyOf = (p: { name: string; type: string; target?: string; title?: true }) => (p.title ? 'title' : `${named(p.name)}|${p.type}|${p.type === 'relation' ? p.target ?? '' : ''}`)
 function entriesOf(workspace: Workspace, d: Dashboard, sources: Source[]): Entry[] {
   const entries = new Map<string, Entry>()
   const widgets = d.rows.flatMap(r => r.widgets)
@@ -47,8 +47,10 @@ function entriesOf(workspace: Workspace, d: Dashboard, sources: Source[]): Entry
   }
   // A Relation's values are its database's rows, by id: one database for the entry, so the same rows in every widget it reaches.
   for (const e of entries.values()) if (e.type === 'relation' && e.target) e.options = databaseRows(workspace, e.target).map(r => ({ id: r.id, name: displayPageTitle(r) }) as Option)
+  // Name first: every widget has it, so a rule on it reaches them all (Bumblebee 0d1055eb).
+  const title: Entry = { key: 'title', name: 'Name', type: 'text', options: [], widgets: widgets.length }
   for (const e of entries.values()) e.widgets = widgets.filter(w => { const s = sources.find(x => x.id === w.source); return s?.db.properties.some(p => keyOf(p) === e.key) }).length
-  return [...entries.values()]
+  return [title, ...entries.values()]
 }
 /** The entry as a property RuleValue can draw, its options' ids being their names. */
 const asProperty = (e: Entry): Property => ({ id: e.key, name: e.name, type: e.type, ...(e.options.length ? { options: e.options } : {}), ...(e.target ? { target: e.target } : {}) }) as Property
@@ -62,9 +64,9 @@ export function DashboardFilterPanel({ workspace, host, view, back }: { workspac
   const fromSource = from && sources.find(s => s.id === from.source)
   const save = (next: RuleInput[], any = Boolean(d.filterAny)) => void run({ type: 'change-database', pageId: host.id, change: { kind: 'setDashboardFilter', viewId: view.id, rules: next, any } })
   const set = (i: number, rule: RuleInput) => save(rules.map((r, j) => (j === i ? rule : r)))
-  const onEntry = (e: Entry): RuleInput => ({ id: newId(), name: e.name, type: e.type, op: opsFor(e.type)[0]!, ...(e.type === 'checkbox' ? { value: true } : {}), ...(e.target ? { target: e.target } : {}) })
+  const onEntry = (e: Entry): RuleInput => ({ id: newId(), name: e.name, type: e.type, op: opsFor(e.type)[0]!, ...(e.type === 'checkbox' ? { value: true } : {}), ...(e.target ? { target: e.target } : {}), ...(e.key === 'title' ? { title: true as const } : {}) })
   // Two properties with one name but different types are two entries, and only then is the type named (§9).
-  const label = (e: Entry) => (entries.filter(x => named(x.name) === named(e.name)).length > 1 ? `${e.name} · ${typeName(e.type)}` : e.name)
+  const label = (e: Entry) => (e.key !== 'title' && entries.filter(x => named(x.name) === named(e.name)).length > 1 ? `${e.name} · ${typeName(e.type)}` : e.name)
   return <div className="database-filter-sheet dashboard-filter">
     <div className="database-menu-head">{back && <button type="button" className="database-menu-back" aria-label="Back" onClick={back}>‹</button>}<span>Filter</span></div>
     {!rules.length && <p className="database-menu-quiet">No filters</p>}

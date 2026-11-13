@@ -3,7 +3,7 @@
 // an older build keeps it (its `updateView` spreads the fields it doesn't know) and draws a table of the host's rows.
 // Every row is full: its widths add up to 12 twelfths (Jazz df571c9f). Changes are per widget or row (database.ts), so a
 // move in one tab and a filter edit in another touch different fields and both survive.
-import { checkId, cleanView, DatabaseError, limits, opsFor, updatedView, type Condition, type Database, type FilterOp, type Json, type PropertyType, type View, type ViewChange } from './database.ts'
+import { checkId, cleanView, DatabaseError, limits, opsFor, titleId, updatedView, type Condition, type Database, type FilterOp, type Json, type PropertyType, type View, type ViewChange } from './database.ts'
 
 export interface DashboardWidget {
   id: string
@@ -27,7 +27,7 @@ export interface Dashboard { rows: DashboardRow[]; filter?: DashboardRule[]; fil
  * saved to that property in each source (`on`, by id). After that it reads only its bound id, so a rename keeps it and
  * no other property renamed to the old name picks it up (G6-6).
  */
-export interface DashboardRule { id: string; name: string; type: PropertyType; op: FilterOp; value?: Json; /** A Relation's database. */ target?: string; on: Record<string, RuleBinding> }
+export interface DashboardRule { id: string; name: string; type: PropertyType; op: FilterOp; value?: Json; /** A Relation's database. */ target?: string; /** On every widget's Name, which every database has (Bumblebee 0d1055eb). */ title?: true; on: Record<string, RuleBinding> }
 /** Where a rule reads in one source: its property, and for options their ids there, so a rename of either keeps it (Lead ad03bcd0). */
 export interface RuleBinding { propertyId: string; optionIds?: string[] }
 
@@ -264,7 +264,7 @@ export function changeDashboard(db: Database, change: DashboardChange, sourceOf:
       const rules = change.rules.map(input => {
         const rule = cleanRule(input), kept = held.get(rule.id)
         // Its property changed (another name, type or Relation database): a rule on something else, bound afresh (Ratchet 1fc10a66).
-        const was = kept && kept.name === rule.name && kept.type === rule.type && kept.target === rule.target ? kept : undefined
+        const was = kept && kept.name === rule.name && kept.type === rule.type && kept.target === rule.target && kept.title === rule.title ? kept : undefined
         const on: Record<string, RuleBinding> = structuredClone(was?.on ?? {})
         for (const id of sources) {
           const source = sourceOf(id)
@@ -315,7 +315,8 @@ export function handleChoices(count: number, k: number): number[][] {
 const optionTypes: ReadonlySet<string> = new Set(['select', 'status', 'multiSelect'])
 const named = (s: string) => s.trim().toLocaleLowerCase()
 /** Where a rule would be bound in a source now: the same name and type (for a Relation the same database), and its options by name. */
-function bindingIn(rule: Pick<DashboardRule, 'name' | 'type' | 'target' | 'value'>, source: Database): RuleBinding | undefined {
+function bindingIn(rule: Pick<DashboardRule, 'name' | 'type' | 'target' | 'value' | 'title'>, source: Database): RuleBinding | undefined {
+  if (rule.title) return { propertyId: titleId }
   const property = source.properties.find(p => named(p.name) === named(rule.name) && p.type === rule.type && (rule.type !== 'relation' || p.target === rule.target))
   if (!property) return undefined
   return { propertyId: property.id, ...(optionTypes.has(rule.type) && rule.value !== undefined && rule.value !== null ? { optionIds: optionIdsIn(property, rule.value) } : {}) }
@@ -337,7 +338,9 @@ export function bindSource(d: Dashboard, sourceId: string, source: Database): vo
 export function ruleIn(rule: DashboardRule, sourceId: string, source: Database): Condition | null {
   // A source that has never had a binding for it reads it by name and type now, writing nothing, so the sheet and the widget
   // agree; the next save stores it (Bumblebee 4cea29f6). A source bound before keeps its binding, even to a deleted property.
-  const binding = rule.on[sourceId] ?? bindingIn(rule, source), property = binding && source.properties.find(p => p.id === binding.propertyId)
+  const binding = rule.on[sourceId] ?? bindingIn(rule, source)
+  if (rule.title && binding?.propertyId === titleId) return { by: titleId, op: rule.op, ...(rule.value !== undefined ? { value: rule.value } : {}) }
+  const property = binding && source.properties.find(p => p.id === binding.propertyId)
   if (!property || property.type !== rule.type || (rule.type === 'relation' && property.target !== rule.target)) return null
   if (!optionTypes.has(rule.type) || rule.value === undefined || rule.value === null) return { by: property.id, op: rule.op, ...(rule.value !== undefined ? { value: rule.value } : {}) }
   // By the ids bound when saved: a renamed option still reads; a deleted one, or one it never had, leaves it unreadable.
@@ -368,5 +371,6 @@ function cleanRule(input: Omit<DashboardRule, 'on'>): Omit<DashboardRule, 'on'> 
   if (typeof input.name !== 'string' || !input.name.trim() || input.name.length > limits.name) throw new DatabaseError('A rule needs a property')
   if (!(opsFor(input.type as PropertyType) ?? []).includes(input.op)) throw new DatabaseError('Invalid rule')
   if (optionTypes.has(input.type) && input.value !== undefined && !(Array.isArray(input.value) ? input.value.every(v => typeof v === 'string') : typeof input.value === 'string')) throw new DatabaseError('Invalid rule')
-  return { id, name: input.name.trim(), type: input.type, op: input.op, ...(input.value !== undefined ? { value: input.value } : {}), ...(input.type === 'relation' && input.target ? { target: checkId(input.target) } : {}) }
+  if (input.title && input.type !== 'text') throw new DatabaseError('Invalid rule')
+  return { id, name: input.name.trim(), type: input.type, op: input.op, ...(input.value !== undefined ? { value: input.value } : {}), ...(input.type === 'relation' && input.target ? { target: checkId(input.target) } : {}), ...(input.title ? { title: true as const } : {}) }
 }

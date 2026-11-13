@@ -416,3 +416,10 @@ test('a Relation rule reads only where the relation points at the same database'
   assert.equal(ruleIn(dash().filter![0]!, 'books', h.page('books').database!), null, "Books' Link points at Runs")
   assert.equal(dash().filter![0]!.on.books, undefined)
 })
+
+test('a rule on Name reaches every widget, whatever its database calls its properties (Bumblebee 0d1055eb)', () => {
+  const { filter, rows, dash } = ruled()
+  filter([{ id: 'r1', name: 'Name', type: 'text', op: 'contains', value: 'm', title: true }])
+  assert.deepEqual(dash().filter![0]!.on, { runs: { propertyId: 'title' }, books: { propertyId: 'title' } })
+  assert.deepEqual(rows('w2'), ['Emma'])
+})
