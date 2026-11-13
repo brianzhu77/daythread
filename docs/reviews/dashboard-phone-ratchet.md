@@ -2,7 +2,7 @@
 
 Reviewed runtime: 8fad6a7f, against cbccb51b. Reviewer: Ratchet. Isolated worktree, shipping CI dependencies, built preview on synthetic SQLite only.
 
-## Result: changes required
+## Original result at 8fad6a7f: changes required
 
 **G6-5: removing a widget in another tab makes a stale filter edit disappear silently.** Reproduced independently in Chromium and WebKit at 1280.
 
@@ -26,3 +26,11 @@ Reproduction: `node tests/evidence/dashboard/ratchet-stale-remove.mjs http://127
 ## Limits
 
 No independent native iPhone/Simulator, Worker/Postgres, performance, long dashboard-name ellipsis, or wide-table sideways-scroll check. The synthetic Books table fits its phone width, so the sideways-scroll case is explicitly not run. No production data or external model calls.
+
+## Repair retest at b69bab03
+
+The original silent-edit finding is repaired. My unchanged saved reproduction passes in Chromium and WebKit: the first stale refusal refreshes the dashboard, the missing widget disappears, and the explicit missing-widget notice appears (one request, one notice). Source inspection confirms a retry is still bounded to one; a real second domain refusal now shows a notice and uses the refreshed dashboard. The updated author phone script was executed against my own build and synthetic store; results recorded below.
+
+Build and typecheck pass with shipping CI dependencies. Long-name truncation, a truly wide table, and same-session expansion now have executable author coverage. Jazz's separately reported move-flash background fault is outside this repair and is not cleared here. Native Simulator and performance remain with Jazz and Lead respectively.
+
+Updated `phone.mjs`: Chromium **22/22**, WebKit **22/22**, each on its own fresh synthetic SQLite seed. This includes two refused attempts followed by visible feedback, ordinary stale move/filter replay, stale Undo refusal, long-name ellipsis, sideways scrolling of the wide table, and same-session expansion. No remaining blocker from my reliability review of b69bab03; this does not clear Jazz's separate visual finding or certify release/performance.
