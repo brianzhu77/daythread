@@ -27,6 +27,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   ok(`${tag} by name: Runs shows its Ideas, Reads its own Idea with other ids`, (await titles('Runs')).sort().join(',') === 'Alpha,Charlie' && (await titles('Reads')).join(',') === 'Dune', `${await titles('Runs')} / ${await titles('Reads')}`)
   ok(`${tag} the chip reads as a view's`, (await page.locator('.dashboard-rules').innerText()).includes('Stage is any of Idea'))
   ok(`${tag} Wide has no Stage: "Not filtered", and its rows all show`, (await widget('Wide').locator('.dashboard-filter-label').innerText()) === 'Not filtered' && (await titles('Wide')).length === 1)
+  const place = await widget('Wide').evaluate(w => { const n = w.querySelector('.database-title').getBoundingClientRect(), l = w.querySelector('.dashboard-filter-label').getBoundingClientRect(); return Math.round(l.left - n.right) })
+  ok(`${tag} the label sits right after the name`, place >= 0 && place <= 12, `${place} px after it`)
   ok(`${tag} where every rule applies, nothing is said`, await widget('Runs').locator('.dashboard-filter-label').count() === 0 && await widget('Reads').locator('.dashboard-filter-label').count() === 0)
   // From the label: the sheet marks the rule "Not in Wide".
   await widget('Wide').locator('.dashboard-filter-label').click(); await settle()
@@ -53,6 +55,17 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   await page.goto(`${base}/pages?page=runs`); await page.locator('.database-title-cell').first().waitFor(); await settle()
   const stages = await page.locator('[data-cell*="|st"]').allInnerTexts()
   ok(`${tag} + New in a widget takes the dashboard's Idea`, stages.filter(t => t.includes('Idea')).length === 3, stages.join(','))
+
+  // A rule on Name reaches every widget, Wide too (Bumblebee 0d1055eb).
+  await open()
+  while (await page.locator('.dashboard-rules .database-chip-remove').count()) { await page.locator('.dashboard-rules .database-chip-remove').first().click(); await settle() }
+  await page.locator('.dashboard-head [data-database-menu]').first().click(); await page.getByRole('menuitem', { name: 'Filter', exact: true }).click(); await settle()
+  const nameEntry = sheet().getByRole('menuitem').filter({ hasText: /^Name/ })
+  ok(`${tag} Name is listed first, in all 3`, /3 of 3/.test(await nameEntry.first().innerText()), await nameEntry.first().innerText().catch(() => ''))
+  await nameEntry.first().click(); await settle()
+  const field = sheet().locator('.database-rule input').first()
+  await field.fill('a'); await field.press('Enter'); await settle(); await page.keyboard.press('Escape'); await settle()
+  ok(`${tag} Name contains "a" filters every widget, labels none`, (await titles('Runs')).sort().join(',') === 'Alpha,Bravo,Charlie' && (await titles('Reads')).join(',') === 'Emma' && (await titles('Wide')).join(',') === 'A wide row' && await page.locator('.dashboard-filter-label').count() === 0, `${await titles('Runs')} / ${await titles('Reads')} / ${await titles('Wide')}`)
 
   // Removing the rules: chips and labels go, and the layout is as before.
   await open()
