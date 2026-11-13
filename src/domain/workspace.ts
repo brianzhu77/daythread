@@ -25,6 +25,7 @@ import { inView, titleId, todosSourceId, changeDatabase, syncMirror, databaseBlo
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, storedDocument, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
+import { heldSmartNoteIds, smartLimits, smartSpecKey, type SmartResult } from "./smart-note.ts";
 import { askedQuestions, formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
 import { changeDashboard, isDashboardChange } from "./dashboard.ts";
 
@@ -925,6 +926,11 @@ function claimLineIds(state: Workspace, p: Page, nodes: readonly EditorNode[]): 
 
 // ---------------------------------------------------------------- commands
 
+/** A source whose page is gone is dropped, not refused: the page may have been deleted while the model ran. `at` must be a time: it is shown and stored as the row's. */
+function heldSources(state: Workspace, result: SmartResult): SmartResult {
+  const held = new Set(state.pages.map((p) => p.id));
+  return { ...result, at: isoTime(result.at), blocks: result.blocks.map((b) => ({ ...b, sources: b.sources.filter((s) => held.has(s.pageId)) })) };
+}
 function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>; renamed?: Record<string, string>; conflicted?: string[] } {
   switch (action.type) {
     case "save-editor": {
@@ -1372,6 +1378,31 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!isTemplate(p)) throw new DomainError("Not a template");
       state.pages = state.pages.filter((x) => x.id !== p.id);
       return { message: `Deleted '${p.title.trim() || "Untitled"}'`, entityId: p.id };
+    }
+    case "save-smart-note": {
+      const name = action.note.name.trim(), prompt = action.note.prompt.trim(), notes = state.smartNotes ?? [];
+      if (!prompt) throw new DomainError("A smart note needs a prompt");
+      if (action.note.range.where.kind === "pages" && !action.note.range.where.pageIds.length) throw new DomainError("Choose at least one page");
+      const at = notes.findIndex((n) => n.id === action.note.id);
+      const note = { ...action.note, name: name || prompt.slice(0, 60), prompt, refresh: "manual" as const, result: heldSources(state, action.note.result) };
+      if (at >= 0) { notes[at] = note; return { message: "Smart note saved", entityId: note.id }; }
+      if (notes.length >= smartLimits.notes) {
+        // No menu removes a note: one with no block left on any page, the longest unrefreshed first, makes room. Only with none is the limit reached.
+        const held = heldSmartNoteIds(state);
+        const spare = notes.filter((n) => !held.has(n.id)).sort((a, b) => (a.result.at < b.result.at ? -1 : a.result.at > b.result.at ? 1 : 0))[0];
+        if (!spare) throw new DomainError("Smart note limit reached");
+        notes.splice(notes.indexOf(spare), 1);
+      }
+      (state.smartNotes ??= []).push(note);
+      return { message: "Smart note saved", entityId: note.id };
+    }
+    case "set-smart-note-result": {
+      const note = state.smartNotes?.find((n) => n.id === action.noteId);
+      if (!note) throw new DomainError("Smart note not found");
+      // Edited while the model ran: the answer is to the prompt and range as they were, so it is not shown under the new ones.
+      if (smartSpecKey(note.prompt, note.range) !== action.spec) throw new DomainError("Smart note changed");
+      note.result = heldSources(state, action.result);
+      return { message: "Smart note updated", entityId: note.id };
     }
     case "set-draft": {
       // B77: the server's draft for a day page, checked here (ids it may use, planning part only) before it is kept.
@@ -1825,6 +1856,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   // A page gone for good takes its threads with it. In Trash they wait for it.
   if (state.threads?.length) { const held = new Set(state.pages.map((p) => p.id)); state.threads = state.threads.filter((t) => held.has(t.pageId)); }
   if (state.threads && !state.threads.length) delete state.threads;
+  if (state.smartNotes && !state.smartNotes.length) delete state.smartNotes;
   if (leavesUndoAlone(command.action.type)) {
     // A note isn't worth Undo, and shouldn't cost the Undo of a table deleted before it (comments.md §2). That Undo brings back what it changed and leaves the note.
     // If what it changed was comments, it would bring back a thread from before the note, so it goes.
