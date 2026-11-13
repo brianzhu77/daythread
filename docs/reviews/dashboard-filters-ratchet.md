@@ -26,3 +26,5 @@ No UI/browser/Worker/Postgres or independent rollback run for this head. No clai
 The empty-group finding is repaired. My unchanged empty-group assertion and an additional empty-subgroup fixture both pass. A clicked nonempty group is retained while the empty subgroup stays empty and hidden by the dashboard filter. The fix marks group/subgroup properties as occupied defaults before the merge.
 
 Independent targeted run: **38/38 pass** (34 author tests, 4 reviewer fixtures). Typecheck passes on shipping CI dependencies. No remaining domain blocker from this early review; UI, browser integration and actual rollback remain separate checks on the finished implementation.
+
+Full local suite at the repaired domain head with my fixtures: **1056 passed, 13 skipped, 0 failed**. The skips are not counted as verified Postgres coverage.
