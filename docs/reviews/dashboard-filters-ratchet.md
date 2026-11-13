@@ -28,3 +28,15 @@ The empty-group finding is repaired. My unchanged empty-group assertion and an a
 Independent targeted run: **38/38 pass** (34 author tests, 4 reviewer fixtures). Typecheck passes on shipping CI dependencies. No remaining domain blocker from this early review; UI, browser integration and actual rollback remain separate checks on the finished implementation.
 
 Full local suite at the repaired domain head with my fixtures: **1056 passed, 13 skipped, 0 failed**. The skips are not counted as verified Postgres coverage.
+
+## UI integration at 0111b219
+
+Reviewed `dashboard-filter.tsx`, the drawn-view wiring and the shared header changes. Build passes with shipping CI dependencies. The sheet saves dashboard rules separately; widget menus and chips retain the widget's own stored view, while row drawing and creation receive the combined projection.
+
+Independent 390 checks in `tests/evidence/dashboard/ratchet-filter-phone.mjs`: Chromium and WebKit **5/5 each**. These exercise opening the sheet, selecting/saving a global rule, fitting the sheet to the viewport, opening an unreadable-rule explanation from the widget, and removing the global rule; no page overflow or page errors observed.
+
+Executed author's `filters.mjs` on my own built preview and synthetic store: Chromium **13/13**. Actual rollback code from my 9417eea2 checkout, against a separate synthetic store with real rule bindings: **7/7**, preserving dashboard rules and IDs through older-code writes. This is a SQLite domain rollback check, not a floor browser/Worker run.
+
+Jazz's separate label-placement observation and the proposed Name-rule addition are not cleared by this head's evidence. Nested dashboard-owned groups are explicitly deferred by Jazz. Native Safari, Postgres/Worker and performance are not independently tested here.
+
+WebKit `filters.mjs`: **13/13** on its own fresh store. UI head typecheck also passes. No additional reliability blocker found at 0111b219; the remaining visual placement and Name scope decisions belong to the separately announced follow-up.

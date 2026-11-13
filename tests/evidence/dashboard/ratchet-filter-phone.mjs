@@ -1,0 +1,10 @@
+import {chromium,webkit} from '@playwright/test';let fail=0;
+for(const[name,engine]of Object.entries({chromium,webkit})){const b=await engine.launch();try{const c=await b.newContext({viewport:{width:390,height:800},hasTouch:true,serviceWorkers:'block'});c.setDefaultTimeout(8000);const p=await c.newPage();const errors=[];p.on('pageerror',e=>errors.push(e.message));const check=(label,pass)=>{console.log(`${pass?'PASS':'FAIL'} ${name} 390 ${label}`);if(!pass)fail++};
+await p.goto(process.argv[2]+'/pages?page=lens');await p.locator('.dashboard-widget').first().waitFor();await p.waitForTimeout(300);
+await p.locator('.dashboard-head [data-database-menu]').first().click();await p.getByRole('menuitem',{name:'Filter',exact:true}).click();const sheet=p.locator('.dashboard-filter');await sheet.waitFor();
+await sheet.getByRole('menuitem').filter({hasText:'Stage'}).click();await p.waitForTimeout(300);await sheet.locator('.database-rule-options label').filter({hasText:'Idea'}).locator('input').click();await p.waitForTimeout(400);
+check('sheet fits phone width',await sheet.evaluate(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&e.scrollWidth<=e.clientWidth+1}));
+await p.keyboard.press('Escape');await p.waitForTimeout(200);check('saved global chip visible',await p.locator('.dashboard-rules').getByText(/Stage is any of Idea/).isVisible());
+const wide=p.locator('.dashboard-widget[aria-label^="Wide ·"]');await wide.scrollIntoViewIfNeeded();await p.waitForTimeout(300);await wide.getByRole('button',{name:'Not filtered',exact:true}).click();await sheet.waitFor();check('missing label opens rule explanation',await sheet.getByText('Not in Wide',{exact:true}).isVisible());await p.keyboard.press('Escape');
+await p.locator('.dashboard-rules .database-chip-remove').first().click();await p.waitForTimeout(400);check('clear removes global chips',await p.locator('.dashboard-rules').count()===0);check('no page overflow or errors',await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&errors.length===0);
+}finally{await b.close()}}process.exit(fail?1:0);
