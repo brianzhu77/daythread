@@ -406,3 +406,13 @@ test('+ New under a group keeps that group\'s value, even "No Stage", over a das
   assert.equal(newRowValues(db, v, ctx, 'y').values.bst, 'y', 'the Idea group, not the dashboard Done')
   assert.equal(newRowValues(db, v, ctx).values.bst, 'x', 'not under a group, the dashboard fills it')
 })
+
+test('a Relation rule reads only where the relation points at the same database', () => {
+  const { C, filter, dash, h } = ruled()
+  C('runs', { kind: 'addProperty', property: { id: 'rl', name: 'Link', type: 'relation', target: 'books' } })
+  C('books', { kind: 'addProperty', property: { id: 'bl', name: 'Link', type: 'relation', target: 'runs' } })
+  filter([{ id: 'r1', name: 'Link', type: 'relation', op: 'contains', value: ['b1'], target: 'books' }])
+  assert.ok(ruleIn(dash().filter![0]!, 'runs', h.page('runs').database!))
+  assert.equal(ruleIn(dash().filter![0]!, 'books', h.page('books').database!), null, "Books' Link points at Runs")
+  assert.equal(dash().filter![0]!.on.books, undefined)
+})

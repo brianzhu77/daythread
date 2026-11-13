@@ -3325,3 +3325,11 @@ textarea.form-input { resize: vertical; }
 .dashboard-head .database-title-row { min-width: 0; }
 .dashboard-head .database-view-name { flex: 0 1 auto; min-width: 0; }
 .dashboard-head .database-more-button { flex: none; }
+/* ---- Filters across widgets (dashboard-edit.md §9): the chips row under the head, a widget's label after its name. */
+.dashboard-rules { margin-top: -12px; }
+.dashboard-filter-label { flex: none; margin-left: 8px; color: var(--ink-2); font-size: var(--text-meta); white-space: nowrap; }
+.dashboard-widget .database-title.is-static { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-rule-missing { color: var(--ink-3); font-size: var(--text-meta); white-space: nowrap; }
+.dashboard-filter-adds { display: grid; gap: 2px; }
+.dashboard-filter-adds .database-add-rule { display: flex; justify-content: space-between; gap: 12px; }
+.dashboard-filter-count { color: var(--ink-2); font-size: var(--text-meta); }

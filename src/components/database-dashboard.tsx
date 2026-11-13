@@ -4,13 +4,15 @@
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from '@heroui/react'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { dashboardLimits, findWidget, firstWidgetView, handleChoices, rowHeights, shownWidths, snapHeight, type Dashboard, type DashboardChange, type DashboardRow, type DashboardWidget } from '../domain/dashboard'
+import { dashboardLimits, filteredView, findWidget, firstWidgetView, handleChoices, rowHeights, shownWidths, snapHeight, widgetRules, type Dashboard, type DashboardChange, type DashboardRow, type DashboardWidget } from '../domain/dashboard'
 import { useRoom } from './drag-lift'
 import { isDatabase, type Database, type View } from '../domain/database'
 import { readingWorkspace, todosSourceId, todosTitle } from '../domain/todos-source'
 import type { Page, Workspace } from '../domain/types'
 import { DatabaseHeader, LaidOutView, rowCaps, setLinkedBlock, type ChangeView, type DatabaseViewProps } from './database-block'
 import { SourceLine, TrashedSource } from './database-linked'
+import { openDatabaseMenu, opLabels } from './database-menu'
+import { filterLabel, openDashboardFilterFrom } from './dashboard-filter'
 import { displayPageTitle } from './page-title'
 import { RowMenu, type MenuItem } from './row-menu'
 import { useWide } from './property-editors'
@@ -170,10 +172,21 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
     el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
     el.classList.add('is-moved'); setTimeout(() => el.classList.remove('is-moved'), 1000)
   })
-  const head = <div className="dashboard-head">
-    <div className="dashboard-head-main"><DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle ?? true} onTitleEnter={() => {}} /></div>
-    <button type="button" className={`dashboard-edit${editing ? ' is-on' : ''}`} aria-pressed={editing} onClick={() => setEditing(e => !e)}>{editing ? 'Done' : 'Edit'}</button>
-  </div>
+  const rules = dashboard.filter ?? []
+  const openFilter = () => { openDashboardFilterFrom(null); openDatabaseMenu(blockId, db.id, 'filter') }
+  const head = <>
+    <div className="dashboard-head">
+      <div className="dashboard-head-main"><DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle ?? true} onTitleEnter={() => {}} /></div>
+      <button type="button" className={`dashboard-edit${editing ? ' is-on' : ''}`} aria-pressed={editing} onClick={() => setEditing(e => !e)}>{editing ? 'Done' : 'Edit'}</button>
+    </div>
+    {/* The rules across widgets as chips on their own row; none, and the row isn't there (dashboard-edit.md §9). */}
+    {rules.length > 0 && <div className="dashboard-rules database-filter-line">
+      {rules.map(r => <span key={r.id} className="database-filter-chip">
+        <button type="button" className="database-chip-open" onClick={openFilter}>{r.name} {opLabels[r.op]}{ruleValueWords(r.value)}</button>
+        <button type="button" className="database-chip-remove" aria-label={`Remove ${r.name} filter`} onClick={() => void send(d => ({ kind: 'setDashboardFilter', viewId: view.id, rules: (d.filter ?? []).filter(x => x.id !== r.id).map(({ on: _on, ...x }) => x), any: Boolean(d.filterAny) }))}>×</button>
+      </span>)}
+    </div>}
+  </>
   const adding = editing && (count >= dashboardLimits.widgets
     ? <p className="dashboard-limit">{dashboardLimits.widgets} widgets at most</p>
     : <AddWidget workspace={workspace} onPick={(source, sourceView) => void send(() => ({ kind: 'addWidget', viewId: view.id, widget: { id: newId(), source, view: sourceView }, rowId: null, newRowId: newId(), beforeId: null }), 'Widget added')} />)
@@ -348,6 +361,11 @@ function WidgetFrame({ workspace, host, view, row, widget, width, editing, block
 
 /** A widget's linked view: registered by its block and widget, so two blocks showing one dashboard each act on their own (Lead 3e548c4e). */
 function WidgetView({ workspace, source, host, view, widget, blockId }: { workspace: Workspace; source: DatabasePage; host: DatabasePage; view: View; widget: DashboardWidget; blockId: string }) {
+  // Drawn through its own filter and the dashboard's rules that apply here, as two whole groups; neither is saved into the other (§4).
+  const dashboard = view.dashboard ?? { rows: [] }
+  const { applied } = widgetRules(dashboard, widget, source.database)
+  const drawn = filteredView(widget.view, applied, Boolean(dashboard.filterAny))
+  const label = filterLabel(dashboard, widget, source.database), hostBlock = blockId.slice(0, blockId.indexOf('|widget:'))
   const send = useDashboardRun(host.id, view.id)
   // Built from the widget as the workspace holds it when it goes, so it carries only this edit.
   const change: ChangeView = (build, notice) => void send(dashboard => {
@@ -358,8 +376,9 @@ function WidgetView({ workspace, source, host, view, widget, blockId }: { worksp
   useLayoutEffect(() => { setLinkedBlock(blockId, { view: widget.view, json, change }) })
   useLayoutEffect(() => () => setLinkedBlock(blockId, null), [blockId])
   // Its heading is its database, and its tab is its view ("Table"), as a linked view's is (Jazz 6f0ebb20).
-  return <LaidOutView workspace={workspace} db={source} view={widget.view} changeView={change} blockId={blockId} pageDate={null} cap={rowCaps.inline}
-    linked={{ title: sourceTitle(source), rename: () => {}, source: <SourceLine workspace={workspace} db={source} />, fixedTitle: true }} />
+  return <LaidOutView workspace={workspace} db={source} view={drawn} changeView={change} blockId={blockId} pageDate={null} cap={rowCaps.inline}
+    linked={{ title: sourceTitle(source), rename: () => {}, source: <SourceLine workspace={workspace} db={source} />, fixedTitle: true,
+      ...(label ? { after: <button type="button" className="app-link dashboard-filter-label" onClick={() => { openDashboardFilterFrom(widget.id); openDatabaseMenu(hostBlock, host.id, 'filter') }}>{label}</button> } : {}) }} />
 }
 
 /** `+ Add widget`: a database (To-dos too) and its first view a widget can be, as a full-width row at the end. */
@@ -421,4 +440,14 @@ function PhoneClip({ id, children }: { id: string; children: React.ReactNode }) 
     <div ref={body} className={`dashboard-clip${over && !open ? ' is-clipped' : ''}`}>{children}</div>
     {over && <button type="button" className="app-link dashboard-more" aria-expanded={open} onClick={toggle}>{open ? 'Show less' : 'Show more'}</button>}
   </>
+}
+
+/** A rule's value as its chip says it: "Idea, Done", a number or words; nothing for "is empty". */
+function ruleValueWords(value: unknown): string {
+  if (value === undefined || value === null) return ''
+  if (Array.isArray(value)) return value.length ? ` ${value.join(', ')}` : ''
+  if (value === true) return ' checked'
+  if (value === false) return ' unchecked'
+  if (typeof value === 'object') return ` ${(value as { date?: string }).date ?? ''}`
+  return ` ${String(value)}`
 }
