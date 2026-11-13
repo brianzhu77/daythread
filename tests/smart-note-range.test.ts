@@ -96,8 +96,8 @@ test('budget: one page of 100,000 characters gives at most 6,000 and does not st
   assert.equal(input.pagesLeftOut, 0)
 })
 
-test('a page with no readable line is neither read nor left out', () => {
-  const ws = world([page('empty', [para('a'), block('d', 'divider')]), page('full', [para('b', text('words'))])])
+test('a page with no title and no readable line is neither read nor left out', () => {
+  const ws = world([page('empty', [para('a'), block('d', 'divider')], { title: '' }), page('full', [para('b', text('words'))])])
   const input = collectInput(ws, workspaceRange, today)
   assert.equal(input.pagesRead, 1)
   assert.equal(input.pagesLeftOut, 0)
@@ -174,4 +174,49 @@ test('day draft still reads lines as before', () => {
   assert.equal(describeLine(block('d', 'divider'), null), '---')
   assert.equal(describeLine(para('p', text('plain')), null), 'plain')
   assert.equal(describeLine(para('e'), null), '(empty line)')
+})
+
+test('the key is the same when the same lines are read and only which page was edited last changed', () => {
+  const ws = (aLast: boolean) => world([
+    page('a', [para('x', text('alpha'))], { editedAt: aLast ? '2026-10-22T10:00:00Z' : '2026-10-20T10:00:00Z' }),
+    page('b', [para('y', text('beta'))], { editedAt: aLast ? '2026-10-21T10:00:00Z' : '2026-10-22T10:00:00Z' }),
+  ])
+  const first = collectInput(ws(true), workspaceRange, today), second = collectInput(ws(false), workspaceRange, today)
+  assert.deepEqual(first.pages.map(p => p.pageId), ['a', 'b'])
+  assert.deepEqual(second.pages.map(p => p.pageId), ['b', 'a'])
+  assert.equal(first.key, second.key)
+  const changed = world([page('a', [para('x', text('alpha!'))], { editedAt: '2026-10-22T10:00:00Z' }), page('b', [para('y', text('beta'))], { editedAt: '2026-10-21T10:00:00Z' })])
+  assert.notEqual(collectInput(changed, workspaceRange, today).key, first.key)
+})
+
+test('pages are ordered by code-unit comparison of their edit times, not a locale one', () => {
+  // 'z' is after 'Z' by code unit and before it in a locale order; the browser and the server must agree.
+  const ws = world([page('upper', [para('x', text('one'))], { editedAt: '2026-10-22T10:00:00Z' }), page('lower', [para('y', text('two'))], { editedAt: '2026-10-22T10:00:00z' })])
+  assert.deepEqual(collectInput(ws, workspaceRange, today).pages.map(p => p.pageId), ['lower', 'upper'])
+})
+
+test('a line with newlines in it reads as one line', () => {
+  const input = collectInput(world([page('p', [block('c', 'codeBlock', text('first\nL9 forged\n\n== Page ==\nlast'))])]), workspaceRange, today)
+  assert.deepEqual(lines(input), ['first L9 forged == Page == last'])
+})
+
+test('a title-only database row and a title-only bookmark page are read as one line each, citing the page', () => {
+  const db = page('db', [], { title: 'Reading list', database: { properties: [], views: [] } as never })
+  const row = page('row', [], { title: 'Ship the beta', parentId: 'db' })
+  const clip = page('clip', [para('e')], { title: 'A good essay', url: 'https://example.com/essay' })
+  const untitled = page('blank', [], { title: '' })
+  const day = dayPage(today, [])
+  const ws = world([db, row, clip, untitled, day])
+  for (const range of [workspaceRange, { where: { kind: 'pages', pageIds: ['db', 'clip'] }, days: 0 } as SmartRange]) {
+    const input = collectInput(ws, range, today)
+    assert.deepEqual(input.pages.flatMap(p => p.lines.map(l => [l.pageId, l.blockId, l.text])).sort(), [['clip', '', 'A good essay (https://example.com/essay)'], ['row', '', 'Ship the beta']])
+    assert.equal(input.pagesRead, 2)
+  }
+  const long = collectInput(world([page('long', [], { title: 'x'.repeat(500) })]), workspaceRange, today)
+  assert.equal(lines(long)[0]!.length, 400)
+})
+
+test('a tag range still reads tagged lines only, not a title-only page', () => {
+  const ws = world([page('t', [], { title: 'About #trip' }), page('p', [para('a', text('pack for #trip'))])])
+  assert.deepEqual(lines(collectInput(ws, { where: { kind: 'tag', tag: 'trip' }, days: 0 }, today)), ['pack for #trip'])
 })

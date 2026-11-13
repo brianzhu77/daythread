@@ -62,7 +62,7 @@ export const smartRange = z.object({
   days: z.union([z.literal(0), z.literal(7), z.literal(30), z.literal(90)]),
 });
 export const smartResult = z.object({
-  blocks: z.array(z.object({ kind: z.enum(["heading", "paragraph", "bullet"]), text: z.string().max(smartLimits.text), sources: z.array(z.object({ pageId: id, blockId: id })).max(smartLimits.sourcesPerBlock) })).max(smartLimits.blocks),
+  blocks: z.array(z.object({ kind: z.enum(["heading", "paragraph", "bullet"]), text: z.string().max(smartLimits.text), sources: z.array(z.object({ pageId: id, blockId: z.string().max(200) })).max(smartLimits.sourcesPerBlock) })).max(smartLimits.blocks),
   at: at, inputKey: z.string().max(200), pagesRead: z.number().int().min(0), pagesLeftOut: z.number().int().min(0), from: day.nullable(), to: day.nullable(),
 });
 export const smartNote = z.object({ id, name: z.string().max(smartLimits.name), prompt: z.string().max(smartLimits.prompt), range: smartRange, refresh: z.enum(["manual", "daily", "hourly"]), result: smartResult });

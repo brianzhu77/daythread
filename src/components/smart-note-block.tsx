@@ -86,7 +86,7 @@ export function SmartNoteBody({ result, workspace, inert = false }: { result: Sm
   </div>
 }
 
-/** A source's number: opens its line as a line link does; plain and muted once the line is gone. */
+/** A source's number: opens its line as a line link does, or its page for a page source (`blockId` ''); plain and muted once the line is gone. */
 function SourceMark({ n, page, blockId }: { n: number; page: Page | undefined; blockId: string }) {
   const navigate = useNavigate()
   if (!page) return <sup className="smart-note-source is-gone">{n}</sup>
@@ -94,7 +94,7 @@ function SourceMark({ n, page, blockId }: { n: number; page: Page | undefined; b
   return <sup className="smart-note-source"><a href={href} onClick={e => {
     e.preventDefault()
     // Nothing stays focused after a jump, so a phone keyboard goes down.
-    if (jumpInPage(page.id, blockId)) { (document.activeElement as HTMLElement | null)?.blur(); return }
+    if (blockId && jumpInPage(page.id, blockId)) { (document.activeElement as HTMLElement | null)?.blur(); return }
     void navigate({ href, resetScroll: false })
   }}>{n}</a></sup>
 }

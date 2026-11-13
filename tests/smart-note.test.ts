@@ -2,7 +2,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { commandSchema } from '../src/domain/command-schema.ts'
-import { inlineText, type EditorNode } from '../src/domain/editor-document.ts'
+import { inlineText, isEmptyLine, type EditorNode } from '../src/domain/editor-document.ts'
+import { hasContent, writtenDays } from '../src/domain/page-tree.ts'
 import { fileNames, pageMarkdown } from '../src/domain/export.ts'
 import { livePlaces, placedSmartNotes, smartNoteLines, smartNoteText, smartPlaces, sourceNumbers, type SmartBlock, type SmartNote, type SmartResult } from '../src/domain/smart-note.ts'
 import { bullet, harness, text, todo } from './v2-helpers.ts'
@@ -148,4 +149,29 @@ test('live places: a source whose line is gone, or whose page is in Trash, has n
   assert.deepEqual([...livePlaces(h.ws, r).keys()], ['doc|l1'])
   h.run({ type: 'delete-page', pageId: 'doc', at: '2026-11-12T10:00:00.000Z' })
   assert.equal(livePlaces(h.ws, r).size, 0)
+})
+
+test('a page source (blockId ""): the schema and save-smart-note keep it, it is live while its page is, and Turn into text makes it a page link', () => {
+  const h = withDoc()
+  const pageSource = { pageId: 'doc', blockId: '' }
+  const r = blocks({ kind: 'bullet', text: 'Doc is on the list', sources: [pageSource] })
+  assert.ok(commandSchema.safeParse({ operationId: 'op', expectedRevision: 0, action: { type: 'save-smart-note', note: note({ result: r }) } }).success)
+  h.run({ type: 'save-smart-note', note: note({ result: r }) })
+  assert.deepEqual(h.ws.smartNotes![0].result.blocks[0].sources, [pageSource])
+  assert.deepEqual([...livePlaces(h.ws, r).keys()], ['doc|'])
+  const [line] = smartNoteLines(h.ws, note({ result: r }), ids())
+  assert.deepEqual(refsOf(line!).map(p => [p.pageId, p.lineId, p.taskId]), [['doc', '', '']])
+  h.run({ type: 'delete-page', pageId: 'doc', at: '2026-11-12T10:00:00.000Z' })
+  assert.equal(livePlaces(h.ws, r).size, 0)
+  assert.deepEqual(refsOf(smartNoteLines(h.ws, note({ result: r }), ids())[0]!), [])
+})
+
+test('a page holding only a smart note block has content, and the block is no empty line', () => {
+  const h = withDoc()
+  h.run({ type: 'save-smart-note', note: note() })
+  assert.equal(isEmptyLine(block('b1', 'n1')), false)
+  const day = h.day('2026-11-10')
+  h.save(day.id, () => [block('b1', 'n1')])
+  assert.equal(hasContent(h.page(day.id)), true)
+  assert.ok(writtenDays(h.ws).has('2026-11-10'))
 })
