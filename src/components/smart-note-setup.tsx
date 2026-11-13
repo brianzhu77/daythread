@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactE
 import { createPortal } from 'react-dom'
 import { useRouterState } from '@tanstack/react-router'
 import { listedPages } from '../domain/page-tree'
-import { placedSmartNotes, smartLimits, smartNoteOf, type SmartNote, type SmartRange, type SmartResult, type SmartWhere, type SmartWindow } from '../domain/smart-note'
+import { placedSmartNotes, smartLimits, smartNoteOf, smartSpecKey, type SmartNote, type SmartRange, type SmartResult, type SmartWhere, type SmartWindow } from '../domain/smart-note'
 import { tagIndex, tagKey } from '../domain/tags'
 import type { Workspace } from '../domain/types'
 import { askSmartNote } from '../server/functions'
@@ -81,8 +81,6 @@ function Picker({ workspace, onPick, onNew }: { workspace: Workspace; onPick(not
   </>
 }
 
-/** What a preview was run with, so a result shows as current only for the prompt and range it was made from. */
-const specKey = (prompt: string, range: SmartRange) => JSON.stringify([prompt.trim(), range.where.kind, range.where.kind === 'pages' ? range.where.pageIds : range.where.kind === 'tag' ? range.where.tag : null, range.days])
 const askable = (prompt: string, range: SmartRange) => Boolean(prompt.trim()) && !(range.where.kind === 'pages' && !range.where.pageIds.length) && !(range.where.kind === 'tag' && !range.where.tag)
 type Preview = { key: string; state: 'running' } | { key: string; state: 'ready'; result: SmartResult } | { key: string; state: 'failed'; error: string | null }
 
@@ -93,10 +91,11 @@ function Setup({ note, workspace, onSaved }: { note: SmartNote | undefined; work
   const asked = useRef(0), shown = useRef<HTMLDivElement>(null)
   // One id for the life of the sheet, so a Save that failed and a second Save store one note.
   const id = useRef(note?.id ?? crypto.randomUUID()).current
-  const key = specKey(prompt, range), canAsk = askable(prompt, range)
+  // What a preview was run with: a result shows as current only for the prompt and range it was made from.
+  const key = smartSpecKey(prompt, range), canAsk = askable(prompt, range)
   const fresh = preview?.state === 'ready' && preview.key === key ? preview.result : null
   // An Edit that changed neither keeps the stored result.
-  const result = fresh ?? (note && specKey(note.prompt, note.range) === key ? note.result : null)
+  const result = fresh ?? (note && smartSpecKey(note.prompt, note.range) === key ? note.result : null)
   const canSave = Boolean(result) && canAsk && !saving
 
   const runPreview = async () => {

@@ -25,7 +25,7 @@ import { inView, titleId, todosSourceId, changeDatabase, syncMirror, databaseBlo
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, storedDocument, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
-import { smartLimits, type SmartResult } from "./smart-note.ts";
+import { heldSmartNoteIds, smartLimits, smartSpecKey, type SmartResult } from "./smart-note.ts";
 import { askedQuestions, formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
 
 export class DomainError extends Error {}
@@ -1383,14 +1383,23 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!prompt) throw new DomainError("A smart note needs a prompt");
       if (action.note.range.where.kind === "pages" && !action.note.range.where.pageIds.length) throw new DomainError("Choose at least one page");
       const at = notes.findIndex((n) => n.id === action.note.id);
-      if (at < 0 && notes.length >= smartLimits.notes) throw new DomainError("Smart note limit reached");
       const note = { ...action.note, name: name || prompt.slice(0, 60), prompt, refresh: "manual" as const, result: heldSources(state, action.note.result) };
-      if (at < 0) (state.smartNotes ??= []).push(note); else notes[at] = note;
+      if (at >= 0) { notes[at] = note; return { message: "Smart note saved", entityId: note.id }; }
+      if (notes.length >= smartLimits.notes) {
+        // No menu removes a note: one with no block left on any page, the longest unrefreshed first, makes room. Only with none is the limit reached.
+        const held = heldSmartNoteIds(state);
+        const spare = notes.filter((n) => !held.has(n.id)).sort((a, b) => (a.result.at < b.result.at ? -1 : a.result.at > b.result.at ? 1 : 0))[0];
+        if (!spare) throw new DomainError("Smart note limit reached");
+        notes.splice(notes.indexOf(spare), 1);
+      }
+      (state.smartNotes ??= []).push(note);
       return { message: "Smart note saved", entityId: note.id };
     }
     case "set-smart-note-result": {
       const note = state.smartNotes?.find((n) => n.id === action.noteId);
       if (!note) throw new DomainError("Smart note not found");
+      // Edited while the model ran: the answer is to the prompt and range as they were, so it is not shown under the new ones.
+      if (smartSpecKey(note.prompt, note.range) !== action.spec) throw new DomainError("Smart note changed");
       note.result = heldSources(state, action.result);
       return { message: "Smart note updated", entityId: note.id };
     }

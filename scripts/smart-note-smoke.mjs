@@ -59,9 +59,16 @@ const seeded = await page.evaluate(async ({ sourceTitle, secondTitle }) => {
   } } })
   await run({ type: 'create-document', title: 'Smart home', body: '', pageId: host })
   await save(host, [{ id: crypto.randomUUID(), type: 'paragraph', props: {}, content: text('Above the note'), children: [] }, { id: crypto.randomUUID(), type: 'smartNote', props: { noteId: 'smoke-note' }, children: [] }, { id: crypto.randomUUID(), type: 'smartNote', props: { noteId: 'no-such-note' }, children: [] }, { id: crypto.randomUUID(), type: 'paragraph', props: {}, content: text('Below the notes'), children: [] }])
+  // Two lines that look empty and are not: one holding only a page link, one with a line nested under it.
+  const kept = crypto.randomUUID(), linkLine = crypto.randomUUID(), parentLine = crypto.randomUUID()
+  await run({ type: 'create-document', title: 'Smart kept lines', body: '', pageId: kept })
+  await save(kept, [
+    { id: linkLine, type: 'paragraph', props: {}, content: [{ type: 'pageRef', props: { pageId: src, refId: crypto.randomUUID(), newTitle: '' } }], children: [] },
+    { id: parentLine, type: 'paragraph', props: {}, content: [], children: [{ id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: text('Nested words'), children: [] }] },
+  ])
   await run({ type: 'create-document', title: 'Smart setup', body: '', pageId: setup })
   await save(setup, [{ id: setupLine, type: 'paragraph', props: {}, content: [], children: [] }])
-  return { host, setup, second, setupLine, secondLine, l1Path: l.pagePath(workspace.pages.find(p => p.id === src), l1), on: (await f.smartNotesOn()).on }
+  return { host, setup, second, setupLine, secondLine, kept, linkLine, parentLine, l1Path: l.pagePath(workspace.pages.find(p => p.id === src), l1), on: (await f.smartNotesOn()).on }
 }, { sourceTitle, secondTitle })
 assert.equal(seeded.on, withModel, withModel ? 'the server has the stub as its model' : 'the server has no model')
 
@@ -199,6 +206,29 @@ if (withModel) {
   await unchanged(there, 'on the second page right after choosing the note')
   await page.goto(`${base}/pages?page=${seeded.setup}`, { waitUntil: 'networkidle' })
   await unchanged(page.locator('.smart-note', { hasText: digest }), 'on the first page after the second place was saved')
+  await page.goto(`${base}/pages?page=${seeded.second}`, { waitUntil: 'networkidle' })
+  await there.locator('li', { hasText: previewed }).waitFor()
+
+  // A line holding only a page link, or with a line nested under it, is kept: the block goes after it.
+  await page.goto(`${base}/pages?page=${seeded.kept}`, { waitUntil: 'networkidle' })
+  for (const lineId of [seeded.linkLine, seeded.parentLine]) {
+    // At the line's right end: its middle can be the link itself, which opens the page.
+    const row = page.locator(`.bn-editor [data-id="${lineId}"] .bn-block-content`).first(), box = await row.boundingBox()
+    await row.click({ position: { x: box.width - 6, y: box.height / 2 } })
+    await page.keyboard.type('/smart'); await page.waitForTimeout(400)
+    await page.locator('#bn-suggestion-menu [role=option]').first().click()
+    await sheet.getByRole('menuitem', { name: digest }).click()
+    await sheet.waitFor({ state: 'detached' })
+  }
+  const keptLines = async () => page.evaluate(async id => {
+    const { workspace } = await (await import('/src/server/functions.ts')).loadWorkspace({ data: { operationId: crypto.randomUUID() } })
+    return JSON.parse(workspace.pages.find(p => p.id === id).document).map(n => ({ id: n.id, type: n.type, inline: (Array.isArray(n.content) ? n.content : []).map(c => c.type), children: (n.children ?? []).length }))
+  }, seeded.kept)
+  let lines = await keptLines()
+  for (let i = 0; i < 20 && lines.filter(n => n.type === 'smartNote').length < 2; i++) { await page.waitForTimeout(250); lines = await keptLines() }
+  assert.deepEqual(lines.map(n => n.type), ['paragraph', 'smartNote', 'paragraph', 'smartNote'], 'each block went after its line')
+  assert.deepEqual(lines[0].inline.filter(t => t === 'pageRef'), ['pageRef'], 'the line holding only a page link keeps its link')
+  assert.equal(lines[2].children, 1, 'the line with a line nested under it keeps that line')
   await page.goto(`${base}/pages?page=${seeded.second}`, { waitUntil: 'networkidle' })
   await there.locator('li', { hasText: previewed }).waitFor()
 

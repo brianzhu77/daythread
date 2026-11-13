@@ -167,7 +167,7 @@ erDiagram
 
 The `smartNote` block type raises the rollback floor, as Buttons and the database block did (`docs/design/buttons.md`, `docs/plan/b21-sizing.md`): those shipped in two steps, first a release with the block spec and nothing that makes one, which became the floor, then the feature. This branch holds both steps. The choice open at merge: land it as two releases (the block spec and the `smart` row handling first, then the `/` item and setup), or land it as one and accept that a tab still on the previous build cannot open a page holding the block until it reloads.
 
-A build from before this change reads a `smart` row as an ordinary page with a JSON body, because `pages.type` is free text, and a save there rewrites its `document` as a page's. This build skips a row that is not a note's shape on the next load: that note is lost, and the pages holding its block show `This smart note was deleted`. So rolling forward again is safe for the workspace, and not for a note saved over by the older build. To roll back for longer, first run, per workspace or for all: `delete from daythread.pages where type = 'smart'` (the notes are lost; the pages holding their blocks are untouched), after backing those rows up.
+A build from before this change reads a `smart` row as an ordinary page with a JSON body, because `pages.type` is free text, and a save there rewrites its `document` as a page's. This build leaves a row that is not a note's shape out of the workspace and keeps the row as stored (no write removes or rewrites it): that note's content was lost to the older build's save, and the pages holding its block show `This smart note was deleted`. So rolling forward again is safe for the workspace, and not for a note saved over by the older build. To roll back for longer, first run, per workspace or for all: `delete from daythread.pages where type = 'smart'` (the notes are lost; the pages holding their blocks are untouched), after backing those rows up.
 
 ### Decided for release 2, not now
 
@@ -576,4 +576,4 @@ git commit -m "docs: smart note first release built"
 
 ## Left for the second release
 
-Daily and Hourly on the Worker's scheduled tick, the unchanged check before a call, self-pause, limits and cost records (spec §6). A scheduled result must neither take nor clear the user's Undo slot, which needs the treatment note commands get in `applyCommand` and `PostgresWorkspaceRepository.undoMarker`. Removing notes that have had no place for a long time also waits until then.
+Daily and Hourly on the Worker's scheduled tick, the unchanged check before a call, self-pause, limits and cost records (spec §6). A scheduled result must neither take nor clear the user's Undo slot, which needs the treatment note commands get in `applyCommand` and `PostgresWorkspaceRepository.undoMarker`. A note with no block left is removed only to make room at the 100-note limit (first release); removing them by age waits until then.

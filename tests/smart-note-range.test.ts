@@ -1,11 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { today, text, para, bullet, heading, todo, chip, dayId } from './v2-helpers.ts'
+import { today, text, para, bullet, heading, todo, chip, dayId, harness } from './v2-helpers.ts'
 import { createEmptyWorkspace } from '../src/domain/workspace.ts'
-import { describeLine, type EditorNode } from '../src/domain/editor-document.ts'
+import { describeLine, templateDocument, type EditorNode } from '../src/domain/editor-document.ts'
 import { collectInput, rangeGone, smartNoteBlockType, type SmartInput, type SmartRange } from '../src/domain/smart-note.ts'
 import type { Page, Task, Workspace } from '../src/domain/types.ts'
 
+const yesterdayOf = (day: string) => addDays(day, -1)
 const addDays = (day: string, n: number) => new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10)
 const page = (id: string, doc: EditorNode[], extra: Partial<Page> = {}): Page =>
   ({ id, type: 'document', date: null, title: id, document: JSON.stringify(doc), ...extra })
@@ -67,6 +68,62 @@ test('a window dates a document by its edit in the account time zone, and drops 
   ])
   assert.deepEqual(lines(collectInput(ws, workspaceRange, today)).sort(), ['fresh', 'old', 'undated'])
   assert.deepEqual(lines(collectInput(ws, { where: { kind: 'workspace' }, days: 7 }, today)), ['fresh'])
+})
+
+test('a window reads a page never edited by the time it was made, and a day page dated after today is not in "Last 7 days"', () => {
+  const ws = world([
+    page('made', [para('a', text('just made'))], { createdAt: `${today}T12:00:00Z` }),
+    page('made-long-ago', [para('b', text('made long ago'))], { createdAt: `${addDays(today, -30)}T12:00:00Z` }),
+    page('clip', [], { title: 'A clip', url: 'https://example.com/a', createdAt: `${today}T08:00:00Z` }),
+    dayPage(addDays(today, 1), [para('c', text('planned for tomorrow'))]),
+    dayPage(today, [para('d', text('today'))]),
+    // The account's zone can be a day ahead of the device's today: a page edited there is still read.
+    page('ahead', [para('e', text('edited in a zone ahead'))], { editedAt: `${today}T20:00:00Z` }),
+  ])
+  ws.timezone = 'Asia/Tokyo'
+  const week = collectInput(ws, { where: { kind: 'workspace' }, days: 7 }, today)
+  assert.deepEqual(lines(week).sort(), ['A clip (https://example.com/a)', 'edited in a zone ahead', 'just made', 'today'])
+  assert.equal(week.to, addDays(today, 1))
+  assert.ok(lines(collectInput(ws, workspaceRange, today)).includes('planned for tomorrow'), 'all time reads a day planned ahead')
+  assert.deepEqual(lines(collectInput(ws, { where: { kind: 'days' }, days: 7 }, today)), ['today'])
+})
+
+test('a page never edited is ordered by when it was made', () => {
+  const ws = world([page('older', [para('a', text('older'))], { createdAt: '2026-10-01T00:00:00Z' }), page('newer', [para('b', text('newer'))], { createdAt: '2026-10-20T00:00:00Z' }), page('edited', [para('c', text('edited'))], { createdAt: '2026-09-01T00:00:00Z', editedAt: '2026-10-21T00:00:00Z' })])
+  assert.deepEqual(lines(collectInput(ws, workspaceRange, today)), ['edited', 'newer', 'older'])
+})
+
+test('a day page still as a new day is made is not read, so opening a day changes neither the input nor its key; a line written on it is read', () => {
+  const written = dayPage(yesterdayOf(today), [para('a', text('wrote this'))])
+  const before = collectInput(world([written]), workspaceRange, today)
+  const opened = dayPage(today, templateDocument(dayId(today), today))
+  const after = collectInput(world([written, opened]), workspaceRange, today)
+  assert.equal(after.key, before.key)
+  assert.equal(after.pagesRead, 1)
+  assert.equal(after.pagesLeftOut, 0)
+  const used = dayPage(today, [...templateDocument(dayId(today), today), para('n', text('a note'))])
+  assert.deepEqual(lines(collectInput(world([written, used]), workspaceRange, today)), ['## TODO', '## Events', '## Good Stuffs', '## Notes', 'a note', 'wrote this'])
+  assert.deepEqual(lines(collectInput(world([opened]), { where: { kind: 'days' }, days: 7 }, today)), [])
+})
+
+test('with a day template, a day page that is its untouched copy is not read; the built-in headings then are', () => {
+  const template = page('tpl', [heading('h', 'Plan'), para('p', text('Top three:')), todo('t', 'Stretch', 'reference', '')], { type: 'template', parentId: 'days' })
+  const copy = dayPage(today, [heading('h2', 'Plan'), para('p2', text('Top three:')), todo('t2', '', 'plan', today)])
+  assert.deepEqual(lines(collectInput(world([template, copy]), workspaceRange, today)), [])
+  const builtIn = dayPage(today, templateDocument(dayId(today), today))
+  assert.equal(collectInput(world([template, builtIn]), workspaceRange, today).pagesRead, 1)
+})
+
+test('a day as `ensure-day` makes it is not read: from the built-in headings, and from a day template holding a to-do', () => {
+  const plain = harness()
+  plain.day(today)
+  assert.equal(collectInput(plain.ws, workspaceRange, today).pagesRead, 0)
+  const template = page('tpl', [heading('h', 'Plan'), para('p', text('Top three:')), todo('t', 'Stretch', 'reference', '')], { type: 'template', parentId: 'days' })
+  const templated = harness(world([template]))
+  templated.day(today)
+  assert.equal(collectInput(templated.ws, workspaceRange, today).pagesRead, 0)
+  templated.save(dayId(today), d => [...d, para('mine', text('my own line'))])
+  assert.deepEqual(lines(collectInput(templated.ws, workspaceRange, today)), ['## Plan', 'Top three:', 'my own line'])
 })
 
 test('a to-do row reads from its task: "[x]" done, "[-]" cancelled, "[ ]" open, with the title of the task when the stored words of the row are older or empty', () => {

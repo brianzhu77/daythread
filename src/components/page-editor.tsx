@@ -3013,11 +3013,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
         // A block made once its sheet is done: in place of the caret's line when it is an empty paragraph, else after it,
-        // else after the last block when the line is gone.
+        // else after the last block when the line is gone. Empty: no content at all (a page link or a date chip has no
+        // words but is content) and nothing nested under it.
         const putAtLine = (lineId: string, made: never) => {
           const line = editor.getBlock(lineId)
           if (!line) { const last = editor.document.at(-1); if (last) editor.insertBlocks([made], last.id, 'after'); return }
-          if (!inlineText(line.content).trim() && line.type === 'paragraph') editor.replaceBlocks([lineId], [made])
+          const content = line.content as unknown
+          const bare = !Array.isArray(content) || content.every(c => (c as { type?: string }).type === 'text' && !String((c as { text?: unknown }).text ?? '').trim())
+          if (line.type === 'paragraph' && bare && !line.children.length) editor.replaceBlocks([lineId], [made])
           else editor.insertBlocks([made], lineId, 'after')
         }
         const buttonItem = { title: 'Button', icon: <ButtonIcon />, aliases: ['button', '按钮'], group: 'Suggested', onItemClick: () => {

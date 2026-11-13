@@ -133,8 +133,12 @@ Read 14 pages · Oct 20 to Nov 12
 The range is a filter the user can state, applied by the app. The model never chooses what it is sent.
 
 - **Where:** whole workspace (default), chosen pages with their subpages, a tag, or day pages only.
-- **When:** all time (default), or the last 7, 30 or 90 days **(proposal).**
-- **Never read:** Trash, templates, drafts, the page's own smart notes and any other smart note's result.
+- **When:** all time (default), or the last 7, 30 or 90 days **(proposal).** A page is dated by its last edit, or
+  by when it was made if it was never edited; a day page by its own date, and one dated after today is not in a
+  "last N days" range.
+- **Never read:** Trash, templates, drafts, the page's own smart notes and any other smart note's result. Nor a day
+  page still as a new day is made (the day template's copy, or the built-in headings): opening a day must not show
+  "Notes changed".
 - **Budget (proposal):** one run reads up to a fixed amount of text, to be set from real cost. Inside the range the
   most recently edited pages are read first, and day pages keep their date. When the range is larger than the
   budget, the note says how many pages were left out, so the user can narrow it.
@@ -165,6 +169,9 @@ Rules for the two schedules **(all proposal):**
 
 - The model answers in a fixed structure (blocks of heading, paragraph or list item, each with the ids of the lines
   it rests on), as the day draft does. The server drops any source id that is not in what was sent, before storing.
+  A statement left with no source is dropped, and so is a heading left with nothing under it: what is shown can
+  always be followed to a line. Each statement is one line.
+- The previous answer is sent back as data, one marked line per statement, never as instructions.
 - The answer is in the language of the prompt.
 - A date in the output is plain text, never an `@date` chip. A `#word` is plain text, never a tag.
 - Export writes a smart note as static text with its "Updated" time.
@@ -180,6 +187,13 @@ Rules for the two schedules **(all proposal):**
   too: it brings the previous result back. A scheduled result (second release) must neither take nor clear the
   user's Undo. The notice after a refresh carries that Undo; because a result can land up to 90 s after Refresh was
   pressed, it replaces the Undo of whatever he did meanwhile.
+- **A result is stored only under the prompt and range it answers.** The refresh carries a key of both; if the note
+  was edited while the model ran, the result is refused ("Smart note changed") and dropped.
+- **A stored note this build cannot read stays as stored.** It is left out of the workspace (its block reads as
+  deleted) and no write removes or rewrites its row. A field or column this build does not know is kept through its own
+  writes and through Undo. This is what lets the second release add fields without the first release losing them.
+- **At most 100 notes.** No menu removes a note, so at the limit a new note takes the room of one with no block left
+  on any page (Trash included), the longest unrefreshed first. Only when every note has a block is the limit reached.
 - **Rollback floor:** the block type raises it, as Buttons did; this branch holds both steps, and whether to land
   them as two releases is open at merge (`docs/plan/smart-note.md`, Rollback).
 - Implementation plan for the first release: `docs/plan/smart-note.md`. Its "Data model (ERD)" section shows the

@@ -172,7 +172,8 @@ const idle: Ask = { state: 'idle' }
 const LOST_MS = 90_000
 /** A refresh on its way, for a tab moving onto a new build (new-build.ts). */
 export const smartAskPending = (): boolean => out.size > 0
-const stale = /Smart note not found|Saved elsewhere/, gone = /Smart note not found/
+// Not found, or edited while the model ran: there is nothing to store the answer under, and the block already shows why.
+const stale = /Smart note not found|Smart note changed|Saved elsewhere/, gone = /Smart note not found|Smart note changed/
 
 /** Asks for a refresh and stores the result through this tab's queue. Shared by every place showing the note. `error`: the server's, for a failed ask. */
 export function useSmartRefresh(noteId: string): { state: 'idle' | 'running' | 'failed'; error: string | null; refresh(): void } {
@@ -186,10 +187,10 @@ export function useSmartRefresh(noteId: string): { state: 'idle' | 'running' | '
     let outcome: Ask = { state: 'failed', error: null }
     const lost = setTimeout(() => { if (asks.get(noteId) === mine) setAsk(noteId, { state: 'failed', error: null }) }, LOST_MS)
     // Another tab or the phone saved meanwhile: the paid result is sent once more on the latest workspace.
-    const store = async (result: SmartResult, retried = false): Promise<boolean> => {
+    const store = async (result: SmartResult, spec: string, retried = false): Promise<boolean> => {
       let refused = null as string | null
-      const receipt = await run({ type: 'set-smart-note-result', noteId, result }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, { quiet: true, inlineRefusal: retried ? gone : stale, onRefused: m => { refused = m } })
-      if (refused === 'Saved elsewhere') return store(result, true)
+      const receipt = await run({ type: 'set-smart-note-result', noteId, result, spec }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, { quiet: true, inlineRefusal: retried ? gone : stale, onRefused: m => { refused = m } })
+      if (refused === 'Saved elsewhere') return store(result, spec, true)
       return Boolean(receipt) || refused !== null
     }
     void (async () => {
@@ -202,7 +203,7 @@ export function useSmartRefresh(noteId: string): { state: 'idle' | 'running' | '
         if (reply.status === 'off') { outcome = idle; return }
         // The note was removed on the server meanwhile: its block shows that, with no error here.
         if (reply.status === 'failed') { outcome = reply.error === 'not-found' ? idle : { state: 'failed', error: reply.error }; return }
-        if (await store(reply.result)) outcome = idle
+        if (await store(reply.result, reply.spec)) outcome = idle
       } catch { /* nothing stored: Retry shows */ } finally {
         clearTimeout(lost)
         out.delete(noteId)

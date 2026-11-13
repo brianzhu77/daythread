@@ -107,7 +107,7 @@ export const askSmartNote = createServerFn({ method: "POST" })
     if ("error" in spec) return { owner, status: "failed" as const, error: spec.error };
     const run = await runSmartNote(ws, spec, config, data.today, new Date().toISOString());
     console.info(JSON.stringify({ level: "info", event: "smart.run", operationId: data.operationId, status: run.status, ...(run.status === "failed" ? { error: run.error } : { pagesRead: run.result.pagesRead, pagesLeftOut: run.result.pagesLeftOut, blocks: run.result.blocks.length, costUsd: run.costUsd }), elapsedMs: run.ms }));
-    return run.status === "ready" ? { owner, status: "ready" as const, result: run.result } : { owner, status: "failed" as const, error: run.error };
+    return run.status === "ready" ? { owner, status: "ready" as const, result: run.result, spec: run.spec } : { owner, status: "failed" as const, error: run.error };
   });
 
 /**

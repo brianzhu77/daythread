@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
 import type { applyCommand } from '../src/domain/workspace.ts'
-import type { SmartNote, SmartResult } from '../src/domain/smart-note.ts'
+import { smartSpecKey, type SmartNote, type SmartResult } from '../src/domain/smart-note.ts'
 import { planWrites, rowsOf, workspaceOf } from '../src/server/workspace-rows.ts'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
 import { pgliteClient } from '../src/server/db/sql.ts'
@@ -16,6 +16,7 @@ import { harness } from './v2-helpers.ts'
 
 const result = (over: Partial<SmartResult> = {}): SmartResult => ({ blocks: [{ kind: 'bullet', text: 'Guest checkout is out', sources: [{ pageId: 'doc', blockId: 'l1' }] }], at: '2026-11-12T09:00:00.000Z', inputKey: 'k1', pagesRead: 1, pagesLeftOut: 0, from: '2026-11-12', to: '2026-11-12', ...over })
 const note = (over: Partial<SmartNote> = {}): SmartNote => ({ id: 'n1', name: 'Checkout', prompt: 'What do my notes say about checkout?', range: { where: { kind: 'workspace' }, days: 0 }, refresh: 'manual', result: result(), ...over })
+const spec = smartSpecKey(note().prompt, note().range)
 function withNote() {
   const h = harness()
   h.run({ type: 'create-document', title: 'Doc', body: '', pageId: 'doc' })
@@ -63,7 +64,7 @@ test('rows: a result write changes one row, and its inverse puts the old result 
   const h = withNote()
   const before = rowsOf(h.ws)
   const old = h.ws.smartNotes![0]!.result
-  h.run({ type: 'set-smart-note-result', noteId: 'n1', result: result({ at: '2026-11-13T09:00:00.000Z', inputKey: 'k2' }) })
+  h.run({ type: 'set-smart-note-result', noteId: 'n1', result: result({ at: '2026-11-13T09:00:00.000Z', inputKey: 'k2' }), spec })
   const { write, inverse } = planWrites(before, h.ws)
   assert.deepEqual(write.pages.upsert.map(r => r.id), ['smart:n1'])
   assert.deepEqual(inverse.pages.upsert.map(r => r.id), ['smart:n1'])
@@ -99,6 +100,104 @@ test('rows: a smart row of the wrong shape is skipped, and the next command writ
     } finally { console.warn = warn }
     assert.deepEqual(warnings.map(w => JSON.parse(w)), [{ level: 'warn', event: 'smart.unreadable' }], document)
   }
+})
+
+const quiet = <T>(run: () => T): T => { const warn = console.warn; console.warn = () => {}; try { return run() } finally { console.warn = warn } }
+const editRow = (rows: ReturnType<typeof rowsOf>, id: string, edit: (document: Record<string, unknown>) => unknown) =>
+  ({ ...rows, pages: rows.pages.map(r => r.id === id ? { ...r, document: JSON.stringify(edit(JSON.parse(r.document) as Record<string, unknown>)) } : r) })
+
+test('rows: a smart row this build cannot read is neither removed nor rewritten by a later write, and Undo of that write leaves it', () => {
+  const h = withNote()
+  h.run({ type: 'save-smart-note', note: note({ id: 'n2', name: 'Readable' }) })
+  // A newer build's note: a place this build does not know.
+  const newer = editRow(rowsOf(h.ws), 'smart:n1', d => ({ ...d, range: { where: { kind: 'board', boardId: 'b1' }, days: 0 }, schedule: { every: 'day' } }))
+  const held = newer.pages.find(r => r.id === 'smart:n1')!
+  quiet(() => {
+    const loaded = harness(workspaceOf(newer))
+    assert.deepEqual(loaded.ws.smartNotes!.map(n => n.id), ['n2'])
+    loaded.run({ type: 'create-document', title: 'Next', body: '', pageId: 'next' })
+    loaded.run({ type: 'set-smart-note-result', noteId: 'n2', result: result({ inputKey: 'k2' }), spec })
+    const { write, inverse, rows } = planWrites(newer, loaded.ws)
+    assert.ok(!write.pages.remove.includes('smart:n1') && !write.pages.upsert.some(r => r.id === 'smart:n1'))
+    assert.ok(!inverse.pages.upsert.some(r => r.id === 'smart:n1') && !inverse.pages.remove.includes('smart:n1'))
+    assert.deepEqual(rows.pages.find(r => r.id === 'smart:n1'), held)
+    // A new note beside it, and the readable note removed (Undo of its save): the unread row still stays.
+    loaded.run({ type: 'save-smart-note', note: note({ id: 'n3' }) })
+    loaded.ws = { ...loaded.ws, smartNotes: loaded.ws.smartNotes!.filter(n => n.id !== 'n2') }
+    const next = planWrites(newer, loaded.ws)
+    assert.deepEqual(next.write.pages.remove, ['smart:n2'])
+    assert.deepEqual(next.rows.pages.find(r => r.id === 'smart:n1'), held)
+  })
+})
+
+test('rows: when every row is renumbered, an unread smart row takes its new position and nothing else of it changes', () => {
+  const h = withNote()
+  const broken = { ...rowsOf(h.ws), pages: rowsOf(h.ws).pages.map(r => r.id === 'smart:n1' ? { ...r, document: '{"later": true' } : r) }
+  // Two rows on one position leave no room between them: the next page added renumbers all.
+  const tight = { ...broken, pages: broken.pages.map(r => ({ ...r, position: 0 })) }
+  quiet(() => {
+    const loaded = harness(workspaceOf(tight))
+    loaded.run({ type: 'create-document', title: 'Next', body: '', pageId: 'next' })
+    const { rows } = planWrites(tight, loaded.ws)
+    const row = rows.pages.find(r => r.id === 'smart:n1')!
+    assert.equal(row.document, '{"later": true')
+    assert.deepEqual(rows.pages.map(r => r.position), rows.pages.map((_, i) => i))
+  })
+})
+
+test('rows: a field this build does not know is kept: untouched by an unrelated write, and carried through a result write and an edit', () => {
+  const h = withNote()
+  const newer = editRow(rowsOf(h.ws), 'smart:n1', d => ({ schedule: { every: 'day' }, ...d, range: { ...(d.range as object), except: ['p9'] }, paused: true }))
+  const documentOf = (rows: ReturnType<typeof rowsOf>) => JSON.parse(rows.pages.find(r => r.id === 'smart:n1')!.document) as Record<string, unknown> & { range: Record<string, unknown>; result: SmartResult }
+  const loaded = harness(workspaceOf(newer))
+  assert.deepEqual(loaded.ws.smartNotes![0], note())
+  loaded.run({ type: 'create-document', title: 'Next', body: '', pageId: 'next' })
+  const unrelated = planWrites(newer, loaded.ws)
+  assert.ok(!unrelated.write.pages.upsert.some(r => r.id === 'smart:n1'))
+  // A new result: the range was not changed here, so it is written back as stored, with the field inside it.
+  loaded.run({ type: 'set-smart-note-result', noteId: 'n1', result: result({ inputKey: 'k2' }), spec })
+  const refreshed = documentOf(planWrites(newer, loaded.ws).rows)
+  assert.equal(refreshed.result.inputKey, 'k2')
+  assert.deepEqual(refreshed.schedule, { every: 'day' })
+  assert.equal(refreshed.paused, true)
+  assert.deepEqual(refreshed.range, { where: { kind: 'workspace' }, days: 0, except: ['p9'] })
+  // An edit of the range writes this build's range; what stands beside it stays.
+  loaded.run({ type: 'save-smart-note', note: note({ range: { where: { kind: 'days' }, days: 7 } }) })
+  const edited = documentOf(planWrites(newer, loaded.ws).rows)
+  assert.deepEqual(edited.range, { where: { kind: 'days' }, days: 7 })
+  assert.deepEqual(edited.schedule, { every: 'day' })
+  assert.equal(edited.paused, true)
+})
+
+test('rows: a column this build leaves empty on a smart row is kept, and an unrelated write does not touch the row', () => {
+  const h = withNote()
+  const base = rowsOf(h.ws)
+  const newer = { ...base, pages: base.pages.map(r => r.id === 'smart:n1' ? { ...r, created_at: '2026-11-01T00:00:00.000Z', row_values: '{"runs":3}' } : r) }
+  const loaded = harness(workspaceOf(newer))
+  loaded.run({ type: 'create-document', title: 'Next', body: '', pageId: 'next' })
+  assert.ok(!planWrites(newer, loaded.ws).write.pages.upsert.some(r => r.id === 'smart:n1'))
+  loaded.run({ type: 'set-smart-note-result', noteId: 'n1', result: result({ at: '2026-11-13T09:00:00.000Z', inputKey: 'k2' }), spec })
+  const row = planWrites(newer, loaded.ws).rows.pages.find(r => r.id === 'smart:n1')!
+  assert.equal(row.created_at, '2026-11-01T00:00:00.000Z')
+  assert.equal(row.row_values, '{"runs":3}')
+  assert.equal(row.edited_at, '2026-11-13T09:00:00.000Z')
+})
+
+test('rows: Undo puts a smart row back as it was stored, with what this build does not know: after an edit, and after the note was removed', () => {
+  const h = withNote()
+  const newer = editRow(rowsOf(h.ws), 'smart:n1', d => ({ ...d, range: { ...(d.range as object), except: ['p9'] }, schedule: { every: 'day' } }))
+  const held = newer.pages.find(r => r.id === 'smart:n1')!
+  const loaded = harness(workspaceOf(newer))
+  const edit = loaded.run({ type: 'save-smart-note', note: note({ range: { where: { kind: 'days' }, days: 7 } }) })
+  const edited = planWrites(newer, loaded.ws)
+  assert.ok(!edited.rows.pages.find(r => r.id === 'smart:n1')!.document.includes('except'))
+  loaded.run({ type: 'undo', targetOperationId: edit.receipt.operationId })
+  assert.deepEqual(planWrites(edited.rows, loaded.ws, edited.inverse.pages.upsert).rows.pages.find(r => r.id === 'smart:n1'), held)
+  // Removed (a note that made room at the limit), then brought back by Undo: no row is stored to carry from.
+  const without = { ...newer, pages: newer.pages.filter(r => r.id !== 'smart:n1') }
+  const back = planWrites(without, loaded.ws, [held]).rows.pages.find(r => r.id === 'smart:n1')!
+  assert.deepEqual(back, { ...held, position: back.position })
+  assert.equal(JSON.parse(planWrites(without, loaded.ws).rows.pages.find(r => r.id === 'smart:n1')!.document).schedule, undefined, 'with no row to carry from, only what this build knows is written')
 })
 
 test('changes: a saved note reaches a tab through changesBetween and applyChanges', () => {

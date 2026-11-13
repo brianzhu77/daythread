@@ -181,7 +181,8 @@ export type Action =
   | { type: "delete-template"; pageId: string }
   | { type: "set-draft"; pageId: string; status: import("./day-draft.ts").DraftStatus; items: import("./day-draft.ts").DraftItem[]; moreOpen: string[]; allowedTaskIds: string[]; recipe?: number }
   | { type: "save-smart-note"; note: import("./smart-note.ts").SmartNote }
-  | { type: "set-smart-note-result"; noteId: string; result: import("./smart-note.ts").SmartResult }
+  /** `spec`: `smartSpecKey` of the prompt and range the result was made for. */
+  | { type: "set-smart-note-result"; noteId: string; result: import("./smart-note.ts").SmartResult; spec: string }
   | { type: "apply-draft"; pageId: string; itemIds: string[]; edits?: Record<string, string>; today?: LocalDate }
   | { type: "skip-draft"; pageId: string; itemIds: string[] }
   /** A database page with the default schema; `homeBlockId`: its `database` block in the parent page, null for a full page. */
