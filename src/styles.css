@@ -3312,11 +3312,14 @@ textarea.form-input { resize: vertical; }
 .dashboard.is-phone .dashboard-widget-body { overflow: visible; }
 .dashboard-clip { position: relative; }
 .dashboard-clip.is-clipped { max-height: 360px; overflow: hidden; }
-.dashboard-clip.is-clipped::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--bg-doc)); pointer-events: none; }
+.dashboard-clip.is-clipped::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--bg-doc)); pointer-events: none; transition: background .3s; }
 .dashboard-more { min-height: 36px; margin-top: 4px; border: 0; background: none; font-size: var(--text-meta); cursor: pointer; }
 /* After a move: the moved-line wash for 1 s, behind its content. */
 .dashboard-widget::after { content: ''; position: absolute; inset: -8px; z-index: -1; border-radius: var(--radius-block); background: transparent; transition: background .3s; pointer-events: none; }
 .dashboard-widget.is-moved::after { background: var(--blue-soft); }
+/* Everything inside that paints the page's colour (a frozen column, the Show more fade) takes the wash too (Jazz, p-moved):
+   the widget's own page colour is the wash while it lasts. */
+.dashboard-widget.is-moved { --bg-doc: var(--blue-soft); }
 /* A long dashboard name ends in "…" before it reaches Edit (Jazz 352627d8). */
 .database-view-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-head .database-title-row { min-width: 0; }
