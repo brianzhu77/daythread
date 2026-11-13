@@ -53,6 +53,39 @@ await page.keyboard.press('ControlOrMeta+z'); await page.waitForTimeout(300)
 assert.equal(await page.locator('.smart-note:not(.is-deleted)').count(), 1, 'Undo brings the block back')
 assert.equal(await editor.locator('.bn-inline-content', { hasText: 'Guest checkout is out' }).count(), 0, 'and takes the lines away')
 
+// At 390 wide every control is a 44 px target; the source numbers keep their small glyph inside a taller hit area.
+// The hit box is measured as the span of points that hit the control (elementFromPoint), so clipping counts too.
+const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+phone.on('pageerror', e => errors.push(e.message))
+const fnName = url => { try { return JSON.parse(Buffer.from(new URL(url).pathname.split('/').pop(), 'base64url').toString()).export } catch { return '' } }
+// No model here: the tab is told smart notes are on, and the ask fails, so the failed state shows its Retry.
+await phone.route('**/_serverFn/**', async route => {
+  const name = fnName(route.request().url())
+  if (name.startsWith('askSmartNote')) return route.abort('failed')
+  if (!name.startsWith('smartNotesOn')) return route.continue()
+  const response = await route.fetch()
+  return route.fulfill({ response, body: (await response.text()).replace('"k":["on"],"v":[{"t":2,"s":3}]', '"k":["on"],"v":[{"t":2,"s":2}]') })
+})
+await phone.goto(`${base}/pages?page=${seeded.host}`, { waitUntil: 'networkidle' })
+const hitBox = selector => phone.locator(selector).first().evaluate(el => {
+  const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2
+  const hits = (x, y) => { const at = document.elementFromPoint(x, y); return Boolean(at && (at === el || el.contains(at))) }
+  let top = cy, bottom = cy, left = cx, right = cx
+  while (hits(cx, top - 1)) top--
+  while (hits(cx, bottom + 1)) bottom++
+  while (hits(left - 1, cy)) left--
+  while (hits(right + 1, cy)) right++
+  return { width: right - left + 1, height: bottom - top + 1 }
+})
+await phone.locator('.smart-note-source a').first().waitFor()
+const source = await hitBox('.smart-note-source a')
+assert.ok(source.height >= 44, `a source number is a 44 px target at 390 (${source.width}x${source.height})`)
+await phone.getByRole('button', { name: 'Refresh' }).click()
+await phone.getByRole('button', { name: 'Retry' }).waitFor()
+const retry = await hitBox('.smart-note-status button')
+assert.ok(retry.height >= 44 && retry.width >= 44, `Retry is a 44 px target at 390 (${retry.width}x${retry.height})`)
+console.log(`at 390: source ${source.width}x${source.height}, Retry ${retry.width}x${retry.height}`)
+
 assert.deepEqual(errors, [])
 await browser.close()
 console.log('smart note block: ok')
