@@ -3,7 +3,7 @@
 // an older build keeps it (its `updateView` spreads the fields it doesn't know) and draws a table of the host's rows.
 // Every row is full: its widths add up to 12 twelfths (Jazz df571c9f). Changes are per widget or row (database.ts), so a
 // move in one tab and a filter edit in another touch different fields and both survive.
-import { checkId, cleanView, DatabaseError, limits, updatedView, type Condition, type Database, type View, type ViewChange } from './database.ts'
+import { checkId, cleanView, DatabaseError, limits, opsFor, titleId, updatedView, type Condition, type Database, type FilterOp, type Json, type PropertyType, type View, type ViewChange } from './database.ts'
 
 export interface DashboardWidget {
   id: string
@@ -20,8 +20,16 @@ export interface DashboardRow {
   height: number
   widgets: DashboardWidget[]
 }
-/** `filter`: step 3's rules across widgets, kept now so an older build has seen it (Lead 3e548c4e); nothing writes it yet. */
-export interface Dashboard { rows: DashboardRow[]; filter?: Condition[] }
+/** `filter`: rules across its widgets (G6-6), all holding or, with `filterAny`, any; each bound to a property per source. */
+export interface Dashboard { rows: DashboardRow[]; filter?: DashboardRule[]; filterAny?: true }
+/**
+ * A rule across widgets (dashboard.md §4): made on a property by its name and type, its options by name, and bound when
+ * saved to that property in each source (`on`, by id). After that it reads only its bound id, so a rename keeps it and
+ * no other property renamed to the old name picks it up (G6-6).
+ */
+export interface DashboardRule { id: string; name: string; type: PropertyType; op: FilterOp; value?: Json; /** A Relation's database. */ target?: string; /** On every widget's Name, which every database has (Bumblebee 0d1055eb). */ title?: true; on: Record<string, RuleBinding> }
+/** Where a rule reads in one source: its property, and for options their ids there, so a rename of either keeps it (Lead ad03bcd0). */
+export interface RuleBinding { propertyId: string; optionIds?: string[] }
 
 export const dashboardLimits = { widgets: 12, perRow: 4 } as const
 export const rowHeights = { min: 160, max: 800, step: 40, initial: 320 } as const
@@ -73,7 +81,9 @@ export type DashboardChange =
   | { kind: 'removeWidget'; viewId: string; widgetId: string }
   /** Duplicate view on a dashboard (Lead ad6dae7b): a copy as stored, every row, widget and widget view under the new id `ids` gives it. */
   | { kind: 'duplicateDashboard'; viewId: string; newViewId: string; ids: Record<string, string> }
-export const dashboardKinds: ReadonlySet<string> = new Set(['addDashboard', 'addWidget', 'updateWidget', 'moveWidget', 'swapWidget', 'sizeSplit', 'sizeRow', 'duplicateWidget', 'removeWidget', 'duplicateDashboard'])
+  /** The rules across widgets: the list as it now reads. A rule already there keeps its binding; a new one is bound now. */
+  | { kind: 'setDashboardFilter'; viewId: string; rules: Omit<DashboardRule, 'on'>[]; any?: boolean }
+export const dashboardKinds: ReadonlySet<string> = new Set(['addDashboard', 'addWidget', 'updateWidget', 'moveWidget', 'swapWidget', 'sizeSplit', 'sizeRow', 'duplicateWidget', 'removeWidget', 'duplicateDashboard', 'setDashboardFilter'])
 export const isDashboardChange = (change: { kind?: string } | undefined): change is DashboardChange => Boolean(change?.kind && dashboardKinds.has(change.kind))
 
 /** A database page's own database, or To-dos', when it's there to show; null once it's in Trash or gone. */
@@ -165,6 +175,9 @@ export function changeDashboard(db: Database, change: DashboardChange, sourceOf:
   switch (change.kind) {
     case 'addWidget': {
       const widget = newWidget(sourceOf, change.widget, idsIn(db))
+      // A source new to the dashboard is bound as it arrives; one already there keeps what it has, bound or not (Ratchet 1fc10a66).
+      const known = dashboard.rows.some(r => r.widgets.some(w => w.source === widget.source))
+      { const source = sourceOf(widget.source); if (source && !known) bindSource(dashboard, widget.source, source) }
       const row = change.rowId === null ? newRow(change.newRowId, undefined) : rowOf(change.rowId)
       placeIn(row.widgets, widget, change.beforeId ? row.widgets.find(w => w.id === change.beforeId) : undefined)
       resplit(row)
@@ -244,6 +257,31 @@ export function changeDashboard(db: Database, change: DashboardChange, sourceOf:
       leave(row, widget)
       return 'View removed'
     }
+    case 'setDashboardFilter': {
+      if (!Array.isArray(change.rules) || change.rules.length > limits.conditions) throw new DatabaseError(`${limits.conditions} rules at most`)
+      const held = new Map((dashboard.filter ?? []).map(r => [r.id, r]))
+      const sources = [...new Set(dashboard.rows.flatMap(r => r.widgets.map(w => w.source)))]
+      const rules = change.rules.map(input => {
+        const rule = cleanRule(input), kept = held.get(rule.id)
+        // Its property changed (another name, type or Relation database): a rule on something else, bound afresh (Ratchet 1fc10a66).
+        const was = kept && kept.name === rule.name && kept.type === rule.type && kept.target === rule.target && kept.title === rule.title ? kept : undefined
+        const on: Record<string, RuleBinding> = structuredClone(was?.on ?? {})
+        for (const id of sources) {
+          const source = sourceOf(id)
+          if (!source) continue
+          const bound = on[id], property = bound && source.properties.find(p => p.id === bound.propertyId)
+          // A source with no binding yet is bound now, so a property added since is picked up on the next save (Lead ad03bcd0,
+          // Bumblebee 012cf5ed); one already bound keeps its property, and only its options are read again if they changed.
+          if (!bound) { const fresh = bindingIn(rule, source); if (fresh) on[id] = fresh }
+          else if (property && optionTypes.has(rule.type) && JSON.stringify(was?.value) !== JSON.stringify(rule.value)) on[id] = { propertyId: bound.propertyId, ...(rule.value !== undefined && rule.value !== null ? { optionIds: optionIdsIn(property, rule.value) } : {}) }
+        }
+        return { ...rule, on }
+      })
+      if (new Set(rules.map(r => r.id)).size !== rules.length) throw new DatabaseError('Invalid id')
+      if (rules.length) dashboard.filter = rules; else delete dashboard.filter
+      if (change.any) dashboard.filterAny = true; else delete dashboard.filterAny
+      return 'Filter saved'
+    }
     default:
       throw new DatabaseError('Unknown change')
   }
@@ -270,4 +308,69 @@ export function handleChoices(count: number, k: number): number[][] {
   if (count !== 3) return [equalSplit(count)]
   const grow = (i: number) => [0, 1, 2].map(j => (j === i ? 6 : 3))
   return [grow(k), [4, 4, 4], grow(k - 1)]
+}
+
+// ---------------------------------------------------------------- rules across widgets (G6-6)
+
+const optionTypes: ReadonlySet<string> = new Set(['select', 'status', 'multiSelect'])
+const named = (s: string) => s.trim().toLocaleLowerCase()
+/** Where a rule would be bound in a source now: the same name and type (for a Relation the same database), and its options by name. */
+function bindingIn(rule: Pick<DashboardRule, 'name' | 'type' | 'target' | 'value' | 'title'>, source: Database): RuleBinding | undefined {
+  if (rule.title) return { propertyId: titleId }
+  const property = source.properties.find(p => named(p.name) === named(rule.name) && p.type === rule.type && (rule.type !== 'relation' || p.target === rule.target))
+  if (!property) return undefined
+  return { propertyId: property.id, ...(optionTypes.has(rule.type) && rule.value !== undefined && rule.value !== null ? { optionIds: optionIdsIn(property, rule.value) } : {}) }
+}
+/** Option names as a property's ids: an option it lacks reads as '' and so never matches, leaving the rule unreadable there. */
+function optionIdsIn(property: Database['properties'][number], value: Json): string[] {
+  return (Array.isArray(value) ? value : [value]).map(n => property.options?.find(o => typeof n === 'string' && named(o.name) === named(n))?.id ?? '')
+}
+/** Each rule bound for `sourceId` where it isn't yet, as a widget of a source arrives; a rule bound there already keeps its property. */
+export function bindSource(d: Dashboard, sourceId: string, source: Database): void {
+  for (const rule of d.filter ?? []) if (!(sourceId in rule.on)) { const binding = bindingIn(rule, source); if (binding) rule.on[sourceId] = binding }
+}
+
+/**
+ * The rule as a widget of `sourceId` reads it: a condition on its bound property, with option names as that property's
+ * ids; null where it's unreadable there (no binding, the property gone or changed type, an option it lacks, another
+ * Relation target), which counts neither way (§4).
+ */
+export function ruleIn(rule: DashboardRule, sourceId: string, source: Database): Condition | null {
+  // A source that has never had a binding for it reads it by name and type now, writing nothing, so the sheet and the widget
+  // agree; the next save stores it (Bumblebee 4cea29f6). A source bound before keeps its binding, even to a deleted property.
+  const binding = rule.on[sourceId] ?? bindingIn(rule, source)
+  if (rule.title && binding?.propertyId === titleId) return { by: titleId, op: rule.op, ...(rule.value !== undefined ? { value: rule.value } : {}) }
+  const property = binding && source.properties.find(p => p.id === binding.propertyId)
+  if (!property || property.type !== rule.type || (rule.type === 'relation' && property.target !== rule.target)) return null
+  if (!optionTypes.has(rule.type) || rule.value === undefined || rule.value === null) return { by: property.id, op: rule.op, ...(rule.value !== undefined ? { value: rule.value } : {}) }
+  // By the ids bound when saved: a renamed option still reads; a deleted one, or one it never had, leaves it unreadable.
+  const ids = binding.optionIds ?? []
+  if (!ids.length || ids.some(id => !property.options?.some(o => o.id === id))) return null
+  return { by: property.id, op: rule.op, value: Array.isArray(rule.value) ? ids : ids[0]! }
+}
+/** How the dashboard's rules read in one widget: those that apply, and how many there are. */
+export function widgetRules(d: Dashboard, widget: Pick<DashboardWidget, 'source'>, source: Database): { applied: Condition[]; total: number } {
+  const rules = d.filter ?? []
+  return { applied: rules.flatMap(r => { const c = ruleIn(r, widget.source, source); return c ? [c] : [] }), total: rules.length }
+}
+/** "Not filtered", "Partly filtered" or nothing, beside a widget's name (Lead 495829a7): state, not instruction. */
+export const filterState = (r: { applied: Condition[]; total: number }): 'none' | 'partly' | null => (!r.total ? null : !r.applied.length ? 'none' : r.applied.length < r.total ? 'partly' : null)
+/**
+ * The view a widget is drawn through: its own filter and the dashboard's applicable rules as two whole groups, both
+ * holding. `+ New` takes its own filter's values first, and a dashboard rule fills only what that leaves (`widgetFilter`). Never stored (§4).
+ */
+export function filteredView(view: View, applied: readonly Condition[], any: boolean): View {
+  if (!applied.length) return view
+  const own = { ...(view.filterAny ? { any: true as const } : {}), rules: view.filter, ...(view.filterGroups?.length ? { groups: view.filterGroups } : {}) }
+  const { filterAny: _any, ...rest } = view, dashboard = { ...(any ? { any: true as const } : {}), rules: [...applied] }
+  return { ...rest, filter: [], filterGroups: [own, dashboard], widgetFilter: { own: view, dashboard } }
+}
+/** A rule as a command brings it, checked; its binding comes from the dashboard, never from the tab. */
+function cleanRule(input: Omit<DashboardRule, 'on'>): Omit<DashboardRule, 'on'> {
+  const id = checkId(input?.id)
+  if (typeof input.name !== 'string' || !input.name.trim() || input.name.length > limits.name) throw new DatabaseError('A rule needs a property')
+  if (!(opsFor(input.type as PropertyType) ?? []).includes(input.op)) throw new DatabaseError('Invalid rule')
+  if (optionTypes.has(input.type) && input.value !== undefined && !(Array.isArray(input.value) ? input.value.every(v => typeof v === 'string') : typeof input.value === 'string')) throw new DatabaseError('Invalid rule')
+  if (input.title && input.type !== 'text') throw new DatabaseError('Invalid rule')
+  return { id, name: input.name.trim(), type: input.type, op: input.op, ...(input.value !== undefined ? { value: input.value } : {}), ...(input.type === 'relation' && input.target ? { target: checkId(input.target) } : {}), ...(input.title ? { title: true as const } : {}) }
 }

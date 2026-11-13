@@ -789,7 +789,7 @@ export function ViewNotes({ db, view, changeView, empty }: { db: Page; view: Vie
   usePendingCells()
   const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   return <>
-    {empty && hasFilter(view) && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [], filterGroups: [] }), view.filterGroups?.length ? 'Filter cleared' : undefined)}>Clear filter</button></p>}
+    {empty && hasFilter(view.widgetFilter?.own ?? view) && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [], filterGroups: [] }), view.filterGroups?.length ? 'Filter cleared' : undefined)}>Clear filter</button></p>}
     {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
   </>
 }
@@ -887,7 +887,7 @@ export function useFolds(blockId: string, viewId: string) {
 /** The table view (design §4.1, §4.2): Name first, then the view's shown properties; `+ New` under the rows. */
 export interface DatabaseViewProps { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number; showTitle?: boolean; linked?: LinkedHeader }
 /** A linked view's own title and the line under it (design §9.2). */
-export interface LinkedHeader { title: string; rename(title: string): void; source: ReactNode; /** A dashboard widget's heading is its database's name, not edited here (Jazz 6f0ebb20). */ fixedTitle?: true }
+export interface LinkedHeader { title: string; rename(title: string): void; source: ReactNode; /** A dashboard widget's heading is its database's name, not edited here (Jazz 6f0ebb20). */ fixedTitle?: true; /** After the heading: a widget's "Partly filtered" (dashboard-edit.md §9). */ after?: ReactNode }
 /** The view a block shows, and how to change it, drawn in its layout. */
 function DatabaseView(props: DatabaseViewProps) {
   useShownViews()
@@ -956,7 +956,7 @@ export function DatabaseHeader({ db, view, changeView, blockId, showTitle, linke
     {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
       {db.icon && <PageEmoji icon={db.icon} className="database-title-icon" />}
-      {linked?.fixedTitle ? <span className="database-title is-static">{linked.title}</span> : <input ref={titleInput} className="database-title" data-database={linked ? undefined : db.id} aria-label={linked ? 'View name' : 'Database name'} placeholder="Untitled database" defaultValue={linked ? linked.title : db.title} key={linked ? linked.title : db.title}
+      {linked?.fixedTitle ? <><span className="database-title is-static">{linked.title}</span>{linked.after}</> : <input ref={titleInput} className="database-title" data-database={linked ? undefined : db.id} aria-label={linked ? 'View name' : 'Database name'} placeholder="Untitled database" defaultValue={linked ? linked.title : db.title} key={linked ? linked.title : db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
         onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); onTitleEnter() } }} />}
@@ -964,7 +964,8 @@ export function DatabaseHeader({ db, view, changeView, blockId, showTitle, linke
       <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}
     {linked?.source}
-    {(hasFilter(view) || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={changeView} />}
+    {/* A dashboard widget's own rules only: the dashboard's are its chips row, never added to the widget's (dashboard-edit.md §9). */}
+    {(hasFilter(view.widgetFilter?.own ?? view) || view.sort.length > 0) && <RulesLine db={db.database} view={view.widgetFilter?.own ?? view} blockId={blockId} databaseId={db.id} onChange={changeView} />}
   </>
 }
 

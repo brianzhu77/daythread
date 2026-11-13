@@ -23,6 +23,7 @@ import { ruleWords, startPicking, blockActions, isLinkedBlock, MenuBlock, setSho
 import { chooseCsv } from './csv-import'
 import { chartFileName, chartPicture, copyChart, pngOf, saveChart, sharesInstead, themePalette, type ExportResult } from './chart-export'
 import { exportDatabase } from './database-export'
+import { DashboardFilterPanel, openDashboardFilterFrom } from './dashboard-filter'
 import { todayIso } from './dates'
 import { flushAllEditors } from './editor-flush'
 import { ChevronDownIcon } from './icons'
@@ -134,7 +135,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'templates' && <TemplatesPanel db={db} view={view} go={go} close={() => setOpenMenu(null)} {...(open.pick ? { pick: open.pick } : {})} />}
     {typeof open.panel === 'object' && 'template' in open.panel && <TemplatePanel db={db} view={view} templateId={open.panel.template} go={go} close={() => setOpenMenu(null)} />}
     {open.panel === 'calculate' && <CalculatePanel db={db} view={view} back={() => go('root')} />}
-    {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
+    {open.panel === 'filter' && (view.layout === 'dashboard' && workspace ? <DashboardFilterPanel workspace={workspace} host={db} view={view} back={() => go('root')} /> : <FilterPanel db={db} view={view} back={() => go('root')} />)}
     {open.panel === 'colour' && <ColourPanel db={db} view={view} back={() => go('layout')} />}
     {open.panel === 'sort' && <SortPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'more' && <MoreSettingsPanel db={db} view={view} back={() => go('root')} />}
@@ -185,6 +186,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
   // A dashboard's own settings are its widgets', in edit mode; its filter across them comes with step 3 (dashboard.md §4).
   const dash = view.layout === 'dashboard'
   return <>
+    {dash && <button type="button" role="menuitem" onClick={() => { openDashboardFilterFrom(null); go('filter') }}>Filter</button>}
     {!dash && <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
