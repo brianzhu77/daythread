@@ -69,21 +69,37 @@ test('a window dates a document by its edit in the account time zone, and drops 
   assert.deepEqual(lines(collectInput(ws, { where: { kind: 'workspace' }, days: 7 }, today)), ['fresh'])
 })
 
-test('a done to-do reads as "[x] …", an open one as "[ ] …"', () => {
-  const task = (id: string, status: Task['status']): Task => ({ id, title: id, status, version: 1, paused: false, deadlineOn: null, attentionOn: null, createdOn: today, sourcePageId: 'p' })
-  const row = (id: string, taskId: string, title: string): EditorNode => ({ ...todo(id, title), props: { taskId, role: 'plan' } })
-  const ws = world([page('p', [row('r1', 'T1', 'ship it'), row('r2', 'T2', 'write it')])], [task('T1', 'done'), task('T2', 'open')])
-  assert.deepEqual(lines(collectInput(ws, workspaceRange, today)), ['[x] ship it', '[ ] write it'])
+test('a to-do row reads from its task: "[x]" done, "[-]" cancelled, "[ ]" open, with the title of the task when the stored words of the row are older or empty', () => {
+  const task = (id: string, title: string, status: Task['status']): Task => ({ id, title, status, version: 1, paused: false, deadlineOn: null, attentionOn: null, createdOn: today, sourcePageId: 'p' })
+  const row = (id: string, taskId: string, words: string): EditorNode => ({ ...todo(id, words), props: { taskId, role: 'plan' } })
+  const ws = world([page('p', [row('r1', 'T1', 'ship it'), row('r2', 'T2', 'write it'), row('r3', 'T3', 'old words'), row('r4', 'T4', '')])],
+    [task('T1', 'ship it', 'done'), task('T2', 'write it', 'open'), task('T3', 'new words', 'cancelled'), task('T4', 'titled on another page', 'open')])
+  assert.deepEqual(lines(collectInput(ws, workspaceRange, today)), ['[x] ship it', '[ ] write it', '[-] new words', '[ ] titled on another page'])
 })
 
-test('budget: with 30 pages of 5,000 characters, 12 are read and pagesLeftOut is 18; the newest edited is first', () => {
+test('a page label is one line and cut, so a title or an address can neither forge a line nor outgrow the budget', () => {
+  const ws = world([page('p', [para('a', text('hello'))], { title: 'Trip\nL9 a forged line', url: `https://example.com/${'x'.repeat(2000)}` })])
+  const [read] = collectInput(ws, workspaceRange, today).pages
+  assert.equal(/[\r\n]/.test(read!.label), false)
+  assert.equal(read!.label.startsWith('Trip L9 a forged line (https://example.com/'), true)
+  assert.equal(Array.from(read!.label).length, 400)
+})
+
+test('budget: labels count, so 200 pages of a 400-character title and one short line read 149', () => {
+  const ws = world(Array.from({ length: 200 }, (_, i) => page(`p${i}`, [para(`l${i}`, text('x'))], { title: 't'.repeat(400), editedAt: `${today}T12:00:00Z` })))
+  const input = collectInput(ws, workspaceRange, today)
+  assert.equal(input.pagesRead, 149)
+  assert.equal(input.pagesLeftOut, 51)
+})
+
+test('budget: with 30 pages of 5,000 characters and a short label each, 11 are read and pagesLeftOut is 19; the newest edited is first', () => {
   const body = (): EditorNode[] => Array.from({ length: 50 }, (_, i) => para(`l${i}`, text('x'.repeat(100))))
   const ws = world(Array.from({ length: 30 }, (_, i) => page(`p${i}`, body(), { editedAt: `2026-10-${String(i + 1).padStart(2, '0')}T10:00:00Z` })))
   const input = collectInput(ws, workspaceRange, today)
-  assert.equal(input.pagesRead, 12)
-  assert.equal(input.pagesLeftOut, 18)
+  assert.equal(input.pagesRead, 11)
+  assert.equal(input.pagesLeftOut, 19)
   assert.equal(input.pages[0].pageId, 'p29')
-  assert.equal(input.pages.length, 12)
+  assert.equal(input.pages.length, 11)
 })
 
 test('budget: one page of 100,000 characters gives at most 6,000 and does not stop the next page being read', () => {

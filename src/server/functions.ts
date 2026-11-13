@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { commandSchema, smartRange } from "../domain/command-schema";
+import { smartLimits } from "../domain/smart-note";
 
 export const loadWorkspace = createServerFn({ method: "GET" })
   .validator((input: unknown) => z.object({ operationId: z.string().min(1).max(200), triggerOperationId: z.string().max(200).optional() }).parse(input))
@@ -91,7 +92,7 @@ export const askSmartNote = createServerFn({ method: "POST" })
     operationId: z.string().min(1).max(200),
     today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     noteId: z.string().min(1).max(200).optional(),
-    prompt: z.string().min(1).max(2000).optional(),
+    prompt: z.string().trim().min(1).max(smartLimits.prompt).optional(),
     range: smartRange.optional(),
   }).parse(input))
   .handler(async ({ data }) => {

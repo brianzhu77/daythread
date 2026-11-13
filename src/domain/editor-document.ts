@@ -102,11 +102,11 @@ export function textKey(s: string): string {
 // Another place's edit to a synced block isn't a change to this page.
 export const pageContentKey = (page: Pick<Page, 'document'>): string => textKey(storedDocument(page.document))
 
-/** One line as the model reads it: `# `, `- `, `1. `, `[ ]`/`[x]` prefixes, else its words. `done`: a to-do row's state. */
-export function describeLine(n: EditorNode, date: string | null, done = false): string {
+/** One line as the model reads it: `# `, `- `, `1. `, `[ ]` prefixes, else its words. */
+export function describeLine(n: EditorNode, date: string | null): string {
   const words = inlineText(n.content, date).trim()
   if (n.type === 'heading') return `${'#'.repeat(Number(n.props?.level ?? 2))} ${words}`
-  if (n.type === 'task') return `${done ? '[x]' : '[ ]'} ${words || '(empty to-do slot)'}`
+  if (n.type === 'task') return `[ ] ${words || '(empty to-do slot)'}`
   if (n.type === 'bulletListItem') return `- ${words || '(empty bullet slot)'}`
   if (n.type === 'numberedListItem') return `1. ${words || '(empty numbered slot)'}`
   if (n.type === 'checkListItem') return `${n.props?.checked ? '[x]' : '[ ]'} ${words}`

@@ -1,11 +1,11 @@
 // Smart notes: a workspace-level record holds the prompt, the range and the model's result; a page holds only a `smartNote` block with `props.noteId`.
-import { describeLine, flatNodes, inlineText, pageNodes, rowTaskId, smartNoteBlockType, taskOfRow, textDate, textKey, textRun, type EditorNode } from './editor-document.ts'
+import { describeLine, flatNodes, inlineText, pageNodes, rowTaskId, smartNoteBlockType, textDate, textKey, textRun, type EditorNode } from './editor-document.ts'
 import { isTrashed, subtreeIds } from './page-tree.ts'
 import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
 import { addDays, isDatabase, localWall } from './database.ts'
 import { tagIndex, tagKey } from './tags.ts'
-import type { LocalDate, Page, Workspace } from './types.ts'
+import type { LocalDate, Page, Task, Workspace } from './types.ts'
 
 export { smartNoteBlockType }
 export const smartLimits = { name: 120, prompt: 2000, pages: 50, tag: 100, notes: 100, blocks: 60, text: 600, sourcesPerBlock: 8, inputChars: 60_000, pageChars: 6_000, lineChars: 400 } as const
@@ -62,47 +62,52 @@ function pagesInRange(ws: Workspace, where: SmartWhere): Source[] {
 }
 
 const inWindow = (date: LocalDate | null, days: SmartWindow, today: LocalDate) => days === 0 || (date !== null && date >= addDays(today, -days))
-const recency = (ws: Workspace, p: Page) => p.editedAt ?? (p.date ? `${p.date}T23:59` : '')
+const recency = (p: Page) => p.editedAt ?? (p.date ? `${p.date}T23:59` : '')
 
 /** The page's readable lines, whole and in order, up to `pageChars`. */
-function readLines(ws: Workspace, { page, blocks }: Source): { blockId: string; text: string }[] {
+function readLines(tasks: ReadonlyMap<string, Task>, { page, blocks }: Source): { blockId: string; text: string }[] {
   const date = textDate(page), out: { blockId: string; text: string }[] = []
   let total = 0
   for (const n of flatNodes(pageNodes(page))) {
-    if ((blocks && !blocks.has(n.id)) || unread.has(n.type) || !inlineText(n.content, date).trim()) continue
-    const text = cut(describeLine(n, date, isDone(ws, n)))
+    if ((blocks && !blocks.has(n.id)) || unread.has(n.type)) continue
+    const taskId = rowTaskId(n), task = taskId ? tasks.get(taskId) : undefined
+    if (!(task ? task.title : inlineText(n.content, date)).trim()) continue
+    const text = cut(task ? todoLine(task) : describeLine(n, date))
     if (total + text.length > smartLimits.pageChars) break
     total += text.length
     out.push({ blockId: n.id, text })
   }
   return out
 }
-const isDone = (ws: Workspace, n: EditorNode) => taskOfRow(ws, n)?.status === 'done'
+/** A to-do row reads from its task, as export does: the row's stored words can be older than a title changed on another page. */
+const todoLine = (task: Task) => `${task.status === 'done' ? '[x]' : task.status === 'cancelled' ? '[-]' : '[ ]'} ${task.title.trim()}`
 // One line each: a newline inside (a code block, a pasted clip) would otherwise read as an alias or a page label.
 const cut = (text: string) => Array.from(text.replace(/\s*[\r\n]+\s*/g, ' ')).slice(0, smartLimits.lineChars).join('')
 
 const weekday = (d: LocalDate) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
-const labelOf = (p: Page) => p.type === 'daily' && p.date ? `${p.date} (${weekday(p.date)})` : `${p.title || 'Untitled'}${p.url ? ` (${p.url})` : ''}`
+const labelOf = (p: Page) => cut(p.type === 'daily' && p.date ? `${p.date} (${weekday(p.date)})` : `${p.title || 'Untitled'}${p.url ? ` (${p.url})` : ''}`)
 /** A titled page with no readable line (a database row, a clip) reads as its label, citing the page itself; a day page does not. */
 const titleLine = ({ page, blocks }: Source): { blockId: string; text: string }[] =>
-  !blocks && page.type !== 'daily' && page.title.trim() ? [{ blockId: '', text: cut(labelOf(page)) }] : []
+  !blocks && page.type !== 'daily' && page.title.trim() ? [{ blockId: '', text: labelOf(page) }] : []
 
 /** What a smart note reads for `range`: the lines of its pages, newest page first, within the size budget. */
 export function collectInput(ws: Workspace, range: SmartRange, today: LocalDate): SmartInput {
+  const tasks = new Map(ws.tasks.map(t => [t.id, t]))
   const candidates = pagesInRange(ws, range.where)
     .filter(({ page }) => inWindow(dateOf(ws, page), range.days, today))
-    .sort((a, b) => { const x = recency(ws, a.page), y = recency(ws, b.page); return x < y ? 1 : x > y ? -1 : 0 })
-    .map(pick => { const lines = readLines(ws, pick); return { pick, lines: lines.length ? lines : titleLine(pick) } })
+    .sort((a, b) => { const x = recency(a.page), y = recency(b.page); return x < y ? 1 : x > y ? -1 : 0 })
+    .map(pick => { const lines = readLines(tasks, pick); return { pick, lines: lines.length ? lines : titleLine(pick) } })
     .filter(c => c.lines.length > 0)
   const pages: SmartInputPage[] = [], dates: LocalDate[] = []
   let used = 0, alias = 0, full = false
   for (const { pick: { page }, lines } of candidates) {
-    const size = lines.reduce((n, l) => n + l.text.length, 0)
+    // The label is sent too, so it counts: a range of many short pages (database rows) is mostly labels.
+    const label = labelOf(page), size = lines.reduce((n, l) => n + l.text.length, label.length)
     if (full || used + size > smartLimits.inputChars) { full = true; continue }
     used += size
     const date = dateOf(ws, page)
     if (date) dates.push(date)
-    pages.push({ pageId: page.id, label: labelOf(page), lines: lines.map(l => ({ alias: `L${++alias}`, pageId: page.id, blockId: l.blockId, text: l.text })) })
+    pages.push({ pageId: page.id, label, lines: lines.map(l => ({ alias: `L${++alias}`, pageId: page.id, blockId: l.blockId, text: l.text })) })
   }
   // By page id, not reading order: an edit that changes no line read (placing this note's own block) moves a page up.
   const key = textKey([...pages].sort((a, b) => a.pageId < b.pageId ? -1 : a.pageId > b.pageId ? 1 : 0).flatMap(p => p.lines.map(l => `${l.pageId}|${l.blockId}|${l.text}`)).join('\n'))

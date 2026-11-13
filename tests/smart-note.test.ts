@@ -37,6 +37,14 @@ test('a source whose page does not exist is dropped, not refused', () => {
   assert.deepEqual(h.ws.smartNotes![0].result.blocks[0].sources, [{ pageId: 'doc', blockId: 'l1' }])
 })
 
+test('refused: a result whose time is not a time, on save and on refresh', () => {
+  const h = withDoc()
+  assert.throws(() => h.run({ type: 'save-smart-note', note: note({ result: result({ at: 'not a time' }) }) }), /Invalid time/)
+  h.run({ type: 'save-smart-note', note: note() })
+  assert.throws(() => h.run({ type: 'set-smart-note-result', noteId: 'n1', result: result({ at: 'not a time' }) }), /Invalid time/)
+  assert.equal(h.ws.smartNotes![0].result.at, '2026-11-12T09:00:00.000Z')
+})
+
 test('refused: empty prompt; pages range with no page; a 101st note', () => {
   const h = withDoc()
   assert.throws(() => h.run({ type: 'save-smart-note', note: note({ prompt: '  ' }) }), /prompt/i)

@@ -117,7 +117,7 @@ function recordOf(row: PageRow): SyncedRecord {
 }
 /** A smart note takes a hidden page row too: its prompt, range and result are one document, and a result write is one row. */
 const smartRow = (n: SmartNote, position: number): PageRow => ({
-  id: `smart:${n.id}`, position, type: 'smart', date: null, title: n.name, url: null, parent_id: null, trashed_at: null, trash_id: null,
+  id: `smart:${n.id}`, position, type: 'smart', date: null, title: clean(n.name), url: null, parent_id: null, trashed_at: null, trash_id: null,
   document: JSON.stringify({ prompt: n.prompt, range: n.range, refresh: n.refresh, result: n.result }),
   handoff_done: false, review_saved: false, database_json: null, row_values: null, created_at: null, edited_at: n.result.at, icon: null, cover: null, cover_position: null,
 })

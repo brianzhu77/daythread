@@ -925,10 +925,10 @@ function claimLineIds(state: Workspace, p: Page, nodes: readonly EditorNode[]): 
 
 // ---------------------------------------------------------------- commands
 
-/** A source whose page is gone is dropped, not refused: the page may have been deleted while the model ran. */
+/** A source whose page is gone is dropped, not refused: the page may have been deleted while the model ran. `at` must be a time: it is shown and stored as the row's. */
 function heldSources(state: Workspace, result: SmartResult): SmartResult {
   const held = new Set(state.pages.map((p) => p.id));
-  return { ...result, blocks: result.blocks.map((b) => ({ ...b, sources: b.sources.filter((s) => held.has(s.pageId)) })) };
+  return { ...result, at: isoTime(result.at), blocks: result.blocks.map((b) => ({ ...b, sources: b.sources.filter((s) => held.has(s.pageId)) })) };
 }
 function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>; renamed?: Record<string, string>; conflicted?: string[] } {
   switch (action.type) {
