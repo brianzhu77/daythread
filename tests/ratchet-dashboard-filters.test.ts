@@ -1,0 +1,23 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {harness} from './v2-helpers.ts';
+import {firstWidgetView,ruleIn,filteredView} from '../src/domain/dashboard.ts';
+import {newRowValues,sectionKey,noGroupKey,type Database,type View} from '../src/domain/database.ts';
+function setup(){const h=harness();const C=(pageId:string,change:unknown)=>h.run({type:'change-database',pageId,change} as never);
+for(const id of ['home','a','b'])h.run({type:'create-database',pageId:id,homeBlockId:null,title:id});
+const db=(id:string)=>h.page(id).database!;
+C('a',{kind:'addProperty',property:{id:'s',name:'Status',type:'select',options:[{id:'d',name:'Done'}]}});
+C('home',{kind:'addDashboard',view:{id:'dash',name:'Dash'},rows:[{id:'row',widgets:[{id:'wa',source:'a',view:firstWidgetView(db('a'),'va')},{id:'wb',source:'b',view:firstWidgetView(db('b'),'vb')}]}]});
+const D=(change:unknown)=>C('home',{viewId:'dash',...(change as object)});
+const dash=()=>db('home').views.find(v=>v.id==='dash')!.dashboard!;
+const save=()=>D({kind:'setDashboardFilter',rules:[{id:'rule',name:'Status',type:'select',op:'isAnyOf',value:['Done']}]});save();return{C,D,db,dash,save};}
+test('never-bound projection does not save; a removed stored property never rematches its replacement',()=>{const{C,db,dash,save}=setup();
+C('b',{kind:'addProperty',property:{id:'sb',name:'Status',type:'select',options:[{id:'db',name:'Done'}]}});
+const before=JSON.stringify(dash());assert.deepEqual(ruleIn(dash().filter![0]!,'b',db('b')),{by:'sb',op:'isAnyOf',value:['db']});assert.equal(JSON.stringify(dash()),before);
+save();assert.equal(dash().filter![0]!.on.b!.propertyId,'sb');
+C('b',{kind:'removeProperty',propertyId:'sb'});C('b',{kind:'addProperty',property:{id:'replacement',name:'Status',type:'select',options:[{id:'other',name:'Done'}]}});save();assert.equal(ruleIn(dash().filter![0]!,'b',db('b')),null);assert.equal(dash().filter![0]!.on.b!.propertyId,'sb');});
+test('bound option rename keeps identity even after saving an unchanged rule',()=>{const{C,db,dash,save}=setup();
+C('a',{kind:'updateProperty',propertyId:'s',name:'Renamed',options:[{id:'d',name:'Finished'}]});assert.equal(db('a').properties.find(p=>p.id==='s')!.name,'Renamed');assert.equal(db('a').properties.find(p=>p.id==='s')!.options![0]!.name,'Finished');save();assert.deepEqual(ruleIn(dash().filter![0]!,'a',db('a')),{by:'s',op:'isAnyOf',value:['d']});});
+test('dashboard defaults preserve the clicked empty Board group',()=>{const db={properties:[{id:'title',name:'Name',type:'text'},{id:'s',name:'Status',type:'select',options:[{id:'done',name:'Done'}]}],views:[]} as Database;
+const own={id:'v',name:'V',layout:'board',columns:[],sort:[],filter:[],groupBy:'s'} as View;
+const v=filteredView(own,[{by:'s',op:'isAnyOf',value:['done']}],false);
+const made=newRowValues(db,v,{today:'2026-11-13',pageDate:null,weekStart:0},sectionKey(noGroupKey));assert.equal(made.values.s,undefined);assert.equal(made.visible,false);});
