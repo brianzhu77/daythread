@@ -27,7 +27,7 @@ export function SmartNoteBlock({ blockId, noteId, editor }: { blockId: string; n
   const remove: MenuItem = { label: 'Delete', danger: true, onSelect: () => { editor.removeBlocks([blockId]) } }
   return <div ref={box} className={`smart-note${note ? '' : ' is-deleted'}`} contentEditable={false} onMouseDown={stop} onPointerDown={stop} onKeyDown={stop}>
     {workspace && note ? <SmartNoteShown note={note} workspace={workspace} edit={() => openSmartNoteSetup({ anchor: box.current, noteId })} turnIntoText={() => { editor.replaceBlocks([blockId], smartNoteLines(workspace, note, () => crypto.randomUUID()) as never) }} remove={remove} />
-      : <div className="smart-note-head"><span className="smart-note-name">This smart note was deleted</span><RowMenu label="Smart note actions" triggerClass="smart-note-more" groups={[{ items: [remove] }]} /></div>}
+      : <div className="smart-note-head"><span className="smart-note-name">This smart note was deleted</span><span className="smart-note-actions"><RowMenu label="Smart note actions" triggerClass="smart-note-more" groups={[{ items: [remove] }]} /></span></div>}
   </div>
 }
 
@@ -54,6 +54,9 @@ function SmartNoteShown({ note, workspace, edit, turnIntoText, remove }: { note:
       <span className="smart-note-meta">
         {status}
         <span className="smart-note-updated">Updated {ago(note.result.at, now)}</span>
+      </span>
+      {/* Apart from the words beside them, so on a phone they stay by the name while the words take a line below. */}
+      <span className="smart-note-actions">
         {on && <button type="button" className="smart-note-refresh" aria-label="Refresh" disabled={running} onClick={ask.refresh}><RefreshIcon /></button>}
         <RowMenu label={`${note.name} actions`} triggerClass="smart-note-more" groups={[
           { items: [...(on ? [{ label: 'Edit', onSelect: edit }] : []), { label: 'Copy', onSelect: copy }, { label: 'Turn into text', onSelect: turnIntoText }] },

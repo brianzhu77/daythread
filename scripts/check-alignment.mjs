@@ -29,6 +29,11 @@
 //   icon of ours (whose ink fills its box, unlike an emoji's) drawn at the words' edge. Before a name wherever one shows, centred on the name's first line (a
 //   [[ link: on where a chip's own icon sits), and the name, or in a database the icon, starting where one with no icon does. Each place in that section's table is
 //   required: sidebar, Pages, Trash, subpage rows, page cards, [[ links, a relation's chip, search, Linked from, the breadcrumb, Move to, a database's title, and a row in each layout.
+//   Smart notes (smart-note.md §4), on /pages?page=fixture-smart-page: the block's left edge on the editor's, each part
+//   inside the block, the body in the page's text size and line height; at 1280 the header's words and controls centred on
+//   the name's first line; at 390 each header control a 44px target and the page no wider than the screen. Each stored
+//   state is required: plain, Notes changed, its range deleted, and a deleted note. Setup and the picker aren't measured
+//   here (no sheet is); the smoke checks their 44px targets.
 //   3. Coverage. Every row type in REQUIRED must appear on the measured pages; one that doesn't is MISSING, never a
 //      pass. Add it to the data copy (or pass a fixture page) and run again.
 // Tolerance is 1px on unrounded coordinates (output shows one decimal). Exit code 1 on any FAIL or MISSING.
@@ -43,7 +48,7 @@ const TOLERANCE = 1, NEST_STEP = 24
 // Where an icon sits before a name, and what's measured for each: `row` centres on the whole row, as its name can have a second line under it.
 const ICON_PLACES = [['.tree-row', 'icon: sidebar', 'name'], ['.card-row', 'icon: Pages', 'row'], ['.subpage-row', 'icon: subpage row', 'name'], ['.editor-page-card', 'icon: page card', 'name'], ['.page-ref', 'icon: [[ link', 'chip'], ['.database-title-cell', 'icon: table row', 'start'], ['.database-list-title', 'icon: list row', 'start'], ['.database-card-title', 'icon: board card', 'centre'], ['.database-gallery-title', 'icon: gallery card', 'centre'], ['.database-day-title', 'icon: calendar', 'centre'], ['.database-bar, .database-week-open', 'icon: timeline', 'centre'], ['.database-pane-name', 'icon: timeline table', 'centre'], ['.database-title-row', 'icon: database title', 'input'], ['.crumb', 'icon: breadcrumb', 'centre'], ['.linked-from a', 'icon: Linked from', 'name'], ['.move-row', 'icon: Move to', 'row'], ['.row-property-value, .database-relation-chip', 'icon: relation chip', 'centre']]
 const ICON_HEADS = [{ kind: 'icon: page head', path: '/pages?page=fixture-icon-page', title: '.page-title-field' }, { kind: 'icon: own icon in a head', path: '/pages?page=fixture-own-icon-page', title: '.page-title-field', ink: true }, { kind: 'icon: row page head', path: '/pages?page=fixture-icon-row', title: '.page-title-field' }, { kind: 'icon: day head', path: '/day/2026-12-30', title: '.day-title' }]
-const REQUIRED = ['timeline', 'sub-items', 'peek', 'side peek', 'synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day', ...ICON_PLACES.map(([, kind]) => kind), ...ICON_HEADS.map(h => h.kind), 'icon: search', 'icon: Trash']
+const REQUIRED = ['smart note', 'smart note: Notes changed', 'smart note: range deleted', 'smart note: deleted', 'timeline', 'sub-items', 'peek', 'side peek', 'synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day', ...ICON_PLACES.map(([, kind]) => kind), ...ICON_HEADS.map(h => h.kind), 'icon: search', 'icon: Trash']
 
 /** Each icon before a name on this page, against its name, and against a place like it with no icon. */
 function iconPlaces(places) {
@@ -201,6 +206,22 @@ function measure() {
       if (type === 'bulletListItem') row.zone = { left: content.getBoundingClientRect().left, right: row.left, top: row.lineTop, bottom: row.lineBottom }
     } else if (type === 'heading') {
       Object.assign(row, { kind: 'heading', ...firstLine(content.querySelector('.bn-inline-content')) })
+    } else if (type === 'smartNote') {
+      // A smart note (smart-note.md §4): on the editor's edge, as a database block is; at 1280 the header's words and
+      // controls on the name's line; its parts inside it, and its body in the page's text size.
+      const note = content.querySelector('.smart-note'), name = note?.querySelector('.smart-note-name')
+      if (!note || !name || !visible(note)) return
+      const status = note.querySelector('.smart-note-status')?.textContent ?? ''
+      const state = note.classList.contains('is-deleted') ? ': deleted' : note.querySelector('.smart-note-changed') ? ': Notes changed' : status.includes('range was deleted') ? ': range deleted' : status ? `: ${status}` : ''
+      Object.assign(row, { kind: `smart note${state}`, ...firstLine(name.querySelector(':scope > span') ?? name), left: note.getBoundingClientRect().left })
+      if (innerWidth >= 900) for (const part of note.querySelectorAll('.smart-note-meta > *, .smart-note-actions button')) {
+        const what = part.matches('.smart-note-changed') ? 'Notes changed' : part.matches('.smart-note-updated') ? 'Updated' : part.matches('.smart-note-status') ? 'status' : part.getAttribute('aria-label') === 'Refresh' ? 'Refresh' : 'menu'
+        row.markers[what] = visible(part) ? cy(part.getBoundingClientRect()) : null
+      }
+      const box = note.getBoundingClientRect()
+      row.spill = Math.max(0, ...[...note.querySelectorAll('*')].filter(visible).map(e => { const r = e.getBoundingClientRect(); return Math.max(r.right - box.right, box.left - r.left) }))
+      const body = note.querySelector('.smart-note-body'), text = document.querySelector('.continuous-editor [data-content-type="paragraph"] .bn-inline-content, .continuous-editor [data-content-type="bulletListItem"] .bn-inline-content')
+      if (body) row.bodyText = text ? { body: `${getComputedStyle(body).fontSize}/${getComputedStyle(body).lineHeight}`, page: `${getComputedStyle(text).fontSize}/${getComputedStyle(text).lineHeight}` } : null
     } else if (type === 'database') {
       // Databases (design §15): the title on the row column (as any top-level row), the view's chevron centred on its
       // word, and `+ New` on Name's text. Only a home block draws a table; any other is a page card, not measured here.
@@ -519,12 +540,34 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     await page.close()
   }
   // A row over a page (R4-16): at 1280 only, since a phone opens it as a full page.
-  for (const path of width === 1280 ? [...paths, '/pages?page=fixture-peek-db&peek=fixture-peek-row', '/pages?page=fixture-peek-db&peek=fixture-peek-row&side=1'] : paths) {
+  // The smart note fixture (align-fixtures.ts) at both widths.
+  for (const path of new Set(width === 1280 ? [...paths, '/pages?page=fixture-smart-page', '/pages?page=fixture-peek-db&peek=fixture-peek-row', '/pages?page=fixture-peek-db&peek=fixture-peek-row&side=1'] : [...paths, '/pages?page=fixture-smart-page'])) {
     const page = await browser.newPage({ viewport: { width, height } })
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000)
     const { rows, editorLeft, chips, synced } = await page.evaluate(measure)
     const inPeek = path.includes('peek=') && rows.length > 0 && await page.locator('.peek .continuous-editor').count() > 0
     await drawPass(page, rows)
+    // A smart note on the phone: each control in its header a 44px target, measured as the span of points that hit it
+    // (so a clipped or covered control counts as small), and the page no wider than the screen.
+    const smartControls = width < 900 ? page.locator('.continuous-editor .smart-note-head button') : null
+    const targets = []
+    for (let i = 0, n = smartControls ? await smartControls.count() : 0; i < n; i++) {
+      const control = smartControls.nth(i)
+      await control.evaluate(el => el.scrollIntoView({ block: 'center' }))
+      targets.push(await control.evaluate(el => {
+        const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2
+        const hits = (x, y) => { const at = document.elementFromPoint(x, y); return Boolean(at && (at === el || el.contains(at))) }
+        if (!hits(cx, cy)) return { label: el.getAttribute('aria-label') ?? el.textContent.trim(), note: el.closest('.smart-note').querySelector('.smart-note-name').textContent.slice(0, 24), width: 0, height: 0 }
+        let top = cy, bottom = cy, left = cx, right = cx
+        while (hits(cx, top - 1)) top--
+        while (hits(cx, bottom + 1)) bottom++
+        while (hits(left - 1, cy)) left--
+        while (hits(right + 1, cy)) right++
+        return { label: el.getAttribute('aria-label') ?? el.textContent.trim(), note: el.closest('.smart-note').querySelector('.smart-note-name').textContent.slice(0, 24), width: right - left + 1, height: bottom - top + 1 }
+      }))
+    }
+    const pageSpill = rows.some(r => r.kind.startsWith('smart note')) ? await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) : null
+    await page.evaluate(() => scrollTo(0, 0))
     const table = await page.evaluate(drawnCentres)
     // A row page lists the same values: the table's first row, opened read-only (a cell's key is block|row|column).
     let properties = []
@@ -546,7 +589,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
         const after = await page.evaluate(i => {
           const outer = document.querySelectorAll('.continuous-editor .bn-block-outer')[i]
           const content = [...outer.querySelectorAll('.bn-block-content')].find(c => c.closest('.bn-block-outer') === outer)
-          const text = content?.querySelector('.editor-task-title, .editor-page-card-title, .bn-inline-content, .database-title')
+          const text = content?.querySelector('.editor-task-title, .editor-page-card-title, .bn-inline-content, .database-title') ?? content?.querySelector('.smart-note-name > span') ?? content?.querySelector('.smart-note-name')
           if (!text) return null
           const range = document.createRange(); range.selectNodeContents(text)
           const line = [...range.getClientRects()].find(r => r.width > 0 && r.height > 0)
@@ -596,7 +639,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     if (inPeek) seen.get(width).add(path.includes('side=1') ? 'side peek' : 'peek')
     for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row'); if (r.kind === 'nested bullet' && r.depth >= 2) seen.get(width).add('level 3 bullet'); if (r.kind.endsWith(' task') && r.depth >= 1) seen.get(width).add(r.depth >= 2 ? 'level 3 task' : 'nested task'); if (r.kind.endsWith(' task') && r.depth >= 2) seen.get(width).add('nested task') }
     // 1. Columns.
-    const top = rows.filter(r => r.depth === 0 && r.kind !== 'heading' && r.kind !== 'paragraph')
+    const top = rows.filter(r => r.depth === 0 && r.kind !== 'heading' && r.kind !== 'paragraph' && !r.kind.startsWith('smart note'))
     const counts = new Map(); for (const r of top) { const x = Math.round(r.left); counts.set(x, (counts.get(x) ?? 0) + 1) }
     const usual = counts.size ? [...counts].sort((a, b) => b[1] - a[1])[0][0] : null
     const column = usual === null ? null : top.find(r => Math.round(r.left) === usual).left
@@ -604,6 +647,8 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       let expected = null, rule = '', x = r.left, what = 'text'
       // A database's title is styled as a section heading (design §4.1), so it shares the headings' edge.
       if (r.kind === 'heading' || r.kind === 'database table') { expected = editorLeft; rule = 'editor edge' }
+      // A smart note's left edge too: it's a block of its own, as a database is, and its words start at its edge.
+      else if (r.kind.startsWith('smart note')) { expected = editorLeft; rule = 'editor edge'; what = 'block' }
       else if (r.kind === 'paragraph') continue
       else if (r.depth > 0) {
         const parent = rows.find(p => p.index === r.parent); if (!parent) continue
@@ -615,6 +660,15 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       const off = x - expected
       results.push({ at, check: `${r.kind} ${what} x: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `x=${fmt(x)}, expected ${fmt(expected)} (${rule}), off ${off >= 0 ? '+' : ''}${fmt(off)}` })
     }
+    // A smart note's parts stay inside it; its body has the page's text size and line height.
+    for (const r of rows.filter(r => r.kind.startsWith('smart note'))) {
+      results.push({ at, check: `${r.kind} nothing past its edges: "${r.label}"`, ok: r.spill <= TOLERANCE, detail: `${fmt(r.spill)}px past` })
+      if (r.bodyText !== undefined) results.push(r.bodyText === null
+        ? { at, check: `${r.kind} body text: "${r.label}"`, ok: 'missing', detail: 'no page text beside it to compare with' }
+        : { at, check: `${r.kind} body text as the page's: "${r.label}"`, ok: r.bodyText.body === r.bodyText.page, detail: `${r.bodyText.body} vs ${r.bodyText.page}` })
+    }
+    for (const t of targets) results.push({ at, check: `smart note control a 44px target: ${t.label} in "${t.note}"`, ok: t.width >= 44 && t.height >= 44, detail: t.width ? `${t.width}x${t.height}px` : 'covered at its centre' })
+    if (pageSpill !== null) results.push({ at, check: 'page with a smart note no wider than the screen', ok: pageSpill <= 0, detail: `${pageSpill}px wider` })
     for (const r of rows) if (r.clipped !== undefined && !r.kind.startsWith('link'))
       results.push({ at, check: `${r.kind} title not clipped: "${r.label}"`, ok: !r.clipped, detail: r.clipped ?? 'wraps' })
     for (const block of synced) {

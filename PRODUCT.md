@@ -86,7 +86,8 @@ model configured and says "Simulated" when none is set. A mocked reply is never 
 - 44 px touch targets on the phone. System font stack. Icons are the app's own SVG set in `src/components/icons.tsx`.
 
 **Terminology on screen:** page, day page, to-do (a `Task` in code), row, property, view, linked view, database,
-dashboard, feed, form, Trash, Tomorrow, Upcoming, Today, Not today, Put back, peek, synced block, tag, `@date` chip.
+dashboard, feed, form, Trash, Tomorrow, Upcoming, Today, Not today, Put back, peek, synced block, smart note, tag,
+`@date` chip.
 
 **Open, not decided:**
 

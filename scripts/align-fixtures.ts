@@ -12,10 +12,12 @@
 // cancelled to-dos; a to-do with a nested one and a level-3 one under it; a bullet with a nested bullet, a level-3
 // one and an empty nested line; a to-do under a bullet; page cards with and without a preview (one with a long
 // title), a link card, and a line linking to another line (A11), with plain text before it so its baseline is
-// measured. Today's page gets one written line if it has none. Run it once per copy: a second run refuses.
+// measured. Today's page gets one written line if it has none. /pages?page=fixture-smart-page holds a smart note
+// block in each stored state. Run it once per copy: a second run refuses.
 import { resolve } from 'node:path'
 import { getRepository } from '../src/server/storage.ts'
 import { flatNodes, headingNode, pageContentKey, pageNodes, textRun, type EditorNode } from '../src/domain/editor-document.ts'
+import { collectInput } from '../src/domain/smart-note.ts'
 import type { Action, Workspace } from '../src/domain/types.ts'
 
 const SCRATCH = '2026-12-31'
@@ -236,6 +238,41 @@ if (!written(ws, today)) {
   const notes = nodes.findIndex(n => n.type === 'heading' && JSON.stringify(n.content).includes('"Notes"'))
   nodes.splice(notes < 0 ? nodes.length : notes + 1, 0, bullet('Fixture line today'))
   ws = await run({ type: 'save-editor', pageId: page.id, expectedContent: pageContentKey(page), document: JSON.stringify(nodes), today })
+}
+
+// Smart notes (smart-note.md §4): /pages?page=fixture-smart-page holds a block in each state a stored note can show:
+// plain (heading, paragraph, bullets, sources, a Read line with older pages left out), Notes changed, its range deleted,
+// and a block whose note is gone. Failed needs a failed ask, which can't be stored: the smoke covers it. Last, so no
+// later fixture changes the lines the plain note's key was made from.
+{
+  const sourceId = 'fixture-smart-source', hostId = 'fixture-smart-page', [s1, s2, s3] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
+  ws = await run({ type: 'create-document', title: 'Fixture smart note source', body: '', pageId: sourceId })
+  ws = await run({ type: 'save-editor', pageId: sourceId, expectedContent: pageContentKey(ws.pages.find(p => p.id === sourceId)!), document: JSON.stringify([bullet('No guest checkout in v1', [], s1), bullet('Address form is one step now', [], s2), bullet('Tax rounding has no owner yet', [], s3)]), today })
+  const range = { where: { kind: 'pages' as const, pageIds: [sourceId] }, days: 0 as const }
+  const at = new Date(Date.now() - 2 * 3600_000).toISOString()
+  const result = (inputKey: string) => ({
+    blocks: [
+      { kind: 'heading' as const, text: 'Decisions', sources: [] },
+      { kind: 'bullet' as const, text: 'Guest checkout is out of the first release', sources: [{ pageId: sourceId, blockId: s1 }] },
+      { kind: 'bullet' as const, text: 'The address form moves to one step', sources: [{ pageId: sourceId, blockId: s2 }, { pageId: sourceId, blockId: s1 }] },
+      { kind: 'heading' as const, text: 'Open questions', sources: [] },
+      { kind: 'paragraph' as const, text: 'Nobody owns the tax rounding change yet, so it waits for the next planning day.', sources: [{ pageId: sourceId, blockId: s3 }] },
+    ],
+    at, inputKey, pagesRead: 14, pagesLeftOut: 6, from: '2026-10-20', to: '2026-11-12',
+  })
+  const notes = [
+    { id: 'fixture-smart-plain', name: 'Checkout redesign: where things stand', range, inputKey: collectInput(ws, range, today).key },
+    { id: 'fixture-smart-changed', name: 'Checkout, changed since', range, inputKey: 'fixture-stale-key' },
+    { id: 'fixture-smart-gone', name: 'Checkout, range deleted', range: { where: { kind: 'pages' as const, pageIds: ['fixture-smart-no-such-page'] }, days: 0 as const }, inputKey: 'fixture-stale-key' },
+  ]
+  for (const n of notes) ws = await run({ type: 'save-smart-note', note: { id: n.id, name: n.name, prompt: 'Where does checkout stand?', range: n.range, refresh: 'manual', result: result(n.inputKey) } })
+  const block = (noteId: string): EditorNode => ({ id: crypto.randomUUID(), type: 'smartNote', props: { noteId }, children: [] })
+  const paragraph = (t: string): EditorNode => ({ id: crypto.randomUUID(), type: 'paragraph', props: {}, content: words(t), children: [] })
+  ws = await run({ type: 'create-document', title: 'Fixture smart notes', body: '', pageId: hostId })
+  // A bullet above, so the page has a row column; an empty line right below the first note, where IME input is checked.
+  ws = await run({ type: 'save-editor', pageId: hostId, expectedContent: pageContentKey(ws.pages.find(p => p.id === hostId)!), document: JSON.stringify([bullet('Fixture line above the smart notes'), block('fixture-smart-plain'), paragraph(''), block('fixture-smart-changed'), block('fixture-smart-gone'), block('fixture-smart-no-such-note'), bullet('Fixture line below the smart notes')]), today })
+  const plain = ws.smartNotes?.find(n => n.id === 'fixture-smart-plain')
+  if (!plain || collectInput(ws, plain.range, today).key !== plain.result.inputKey) { console.error('Fixture smart note would show Notes changed.'); process.exit(1) }
 }
 
 for (const [id, what] of [[previewId, 'page with words'], [emptyId, 'empty page'], [longId, 'long-title page'], [linkId, 'link page'], [databaseId, 'database'], [boardId, 'board'], [groupedId, 'grouped table'], [listId, 'list'], [galleryId, 'gallery'], [calendarId, 'calendar']] as const)

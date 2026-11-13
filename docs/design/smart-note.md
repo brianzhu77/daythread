@@ -1,7 +1,7 @@
 # Smart note: product requirements
 
-- Status: **draft. The three decisions in §11 are settled (Brian, 2026-11-12); the other proposals stand unless he
-  corrects them. Not built.**
+- Status: **the first release (§10) is built on the branch `claude/laughing-pike-f8c95f`, 2026-11-13; not merged.**
+  The three decisions in §11 are settled (Brian, 2026-11-12); the other proposals stand unless he corrects them.
 - Asked by Brian, 2026-11-12: a note whose content is written by the model from a saved prompt and a chosen range of
   the workspace, embedded in a page, refreshed hourly, daily or on demand.
 - What is his and what is proposed: §1 and the entry flow in §4 are his. Everything marked **(proposal)** is a call
@@ -83,7 +83,8 @@ the preview is read without a new kind of surface). It holds:
 
 **Preview** runs the prompt against the range and shows the result in the pane, with what it read ("Read 14 pages,
 Oct 20 to Nov 12 · 6 older pages left out"). It runs only when asked, since every run is a paid call. The prompt
-and range can be changed and previewed again.
+and range can be changed and previewed again. In the preview the source numbers are plain text; sources are followed
+from the saved block.
 
 **Save** stores the definition with the last preview as its first result and embeds the block. Nothing is stored and
 nothing is embedded before Save.
@@ -176,6 +177,7 @@ Rules for the two schedules **(all proposal):**
 - Implementation plan for the first release: `docs/plan/smart-note.md`. Its "Data model (ERD)" section shows the
   tables touched: no table or column is added.
 - The model key stays on the server. A run is allowed only for accounts with AI on (today's allow-list).
+  `OPENROUTER_BASE_URL`, for tests' stub model only, is honoured only for a loopback address.
 - A mocked or missing model is never shown as a model's answer (`PRODUCT.md`, Positioning).
 
 ## 9. Approaches considered
