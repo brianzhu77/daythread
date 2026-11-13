@@ -165,7 +165,9 @@ erDiagram
 
 ### Rollback
 
-A build from before this change reads a `smart` row as an ordinary page with a JSON body, because `pages.type` is free text. Rolling forward again is safe. To roll back for longer, first run, per workspace or for all: `delete from daythread.pages where type = 'smart'` (the notes are lost; the pages holding their blocks are untouched), after backing those rows up.
+The `smartNote` block type raises the rollback floor, as Buttons and the database block did (`docs/design/buttons.md`, `docs/plan/b21-sizing.md`): those shipped in two steps, first a release with the block spec and nothing that makes one, which became the floor, then the feature. This branch holds both steps. The choice open at merge: land it as two releases (the block spec and the `smart` row handling first, then the `/` item and setup), or land it as one and accept that a tab still on the previous build cannot open a page holding the block until it reloads.
+
+A build from before this change reads a `smart` row as an ordinary page with a JSON body, because `pages.type` is free text, and a save there rewrites its `document` as a page's. This build skips a row that is not a note's shape on the next load: that note is lost, and the pages holding its block show `This smart note was deleted`. So rolling forward again is safe for the workspace, and not for a note saved over by the older build. To roll back for longer, first run, per workspace or for all: `delete from daythread.pages where type = 'smart'` (the notes are lost; the pages holding their blocks are untouched), after backing those rows up.
 
 ### Decided for release 2, not now
 

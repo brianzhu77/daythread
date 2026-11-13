@@ -2,6 +2,9 @@
 
 - Status: **the first release (§10) is built on the branch `claude/laughing-pike-f8c95f`, 2026-11-13; not merged.**
   The three decisions in §11 are settled (Brian, 2026-11-12); the other proposals stand unless he corrects them.
+- First real run, 2026-11-13: fixture data (not Brian's own notes), the account's model through an isolated server.
+  15 pages read, 0 left out, 5 blocks, 1,973 ms, $0.000256; 3 sources, each opened the line it cites. Not measured:
+  cost and usefulness at the size of his real workspace; `inputChars` stays 60,000 until he runs one.
 - Asked by Brian, 2026-11-12: a note whose content is written by the model from a saved prompt and a chosen range of
   the workspace, embedded in a page, refreshed hourly, daily or on demand.
 - What is his and what is proposed: §1 and the entry flow in §4 are his. Everything marked **(proposal)** is a call
@@ -139,6 +142,8 @@ The range is a filter the user can state, applied by the app. The model never ch
   Embeddings are out of scope until this proves too weak.
 
 A database inside the range is read as its rows' titles and bodies. Reading properties as structured data is later.
+A page with a title and no readable line (a title-only row, a clip with no body) is read as one line, its title (with
+the address for a clip), citing the page itself; a day page with no line is not read.
 
 ## 6. Refresh
 
@@ -173,7 +178,10 @@ Rules for the two schedules **(all proposal):**
   "Linked from", the day draft and other smart notes do not see it.
 - Saving a definition is a command with Undo. In the first release a refresh is the user's own action and has Undo
   too: it brings the previous result back. A scheduled result (second release) must neither take nor clear the
-  user's Undo.
+  user's Undo. The notice after a refresh carries that Undo; because a result can land up to 90 s after Refresh was
+  pressed, it replaces the Undo of whatever he did meanwhile.
+- **Rollback floor:** the block type raises it, as Buttons did; this branch holds both steps, and whether to land
+  them as two releases is open at merge (`docs/plan/smart-note.md`, Rollback).
 - Implementation plan for the first release: `docs/plan/smart-note.md`. Its "Data model (ERD)" section shows the
   tables touched: no table or column is added.
 - The model key stays on the server. A run is allowed only for accounts with AI on (today's allow-list).
