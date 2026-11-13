@@ -1,6 +1,7 @@
 // The workspace as rows (shot 2): what the Postgres store reads and writes. Pure: no SQL here. A loaded workspace is
 // its rows with their positions; a command's result is turned back into rows, and the difference is what gets written,
 // with the rows as they were as the operation's inverse (what Undo puts back). The domain never sees positions.
+import type { SmartNote } from '../domain/smart-note.ts'
 import { expandedWorkspace, storedDocument, type SyncedRecord } from '../domain/synced.ts'
 import type { CommentThread, CommentAnchor, CommentProperty } from '../domain/comments.ts'
 import type { Automation } from '../domain/automations.ts'
@@ -91,11 +92,13 @@ const linkRow = (l: TaskLink): LinkRow => ({ id: linkId(l), blocked_id: l.blocke
 const linkOf = (r: LinkRow): TaskLink => ({ blockedId: r.blocked_id, blockerId: r.blocker_id, createdAt: r.created_at })
 export function workspaceOf(rows: Rows): Workspace {
   const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)
+  const smartNotes = sorted.filter(r => r.type === 'smart').flatMap(r => smartOf(r) ?? [])
   return expandedWorkspace({
     schemaVersion: 2, revision: rows.revision, timezone: rows.timezone, ...(rows.weekStart === 1 ? { weekStart: 1 as const } : {}),
     ...(() => { const rules = readRules(rows.todoAutomations); return rules?.length ? { todoAutomations: rules } : rows.todoAutomations && !rules ? { todoAutomationsUnreadable: true as const } : {} })(),
     ...(synced.length ? { synced } : {}),
-    pages: sorted.filter(r => r.type !== 'synced').map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
+    ...(smartNotes.length ? { smartNotes } : {}),
+    pages: sorted.filter(r => r.type !== 'synced' && r.type !== 'smart').map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
     deletedTasks: byPosition(rows.deleted).map(r => JSON.parse(r.data) as Task), receipts: {},
     ...(rows.threads.length ? { threads: [...rows.threads].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(threadOf) } : {}),
     ...(rows.links?.length ? { links: [...rows.links].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(linkOf) } : {}),
@@ -111,10 +114,27 @@ function recordOf(row: PageRow): SyncedRecord {
   const { rev, original } = JSON.parse(row.row_values ?? '{}') as { rev: number; original: string }
   return { id: row.id.slice('synced:'.length), lines: row.document, rev, original, ...(row.edited_at != null ? { editedAt: row.edited_at } : {}) }
 }
-/** The pages' rows and the records', in that order: each record's row sits after every page. */
+/** A smart note takes a hidden page row too: its prompt, range and result are one document, and a result write is one row. */
+const smartRow = (n: SmartNote, position: number): PageRow => ({
+  id: `smart:${n.id}`, position, type: 'smart', date: null, title: n.name, url: null, parent_id: null, trashed_at: null, trash_id: null,
+  document: JSON.stringify({ prompt: n.prompt, range: n.range, refresh: n.refresh, result: n.result }),
+  handoff_done: false, review_saved: false, database_json: null, row_values: null, created_at: null, edited_at: n.result.at, icon: null, cover: null, cover_position: null,
+})
+/** A row that does not parse is left out, so one bad note never stops the workspace from loading. */
+function smartOf(row: PageRow): SmartNote | null {
+  try {
+    const { prompt, range, refresh, result } = JSON.parse(row.document) as Omit<SmartNote, 'id' | 'name'>
+    return { id: row.id.slice('smart:'.length), name: row.title, prompt, range, refresh, result }
+  } catch {
+    console.warn(JSON.stringify({ level: 'warn', event: 'smart.unreadable' }))
+    return null
+  }
+}
+/** The pages' rows, the synced records' and the smart notes', in that order: each hidden row sits after every page. */
 const pageEntities = (ws: Workspace): { id: string; row(position: number): PageRow }[] => [
   ...ws.pages.map(p => ({ id: p.id, row: (position: number) => pageRow(p, position) })),
   ...(ws.synced ?? []).map(r => ({ id: `synced:${r.id}`, row: (position: number) => recordRow(r, position) })),
+  ...(ws.smartNotes ?? []).map(n => ({ id: `smart:${n.id}`, row: (position: number) => smartRow(n, position) })),
 ]
 
 /** Rows for a workspace with no history (a migration, a first import): positions are the indexes. */
