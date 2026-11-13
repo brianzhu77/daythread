@@ -95,16 +95,15 @@ export const askSmartNote = createServerFn({ method: "POST" })
     range: smartRange.optional(),
   }).parse(input))
   .handler(async ({ data }) => {
-    const [{ getRepository }, { currentOwner }, { accountModel }, { runSmartNote }, { smartNoteOf }] = await Promise.all([
-      import("./storage"), import("./auth/request-owner"), import("./model/access"), import("./model/smart-note"), import("../domain/smart-note"),
+    const [{ getRepository }, { currentOwner }, { accountModel }, { resolveSmartAsk, runSmartNote }] = await Promise.all([
+      import("./storage"), import("./auth/request-owner"), import("./model/access"), import("./model/smart-note"),
     ]);
     const owner = currentOwner() ?? "local";
     const config = await accountModel();
     if (!config) return { owner, status: "off" as const };
     const ws = await getRepository().load();
-    const stored = data.noteId ? smartNoteOf(ws, data.noteId) : undefined;
-    const spec = data.prompt && data.range ? { prompt: data.prompt, range: data.range, previous: stored?.result ?? null } : stored ? { prompt: stored.prompt, range: stored.range, previous: stored.result } : null;
-    if (!spec) return { owner, status: "failed" as const, error: "not-found" };
+    const spec = resolveSmartAsk(ws, data);
+    if ("error" in spec) return { owner, status: "failed" as const, error: spec.error };
     const run = await runSmartNote(ws, spec, config, data.today, new Date().toISOString());
     console.info(JSON.stringify({ level: "info", event: "smart.run", operationId: data.operationId, status: run.status, ...(run.status === "failed" ? { error: run.error } : { pagesRead: run.result.pagesRead, pagesLeftOut: run.result.pagesLeftOut, blocks: run.result.blocks.length, costUsd: run.costUsd }), elapsedMs: run.ms }));
     return run.status === "ready" ? { owner, status: "ready" as const, result: run.result } : { owner, status: "failed" as const, error: run.error };

@@ -5,7 +5,7 @@
 // open". Nothing here reads his words to decide where things go; the domain checks the result again before it is
 // stored (set-draft).
 import { dayEvents } from '../../domain/chip-events.ts'
-import { describeLine, flatNodes, inlineText, isTaskRow, pageNodes, type EditorNode } from '../../domain/editor-document.ts'
+import { describeLine, flatNodes, inlineText, isTaskRow, pageNodes, smartNoteBlockType, type EditorNode } from '../../domain/editor-document.ts'
 import { eligibleTask, isDraft, planningRange, sameWords, type DraftItem } from '../../domain/day-draft.ts'
 import { isTemplate } from '../../domain/day-template.ts'
 import { databaseOfRow, isDatabase, localWall } from '../../domain/database.ts'
@@ -76,7 +76,7 @@ export function earlierPages(ws: Workspace, page: Page, zone?: string): Page[] {
 /** A page's lines in order with their depth: a database view is left out, and a synced block's lines are shown once in all. */
 function linesOf(nodes: readonly EditorNode[], depth: number, seenSynced: Set<unknown>, out: { n: EditorNode; depth: number }[] = []) {
   for (const n of nodes) {
-    if (n.type === 'database') continue
+    if (n.type === 'database' || n.type === smartNoteBlockType) continue
     if (isSyncedBlock(n)) {
       if (seenSynced.has(n.props?.syncId)) continue
       seenSynced.add(n.props?.syncId)
@@ -114,10 +114,10 @@ export function buildDayDraftRequest(ws: Workspace, page: Page, zone?: string): 
   const doc = pageNodes(page), { start, end } = planningRange(doc)
   const blocks = new Map<string, EditorNode>(), lines = new Map<string, EditorNode>(), tasks = new Map<string, Task>()
   // Only the planning part gets ids: the model can't anchor anything in his reflection or notes.
-  // A database view on the page isn't his writing, and nothing can be anchored to it (R2-6).
+  // A database view on the page isn't his writing, and nothing can be anchored to it (R2-6); nor is a smart note's answer.
   const shownBlocks = new Set<unknown>()
   const pageRows = doc.flatMap((n, i) => {
-    if (n.type === 'database') return []
+    if (n.type === 'database' || n.type === smartNoteBlockType) return []
     // A synced block's lines are the day's context, once however many times it's shown, and nothing is anchored inside it.
     if (isSyncedBlock(n)) { if (shownBlocks.has(n.props?.syncId)) return []; shownBlocks.add(n.props?.syncId); return (n.children ?? []).map(line => `   ${describeLine(line, day)}`) }
     if (i < start || i >= end) return [`   ${describeLine(n, day)}`]

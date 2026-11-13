@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import { today, text, para } from './v2-helpers.ts'
 import { createEmptyWorkspace } from '../src/domain/workspace.ts'
 import type { EditorNode } from '../src/domain/editor-document.ts'
-import type { SmartInput, SmartRange, SmartResult } from '../src/domain/smart-note.ts'
+import type { SmartInput, SmartNote, SmartRange, SmartResult } from '../src/domain/smart-note.ts'
 import type { Page, Workspace } from '../src/domain/types.ts'
 import { ModelError, modelBaseUrl, type callStructured } from '../src/server/model/openrouter.ts'
-import { readAnswer, runSmartNote, smartMessages, smartNoteSchema } from '../src/server/model/smart-note.ts'
+import { readAnswer, resolveSmartAsk, runSmartNote, smartMessages, smartNoteSchema } from '../src/server/model/smart-note.ts'
 
 const page = (id: string, doc: EditorNode[], extra: Partial<Page> = {}): Page =>
   ({ id, type: 'document', date: null, title: id, document: JSON.stringify(doc), ...extra })
@@ -117,4 +117,75 @@ test('model address: only a loopback http address replaces the default, so the k
   assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: 'https://example.com/v1' }), fallback, 'another host')
   assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: 'http://127.0.0.1.example.com:3514' }), fallback, 'a host that only starts like loopback')
   assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: 'not a url' }), fallback, 'malformed')
+})
+
+test('messages: the system message states the answer\'s size, and the call allows 6000 tokens', async () => {
+  const [system] = smartMessages(input, 'p', null, today)
+  assert.match(system!.content, /at most 20 blocks/)
+  assert.match(system!.content, /at most 200 characters/)
+  let options: { maxTokens?: number } = {}
+  const call = (async (_c: unknown, _m: unknown, _s: unknown, o: { maxTokens?: number }) => { options = o; return { value: { blocks: [{ kind: 'paragraph', text: 'x', sources: [] }] }, raw: '', generationId: null, costUsd: 0, promptTokens: 1, completionTokens: 1 } }) as typeof callStructured
+  await runSmartNote(world([page('doc', [para('a', text('Book the train'))])]), { prompt: 'p', range, previous: null }, config, today, 'now', call)
+  assert.equal(options.maxTokens, 6000)
+})
+
+test('answer: the alias of a page read by its title maps back to the page, with blockId ""', () => {
+  const ws = world([page('row', [], { title: 'Ship the beta' })])
+  const titled = (async () => ({ value: { blocks: [{ kind: 'bullet', text: 'Ship it', sources: ['L1'] }] }, raw: '', generationId: null, costUsd: 0, promptTokens: 1, completionTokens: 1 })) as typeof callStructured
+  return runSmartNote(ws, { prompt: 'p', range, previous: null }, config, today, 'now', titled).then(run => {
+    assert.equal(run.status, 'ready')
+    assert.deepEqual(run.status === 'ready' && run.result.blocks[0]!.sources, [{ pageId: 'row', blockId: '' }])
+  })
+})
+
+test('run: a failure that is not a ModelError logs its name only and gives unavailable', async () => {
+  const warn = console.warn, logged: string[] = []
+  console.warn = (m: unknown) => { logged.push(String(m)) }
+  try {
+    const boom = (async () => { throw new TypeError('secret words from the notes') }) as typeof callStructured
+    const run = await runSmartNote(world([page('doc', [para('a', text('Book the train'))])]), { prompt: 'p', range, previous: null }, config, today, 'now', boom)
+    assert.equal(run.status === 'failed' && run.error, 'unavailable')
+  } finally { console.warn = warn }
+  assert.deepEqual(logged.map(l => JSON.parse(l)), [{ level: 'warn', event: 'smart.error', name: 'TypeError' }])
+  assert.ok(!logged.join('').includes('secret'))
+})
+
+const stored: SmartNote = { id: 'n1', name: 'Trip', prompt: 'What is left for the trip?', range: { where: { kind: 'pages', pageIds: ['a', 'b'] }, days: 30 }, refresh: 'manual', result: previous }
+const withStored: Workspace = { ...world([]), smartNotes: [stored] }
+
+test('ask: a refresh (noteId alone) runs the stored prompt and range with the stored result', () => {
+  assert.deepEqual(resolveSmartAsk(withStored, { noteId: 'n1' }), { prompt: stored.prompt, range: stored.range, previous })
+})
+
+test('ask: an unknown note is not-found', () => {
+  assert.deepEqual(resolveSmartAsk(withStored, { noteId: 'nope' }), { error: 'not-found' })
+  assert.deepEqual(resolveSmartAsk(withStored, {}), { error: 'not-found' })
+})
+
+test('ask: a preview with the stored prompt (trimmed) and range keeps the previous answer', () => {
+  const r = resolveSmartAsk(withStored, { noteId: 'n1', prompt: `  ${stored.prompt} `, range: { where: { kind: 'pages', pageIds: ['b', 'a'] }, days: 30 } })
+  assert.ok('previous' in r && r.previous === previous)
+})
+
+test('ask: a preview with a changed prompt or range, or for a new note, sends no previous answer', () => {
+  const changed = [
+    { noteId: 'n1', prompt: 'Something else?', range: stored.range },
+    { noteId: 'n1', prompt: stored.prompt, range: { where: { kind: 'pages', pageIds: ['a'] }, days: 30 } as SmartRange },
+    { noteId: 'n1', prompt: stored.prompt, range: { ...stored.range, days: 7 } as SmartRange },
+    { noteId: 'n1', prompt: stored.prompt, range: { where: { kind: 'workspace' }, days: 30 } as SmartRange },
+    { prompt: stored.prompt, range: stored.range },
+    { noteId: 'nope', prompt: 'New?', range },
+  ]
+  for (const ask of changed) {
+    const r = resolveSmartAsk(withStored, ask)
+    assert.ok('previous' in r && r.previous === null, JSON.stringify(ask))
+    assert.equal('prompt' in r && r.prompt, ask.prompt)
+  }
+})
+
+test('ask: a prompt alone or a range alone falls through to the stored note, or not-found', () => {
+  assert.deepEqual(resolveSmartAsk(withStored, { noteId: 'n1', prompt: 'Other?' }), { prompt: stored.prompt, range: stored.range, previous })
+  assert.deepEqual(resolveSmartAsk(withStored, { noteId: 'n1', range }), { prompt: stored.prompt, range: stored.range, previous })
+  assert.deepEqual(resolveSmartAsk(withStored, { prompt: 'Other?' }), { error: 'not-found' })
+  assert.deepEqual(resolveSmartAsk(withStored, { range }), { error: 'not-found' })
 })
