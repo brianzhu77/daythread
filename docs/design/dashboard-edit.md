@@ -142,3 +142,51 @@ only between two neighbours, and it trades width between them.
 - At 12, the limit line. At 390, the order, the 360 px cap with Show more, and Move up and Move down with the flash.
 - Dark mode: the ring, bars and badge are on the scale, with nothing restated.
 - Reduced motion.
+
+## 9. Filters across widgets (step 3, G6-6)
+
+From `dashboard.md` §4 (approved). The rules on what applies where are §4's. This is how they look.
+
+**Where they live:** in the dashboard head's `⋯`, "Filter", as a view's Filter is. Rules show as filter chips on a row of
+their own, under the head and above the first row of widgets, in `DESIGN.md`'s filter chip style (Paper, Border-subtle
+ring, Ink-soft, 8 px corners, 40 px tall). A chip reads as a view's does: "Status is Done ×". With a group, one chip
+reads "Status is Done and 1 group", which opens the sheet (filter-groups §2). With no rules, the row isn't there, so a
+dashboard without filters looks exactly as in step 1.
+
+**The sheet:** the same Filter sheet as a view's, 360 px at 1280 and a bottom sheet at 390, with its all/any, groups
+and limits. Only the property picker differs:
+
+- **Properties are listed once by name and type,** with their type icon, in the order of the widgets that have them.
+- **At the right of each,** in Meta Ink-soft, how many widgets have it, by name and type: "3 of 4". It's state, so the Quiet Copy Rule
+  allows it, and it's what tells him a rule won't reach every widget before he picks it.
+- **Two properties with one name but different types** are two entries ("Stage · Select", "Stage · Text"). The type
+  name shows only then.
+- **A select's options** are listed once by name, across the widgets that have the property. An option only some have
+  is listed like the rest. Where it's missing, the rule can't be read and counts neither way (§4).
+
+**Beside each widget's name,** only while the dashboard has rules, in Meta Ink-soft after the name:
+
+- **"Not filtered"** where no rule applies, and **"Partly filtered"** where some do. Both are link buttons (Roadbuster
+  882d566f) that open the sheet with each rule that doesn't apply to this widget marked at its right in Meta Ink-faint,
+  as "Not in Runs". The marks show only when the sheet was opened from a widget.
+- **Nothing** where every rule applies, which is the case to expect, so it's the quiet one.
+- **Space:** the name ends in "…" before the label does, at both widths.
+
+**A widget's own filter** keeps its own chips under its head, as now. The dashboard's rules are never added to them or
+saved into the widget, so a widget shows only what's its own.
+
+**In edit mode** the chips row and the labels stay and still work. Filtering isn't arranging, but hiding them would
+make widgets jump on Edit, which §2 rules out.
+
+**Rows filtered to none:** the widget shows its layout's usual empty state, and its name keeps "Partly filtered" or
+nothing, so he can tell it's the dashboard's filter, not an empty database.
+
+**At 390:** the chips row wraps, as a view's does. The label sits after the name on the head's line, and the name is
+cut first.
+
+**Not designed here:** "This page's day" (§4). A day page shows a dashboard as a link (§5), so there's no day for the
+rule to read. It appears only if a dashboard is ever drawn inline on a day page.
+
+**Checks once built:** the chips row's absence with no rules, so step 1's rects are unchanged. The "3 of 4" counts
+against the widgets. Each label against §4's three cases, at both widths and in dark mode. "Partly filtered" opening
+the sheet with the right rules marked. Long names cut before the label.
