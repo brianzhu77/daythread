@@ -2,7 +2,7 @@
 // numbered sources. The block holds only `noteId`. It takes no caret, so a tap raises no keyboard and IME is untouched.
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactElement, type SyntheticEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement, type SyntheticEvent } from 'react'
 import { pagePath } from '../domain/line-link'
 import { collectInput, livePlaces, rangeGone, smartNoteLines, smartNoteOf, smartNoteText, sourceNumbers, type SmartBlock, type SmartNote, type SmartResult } from '../domain/smart-note'
 import type { LocalDate, Page, Workspace } from '../domain/types'
@@ -12,6 +12,7 @@ import { flushAllEditors } from './editor-flush'
 import { RefreshIcon, SmartNoteIcon } from './icons'
 import { jumpInPage } from './line-jump'
 import { RowMenu, type MenuItem } from './row-menu'
+import { openSmartNoteSetup } from './smart-note-setup'
 import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
 /** What the block needs of the editor, declared here as `ButtonLine` declares its own. */
@@ -22,14 +23,15 @@ const stop = (e: SyntheticEvent) => e.stopPropagation()
 export function SmartNoteBlock({ blockId, noteId, editor }: { blockId: string; noteId: string; editor: BlockEditor }): ReactElement {
   const { workspace } = useWorkspace()
   const note = workspace ? smartNoteOf(workspace, noteId) : undefined
+  const box = useRef<HTMLDivElement>(null)
   const remove: MenuItem = { label: 'Delete', danger: true, onSelect: () => { editor.removeBlocks([blockId]) } }
-  return <div className={`smart-note${note ? '' : ' is-deleted'}`} contentEditable={false} onMouseDown={stop} onPointerDown={stop} onKeyDown={stop}>
-    {workspace && note ? <SmartNoteShown note={note} workspace={workspace} turnIntoText={() => { editor.replaceBlocks([blockId], smartNoteLines(workspace, note, () => crypto.randomUUID()) as never) }} remove={remove} />
+  return <div ref={box} className={`smart-note${note ? '' : ' is-deleted'}`} contentEditable={false} onMouseDown={stop} onPointerDown={stop} onKeyDown={stop}>
+    {workspace && note ? <SmartNoteShown note={note} workspace={workspace} edit={() => openSmartNoteSetup({ anchor: box.current, noteId })} turnIntoText={() => { editor.replaceBlocks([blockId], smartNoteLines(workspace, note, () => crypto.randomUUID()) as never) }} remove={remove} />
       : <div className="smart-note-head"><span className="smart-note-name">This smart note was deleted</span><RowMenu label="Smart note actions" triggerClass="smart-note-more" groups={[{ items: [remove] }]} /></div>}
   </div>
 }
 
-function SmartNoteShown({ note, workspace, turnIntoText, remove }: { note: SmartNote; workspace: Workspace; turnIntoText: () => void; remove: MenuItem }) {
+function SmartNoteShown({ note, workspace, edit, turnIntoText, remove }: { note: SmartNote; workspace: Workspace; edit: () => void; turnIntoText: () => void; remove: MenuItem }) {
   const on = useSmartNotesOn()
   const ask = useSmartRefresh(note.id)
   const changed = useNotesChanged(workspace, note)
@@ -54,7 +56,7 @@ function SmartNoteShown({ note, workspace, turnIntoText, remove }: { note: Smart
         <span className="smart-note-updated">Updated {ago(note.result.at, now)}</span>
         {on && <button type="button" className="smart-note-refresh" aria-label="Refresh" disabled={running} onClick={ask.refresh}><RefreshIcon /></button>}
         <RowMenu label={`${note.name} actions`} triggerClass="smart-note-more" groups={[
-          { items: [{ label: 'Copy', onSelect: copy }, { label: 'Turn into text', onSelect: turnIntoText }] },
+          { items: [...(on ? [{ label: 'Edit', onSelect: edit }] : []), { label: 'Copy', onSelect: copy }, { label: 'Turn into text', onSelect: turnIntoText }] },
           { items: [remove] },
         ]} />
       </span>
@@ -97,8 +99,8 @@ function SourceMark({ n, page, blockId }: { n: number; page: Page | undefined; b
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const dayLabel = (d: LocalDate, today: LocalDate) => fromIso(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(d.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }) })
 
-/** "Read 14 pages · Oct 20 to Nov 12 · 6 older pages left out". */
-function readLine(r: SmartResult, today: LocalDate): string {
+/** "Read 14 pages · Oct 20 to Nov 12 · 6 older pages left out". Shared with setup's preview. */
+export function readLine(r: SmartResult, today: LocalDate): string {
   const span = r.from && r.to ? ` · ${r.from === r.to ? dayLabel(r.from, today) : `${dayLabel(r.from, today)} to ${dayLabel(r.to, today)}`}` : ''
   return `Read ${plural(r.pagesRead, 'page')}${span}${r.pagesLeftOut ? ` · ${plural(r.pagesLeftOut, 'older page')} left out` : ''}`
 }

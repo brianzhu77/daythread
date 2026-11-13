@@ -34,7 +34,8 @@ import { moveInTree } from '../domain/line-move'
 import { buttonBlockType, blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { ButtonLine, ButtonPage } from './button-block'
-import { SmartNoteBlock } from './smart-note-block'
+import { SmartNoteBlock, useSmartNotesOn } from './smart-note-block'
+import { openSmartNoteSetup } from './smart-note-setup'
 import { smartNoteBlockType } from '../domain/smart-note'
 import { ButtonEditorHost, openButtonEditor } from './button-editor'
 import { buttonChanging, useRunButton } from './button-run'
@@ -55,7 +56,7 @@ import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CommentIcon, PageEmoji, BodyIcon, ImageIcon, PaperclipIcon, BulletListIcon, ButtonIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
+import { CommentIcon, PageEmoji, BodyIcon, ImageIcon, PaperclipIcon, BulletListIcon, ButtonIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SmartNoteIcon, SyncedIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
@@ -474,6 +475,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // B70: a page made inside the day template would be copied into every day, so the template makes none (Jazz §2).
   const onTemplate = isTemplate(page)
   const { run, refresh, latest } = useWorkspace()
+  const smartNotesOn = useSmartNotesOn()
   const copyBlockRef = useRef<(blockId: string) => void>(() => undefined)
   const endPlaceRef = useRef<(action: Extract<Action, { type: 'unsync-block' | 'delete-synced-place' }>) => Promise<void>>(async () => undefined)
   const runRef = useRef(run); runRef.current = run
@@ -3009,20 +3011,27 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           const role = insertionRole(currentId)
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
+        // A block made once its sheet is done: in place of the caret's line when it is an empty paragraph, else after it,
+        // else after the last block when the line is gone.
+        const putAtLine = (lineId: string, made: never) => {
+          const line = editor.getBlock(lineId)
+          if (!line) { const last = editor.document.at(-1); if (last) editor.insertBlocks([made], last.id, 'after'); return }
+          if (!inlineText(line.content).trim() && line.type === 'paragraph') editor.replaceBlocks([lineId], [made])
+          else editor.insertBlocks([made], lineId, 'after')
+        }
         const buttonItem = { title: 'Button', icon: <ButtonIcon />, aliases: ['button', '按钮'], group: 'Suggested', onItemClick: () => {
           // A new button with no finished step leaves no block (Jazz), so it goes in at Done.
           const lineId = editor.getTextCursorPosition().block.id
-          openButtonEditor({ pageId: page.id, initial: { label: '', steps: '' }, anchor: document.querySelector(`[data-id="${CSS.escape(lineId)}"]`), onDone: draft => {
-            const line = editor.getBlock(lineId), made = { type: buttonBlockType, props: draft } as never
-            if (!line) { const last = editor.document.at(-1); if (last) editor.insertBlocks([made], last.id, 'after'); return }
-            if (!inlineText(line.content).trim() && line.type === 'paragraph') editor.replaceBlocks([lineId], [made])
-            else editor.insertBlocks([made], lineId, 'after')
-          } })
+          openButtonEditor({ pageId: page.id, initial: { label: '', steps: '' }, anchor: document.querySelector(`[data-id="${CSS.escape(lineId)}"]`), onDone: draft => putAtLine(lineId, { type: buttonBlockType, props: draft } as never) })
         } }
         const syncedItem = { title: 'Synced block', icon: <SyncedIcon />, aliases: ['synced', 'sync', '同步'], group: 'Suggested', onItemClick: () => {
           const lineId = crypto.randomUUID()
           insertOrUpdateBlockForSlashMenu(editor, { type: syncedBlockType, props: { syncId: crypto.randomUUID(), rev: 0, key: '', roles: '' }, children: [{ id: lineId, type: 'paragraph' }] } as never)
           editor.setTextCursorPosition(lineId, 'start')
+        } }
+        const smartItem = { title: 'Smart note', icon: <SmartNoteIcon />, aliases: ['smart', 'ai', 'summary', 'digest', '智能', '总结'], group: 'Suggested', onItemClick: () => {
+          const lineId = editor.getTextCursorPosition().block.id
+          openSmartNoteSetup({ anchor: document.querySelector(`[data-id="${CSS.escape(lineId)}"]`), onPlaced: noteId => putAtLine(lineId, { type: smartNoteBlockType, props: { noteId } } as never) })
         } }
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
         // Pick the file, see the preview, and only then does a block appear (R4-8).
@@ -3036,7 +3045,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
         // Database sits after Page and Link to page (design §3.1). In a template, only a linked view can be made, so it
         // needs a database to show (§9.4).
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, buttonItem, syncedItem, ...first, ...rest, ...(onTemplate ? [] : [csvItem])], query)
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, buttonItem, syncedItem, ...(smartNotesOn && !onTemplate ? [smartItem] : []), ...first, ...rest, ...(onTemplate ? [] : [csvItem])], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}

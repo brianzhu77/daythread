@@ -19,7 +19,7 @@ export async function callStructured<T>(config: ModelConfig, messages: { role: s
   const timeout = AbortSignal.timeout(options.timeoutMs ?? 30_000)
   let response: Response
   try {
-    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    response = await fetch(`${process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1'}/chat/completions`, {
       method: 'POST',
       signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
       headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json', 'X-Title': 'Daythread' },

@@ -3025,6 +3025,45 @@ body:has(.button-editor) #bn-suggestion-menu { max-height: min(420px, 45vh); }
   .database-menu .button-step-row button { min-height: 44px; min-width: 36px; }
   .database-menu .button-editor-done { min-height: 36px; height: 36px; }
 }
+/* A smart note's picker and setup (smart-note.md §4), in Buttons' shell. */
+/* Room under a focused field for the sticky actions, so they never cover it. */
+.database-menu.button-editor.smart-setup { width: 400px; padding-bottom: 0; scroll-padding-bottom: 64px; }
+.smart-setup label.button-editor-label { display: block; }
+.smart-setup .smart-setup-prompt { min-height: 72px; resize: vertical; line-height: 1.4; }
+.database-menu > button.smart-setup-pick { gap: 8px; }
+.smart-setup-pick > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.smart-setup-pick > small { flex: none; color: var(--ink-3); font-size: var(--text-meta); }
+.smart-setup-range { display: flex; gap: 6px; margin: 2px 6px 6px; }
+.smart-setup-range .button-editor-field { flex: 1 1 0; min-width: 0; width: auto; margin: 0; }
+.smart-setup-pages { display: flex; flex-direction: column; }
+.smart-setup-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 6px 4px; }
+.smart-setup-chip { display: inline-flex; align-items: center; max-width: 100%; min-height: 28px; padding-left: 8px; border-radius: var(--radius-pill); background: var(--fill); color: var(--ink); font-size: var(--text-meta); }
+.smart-setup-chip > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.database-menu .smart-setup-chip button { flex: none; display: inline-grid; place-content: center; min-width: 28px; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+.smart-setup-page { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; color: var(--ink); cursor: pointer; }
+.smart-setup-page > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.smart-setup-page input { flex: none; accent-color: var(--blue); }
+.smart-setup-preview { margin: 4px 10px 6px; padding: 6px 0; border-top: 1px solid var(--line-soft); overflow-wrap: anywhere; }
+/* The sheet's bottom padding is the actions' own, so nothing shows beneath them as the sheet scrolls. */
+.smart-setup-actions { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 6px; margin-top: auto; padding: 8px 6px 6px; background: var(--paper); }
+.database-menu .smart-setup-actions button { min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-control); background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.database-menu .smart-setup-actions .smart-setup-run { margin-right: auto; }
+.database-menu .smart-setup-actions button:disabled { color: var(--ink-3); cursor: default; }
+/* The one primary on this surface. The light ink reads on the filled blue in both themes. */
+.database-menu .smart-setup-actions .smart-setup-save { border-color: var(--blue); background: var(--blue); color: var(--toast-ink); font-weight: var(--weight-medium); }
+.database-menu .smart-setup-actions .smart-setup-save:disabled { border-color: var(--fill); background: var(--fill); color: var(--ink-3); }
+@media (hover: hover) { .database-menu .smart-setup-actions .smart-setup-save:hover:not(:disabled) { border-color: var(--blue-pressed); background: var(--blue-pressed); } }
+@media (max-width: 899px) {
+  .database-menu.button-editor.smart-setup { width: auto; scroll-padding-bottom: 80px; }
+  .smart-setup textarea { font-size: 16px; }
+  .database-menu.smart-setup select, .database-menu.smart-setup input:not([type=checkbox]) { min-height: 44px; }
+  .smart-setup-page { min-height: 44px; }
+  .smart-setup-actions { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .smart-setup-page input { width: 20px; height: 20px; }
+  .smart-setup-chip { min-height: 44px; }
+  .database-menu .smart-setup-chip button { min-width: 44px; min-height: 44px; }
+  .database-menu .smart-setup-actions button { min-height: 44px; }
+}
 /* Comments (comments.md §2). Nothing shows until there's one. */
 /* Grey and quiet, so it doesn't read as an underline he made (comments.md §2). */
 .comment-underline { border-bottom: 2px solid var(--comment-underline); }
