@@ -84,11 +84,9 @@ export function pageNodes(page: Pick<Page, 'document'>): EditorNode[] {
   return nodes
 }
 
-/** A stale-save check: the saved document's fingerprint, short enough to travel with every save. */
-export function pageContentKey(page: Pick<Page, 'document'>): string {
+/** The hash `pageContentKey` uses, over any text. */
+export function textKey(s: string): string {
   let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762
-  // Another place's edit to a synced block isn't a change to this page.
-  const s = storedDocument(page.document)
   for (let i = 0; i < s.length; i++) {
     const k = s.charCodeAt(i)
     h1 = h2 ^ Math.imul(h1 ^ k, 597399067); h2 = h3 ^ Math.imul(h2 ^ k, 2869860233); h3 = h4 ^ Math.imul(h3 ^ k, 951274213); h4 = h1 ^ Math.imul(h4 ^ k, 2716044179)
@@ -96,6 +94,22 @@ export function pageContentKey(page: Pick<Page, 'document'>): string {
   h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067); h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233); h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213); h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179)
   h1 ^= h2 ^ h3 ^ h4; h2 ^= h1; h3 ^= h1; h4 ^= h1
   return `d:${s.length}:${[h1, h2, h3, h4].map(h => (h >>> 0).toString(16).padStart(8, '0')).join('')}`
+}
+
+/** A stale-save check: the saved document's fingerprint, short enough to travel with every save. */
+// Another place's edit to a synced block isn't a change to this page.
+export const pageContentKey = (page: Pick<Page, 'document'>): string => textKey(storedDocument(page.document))
+
+/** One line as the model reads it: `# `, `- `, `1. `, `[ ]`/`[x]` prefixes, else its words. `done`: a to-do row's state. */
+export function describeLine(n: EditorNode, date: string | null, done = false): string {
+  const words = inlineText(n.content, date).trim()
+  if (n.type === 'heading') return `${'#'.repeat(Number(n.props?.level ?? 2))} ${words}`
+  if (n.type === 'task') return `${done ? '[x]' : '[ ]'} ${words || '(empty to-do slot)'}`
+  if (n.type === 'bulletListItem') return `- ${words || '(empty bullet slot)'}`
+  if (n.type === 'numberedListItem') return `1. ${words || '(empty numbered slot)'}`
+  if (n.type === 'checkListItem') return `${n.props?.checked ? '[x]' : '[ ]'} ${words}`
+  if (n.type === 'divider') return '---'
+  return words || '(empty line)'
 }
 
 /**

@@ -5,7 +5,7 @@
 // open". Nothing here reads his words to decide where things go; the domain checks the result again before it is
 // stored (set-draft).
 import { dayEvents } from '../../domain/chip-events.ts'
-import { flatNodes, inlineText, isTaskRow, pageNodes, type EditorNode } from '../../domain/editor-document.ts'
+import { describeLine, flatNodes, inlineText, isTaskRow, pageNodes, type EditorNode } from '../../domain/editor-document.ts'
 import { eligibleTask, isDraft, planningRange, sameWords, type DraftItem } from '../../domain/day-draft.ts'
 import { isTemplate } from '../../domain/day-template.ts'
 import { databaseOfRow, isDatabase, localWall } from '../../domain/database.ts'
@@ -37,16 +37,6 @@ export const dayDraftSchema = {
 export interface ModelSuggestion { anchor: string; place: 'fill' | 'after'; kind: 'line_todo' | 'existing_todo' | 'line' | 'new_todo' | 'new_line'; taskId: string; lineId: string; text: string; why: string }
 
 const weekday = (d: LocalDate) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })
-const describe = (n: EditorNode, date: string | null) => {
-  const words = inlineText(n.content, date).trim()
-  if (n.type === 'heading') return `${'#'.repeat(Number(n.props?.level ?? 2))} ${words}`
-  if (n.type === 'task') return `[ ] ${words || '(empty to-do slot)'}`
-  if (n.type === 'bulletListItem') return `- ${words || '(empty bullet slot)'}`
-  if (n.type === 'numberedListItem') return `1. ${words || '(empty numbered slot)'}`
-  if (n.type === 'checkListItem') return `${n.props?.checked ? '[x]' : '[ ]'} ${words}`
-  if (n.type === 'divider') return '---'
-  return words || '(empty line)'
-}
 const hasDateChip = (n: EditorNode) => Array.isArray(n.content) && n.content.some(c => (c as { type?: string })?.type === 'dateMention')
 
 /** How far back a draft reads (Brian 3d7aca46): the pages edited in the last 7 days, and the day pages of those days. */
@@ -129,9 +119,9 @@ export function buildDayDraftRequest(ws: Workspace, page: Page, zone?: string): 
   const pageRows = doc.flatMap((n, i) => {
     if (n.type === 'database') return []
     // A synced block's lines are the day's context, once however many times it's shown, and nothing is anchored inside it.
-    if (isSyncedBlock(n)) { if (shownBlocks.has(n.props?.syncId)) return []; shownBlocks.add(n.props?.syncId); return (n.children ?? []).map(line => `   ${describe(line, day)}`) }
-    if (i < start || i >= end) return [`   ${describe(n, day)}`]
-    const id = `P${blocks.size + 1}`; blocks.set(id, n); return [`${id} ${describe(n, day)}`]
+    if (isSyncedBlock(n)) { if (shownBlocks.has(n.props?.syncId)) return []; shownBlocks.add(n.props?.syncId); return (n.children ?? []).map(line => `   ${describeLine(line, day)}`) }
+    if (i < start || i >= end) return [`   ${describeLine(n, day)}`]
+    const id = `P${blocks.size + 1}`; blocks.set(id, n); return [`${id} ${describeLine(n, day)}`]
   })
   // A line that reads the same as one on today's page (a template's own words, or something already brought over)
   // isn't sent again; headings are, as they say what the lines under them are for.
@@ -158,10 +148,10 @@ export function buildDayDraftRequest(ws: Workspace, page: Page, zone?: string): 
     earlier.push([`== ${name}${edited ? `, last edited ${edited.replace('T', ' ')}` : ''} ==`, ...kept.map(r => {
       if ('gap' in r) return `   (… ${r.gap} lines left out …)`
       const indent = '  '.repeat(r.depth)
-      if (r.n.type === 'heading') return `   ${indent}${describe(r.n, date)}`
+      if (r.n.type === 'heading') return `   ${indent}${describeLine(r.n, date)}`
       const id = `L${lines.size + 1}`; lines.set(id, r.n)
       const t = r.n.type === 'task' ? ws.tasks.find(x => x.id === r.n.props?.taskId) : undefined
-      const words = describe(r.n, date)
+      const words = describeLine(r.n, date)
       return `${id} ${indent}${words.length > LINE_CHARS ? `${words.slice(0, LINE_CHARS)}…` : words}${t ? ` (to-do, ${t.status})` : ''}`
     })].join('\n'))
   }
