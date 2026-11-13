@@ -2,7 +2,7 @@
 
 Reviewed 467c50e9 against 0e17612c, following revised design decisions through Lead 8db52bde. No UI exists in this head. Reviewer: Ratchet.
 
-## Changes required: empty group is lost on + New
+## Original finding at 467c50e9: empty group is lost on + New
 
 Confirmed by an independent fixture: a Board widget has no own filters, groups by Status, and the dashboard asks for Status=Done. Adding in the Board's No Status group produces Status=Done and `visible: true`. Ordinary `newRowValues` preserves the clicked empty group by clearing that property. The new dashboard merge reintroduces the dashboard default because the cleared property is absent from `mine.values` and not mentioned in the widget filter.
 
@@ -20,3 +20,9 @@ Reproduction: `node --test tests/ratchet-dashboard-filters.test.ts`. At this hea
 ## Limits
 
 No UI/browser/Worker/Postgres or independent rollback run for this head. No claim of implementation clearance while the empty-group regression remains. The earlier design experiment proving the old default-overwrite behavior is separate from this new grouped-row regression.
+
+## Repair at aa27a5be
+
+The empty-group finding is repaired. My unchanged empty-group assertion and an additional empty-subgroup fixture both pass. A clicked nonempty group is retained while the empty subgroup stays empty and hidden by the dashboard filter. The fix marks group/subgroup properties as occupied defaults before the merge.
+
+Independent targeted run: **38/38 pass** (34 author tests, 4 reviewer fixtures). Typecheck passes on shipping CI dependencies. No remaining domain blocker from this early review; UI, browser integration and actual rollback remain separate checks on the finished implementation.

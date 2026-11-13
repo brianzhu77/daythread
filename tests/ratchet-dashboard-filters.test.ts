@@ -20,4 +20,8 @@ C('a',{kind:'updateProperty',propertyId:'s',name:'Renamed',options:[{id:'d',name
 test('dashboard defaults preserve the clicked empty Board group',()=>{const db={homeBlockId:null,properties:[{id:'title',name:'Name',type:'text'},{id:'s',name:'Status',type:'select',options:[{id:'done',name:'Done'}]}],views:[]} as Database;
 const own={id:'v',name:'V',layout:'board',columns:[],sort:[],filter:[],groupBy:'s'} as View;
 const v=filteredView(own,[{by:'s',op:'isAnyOf',value:['done']}],false);
-const made=newRowValues(db,v,{today:'2026-11-13',pageDate:null,weekStart:0},sectionKey(noGroupKey,undefined));assert.equal(made.values.s,undefined);assert.equal(made.visible,false);});
+const made=newRowValues(db,v,{today:'2026-11-13',pageDate:null,weekStart:0},noGroupKey);assert.equal(made.values.s,undefined);assert.equal(made.visible,false);});
+
+test('empty subgroup is not refilled by dashboard defaults',()=>{const db={homeBlockId:null,properties:[{id:'title',name:'Name',type:'text'},{id:'s',name:'Status',type:'select',options:[{id:'done',name:'Done'}]},{id:'p',name:'Priority',type:'select',options:[{id:'high',name:'High'}]}],views:[]} as Database;
+const own={id:'v',name:'V',layout:'board',columns:[],sort:[],filter:[],groupBy:'s',subGroupBy:'p'} as View;
+const made=newRowValues(db,filteredView(own,[{by:'p',op:'isAnyOf',value:['high']}],false),{today:'2026-11-13',pageDate:null,weekStart:0},sectionKey('done',noGroupKey));assert.equal(made.values.s,'done');assert.equal(made.values.p,undefined);assert.equal(made.visible,false);});
