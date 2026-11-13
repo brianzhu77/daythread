@@ -394,3 +394,15 @@ test("+ New in a widget: its own filter's values win, a dashboard rule fills onl
   const plain = newRowValues(h.page('books').database!, { ...widget('w2')!.view, filter: [{ by: 'bst', op: 'isAnyOf', value: ['x'] }, { by: 'bst', op: 'isAnyOf', value: ['y'] }], filterAny: undefined } as never, { today: '2026-11-13', pageDate: null, weekStart: 0 })
   assert.equal(plain.values.bst, 'y')
 })
+
+test('+ New under a group keeps that group\'s value, even "No Stage", over a dashboard rule (Ratchet 85a08321)', () => {
+  const { h, D, filter, rule, widget, dash } = ruled()
+  D({ kind: 'updateWidget', widgetId: 'w2', fields: { groupBy: 'bst' } })
+  filter([rule('r1', ['Done'])])
+  const w = widget('w2')!, db = h.page('books').database!, { applied } = widgetRules(dash(), w, db)
+  const v = filteredView(w.view, applied, false), ctx = { today: '2026-11-13', pageDate: null, weekStart: 0 as const }
+  assert.equal(newRowValues(db, v, ctx, 'none').values.bst, undefined, 'No Stage stays empty, and hidden')
+  assert.equal(newRowValues(db, v, ctx, 'none').visible, false)
+  assert.equal(newRowValues(db, v, ctx, 'y').values.bst, 'y', 'the Idea group, not the dashboard Done')
+  assert.equal(newRowValues(db, v, ctx).values.bst, 'x', 'not under a group, the dashboard fills it')
+})
