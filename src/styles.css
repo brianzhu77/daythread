@@ -2947,6 +2947,31 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
 @keyframes button-spin { to { transform: rotate(360deg); } }
 .editor-button-more { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); opacity: 0; cursor: pointer; }
 .editor-button-line:hover .editor-button-more, .editor-button-more:focus-visible, .editor-button-more[aria-expanded=true] { opacity: 1; }
+/* A smart note (smart-note.md §4): a hairline above and below, as the feed's cards, and no box. Read-only text. */
+.smart-note { width: 100%; min-width: 0; margin: 6px 0; padding: 4px 0 10px; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); color: var(--ink); cursor: default; }
+.smart-note-head { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; min-height: 36px; }
+.smart-note-name { display: flex; flex: 1 1 14em; align-items: center; gap: 6px; min-width: 0; font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.smart-note-name svg { flex: none; width: 18px; height: 18px; color: var(--ink-3); }
+.smart-note.is-deleted .smart-note-name { color: var(--ink-3); font-weight: var(--weight-medium); }
+.smart-note-meta { display: flex; flex: none; align-items: center; gap: 6px; margin-left: auto; color: var(--ink-3); font-size: var(--text-meta); white-space: nowrap; }
+.smart-note-changed { padding: 1px 8px; border-radius: var(--radius-pill); background: var(--warn-soft); color: var(--warn); font-weight: var(--weight-medium); }
+.smart-note-status button { min-height: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-decoration: underline; cursor: pointer; }
+.smart-note-refresh, .smart-note-more { flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.smart-note-refresh:hover, .smart-note-more:hover { background: var(--fill-soft); }
+.smart-note-refresh:disabled { cursor: default; }
+.smart-note-head[aria-busy=true] .smart-note-refresh svg { animation: button-spin 1.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .smart-note-head[aria-busy=true] .smart-note-refresh svg { animation: none; opacity: .5; } }
+.smart-note-body { font-size: var(--text-ui); line-height: 1.5; }
+.smart-note-body p, .smart-note-body ul { margin: 4px 0; }
+.smart-note-body ul { padding-left: 1.3em; list-style: disc; }
+.smart-note-body .smart-note-heading { margin-top: 12px; font-weight: var(--weight-semibold); }
+.smart-note-source { margin-left: 3px; font-size: 11px; line-height: 0; }
+/* `.bn-editor a { color: revert; text-decoration: revert }` would make these browser-blue. */
+.bn-editor .smart-note .smart-note-source a, .smart-note-source a { position: relative; padding: 0 4px; border-radius: var(--radius-tight); background: var(--fill); color: var(--ink); text-decoration: none; }
+.smart-note-source a::after { content: ''; position: absolute; inset: -10px -4px; }
+.smart-note-source.is-gone { padding: 0 4px; color: var(--ink-3); }
+.smart-note-read { margin: 8px 0 0; color: var(--ink-3); font-size: var(--text-meta); }
+@media (max-width: 899px) { .smart-note-refresh, .smart-note-more { width: 44px; height: 44px; } }
 .database-menu.button-editor { width: 360px; max-height: min(80vh, 560px); padding-bottom: 6px; }
 .button-editor-head { position: sticky; top: 0; z-index: 2; background: var(--paper); }
 .database-menu .button-editor-done { margin-left: auto; min-height: 28px; height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: var(--ink); color: var(--paper); font: inherit; font-weight: var(--weight-medium); cursor: pointer; }

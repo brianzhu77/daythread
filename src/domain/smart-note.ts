@@ -1,5 +1,5 @@
 // Smart notes: a workspace-level record holds the prompt, the range and the model's result; a page holds only a `smartNote` block with `props.noteId`.
-import { describeLine, flatNodes, inlineText, pageNodes, taskOfRow, textDate, textKey, type EditorNode } from './editor-document.ts'
+import { describeLine, flatNodes, inlineText, pageNodes, rowTaskId, taskOfRow, textDate, textKey, textRun, type EditorNode } from './editor-document.ts'
 import { isTrashed, subtreeIds } from './page-tree.ts'
 import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
@@ -109,4 +109,52 @@ export function rangeGone(ws: Workspace, range: SmartRange): boolean {
   if (where.kind === 'pages') return !where.pageIds.some(id => ws.pages.some(p => p.id === id && !isTrashed(p)))
   if (where.kind === 'tag') return !where.tag.trim() || !tagIndex(ws).some(e => e.key === tagKey(where.tag))
   return false
+}
+
+/** The line a source points at, while its page is live and still holds it. */
+export function sourceLine(ws: Pick<Workspace, 'pages'>, source: SmartSource): { page: Page; node: EditorNode } | null {
+  const page = ws.pages.find(p => p.id === source.pageId && !isTrashed(p))
+  const node = page && flatNodes(pageNodes(page)).find(n => n.id === source.blockId)
+  return page && node ? { page, node } : null
+}
+
+const lineType = { heading: 'heading', paragraph: 'paragraph', bullet: 'bulletListItem' } as const
+
+/** The note as ordinary lines: heading (level 3), paragraph, bulletListItem; each source a `pageRef` inline with `lineId` (and `taskId` when the line is a to-do row). A source whose line is gone is left out. */
+export function smartNoteLines(ws: Workspace, note: SmartNote, newId: () => string): EditorNode[] {
+  return note.result.blocks.map((b): EditorNode => {
+    const refs = b.sources.flatMap(s => {
+      const line = sourceLine(ws, s)
+      return line ? [textRun(' '), { type: 'pageRef', props: { pageId: s.pageId, refId: newId(), newTitle: '', lineId: s.blockId, taskId: rowTaskId(line.node) ?? '' } }] : []
+    })
+    return { id: newId(), type: lineType[b.kind], props: b.kind === 'heading' ? { level: 3 } : {}, content: [textRun(b.text), ...refs], children: [] }
+  })
+}
+
+/** The note as plain text: `## ` headings, `- ` bullets, paragraphs; no sources. */
+export function smartNoteText(note: SmartNote): string {
+  return note.result.blocks.map((b, i) => {
+    const line = b.kind === 'heading' ? `## ${b.text}` : b.kind === 'bullet' ? `- ${b.text}` : b.text
+    return i === 0 ? line : `${b.kind === 'bullet' && note.result.blocks[i - 1]!.kind === 'bullet' ? '\n' : '\n\n'}${line}`
+  }).join('')
+}
+
+/** The page of each source whose line is still in place, by `${pageId}|${blockId}`; each page's document read once. */
+export function livePlaces(ws: Pick<Workspace, 'pages'>, result: SmartResult): Map<string, Page> {
+  const lines = new Map<string, Set<string>>(), out = new Map<string, Page>()
+  for (const s of result.blocks.flatMap(b => b.sources)) {
+    const page = ws.pages.find(p => p.id === s.pageId && !isTrashed(p))
+    if (!page) continue
+    let ids = lines.get(page.id)
+    if (!ids) { ids = new Set(flatNodes(pageNodes(page)).map(n => n.id)); lines.set(page.id, ids) }
+    if (ids.has(s.blockId)) out.set(`${s.pageId}|${s.blockId}`, page)
+  }
+  return out
+}
+
+/** Each distinct source's number, by first appearance. */
+export function sourceNumbers(result: SmartResult): Map<string, number> {
+  const numbers = new Map<string, number>()
+  for (const s of result.blocks.flatMap(b => b.sources)) { const key = `${s.pageId}|${s.blockId}`; if (!numbers.has(key)) numbers.set(key, numbers.size + 1) }
+  return numbers
 }

@@ -34,6 +34,8 @@ import { moveInTree } from '../domain/line-move'
 import { buttonBlockType, blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { ButtonLine, ButtonPage } from './button-block'
+import { SmartNoteBlock } from './smart-note-block'
+import { smartNoteBlockType } from '../domain/smart-note'
 import { ButtonEditorHost, openButtonEditor } from './button-editor'
 import { buttonChanging, useRunButton } from './button-run'
 import { readSteps } from '../domain/buttons'
@@ -113,6 +115,10 @@ const button = createReactBlockSpec({ type: buttonBlockType, propSchema: { label
 const syncedBlock = createReactBlockSpec({ type: syncedBlockType, propSchema: { syncId: { default: '' }, rev: { default: 0 }, key: { default: '' }, roles: { default: '' } }, content: 'none' }, {
   render: ({ block }) => <SyncedLabel blockId={block.id} syncId={block.props.syncId} />,
 })()
+// A smart note (docs/design/smart-note.md §4): the block names its record; the result lives in the workspace, never here.
+const smartNote = createReactBlockSpec({ type: smartNoteBlockType, propSchema: { noteId: { default: '' } }, content: 'none' }, {
+  render: ({ block, editor }) => <SmartNoteBlock blockId={block.id} noteId={block.props.noteId} editor={editor as never} />,
+})()
 function DatabaseInPage({ blockId, pageId, viewJson }: { blockId: string; pageId: string; viewJson: string }) {
   const actions = useContext(DatabaseEditorActions)
   return <DatabaseBlock blockId={blockId} pageId={pageId} viewJson={viewJson} hostDate={useContext(ChipPageDate)} actions={actions} />
@@ -164,7 +170,7 @@ const dateMention = createReactInlineContentSpec({ type: 'dateMention', propSche
   render: ({ inlineContent: { props } }) => <DateChipInPage date={props.date} time={props.time || null} />,
   toExternalHTML: ({ inlineContent: { props } }) => <span>{mentionText({ date: props.date, time: props.time || null }, null)}</span>,
 })
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, image: bodyImageSpec(), file: bodyFileSpec(), task, sourceChecklist, pageLink, database, button, [syncedBlockType]: syncedBlock }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, image: bodyImageSpec(), file: bodyFileSpec(), task, sourceChecklist, pageLink, database, button, [syncedBlockType]: syncedBlock, [smartNoteBlockType]: smartNote }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
 // B4 (F13): a plain line is "Body" and the divider is "Separator", in the / menu and the toolbar's line-type menu alike.
 /** The blocks the `/` menu offers from BlockNote's list, each with this app's icon. */
 const slashIcons: Record<string, ReactElement> = {
