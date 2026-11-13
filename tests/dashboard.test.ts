@@ -48,7 +48,7 @@ test('a dashboard is made only by addDashboard, and stays one', () => {
 
 test('renaming the dashboard view keeps its rows, and its reserved filter, untouched', () => {
   const { C, h, dash } = setup()
-  h.page('home').database!.views.find(v => v.id === 'dash')!.dashboard!.filter = [{ by: 'st', op: 'isAnyOf', value: ['a'] }]
+  h.page('home').database!.views.find(v => v.id === 'dash')!.dashboard!.filter = [{ id: 'r', name: 'Stage', type: 'select', op: 'isAnyOf', value: ['Idea'], on: {} }]
   const before = JSON.stringify(dash())
   C('home', { kind: 'updateView', viewId: 'dash', name: 'This month' })
   assert.equal(JSON.stringify(dash()), before)
