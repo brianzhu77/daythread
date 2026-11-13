@@ -63,7 +63,7 @@ export function DatabaseViewsButton({ blockId, databaseId, name }: { blockId: st
   const open = useOpenMenu()
   const here = open?.blockId === blockId && open.panel === 'views'
   return <button type="button" className="database-view-name" data-database-views={blockId} aria-haspopup="menu" aria-expanded={here}
-    onClick={() => setOpenMenu(here ? null : { blockId, databaseId, panel: 'views' })}>{name}<ChevronDownIcon /></button>
+    onClick={() => setOpenMenu(here ? null : { blockId, databaseId, panel: 'views' })}><span className="database-view-label">{name}</span><ChevronDownIcon /></button>
 }
 
 /** Mounted once (app shell): the open table menu, under its `⋯`. */

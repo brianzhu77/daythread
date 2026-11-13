@@ -36,7 +36,12 @@ const home = w.pages.find((p: any) => p.id === 'home').database
 await C('home', { kind: 'moveView', viewId: 'dash', beforeId: home.views[0].id })
 // Wall: a dashboard of four quarter widgets in one row, for wrapping with the Comments pane open.
 await run({ type: 'create-database', pageId: 'wall', homeBlockId: null, title: 'Wall' })
-await C('wall', { kind: 'addDashboard', view: { id: 'quad', name: 'Four' }, rows: [{ id: 'q', widgets: ['a', 'b', 'c', 'd'].map((x, i) => ({ id: `q${x}`, width: 3, source: i % 2 ? 'books' : 'runs', view: { ...firstWidgetView(db(i % 2 ? 'books' : 'runs'), `qv${x}`), name: `Quarter ${x}` } })) }] })
+// Wide: eight columns, wider than a phone, for a widget that scrolls sideways inside itself.
+await run({ type: 'create-database', pageId: 'wide', homeBlockId: null, title: 'Wide' })
+for (let n = 1; n <= 8; n++) await C('wide', { kind: 'addProperty', property: { id: `c${n}`, name: `Column ${n}`, type: 'text' } })
+await run({ type: 'add-row', databaseId: 'wide', pageId: 'wr1', title: 'A wide row', values: { c1: 'one', c8: 'eight' }, at })
+const quarterOf = (i: number) => (i === 3 ? 'wide' : i % 2 ? 'books' : 'runs')
+await C('wall', { kind: 'addDashboard', view: { id: 'quad', name: 'Four quarters of a dashboard with a very long name indeed' }, rows: [{ id: 'q', widgets: ['a', 'b', 'c', 'd'].map((x, i) => ({ id: `q${x}`, width: 3, source: quarterOf(i), view: { ...firstWidgetView(db(quarterOf(i)), `qv${x}`), name: `Quarter ${x}` } })) }] })
 await C('wall', { kind: 'moveView', viewId: 'quad', beforeId: w.pages.find((p: any) => p.id === 'wall').database.views[0].id })
 // Shelf: Books and Runs in a row, and under them a widget whose database has since gone for good (as Trash's sweep leaves it).
 await run({ type: 'create-database', pageId: 'temp', homeBlockId: null, title: 'Temp' })

@@ -3317,3 +3317,8 @@ textarea.form-input { resize: vertical; }
 /* After a move: the moved-line wash for 1 s, behind its content. */
 .dashboard-widget::after { content: ''; position: absolute; inset: -8px; z-index: -1; border-radius: var(--radius-block); background: transparent; transition: background .3s; pointer-events: none; }
 .dashboard-widget.is-moved::after { background: var(--blue-soft); }
+/* A long dashboard name ends in "…" before it reaches Edit (Jazz 352627d8). */
+.database-view-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-head .database-title-row { min-width: 0; }
+.dashboard-head .database-view-name { flex: 0 1 auto; min-width: 0; }
+.dashboard-head .database-more-button { flex: none; }
