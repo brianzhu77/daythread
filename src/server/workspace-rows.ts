@@ -1,6 +1,7 @@
 // The workspace as rows (shot 2): what the Postgres store reads and writes. Pure: no SQL here. A loaded workspace is
 // its rows with their positions; a command's result is turned back into rows, and the difference is what gets written,
 // with the rows as they were as the operation's inverse (what Undo puts back). The domain never sees positions.
+import { smartNote } from '../domain/command-schema.ts'
 import type { SmartNote } from '../domain/smart-note.ts'
 import { expandedWorkspace, storedDocument, type SyncedRecord } from '../domain/synced.ts'
 import type { CommentThread, CommentAnchor, CommentProperty } from '../domain/comments.ts'
@@ -120,15 +121,17 @@ const smartRow = (n: SmartNote, position: number): PageRow => ({
   document: JSON.stringify({ prompt: n.prompt, range: n.range, refresh: n.refresh, result: n.result }),
   handoff_done: false, review_saved: false, database_json: null, row_values: null, created_at: null, edited_at: n.result.at, icon: null, cover: null, cover_position: null,
 })
-/** A row that does not parse is left out, so one bad note never stops the workspace from loading. */
+/**
+ * A row that does not parse, or is not a note's shape, is left out, so one bad note never stops the workspace from
+ * loading nor a later write (an older build reads the row as a page, and a save there rewrites `document`).
+ */
 function smartOf(row: PageRow): SmartNote | null {
-  try {
-    const { prompt, range, refresh, result } = JSON.parse(row.document) as Omit<SmartNote, 'id' | 'name'>
-    return { id: row.id.slice('smart:'.length), name: row.title, prompt, range, refresh, result }
-  } catch {
-    console.warn(JSON.stringify({ level: 'warn', event: 'smart.unreadable' }))
-    return null
-  }
+  let parsed: unknown
+  try { parsed = JSON.parse(row.document) } catch { /* below */ }
+  const note = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? smartNote.safeParse({ ...parsed, id: row.id.slice('smart:'.length), name: row.title }) : null
+  if (note?.success) return note.data
+  console.warn(JSON.stringify({ level: 'warn', event: 'smart.unreadable' }))
+  return null
 }
 /** The pages' rows, the synced records' and the smart notes', in that order: each hidden row sits after every page. */
 const pageEntities = (ws: Workspace): { id: string; row(position: number): PageRow }[] => [

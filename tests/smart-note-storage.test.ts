@@ -84,6 +84,23 @@ test('rows: a smart row that cannot be read is skipped and the workspace still l
   assert.deepEqual(JSON.parse(warnings[0]!), { level: 'warn', event: 'smart.unreadable' })
 })
 
+test('rows: a smart row of the wrong shape is skipped, and the next command writes without throwing', () => {
+  const rows = rowsOf(withNote().ws)
+  const { result: { at: _, ...noAt }, ...rest } = JSON.parse(rows.pages.find(r => r.id === 'smart:n1')!.document) as Omit<SmartNote, 'id' | 'name'>
+  for (const document of ['[]', '{}', '"x"', JSON.stringify({ ...rest, result: noAt })]) {
+    const broken = { ...rows, pages: rows.pages.map(r => r.id === 'smart:n1' ? { ...r, document } : r) }
+    const warn = console.warn, warnings: string[] = []
+    console.warn = (m: unknown) => { warnings.push(String(m)) }
+    try {
+      const h = harness(workspaceOf(broken))
+      assert.equal(h.ws.smartNotes, undefined, document)
+      h.run({ type: 'create-document', title: 'Next', body: '', pageId: 'next' })
+      assert.doesNotThrow(() => planWrites(broken, h.ws), document)
+    } finally { console.warn = warn }
+    assert.deepEqual(warnings.map(w => JSON.parse(w)), [{ level: 'warn', event: 'smart.unreadable' }], document)
+  }
+})
+
 test('changes: a saved note reaches a tab through changesBetween and applyChanges', () => {
   const h = harness()
   h.run({ type: 'create-document', title: 'Doc', body: '', pageId: 'doc' })
