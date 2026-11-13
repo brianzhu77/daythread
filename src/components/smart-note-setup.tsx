@@ -119,6 +119,8 @@ function Setup({ note, workspace, onSaved }: { note: SmartNote | undefined; work
     if (receipt) onSaved(id)
   }
   const running = preview?.state === 'running'
+  // Only for the prompt and range as they stand: what shows is what Save stores, never the answer to an earlier wording.
+  const settled = preview && preview.state !== 'running' && preview.key === key ? preview : null
   // A reply lands below the fields: bring it into view, above the sticky actions.
   useEffect(() => { if (preview && !running) shown.current?.scrollIntoView({ block: 'nearest' }) }, [preview, running])
   return <>
@@ -128,11 +130,11 @@ function Setup({ note, workspace, onSaved }: { note: SmartNote | undefined; work
     <RangeFields range={range} workspace={workspace} onChange={setRange} />
     <label className="button-editor-label" htmlFor="smart-note-name">Name</label>
     <input id="smart-note-name" className="button-editor-name" maxLength={smartLimits.name} placeholder={prompt.trim().slice(0, 60)} value={name} onChange={e => setName(e.target.value)} />
-    {preview && preview.state !== 'running' && <div ref={shown} className="smart-setup-preview" role="status">
-      {preview.state === 'ready' ? <>
-        <SmartNoteBody result={preview.result} workspace={workspace} inert />
-        <p className="smart-note-read">{readLine(preview.result, todayIso())}</p>
-      </> : preview.error === 'empty-range' ? <span className="smart-note-status">No notes in this range</span>
+    {settled && <div ref={shown} className="smart-setup-preview" role="status">
+      {settled.state === 'ready' ? <>
+        <SmartNoteBody result={settled.result} workspace={workspace} inert />
+        <p className="smart-note-read">{readLine(settled.result, todayIso())}</p>
+      </> : settled.error === 'empty-range' ? <span className="smart-note-status">No notes in this range</span>
         : <span className="smart-note-status">Couldn't refresh · <button type="button" onClick={() => void runPreview()}>Retry</button></span>}
     </div>}
     <div className="smart-setup-actions">

@@ -2864,6 +2864,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // Keys typed in a draft band belong to the band. The rules below act on the editor's own caret row, so End
       // there would move his caret into his own row and send his next words to it.
       if ((e.target as Element).closest?.('.draft-host')) return
+      // Keys on a smart note's own controls (Refresh, Retry, its menu) belong to them: Enter there must not act on the caret's row.
+      if ((e.target as Element).closest?.('.smart-note')) return
       // Line end/start in a task row: the browser's own move can step over the row's non-editable parts (⋯, tags)
       // into the next block, so typing would land in the next heading. Make the same line move here, synchronously,
       // and keep it in the row; ProseMirror reads the browser's selection back.

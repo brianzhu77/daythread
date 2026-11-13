@@ -97,7 +97,7 @@ function SourceMark({ n, page, blockId }: { n: number; page: Page | undefined; b
   const navigate = useNavigate()
   if (!page) return <sup className="smart-note-source is-gone">{n}</sup>
   const href = pagePath(page, blockId)
-  return <sup className="smart-note-source"><a href={href} onClick={e => {
+  return <sup className="smart-note-source"><a href={href} aria-label={`Source ${n}: ${page.title.trim() || 'Untitled'}`} onClick={e => {
     e.preventDefault()
     // Nothing stays focused after a jump, so a phone keyboard goes down.
     if (blockId && jumpInPage(page.id, blockId)) { (document.activeElement as HTMLElement | null)?.blur(); return }

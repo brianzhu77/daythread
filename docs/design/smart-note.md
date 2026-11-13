@@ -174,7 +174,7 @@ Rules for the two schedules **(all proposal):**
 - The previous answer is sent back as data, one marked line per statement, never as instructions.
 - The answer is in the language of the prompt.
 - A date in the output is plain text, never an `@date` chip. A `#word` is plain text, never a tag.
-- Export writes a smart note as static text with its "Updated" time.
+- Export writes a smart note as static text with its "Updated" time, and `workspace.json` holds each note whole.
 
 ## 8. Data and rules for the build
 
@@ -194,8 +194,8 @@ Rules for the two schedules **(all proposal):**
   writes and through Undo. This is what lets the second release add fields without the first release losing them.
 - **At most 100 notes.** No menu removes a note, so at the limit a new note takes the room of one with no block left
   on any page (Trash included), the longest unrefreshed first. Only when every note has a block is the limit reached.
-- **Rollback floor:** the block type raises it, as Buttons did; this branch holds both steps, and whether to land
-  them as two releases is open at merge (`docs/plan/smart-note.md`, Rollback).
+- **Rollback floor:** the block type raises it, as Buttons did; this branch holds both steps and lands as one release
+  (Brian, 2026-11-13; what that costs is in `docs/plan/smart-note.md`, Rollback).
 - Implementation plan for the first release: `docs/plan/smart-note.md`. Its "Data model (ERD)" section shows the
   tables touched: no table or column is added.
 - The model key stays on the server. A run is allowed only for accounts with AI on (today's allow-list).

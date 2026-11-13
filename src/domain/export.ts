@@ -217,14 +217,14 @@ function yamlString(value: string): string {
   return JSON.stringify(value)
 }
 
-/** Every fact, readable without the app: pages with their documents (BlockNote JSON) and Markdown file, and tasks. */
+/** Every fact, readable without the app: pages with their documents (BlockNote JSON) and Markdown file, tasks, and smart notes (a page holds only a note's id). */
 export function exportJson(ws: Workspace, now: Date, names = fileNames(ws)) {
   const pages = ws.pages.map(p => {
     const { document: _document, ...rest } = p
     const folder = p.type === 'daily' && p.date ? 'days' : isTemplate(p) ? 'templates' : 'pages'
     return { ...rest, document: pageNodes(p), markdownFile: p.trashedAt ? null : `${folder}/${names.get(p.id)}.md` }
   })
-  return { format: 'daythread-export', formatVersion: exportFormatVersion, exportedAt: now.toISOString(), schemaVersion: ws.schemaVersion, revision: ws.revision, timezone: ws.timezone, pages, tasks: ws.tasks }
+  return { format: 'daythread-export', formatVersion: exportFormatVersion, exportedAt: now.toISOString(), schemaVersion: ws.schemaVersion, revision: ws.revision, timezone: ws.timezone, pages, tasks: ws.tasks, ...(ws.smartNotes?.length ? { smartNotes: ws.smartNotes } : {}) }
 }
 
 /** Files aren't in the zip, which is built in memory: each is named, so what's missing is plain. */

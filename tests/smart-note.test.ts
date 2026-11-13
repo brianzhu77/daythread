@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { inlineText, isEmptyLine, type EditorNode } from '../src/domain/editor-document.ts'
 import { hasContent, writtenDays } from '../src/domain/page-tree.ts'
-import { fileNames, pageMarkdown } from '../src/domain/export.ts'
+import { exportJson, fileNames, pageMarkdown } from '../src/domain/export.ts'
 import { livePlaces, placedSmartNotes, smartNoteLines, smartNoteText, smartPlaces, smartSpecKey, sourceNumbers, type SmartBlock, type SmartNote, type SmartResult } from '../src/domain/smart-note.ts'
 import { bullet, harness, text, todo } from './v2-helpers.ts'
 
@@ -196,6 +196,13 @@ test('export: a page holding a smart note block exports the note\'s name, its te
   const md = pageMarkdown(h.page('doc'), h.ws, fileNames(h.ws))
   assert.match(md, /\*\*Checkout\*\*\n- Guest checkout is out\n_Updated 2026-11-12_/)
   assert.equal(md.match(/Updated/g)?.length, 1)
+})
+
+test('export: workspace.json holds each smart note whole, and has no such key with none', () => {
+  const h = withDoc()
+  assert.ok(!('smartNotes' in exportJson(h.ws, new Date('2026-11-12T10:00:00Z'))))
+  h.run({ type: 'save-smart-note', note: note() })
+  assert.deepEqual(exportJson(h.ws, new Date('2026-11-12T10:00:00Z')).smartNotes, [note()])
 })
 
 test('live places: a source whose line is gone, or whose page is in Trash, has no place', () => {

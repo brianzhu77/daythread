@@ -146,6 +146,7 @@ if (withModel) {
   assert.equal(await sheet.locator('.smart-setup-preview a[href]').count(), 0, "the preview's source numbers are not links")
   await sheet.locator('#smart-note-prompt').fill('Where does checkout stand now?')
   assert.ok(await save.isDisabled(), 'changing the prompt disables Save again')
+  assert.equal(await sheet.locator('.smart-setup-preview').count(), 0, 'and takes the preview of the earlier prompt away')
   await sheet.locator('#smart-note-prompt').fill('Where does checkout stand?')
   assert.ok(await save.isEnabled(), 'the prompt the preview was run with enables it again')
   await sheet.locator('#smart-note-name').fill(digest)
@@ -254,6 +255,18 @@ if (withModel) {
   assert.equal(await pending(), false, 'and stops counting once its result is stored')
   await page.goto(`${base}/pages?page=${seeded.setup}`, { waitUntil: 'networkidle' })
   await page.locator('.smart-note', { hasText: digest }).locator('li', { hasText: refreshed }).first().waitFor()
+
+  // Enter on a focused Refresh belongs to the button: it refreshes, and the caret's line is left as it is.
+  await page.goto(`${base}/pages?page=${seeded.second}`, { waitUntil: 'networkidle' })
+  const words = page.locator('.bn-editor .bn-inline-content', { hasText: 'Second page words' })
+  await words.click(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight')
+  const blocksBefore = await page.locator('.bn-editor [data-node-type="blockContainer"]').count(), entered = `(answer ${stub.calls + 1})`
+  await there.getByRole('button', { name: 'Refresh' }).focus()
+  await page.keyboard.press('Enter')
+  await there.locator('li', { hasText: entered }).first().waitFor()
+  await page.waitForTimeout(300)
+  assert.equal(await page.locator('.bn-editor [data-node-type="blockContainer"]').count(), blocksBefore, 'Enter on Refresh adds no line')
+  assert.equal(await words.count(), 1, "and the caret's line keeps its words whole")
 } else {
   const items = await slash(seeded.setup, seeded.setupLine)
   assert.equal(await items.count(), 0, '`/smart` offers nothing without a model')
