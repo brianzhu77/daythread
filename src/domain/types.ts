@@ -6,7 +6,7 @@ export type LocalDate = string;
 export interface Page {
   id: string;
   /** `template`: the day template (B70), one per workspace, copied into each new day page; never listed as a page. */
-  type: "daily" | "document" | "template" | "draft" | "synced";
+  type: "daily" | "document" | "template" | "draft" | "synced" | "smart";
   /** Day pages: their date; one page per date, id `day:<date>`. */
   date: LocalDate | null;
   title: string;
@@ -86,6 +86,8 @@ export interface Workspace {
   deletedTasks: Task[];
   /** Synced blocks' lines, once each (synced.ts). Absent until there's one. */
   synced?: import("./synced.ts").SyncedRecord[];
+  /** Smart notes (smart-note.ts): prompt, range and result once each; a page holds only the block. Absent until there's one. */
+  smartNotes?: import("./smart-note.ts").SmartNote[];
   /** Comments, in a table of their own (comments.ts). Absent until there's one. */
   threads?: import("./comments.ts").CommentThread[];
   /** To-dos' rules (automations.md §7): To-dos isn't a stored database, so they're kept with the workspace. Absent until there's one. */
@@ -178,6 +180,8 @@ export type Action =
   /** The template goes for good (no Trash); Undo brings it back. */
   | { type: "delete-template"; pageId: string }
   | { type: "set-draft"; pageId: string; status: import("./day-draft.ts").DraftStatus; items: import("./day-draft.ts").DraftItem[]; moreOpen: string[]; allowedTaskIds: string[]; recipe?: number }
+  | { type: "save-smart-note"; note: import("./smart-note.ts").SmartNote }
+  | { type: "set-smart-note-result"; noteId: string; result: import("./smart-note.ts").SmartResult }
   | { type: "apply-draft"; pageId: string; itemIds: string[]; edits?: Record<string, string>; today?: LocalDate }
   | { type: "skip-draft"; pageId: string; itemIds: string[] }
   /** A database page with the default schema; `homeBlockId`: its `database` block in the parent page, null for a full page. */
