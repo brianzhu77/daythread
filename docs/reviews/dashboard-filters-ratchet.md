@@ -40,3 +40,7 @@ Executed author's `filters.mjs` on my own built preview and synthetic store: Chr
 Jazz's separate label-placement observation and the proposed Name-rule addition are not cleared by this head's evidence. Nested dashboard-owned groups are explicitly deferred by Jazz. Native Safari, Postgres/Worker and performance are not independently tested here.
 
 WebKit `filters.mjs`: **13/13** on its own fresh store. UI head typecheck also passes. No additional reliability blocker found at 0111b219; the remaining visual placement and Name scope decisions belong to the separately announced follow-up.
+
+## Name delta at 16829888
+
+Source-reviewed the title marker in the domain, command schema and sheet. The fixed title ID bypasses name/type lookup, while changing between title and an ordinary property invalidates the old binding. Non-text title rules are refused. An additional independent fixture confirms the marker targets fixed titles across sources even when its display label matches a custom text property, and removing that marker rebinds to the ordinary property. Targeted tests **41/41 pass**, including all prior binding/group fixtures; typecheck passes. No new domain blocker. Browser/visual regating of this delta remains with Lead/Jazz; my earlier browser results apply to 0111b219.
