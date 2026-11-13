@@ -1,7 +1,7 @@
 // Server side of sign-in: the gate's checks, the session cookie, and the /api/auth handlers (sign-in, sign-up,
 // sign-out, delete-account). Shot 2: any account on the invite list (or anyone, with DAYTHREAD_SIGNUP=open) may come
 // in; the first sign-in makes its account row and its workspace.
-import { getCookie, appendResponseHeader, getRequestIP } from '@tanstack/react-start/server'
+import { getRequest, appendResponseHeader, getRequestIP } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { getRepository, postgresSql } from '../storage.ts'
 import { PostgresWorkspaceRepository, schemaName } from '../postgres-repository.ts'
@@ -58,6 +58,7 @@ export function sessionCookie(request: Request, token: string, expiresAt: Date |
   const maxAge = expiresAt ? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)) : 0
   return `${cookieName(request)}=${expiresAt ? token : ''}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure(request) ? '; Secure' : ''}`
 }
+/** The session token a request carries: the one reader of the cookie, for the gate and for everything behind it. */
 function tokenOf(request: Request): string | undefined {
   const name = cookieName(request)
   for (const part of (request.headers.get('cookie') ?? '').split(';')) {
@@ -122,15 +123,18 @@ export async function ownerSession(token: string | undefined): Promise<CheckedSe
   return null
 }
 
-/** The signed-in account for the account row: its address and time zone; null when sign-in is off or the session is gone. */
-export async function currentAccount(): Promise<{ email: string; timezone: string } | null> {
+/**
+ * The account behind a request: its address and time zone; null when sign-in is off or the session is gone. The token
+ * is the one the gate read (`tokenOf`), so the account named here is always the one the gate let in.
+ */
+export async function accountOf(request: Request): Promise<{ email: string; timezone: string } | null> {
   if (!authRequired()) return null
-  const name = secureCookieNames.find(n => getCookie(n))
-  const session = name ? await ownerSession(getCookie(name)) : null
+  const session = await ownerSession(tokenOf(request))
   if (!session) return null
   return { email: session.email, timezone: (await workspaceStore().timezoneOf(session.userId)) ?? 'UTC' }
 }
-const secureCookieNames = ['__Host-daythread_session', 'daythread_session']
+/** The signed-in account of the request being served. */
+export const currentAccount = () => accountOf(getRequest())
 
 // Per-address brake on sign-in tries (failed or not) within one instance; the global failure backoff is in the store.
 const tries = new Map<string, number[]>()

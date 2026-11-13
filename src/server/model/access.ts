@@ -5,8 +5,8 @@ import { modelConfig, type ModelConfig } from './openrouter.ts'
 
 /**
  * With sign-in off, this machine's one user has the model. With sign-in on, only an account whose email is in
- * `emails` (DAYTHREAD_DRAFT_EMAILS, comma-separated): a request with no account read has none, so a cookie the account
- * lookup reads differently from the gate can never widen the list.
+ * `emails` (DAYTHREAD_DRAFT_EMAILS, comma-separated). The account is the one the gate let in (auth/server.ts reads
+ * the session cookie one way for both), and a request with no account has none: the list fails closed.
  */
 export function modelAllowed(signInOn: boolean, account: { email: string } | null, emails: string | undefined): boolean {
   if (!signInOn) return true
