@@ -51,6 +51,17 @@ await C('shelf', { kind: 'addDashboard', view: { id: 'shelfdash', name: 'Shelf b
   { id: 's2', widgets: [{ id: 's-gone', source: 'temp', view: firstWidgetView(db('temp'), 'sv-gone') }] },
 ] })
 await C('shelf', { kind: 'moveView', viewId: 'shelfdash', beforeId: w.pages.find((p: any) => p.id === 'shelf').database.views[0].id })
+// Filters (step 3): Reads has a Stage of its own, Idea and Done with ids of its own; Wide has none. Lens shows Runs, Reads and Wide.
+await run({ type: 'create-database', pageId: 'reads', homeBlockId: null, title: 'Reads' })
+await C('reads', { kind: 'addProperty', property: { id: 'rst', name: 'Stage', type: 'select', options: [{ id: 'rd', name: 'Done', color: 'gray' }, { id: 'ri', name: 'Idea', color: 'gray' }] } })
+for (const [id, title, st] of [['k1', 'Dune', 'ri'], ['k2', 'Emma', 'rd']]) await run({ type: 'add-row', databaseId: 'reads', pageId: id, title, values: { rst: st }, at })
+await run({ type: 'create-database', pageId: 'lens', homeBlockId: null, title: 'Lens' })
+await C('lens', { kind: 'addDashboard', view: { id: 'lensdash', name: 'Lens' }, rows: [{ id: 'l1', widgets: [
+  { id: 'l-runs', source: 'runs', view: firstWidgetView(db('runs'), 'lv-runs') },
+  { id: 'l-reads', source: 'reads', view: firstWidgetView(db('reads'), 'lv-reads') },
+  { id: 'l-wide', source: 'wide', view: firstWidgetView(db('wide'), 'lv-wide') },
+] }] })
+await C('lens', { kind: 'moveView', viewId: 'lensdash', beforeId: w.pages.find((p: any) => p.id === 'lens').database.views[0].id })
 // A to-do planned for today, for the To-dos widget's tick.
 const today = new Date().toLocaleDateString('en-CA')
 await run({ type: 'ensure-day', date: today })
