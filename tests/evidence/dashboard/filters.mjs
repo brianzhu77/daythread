@@ -29,6 +29,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   ok(`${tag} Wide has no Stage: "Not filtered", and its rows all show`, (await widget('Wide').locator('.dashboard-filter-label').innerText()) === 'Not filtered' && (await titles('Wide')).length === 1)
   const place = await widget('Wide').evaluate(w => { const n = w.querySelector('.database-title').getBoundingClientRect(), l = w.querySelector('.dashboard-filter-label').getBoundingClientRect(); return Math.round(l.left - n.right) })
   ok(`${tag} the label sits right after the name`, place >= 0 && place <= 12, `${place} px after it`)
+  const tabs = await page.evaluate(() => [...document.querySelectorAll('.dashboard-widget')].map(w => { const r = w.querySelector('.database-title-row').getBoundingClientRect(), m = w.querySelector('.database-title-row .database-more-button')?.getBoundingClientRect(); return m ? Math.round(r.right - m.right) : null }))
+  ok(`${tag} every widget's tab and ⋯ stay at the head's right, label or not`, tabs.every(x => x !== null && x <= 2), JSON.stringify(tabs))
   ok(`${tag} where every rule applies, nothing is said`, await widget('Runs').locator('.dashboard-filter-label').count() === 0 && await widget('Reads').locator('.dashboard-filter-label').count() === 0)
   // From the label: the sheet marks the rule "Not in Wide".
   await widget('Wide').locator('.dashboard-filter-label').click(); await settle()

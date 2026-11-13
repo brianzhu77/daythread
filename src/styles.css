@@ -3330,7 +3330,8 @@ textarea.form-input { resize: vertical; }
 .dashboard-filter-label { flex: none; margin-left: 0; color: var(--ink-2); font-size: var(--text-meta); white-space: nowrap; }
 /* Right after the name, which is cut first, so the state reads as the widget's, not its view tab's (Jazz 22e1c0a7). */
 .dashboard-widget .database-title.is-static { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-widget .database-title.is-static + .dashboard-filter-label { margin-right: auto; }
+/* The view tab and ⋯ keep the head's right, label or not, as in step 1 (Jazz 490c7f8c). */
+.dashboard-widget .database-title-row > .database-view-name { margin-left: auto; }
 .dashboard-rule-missing { color: var(--ink-3); font-size: var(--text-meta); white-space: nowrap; }
 .dashboard-filter-adds { display: grid; gap: 2px; }
 .dashboard-filter-adds .database-add-rule { display: flex; justify-content: space-between; gap: 12px; }
