@@ -3303,3 +3303,25 @@ textarea.form-input { resize: vertical; }
 .dashboard-badge { position: absolute; z-index: 4; padding: 1px 7px; border-radius: 6px; background: var(--fill); color: var(--ink-2); font-size: var(--text-meta); line-height: 20px; white-space: nowrap; pointer-events: none; }
 .dashboard-split .dashboard-badge { left: 50%; transform: translate(-50%, -50%); }
 .dashboard-row-size .dashboard-badge { top: 18px; }
+
+/* ---- At 390 (dashboard-edit.md §7, Jazz 352627d8): full width in reading order, content up to 360 px, no scrolling down inside. */
+.dashboard-head-main { overflow: hidden; }
+.dashboard-widget[data-wrapped] > .dashboard-split { display: none; }
+.dashboard-widget { isolation: isolate; }
+.dashboard.is-phone .dashboard-widget { flex: none; width: 100%; min-width: 0; height: auto; }
+.dashboard.is-phone .dashboard-widget-body { overflow: visible; }
+.dashboard-clip { position: relative; }
+.dashboard-clip.is-clipped { max-height: 360px; overflow: hidden; }
+.dashboard-clip.is-clipped::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--bg-doc)); pointer-events: none; transition: background .3s; }
+.dashboard-more { min-height: 36px; margin-top: 4px; border: 0; background: none; font-size: var(--text-meta); cursor: pointer; }
+/* After a move: the moved-line wash for 1 s, behind its content. */
+.dashboard-widget::after { content: ''; position: absolute; inset: -8px; z-index: -1; border-radius: var(--radius-block); background: transparent; transition: background .3s; pointer-events: none; }
+.dashboard-widget.is-moved::after { background: var(--blue-soft); }
+/* Everything inside that paints the page's colour (a frozen column, the Show more fade) takes the wash too (Jazz, p-moved):
+   the widget's own page colour is the wash while it lasts. */
+.dashboard-widget.is-moved { --bg-doc: var(--blue-soft); }
+/* A long dashboard name ends in "…" before it reaches Edit (Jazz 352627d8). */
+.database-view-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-head .database-title-row { min-width: 0; }
+.dashboard-head .database-view-name { flex: 0 1 auto; min-width: 0; }
+.dashboard-head .database-more-button { flex: none; }
