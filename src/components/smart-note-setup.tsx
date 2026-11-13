@@ -91,6 +91,8 @@ function Setup({ note, workspace, onSaved }: { note: SmartNote | undefined; work
   const [prompt, setPrompt] = useState(note?.prompt ?? ''), [range, setRange] = useState<SmartRange>(note?.range ?? { where: { kind: 'workspace' }, days: 0 }), [name, setName] = useState(note?.name ?? '')
   const [preview, setPreview] = useState<Preview | null>(null), [saving, setSaving] = useState(false)
   const asked = useRef(0), shown = useRef<HTMLDivElement>(null)
+  // One id for the life of the sheet, so a Save that failed and a second Save store one note.
+  const id = useRef(note?.id ?? crypto.randomUUID()).current
   const key = specKey(prompt, range), canAsk = askable(prompt, range)
   const fresh = preview?.state === 'ready' && preview.key === key ? preview.result : null
   // An Edit that changed neither keeps the stored result.
@@ -112,7 +114,6 @@ function Setup({ note, workspace, onSaved }: { note: SmartNote | undefined; work
   }
   const save = async () => {
     if (!result || !canSave) return
-    const id = note?.id ?? crypto.randomUUID()
     setSaving(true)
     const receipt = await run({ type: 'save-smart-note', note: { id, name: name.trim(), prompt: prompt.trim(), range, refresh: 'manual', result } }, r => ({ text: r.message, undoOperationId: r.operationId }))
     setSaving(false)

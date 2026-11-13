@@ -4,28 +4,33 @@
 //   node scripts/smart-note-smoke.mjs <base> --no-model   the server has no model key
 // A smart note block (smart-note.md §4): the record's result with numbered sources; Turn into text leaves ordinary lines
 // with the same words, ⌘Z brings the block back, and a block whose record is gone says so. With the stub as the model:
-// `/` → Smart note, setup with a preview, Save, the picker on a second page, Refresh, Edit and a failed refresh. With
-// no model: the last result still shows, with no Refresh, no Edit and no Smart note in `/`.
+// `/` → Smart note, setup with a preview, Save, the picker on a second page (no Notes changed in either place), Refresh
+// with Undo, Edit and a failed refresh. With no model: the last result still shows, with no Refresh, no Edit and no
+// Smart note in `/`. Copying the blocks puts the note's name in text/html, never the live block.
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import { chromium } from '@playwright/test'
 const base = process.argv[2] ?? 'http://127.0.0.1:3513', withModel = !process.argv.includes('--no-model')
 // Names unique to this run, so a store that has seen an earlier run still finds one of each.
-const run = Math.random().toString(36).slice(2, 7), sourceTitle = `Checkout notes ${run}`, digest = `Checkout digest ${run}`
+const run = Math.random().toString(36).slice(2, 7), sourceTitle = `Checkout notes ${run}`, digest = `Checkout digest ${run}`, secondTitle = `Smart second ${run}`
 
 // The only "model" this smoke ever reaches: two bullets citing L1 and L2, numbered by call so a refresh shows.
-const stub = { calls: 0, failNext: 0 }
+const stub = { calls: 0, failNext: 0, delayNext: 0 }
 const stubServer = withModel ? http.createServer((req, res) => {
   let body = ''
   req.on('data', c => { body += c })
   req.on('end', () => {
     const asked = (() => { try { return JSON.parse(body) } catch { return null } })()
     if (req.url !== '/chat/completions' || asked?.response_format?.json_schema?.name !== 'smart_note') { res.writeHead(503).end('{}'); return }
-    const n = ++stub.calls
+    const n = ++stub.calls, delay = stub.delayNext
+    stub.delayNext = 0
+    setTimeout(() => answer(n), delay)
+  })
+  const answer = n => {
     if (stub.failNext > 0) { stub.failNext--; res.writeHead(500, { 'content-type': 'application/json' }).end('{"error":{"message":"stub"}}'); return }
     const blocks = [{ kind: 'bullet', text: `Guest checkout stays out (answer ${n})`, sources: ['L1'] }, { kind: 'bullet', text: `The address form is one step (answer ${n})`, sources: ['L2'] }]
     res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ id: `stub-${n}`, choices: [{ message: { content: JSON.stringify({ blocks }) } }], usage: { cost: 0, prompt_tokens: 1, completion_tokens: 1 } }))
-  })
+  }
 }) : null
 if (stubServer) await new Promise(resolve => stubServer.listen(3514, '127.0.0.1', resolve))
 
@@ -34,7 +39,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
 page.on('pageerror', e => errors.push(e.message))
 await page.goto(base + '/', { waitUntil: 'networkidle' })
 
-const seeded = await page.evaluate(async sourceTitle => {
+const seeded = await page.evaluate(async ({ sourceTitle, secondTitle }) => {
   const [f, d, l] = await Promise.all([import('/src/server/functions.ts'), import('/src/domain/editor-document.ts'), import('/src/domain/line-link.ts')])
   let { workspace } = await f.loadWorkspace({ data: { operationId: crypto.randomUUID() } })
   const run = async action => { workspace = (await f.runCommand({ data: { operationId: crypto.randomUUID(), expectedRevision: workspace.revision, action } })).workspace }
@@ -43,6 +48,9 @@ const seeded = await page.evaluate(async sourceTitle => {
   const setup = crypto.randomUUID(), second = crypto.randomUUID(), setupLine = crypto.randomUUID(), secondLine = crypto.randomUUID()
   const text = t => [{ type: 'text', text: t, styles: {} }]
   const save = (pageId, document) => run({ type: 'save-editor', pageId, expectedContent: d.pageContentKey(workspace.pages.find(p => p.id === pageId)), document: JSON.stringify(document), today })
+  // The second page is edited before the source, so placing the note there later moves it up the reading order.
+  await run({ type: 'create-document', title: secondTitle, body: '', pageId: second })
+  await save(second, [{ id: crypto.randomUUID(), type: 'paragraph', props: {}, content: text('Second page words'), children: [] }, { id: secondLine, type: 'paragraph', props: {}, content: [], children: [] }])
   await run({ type: 'create-document', title: sourceTitle, body: '', pageId: src })
   await save(src, [{ id: l1, type: 'bulletListItem', props: {}, content: text('No guest checkout in v1'), children: [] }, { id: l2, type: 'bulletListItem', props: {}, content: text('Address form is one step now'), children: [] }])
   await run({ type: 'save-smart-note', note: { id: 'smoke-note', name: 'Checkout: where things stand', prompt: 'Where does checkout stand?', range: { where: { kind: 'pages', pageIds: [src] }, days: 0 }, refresh: 'manual', result: {
@@ -50,13 +58,11 @@ const seeded = await page.evaluate(async sourceTitle => {
     at: new Date().toISOString(), inputKey: 'seeded', pagesRead: 1, pagesLeftOut: 0, from: today, to: today,
   } } })
   await run({ type: 'create-document', title: 'Smart home', body: '', pageId: host })
-  await save(host, [{ id: crypto.randomUUID(), type: 'paragraph', props: {}, content: text('Above the note'), children: [] }, { id: crypto.randomUUID(), type: 'smartNote', props: { noteId: 'smoke-note' }, children: [] }, { id: crypto.randomUUID(), type: 'smartNote', props: { noteId: 'no-such-note' }, children: [] }])
+  await save(host, [{ id: crypto.randomUUID(), type: 'paragraph', props: {}, content: text('Above the note'), children: [] }, { id: crypto.randomUUID(), type: 'smartNote', props: { noteId: 'smoke-note' }, children: [] }, { id: crypto.randomUUID(), type: 'smartNote', props: { noteId: 'no-such-note' }, children: [] }, { id: crypto.randomUUID(), type: 'paragraph', props: {}, content: text('Below the notes'), children: [] }])
   await run({ type: 'create-document', title: 'Smart setup', body: '', pageId: setup })
   await save(setup, [{ id: setupLine, type: 'paragraph', props: {}, content: [], children: [] }])
-  await run({ type: 'create-document', title: 'Smart second', body: '', pageId: second })
-  await save(second, [{ id: secondLine, type: 'paragraph', props: {}, content: [], children: [] }])
   return { host, setup, second, setupLine, secondLine, l1Path: l.pagePath(workspace.pages.find(p => p.id === src), l1), on: (await f.smartNotesOn()).on }
-}, sourceTitle)
+}, { sourceTitle, secondTitle })
 assert.equal(seeded.on, withModel, withModel ? 'the server has the stub as its model' : 'the server has no model')
 
 await page.goto(`${base}/pages?page=${seeded.host}`, { waitUntil: 'networkidle' })
@@ -86,6 +92,18 @@ await page.keyboard.press('ControlOrMeta+z'); await page.waitForTimeout(300)
 assert.equal(await page.locator('.smart-note:not(.is-deleted)').count(), 1, 'Undo brings the block back')
 assert.equal(await editor.locator('.bn-inline-content', { hasText: 'Guest checkout is out' }).count(), 0, 'and takes the lines away')
 
+// Copy with both blocks selected: each is a plain line in text/html, the name or "Smart note", never the live block.
+await editor.locator('.bn-inline-content', { hasText: 'Above the note' }).click()
+await page.evaluate(() => {
+  const words = text => [...document.querySelectorAll('.bn-editor .bn-inline-content')].find(e => e.textContent === text).firstChild
+  getSelection().setBaseAndExtent(words('Above the note'), 0, words('Below the notes'), 3)
+})
+await page.waitForTimeout(200)
+const copied = await page.evaluate(() => { const dt = new DataTransfer(); document.activeElement.dispatchEvent(new ClipboardEvent('copy', { clipboardData: dt, bubbles: true, cancelable: true })); return dt.getData('text/html') })
+assert.match(copied, /<p[^>]*>Checkout: where things stand<\/p>/, 'the copy names the note')
+assert.match(copied, /<p[^>]*>Smart note<\/p>/, 'a block whose note is gone copies as "Smart note"')
+for (const live of ['smart-note-head', 'Updated', 'Guest checkout is out', 'This smart note was deleted']) assert.ok(!copied.includes(live), `the copy holds no live block (${live})`)
+
 // `/smart` on an empty line: the menu's items, by title.
 const slash = async (pageId, lineId) => {
   await page.goto(`${base}/pages?page=${pageId}`, { waitUntil: 'networkidle' })
@@ -108,11 +126,14 @@ if (withModel) {
   await sheet.locator('#smart-note-where').selectOption('pages')
   await sheet.locator('#smart-note-pages').fill(sourceTitle)
   await sheet.locator('.smart-setup-page', { hasText: sourceTitle }).locator('input').check()
+  // The second page is read too, so placing the note there (an edit that reads nothing new) must not show Notes changed.
+  await sheet.locator('#smart-note-pages').fill(secondTitle)
+  await sheet.locator('.smart-setup-page', { hasText: secondTitle }).locator('input').check()
   assert.ok(await save.isDisabled(), 'Save is still disabled with no preview')
   await sheet.getByRole('button', { name: 'Run preview' }).click()
   await sheet.locator('.smart-setup-preview li', { hasText: 'Guest checkout stays out' }).waitFor()
   assert.equal(await sheet.locator('.smart-setup-preview li').count(), 2, "the preview shows the stub's two bullets")
-  assert.match(await sheet.locator('.smart-setup-preview .smart-note-read').innerText(), /^Read 1 page · /, 'the preview shows the Read line')
+  assert.match(await sheet.locator('.smart-setup-preview .smart-note-read').innerText(), /^Read 2 pages · /, 'the preview shows the Read line')
   assert.ok(await save.isEnabled(), 'Save is enabled after a preview')
   assert.ok(await sheet.locator('.smart-setup-preview .smart-note-source').count() > 0, 'the preview shows its source numbers')
   assert.equal(await sheet.locator('.smart-setup-preview a[href]').count(), 0, "the preview's source numbers are not links")
@@ -133,6 +154,9 @@ if (withModel) {
   assert.ok(await made.locator('.smart-note-source a[href]').count() > 0, "the saved block's source numbers are links")
   assert.equal(await page.locator(`.bn-editor [data-id="${seeded.setupLine}"]`).count(), 0, 'the block took the empty line')
   await page.getByText('Smart note saved').first().waitFor()
+  // The check runs when the tab is idle: give it time, so its absence means something.
+  const unchanged = async (block, where) => { await page.waitForTimeout(1500); assert.equal(await block.locator('.smart-note-changed').count(), 0, `no Notes changed ${where}`) }
+  await unchanged(made, 'right after Save')
 
   // Edit: the stored prompt, Save on as it stands, off once the prompt changes; Cancel stores nothing.
   await made.getByRole('button', { name: `${digest} actions` }).click()
@@ -148,7 +172,7 @@ if (withModel) {
   // route change (no reload, and no press outside the sheet).
   const noteCount = () => page.evaluate(async () => (await (await import('/src/server/functions.ts')).loadWorkspace({ data: { operationId: crypto.randomUUID() } })).workspace.smartNotes?.length ?? 0)
   const before = await noteCount()
-  await page.locator('.tree-title[title="Smart second"]').first().click()
+  await page.locator(`.tree-title[title="${secondTitle}"]`).first().click()
   await page.waitForURL(url => url.search.includes(seeded.second))
   await page.locator(`.bn-editor [data-id="${seeded.secondLine}"] .bn-inline-content`).click()
   await page.keyboard.type('/smart'); await page.waitForTimeout(400)
@@ -172,11 +196,32 @@ if (withModel) {
   const there = page.locator('.smart-note', { hasText: digest })
   await there.locator('li', { hasText: previewed }).waitFor()
   assert.equal(await there.locator('li').count(), 2, 'the second place shows the same result')
+  await unchanged(there, 'on the second page right after choosing the note')
+  await page.goto(`${base}/pages?page=${seeded.setup}`, { waitUntil: 'networkidle' })
+  await unchanged(page.locator('.smart-note', { hasText: digest }), 'on the first page after the second place was saved')
+  await page.goto(`${base}/pages?page=${seeded.second}`, { waitUntil: 'networkidle' })
+  await there.locator('li', { hasText: previewed }).waitFor()
 
-  // Refresh in one place updates both.
-  const refreshed = `(answer ${stub.calls + 1})`
+  // Refresh has Undo: the notice brings the previous result back.
+  const undone = `(answer ${stub.calls + 1})`
   await there.getByRole('button', { name: 'Refresh' }).click()
+  await there.locator('li', { hasText: undone }).first().waitFor()
+  const updated = page.locator('[data-slot=toast]', { hasText: 'Smart note updated' })
+  await updated.waitFor()
+  await updated.getByRole('button', { name: 'Undo' }).click()
+  await there.locator('li', { hasText: previewed }).waitFor()
+  assert.equal(await there.locator('li', { hasText: undone }).count(), 0, 'Undo of a refresh brings the previous result back')
+
+  // Refresh in one place updates both. While it is out, the tab counts as busy for a move onto a new build.
+  const refreshed = `(answer ${stub.calls + 1})`
+  const pending = () => page.evaluate(async () => (await import('/src/components/smart-note-block.tsx')).smartAskPending())
+  stub.delayNext = 1500
+  await there.getByRole('button', { name: 'Refresh' }).click()
+  await page.waitForTimeout(500)
+  assert.equal(await pending(), true, 'a refresh that is out counts as busy')
   await there.locator('li', { hasText: refreshed }).first().waitFor()
+  await page.waitForTimeout(200)
+  assert.equal(await pending(), false, 'and stops counting once its result is stored')
   await page.goto(`${base}/pages?page=${seeded.setup}`, { waitUntil: 'networkidle' })
   await page.locator('.smart-note', { hasText: digest }).locator('li', { hasText: refreshed }).first().waitFor()
 } else {

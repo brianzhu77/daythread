@@ -34,7 +34,7 @@ import { moveInTree } from '../domain/line-move'
 import { buttonBlockType, blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { ButtonLine, ButtonPage } from './button-block'
-import { SmartNoteBlock, useSmartNotesOn } from './smart-note-block'
+import { SmartNoteBlock, SmartNoteCopy, useSmartNotesOn } from './smart-note-block'
 import { openSmartNoteSetup } from './smart-note-setup'
 import { smartNoteBlockType } from '../domain/smart-note'
 import { ButtonEditorHost, openButtonEditor } from './button-editor'
@@ -119,6 +119,7 @@ const syncedBlock = createReactBlockSpec({ type: syncedBlockType, propSchema: { 
 // A smart note (docs/design/smart-note.md §4): the block names its record; the result lives in the workspace, never here.
 const smartNote = createReactBlockSpec({ type: smartNoteBlockType, propSchema: { noteId: { default: '' } }, content: 'none' }, {
   render: ({ block, editor }) => <SmartNoteBlock blockId={block.id} noteId={block.props.noteId} editor={editor as never} />,
+  toExternalHTML: ({ block }) => <SmartNoteCopy noteId={block.props.noteId} />,
 })()
 function DatabaseInPage({ blockId, pageId, viewJson }: { blockId: string; pageId: string; viewJson: string }) {
   const actions = useContext(DatabaseEditorActions)

@@ -13,7 +13,7 @@ import { RefreshIcon, SmartNoteIcon } from './icons'
 import { jumpInPage } from './line-jump'
 import { RowMenu, type MenuItem } from './row-menu'
 import { openSmartNoteSetup } from './smart-note-setup'
-import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
+import { newOperationId, useWorkspace, useWorkspaceIfAny, workspaceOwner } from './use-day'
 
 /** What the block needs of the editor, declared here as `ButtonLine` declares its own. */
 type BlockEditor = { replaceBlocks(ids: string[], blocks: never): unknown; removeBlocks(ids: string[]): unknown }
@@ -29,6 +29,12 @@ export function SmartNoteBlock({ blockId, noteId, editor }: { blockId: string; n
     {workspace && note ? <SmartNoteShown note={note} workspace={workspace} edit={() => openSmartNoteSetup({ anchor: box.current, noteId })} turnIntoText={() => { editor.replaceBlocks([blockId], smartNoteLines(workspace, note, () => crypto.randomUUID()) as never) }} remove={remove} />
       : <div className="smart-note-head"><span className="smart-note-name">This smart note was deleted</span><span className="smart-note-actions"><RowMenu label="Smart note actions" triggerClass="smart-note-more" groups={[{ items: [remove] }]} /></span></div>}
   </div>
+}
+
+/** The block in copied HTML: the note's name only, never the live block. */
+export function SmartNoteCopy({ noteId }: { noteId: string }): ReactElement {
+  const workspace = useWorkspaceIfAny()
+  return <p>{(workspace && smartNoteOf(workspace, noteId)?.name) || 'Smart note'}</p>
 }
 
 function SmartNoteShown({ note, workspace, edit, turnIntoText, remove }: { note: SmartNote; workspace: Workspace; edit: () => void; turnIntoText: () => void; remove: MenuItem }) {
@@ -156,23 +162,36 @@ export function useSmartNotesOn(): boolean {
 /** This tab's refresh of each note, shared by every place showing it. `error`: the server's, for a failed ask. */
 type Ask = { state: 'idle' } | { state: 'running'; at: number } | { state: 'failed'; error: string | null }
 const asks = new Map<string, Ask>()
+/** Notes with an ask still out, even one already shown as lost: no second ask for them, so a Retry never pays twice. */
+const out = new Set<string>()
 const askListeners = new Set<() => void>()
 const setAsk = (noteId: string, ask: Ask) => { asks.set(noteId, ask); for (const l of askListeners) l() }
 const subscribeAsks = (l: () => void) => { askListeners.add(l); return () => { askListeners.delete(l) } }
 const idle: Ask = { state: 'idle' }
-/** No reply this long after asking: the ask is taken as lost, and Retry shows. */
-const LOST_MS = 60_000
+/** No reply this long after asking: the ask is taken as lost, and Retry shows. Past the server's 60 s model timeout and the flush before it. */
+const LOST_MS = 90_000
+/** A refresh on its way, for a tab moving onto a new build (new-build.ts). */
+export const smartAskPending = (): boolean => out.size > 0
+const stale = /Smart note not found|Saved elsewhere/, gone = /Smart note not found/
 
 /** Asks for a refresh and stores the result through this tab's queue. Shared by every place showing the note. `error`: the server's, for a failed ask. */
 export function useSmartRefresh(noteId: string): { state: 'idle' | 'running' | 'failed'; error: string | null; refresh(): void } {
   const { run } = useWorkspace()
   const ask = useSyncExternalStore(subscribeAsks, () => asks.get(noteId) ?? idle, () => idle)
   const refresh = useCallback(() => {
-    if (asks.get(noteId)?.state === 'running') return
+    if (out.has(noteId)) return
+    out.add(noteId)
     const mine: Ask = { state: 'running', at: Date.now() }
     setAsk(noteId, mine)
     let outcome: Ask = { state: 'failed', error: null }
     const lost = setTimeout(() => { if (asks.get(noteId) === mine) setAsk(noteId, { state: 'failed', error: null }) }, LOST_MS)
+    // Another tab or the phone saved meanwhile: the paid result is sent once more on the latest workspace.
+    const store = async (result: SmartResult, retried = false): Promise<boolean> => {
+      let refused = null as string | null
+      const receipt = await run({ type: 'set-smart-note-result', noteId, result }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, { quiet: true, inlineRefusal: retried ? gone : stale, onRefused: m => { refused = m } })
+      if (refused === 'Saved elsewhere') return store(result, true)
+      return Boolean(receipt) || refused !== null
+    }
     void (async () => {
       try {
         // The model reads what was typed, so every open page is saved first; a failed save stops the ask.
@@ -183,12 +202,12 @@ export function useSmartRefresh(noteId: string): { state: 'idle' | 'running' | '
         if (reply.status === 'off') { outcome = idle; return }
         // The note was removed on the server meanwhile: its block shows that, with no error here.
         if (reply.status === 'failed') { outcome = reply.error === 'not-found' ? idle : { state: 'failed', error: reply.error }; return }
-        let refused = false
-        const receipt = await run({ type: 'set-smart-note-result', noteId, result: reply.result }, undefined, undefined, { quiet: true, inlineRefusal: /Smart note not found/, onRefused: () => { refused = true } })
-        if (receipt || refused) outcome = idle
+        if (await store(reply.result)) outcome = idle
       } catch { /* nothing stored: Retry shows */ } finally {
         clearTimeout(lost)
-        if (asks.get(noteId) === mine) setAsk(noteId, outcome)
+        out.delete(noteId)
+        // Also after the ask was taken as lost: a late result that stored clears the failure.
+        setAsk(noteId, outcome)
       }
     })()
   }, [noteId, run])
