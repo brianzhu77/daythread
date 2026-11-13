@@ -66,8 +66,8 @@ function SmartNoteShown({ note, workspace, edit, turnIntoText, remove }: { note:
   </>
 }
 
-/** The result's statements, with a number per source. Shared with setup's preview. */
-export function SmartNoteBody({ result, workspace }: { result: SmartResult; workspace: Workspace }): ReactElement {
+/** The result's statements, with a number per source. Shared with setup's preview, where `inert` makes the numbers plain text. */
+export function SmartNoteBody({ result, workspace, inert = false }: { result: SmartResult; workspace: Workspace; inert?: boolean }): ReactElement {
   const numbers = useMemo(() => sourceNumbers(result), [result])
   const places = useMemo(() => livePlaces(workspace, result), [workspace, result])
   const groups: (SmartBlock | SmartBlock[])[] = []
@@ -76,7 +76,7 @@ export function SmartNoteBody({ result, workspace }: { result: SmartResult; work
     if (b.kind === 'bullet' && Array.isArray(last)) last.push(b)
     else groups.push(b.kind === 'bullet' ? [b] : b)
   }
-  const words = (b: SmartBlock) => <>{b.text}{[...new Map(b.sources.map(s => [`${s.pageId}|${s.blockId}`, s])).entries()].map(([key, s]) => <SourceMark key={key} n={numbers.get(key)!} page={places.get(key)} blockId={s.blockId} />)}</>
+  const words = (b: SmartBlock) => <>{b.text}{[...new Map(b.sources.map(s => [`${s.pageId}|${s.blockId}`, s])).entries()].map(([key, s]) => inert ? <sup key={key} className="smart-note-source is-inert">{numbers.get(key)}</sup> : <SourceMark key={key} n={numbers.get(key)!} page={places.get(key)} blockId={s.blockId} />)}</>
   return <div className="smart-note-body">
     {groups.map((g, i) => Array.isArray(g) ? <ul key={i}>{g.map((b, j) => <li key={j}>{words(b)}</li>)}</ul>
       : <p key={i} className={g.kind === 'heading' ? 'smart-note-heading' : undefined}>{words(g)}</p>)}

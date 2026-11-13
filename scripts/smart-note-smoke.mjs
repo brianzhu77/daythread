@@ -114,6 +114,8 @@ if (withModel) {
   assert.equal(await sheet.locator('.smart-setup-preview li').count(), 2, "the preview shows the stub's two bullets")
   assert.match(await sheet.locator('.smart-setup-preview .smart-note-read').innerText(), /^Read 1 page · /, 'the preview shows the Read line')
   assert.ok(await save.isEnabled(), 'Save is enabled after a preview')
+  assert.ok(await sheet.locator('.smart-setup-preview .smart-note-source').count() > 0, 'the preview shows its source numbers')
+  assert.equal(await sheet.locator('.smart-setup-preview a[href]').count(), 0, "the preview's source numbers are not links")
   await sheet.locator('#smart-note-prompt').fill('Where does checkout stand now?')
   assert.ok(await save.isDisabled(), 'changing the prompt disables Save again')
   await sheet.locator('#smart-note-prompt').fill('Where does checkout stand?')
@@ -128,6 +130,7 @@ if (withModel) {
   const bullets = await made.locator('li').allInnerTexts()
   assert.equal(bullets.length, 2, 'the saved block has two bullets')
   assert.ok(bullets[0].startsWith(previewed) && bullets[1].startsWith(`The address form is one step (answer ${answer})`), `the saved block shows the previewed answer (${bullets.join(' | ')})`)
+  assert.ok(await made.locator('.smart-note-source a[href]').count() > 0, "the saved block's source numbers are links")
   assert.equal(await page.locator(`.bn-editor [data-id="${seeded.setupLine}"]`).count(), 0, 'the block took the empty line')
   await page.getByText('Smart note saved').first().waitFor()
 
@@ -140,6 +143,23 @@ if (withModel) {
   assert.ok(await save.isDisabled(), 'a changed prompt needs a preview')
   await sheet.getByRole('button', { name: 'Cancel' }).click()
   await sheet.waitFor({ state: 'detached' })
+
+  // Navigating with the setup open closes it and stores nothing. A client-side move first, so Back is the app's own
+  // route change (no reload, and no press outside the sheet).
+  const noteCount = () => page.evaluate(async () => (await (await import('/src/server/functions.ts')).loadWorkspace({ data: { operationId: crypto.randomUUID() } })).workspace.smartNotes?.length ?? 0)
+  const before = await noteCount()
+  await page.locator('.tree-title[title="Smart second"]').first().click()
+  await page.waitForURL(url => url.search.includes(seeded.second))
+  await page.locator(`.bn-editor [data-id="${seeded.secondLine}"] .bn-inline-content`).click()
+  await page.keyboard.type('/smart'); await page.waitForTimeout(400)
+  await page.locator('#bn-suggestion-menu [role=option]').first().click()
+  await sheet.getByRole('menuitem', { name: 'New smart note' }).click()
+  await sheet.locator('#smart-note-prompt').fill('Left behind')
+  await page.evaluate(() => { window.smokeSamePage = true })
+  await page.goBack()
+  await sheet.waitFor({ state: 'detached' })
+  assert.ok(await page.evaluate(() => window.smokeSamePage === true), 'Back was a route change in the same page')
+  assert.equal(await noteCount(), before, 'navigating away stores no note')
 
   // The same note on a second page, through the picker.
   const again = await slash(seeded.second, seeded.secondLine)

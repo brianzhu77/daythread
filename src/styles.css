@@ -2967,10 +2967,12 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
 .smart-note-body .smart-note-heading { margin-top: 12px; font-weight: var(--weight-semibold); }
 .smart-note-source { margin-left: 3px; font-size: 11px; line-height: 0; }
 /* `.bn-editor a { color: revert; text-decoration: revert }` would make these browser-blue. */
-.bn-editor .smart-note .smart-note-source a, .smart-note-source a { position: relative; padding: 0 4px; border-radius: var(--radius-tight); background: var(--fill); color: var(--ink); text-decoration: none; }
+.bn-editor .smart-note .smart-note-source a, .smart-note-source a, .smart-note-source.is-inert { position: relative; padding: 0 4px; border-radius: var(--radius-tight); background: var(--fill); color: var(--ink); text-decoration: none; }
 /* A hit area 44 px tall around the small number; neighbours' areas may overlap. The glyph and the line keep their size. */
 .smart-note-source a::after { content: ''; position: absolute; top: 50%; left: -4px; right: -4px; height: 44px; transform: translateY(-50%); }
 .smart-note-source.is-gone { padding: 0 4px; color: var(--ink-3); }
+/* In setup's preview the numbers are shown but lead nowhere: a jump would leave the sheet's placement behind. */
+.smart-note-source.is-inert { cursor: default; }
 .smart-note-read { margin: 8px 0 0; color: var(--ink-3); font-size: var(--text-meta); }
 @media (max-width: 899px) {
   .smart-note-refresh, .smart-note-more { width: 44px; height: 44px; }

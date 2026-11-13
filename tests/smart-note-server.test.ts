@@ -5,7 +5,7 @@ import { createEmptyWorkspace } from '../src/domain/workspace.ts'
 import type { EditorNode } from '../src/domain/editor-document.ts'
 import type { SmartInput, SmartRange, SmartResult } from '../src/domain/smart-note.ts'
 import type { Page, Workspace } from '../src/domain/types.ts'
-import { ModelError, type callStructured } from '../src/server/model/openrouter.ts'
+import { ModelError, modelBaseUrl, type callStructured } from '../src/server/model/openrouter.ts'
 import { readAnswer, runSmartNote, smartMessages, smartNoteSchema } from '../src/server/model/smart-note.ts'
 
 const page = (id: string, doc: EditorNode[], extra: Partial<Page> = {}): Page =>
@@ -104,4 +104,17 @@ test('run: a ModelError of kind timeout gives { status: "failed", error: "timeou
   assert.equal(a.status === 'failed' && a.error, 'timeout')
   const b = await runSmartNote(ws, spec, config, today, 'now', fake({ blocks: [{ kind: 'paragraph', text: '', sources: [] }] }))
   assert.equal(b.status === 'failed' && b.error, 'invalid-output')
+})
+
+test('model address: only a loopback http address replaces the default, so the key never goes to another host', () => {
+  const fallback = 'https://openrouter.ai/api/v1'
+  assert.equal(modelBaseUrl({}), fallback, 'unset')
+  assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: '' }), fallback, 'empty')
+  assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: '   ' }), fallback, 'whitespace')
+  assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: 'http://127.0.0.1:3514' }), 'http://127.0.0.1:3514')
+  assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: ' http://localhost:3514 ' }), 'http://localhost:3514')
+  assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: 'http://[::1]:3514' }), 'http://[::1]:3514')
+  assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: 'https://example.com/v1' }), fallback, 'another host')
+  assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: 'http://127.0.0.1.example.com:3514' }), fallback, 'a host that only starts like loopback')
+  assert.equal(modelBaseUrl({ OPENROUTER_BASE_URL: 'not a url' }), fallback, 'malformed')
 })

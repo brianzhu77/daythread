@@ -9,6 +9,18 @@ export function modelConfig(env: NodeJS.ProcessEnv = process.env): ModelConfig |
   return apiKey && model ? { apiKey, model } : null
 }
 
+const defaultBaseUrl = 'https://openrouter.ai/api/v1'
+const loopback = new Set(['127.0.0.1', 'localhost', '[::1]'])
+/** Where model calls go. OPENROUTER_BASE_URL is for tests' stub: only a loopback http address is honoured, so no setting can send the key to another host. */
+export function modelBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const value = env.OPENROUTER_BASE_URL?.trim()
+  if (!value) return defaultBaseUrl
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' && loopback.has(url.hostname) ? value.replace(/\/+$/, '') : defaultBaseUrl
+  } catch { return defaultBaseUrl }
+}
+
 export type ModelErrorKind = 'auth' | 'limit' | 'unavailable' | 'invalid-output' | 'timeout'
 export class ModelError extends Error {
   readonly kind: ModelErrorKind
@@ -19,7 +31,7 @@ export async function callStructured<T>(config: ModelConfig, messages: { role: s
   const timeout = AbortSignal.timeout(options.timeoutMs ?? 30_000)
   let response: Response
   try {
-    response = await fetch(`${process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1'}/chat/completions`, {
+    response = await fetch(`${modelBaseUrl()}/chat/completions`, {
       method: 'POST',
       signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
       headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json', 'X-Title': 'Daythread' },

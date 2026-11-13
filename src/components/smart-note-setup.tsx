@@ -2,6 +2,7 @@
 // above the keyboard at 390. A preview is this view's own state: nothing is stored before Save.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
+import { useRouterState } from '@tanstack/react-router'
 import { listedPages } from '../domain/page-tree'
 import { placedSmartNotes, smartLimits, smartNoteOf, type SmartNote, type SmartRange, type SmartResult, type SmartWhere, type SmartWindow } from '../domain/smart-note'
 import { tagIndex, tagKey } from '../domain/tags'
@@ -34,6 +35,13 @@ export function openSmartNoteSetup(options: { anchor: Element | null; noteId?: s
 export function SmartNoteSetupHost(): ReactElement | null {
   const current = useSyncExternalStore(subscribe, () => open, () => null)
   const { workspace } = useWorkspace()
+  // Any navigation closes it, storing nothing: its placement belongs to the page it was opened on.
+  const place = useRouterState({ select: r => r.location.href }), seen = useRef(place)
+  useEffect(() => {
+    if (seen.current === place) return
+    seen.current = place
+    if (open) close()
+  }, [place])
   if (!current || !workspace) return null
   // An Edit whose note is gone has nothing to edit.
   if (current.noteId && !smartNoteOf(workspace, current.noteId)) return null
@@ -122,7 +130,7 @@ function Setup({ note, workspace, onSaved }: { note: SmartNote | undefined; work
     <input id="smart-note-name" className="button-editor-name" maxLength={smartLimits.name} placeholder={prompt.trim().slice(0, 60)} value={name} onChange={e => setName(e.target.value)} />
     {preview && preview.state !== 'running' && <div ref={shown} className="smart-setup-preview" role="status">
       {preview.state === 'ready' ? <>
-        <SmartNoteBody result={preview.result} workspace={workspace} />
+        <SmartNoteBody result={preview.result} workspace={workspace} inert />
         <p className="smart-note-read">{readLine(preview.result, todayIso())}</p>
       </> : preview.error === 'empty-range' ? <span className="smart-note-status">No notes in this range</span>
         : <span className="smart-note-status">Couldn't refresh · <button type="button" onClick={() => void runPreview()}>Retry</button></span>}
