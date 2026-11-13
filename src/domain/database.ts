@@ -801,6 +801,10 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
     const mine = newRowValues(db, own, context, groupKey)
     const theirs = newRowValues(db, { ...own, filter: dashboard.rules, filterAny: dashboard.any, filterGroups: undefined, widgetFilter: undefined } as View, context)
     const spoken = new Set([...own.filter, ...rulesIn(own.filterGroups)].map((c) => c.by))
+    // The group it's added under decides its own property, even emptied as "No Status" (§7.4, Ratchet 85a08321).
+    const section = groupKey === undefined ? undefined : splitSection(groupKey)
+    if (section) { const grouped = viewGroupBy(db, own); if (grouped) spoken.add(grouped.id) }
+    if (section?.sub !== undefined) { const sub = viewSubGroupBy(db, own); if (sub) spoken.add(sub.id) }
     const values: RawValues = { ...Object.fromEntries(Object.entries(theirs.values).filter(([id]) => !spoken.has(id))), ...mine.values };
     const title = mine.title || (spoken.has(titleId) ? "" : theirs.title);
     return { title, values, visible: inView(db, newRowProbe(db, title, values), view, context) };
