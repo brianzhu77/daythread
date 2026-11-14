@@ -188,6 +188,30 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 14b Discard drops it; the banner goes; the latest is shown`, await again.locator('.banner.save-failed').count() === 0 && statusOf('Water the plants') === 'open')
     await context.close()
   }
+  // 4. A refusal (the to-do deleted elsewhere) goes to the held banner with Discard only; a passing failure (a 5xx) to the
+  //    usual Retry, the change kept (Bumblebee 6233888d: the two take different paths).
+  {
+    reseed(); const { context, page } = await fresh()
+    await openTasks(page); await hold(page); await tick(page, 'Pay rent'); await wait(400)
+    await page.close({ runBeforeUnload: false })
+    await elsewhere(w => { const t = w.tasks.find(x => x.title === 'Pay rent'); return { type: 'remove-task-row', pageId: t.sourcePageId, taskId: t.id, today: today() } })
+    const again = await context.newPage(); await openTasks(again); await wait(1200)
+    const text = (await again.locator('.banner.save-failed').innerText().catch(() => '')).replace(/\s+/g, ' ')
+    const keep = await again.locator('.banner.save-failed').getByRole('button', { name: 'Keep mine' }).count()
+    ok(`${tag} 4 a refusal is held with Discard only ("${text}")`, /deleted elsewhere/.test(text) && /Discard/.test(text) && keep === 0 && !/Retry/.test(text))
+    await context.close()
+  }
+  {
+    reseed(); const { context, page } = await fresh()
+    await openTasks(page)
+    await page.route(OUTBOX, route => route.fulfill({ status: 503, body: 'down' }))
+    await tick(page, 'Call the bank'); await wait(1500)
+    const text = (await page.locator('.banner.save-failed').innerText().catch(() => '')).replace(/\s+/g, ' ')
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+    await page.locator('.banner.save-failed').getByRole('button', { name: 'Retry' }).click(); await settle(page); await wait(800)
+    ok(`${tag} 4b a 5xx keeps the change under the usual Retry ("${text}"), and Retry sends it`, /Retry/.test(text) && !/Discard/.test(text) && statusOf('Call the bank') === 'done' && await page.locator('.banner.save-failed').count() === 0, `status ${statusOf('Call the bank')}`)
+    await context.close()
+  }
   // 10. No IndexedDB: changes go as before, nothing claims they were kept.
   {
     reseed(); const { context, page } = await fresh()

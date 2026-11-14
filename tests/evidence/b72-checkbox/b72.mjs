@@ -8,19 +8,19 @@ async function open(br, width, height) {
   const b = await br.launch()
   const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width, height }, ...(width === 390 ? { isMobile: true, hasTouch: true } : {}) })
   const p = await ctx.newPage()
-  const writes = []; let mode = 'slow'
+  const writes = [], ops = []; let mode = 'slow'
   p.on('pageerror', e => { if (!/access control checks/.test(e.message)) console.log('pageerror', e.message) })
   await p.route('**/_serverFn/**', async route => {
     const req = route.request()
     if (req.method() !== 'POST') return route.continue()
     const body = req.postData() ?? ''
     const status = body.match(/"s":"task-status"\},\{"t":1,"s":"[^"]+"\},\{"t":1,"s":"(\w+)"/)?.[1]
-    if (status) writes.push(status)
+    if (status) { writes.push(status); ops.push(body.match(/"operationId"\},?\{?"t":1,"s":"([^"]+)"/)?.[1] ?? body.match(/"s":"([0-9a-f-]{36})"/)?.[1] ?? '?') }
     if (mode !== 'fast') await new Promise(r => setTimeout(r, SLOW))
     if (status && mode === 'fail') return route.fulfill({ status: 503, body: 'down' })
     return route.continue()
   })
-  return { b, p, writes, setMode: m => { mode = m } }
+  return { b, p, writes, ops, setMode: m => { mode = m } }
 }
 
 const tap = async (p, loc, touch) => (touch ? loc.tap() : loc.click())
@@ -30,7 +30,7 @@ const tap = async (p, loc, touch) => (touch ? loc.tap() : loc.click())
 const passes = [['webkit', webkit, 390, 844], ['chromium', chromium, 1280, 900]].filter(([n]) => !process.env.ONLY || n === process.env.ONLY)
 for (const [name, br, width, height] of passes) {
   const touch = width === 390
-  const { b, p, writes, setMode } = await open(br, width, height)
+  const { b, p, writes, ops, setMode } = await open(br, width, height)
   await p.goto(`${base}/`)
   if (!process.env.SKIP_SEED) {
     setMode('fast')
@@ -56,14 +56,23 @@ for (const [name, br, width, height] of passes) {
   writes.length = 0
   await tap(p, box, touch); await p.waitForTimeout(SLOW + 800)
   ok(writes.length === 1 && writes[0] === 'open' && !(await box.isChecked()), `${name} ${width} day page: a tap after the answer reopens on purpose (${JSON.stringify(writes)})`)
-  // 3. Forced failure reverts.
-  setMode('fail'); writes.length = 0
+  // 3. Forced failure: with the outbox (B98, Jazz b8dee7ac) the tick is kept, shown ticked under the usual error with
+  //    Retry; Retry sends the same change once, the banner goes, and the box never blinks unticked.
+  setMode('fail'); writes.length = 0; ops.length = 0
   await tap(p, box, touch); await p.waitForTimeout(100)
   const tickedDuring = await box.isChecked()
   await p.waitForTimeout(SLOW + 1500)
-  ok(tickedDuring && !(await box.isChecked()), `${name} ${width} failed save: ticked at once, then reverted (${JSON.stringify(writes)})`)
-  ok(await p.getByRole('button', { name: 'Retry' }).first().isVisible(), `${name} ${width} failed save: the usual error with Retry shows`)
+  ok(tickedDuring && await box.isChecked(), `${name} ${width} failed save: ticked at once, and still ticked (kept) (${JSON.stringify(writes)})`)
+  ok(await p.locator('.banner.save-failed').getByRole('button', { name: 'Retry' }).first().isVisible(), `${name} ${width} failed save: the usual error with Retry shows`)
   setMode('slow')
+  const failedOp = ops[0]
+  await p.locator('.banner.save-failed').getByRole('button', { name: 'Retry' }).first().click()
+  let blinked = false
+  for (let i = 0; i < 12; i++) { if (!(await box.isChecked())) blinked = true; await p.waitForTimeout(150) }
+  await p.waitForTimeout(800)
+  ok(!blinked && await box.isChecked() && ops.at(-1) === failedOp && writes.length === 2 && await p.locator('.banner.save-failed').getByRole('button', { name: 'Retry' }).count() === 0, `${name} ${width} failed save: Retry sends the same change once, no blink, the banner goes (${JSON.stringify(writes)}, same op ${ops.at(-1) === failedOp}, blinked ${blinked}, ticked ${await box.isChecked()}, retry buttons ${await p.locator('.banner.save-failed').getByRole('button', { name: 'Retry' }).count()})`)
+  // Back as it was, deliberately, for the checks after this one.
+  await p.waitForTimeout(600); await tap(p, box, touch); await p.waitForTimeout(SLOW + 800)
   // 4. Tasks screen (Today): a double tap across the save boundary ticks only that row; the neighbour stays open.
   await p.goto(`${base}/tasks?view=today`); await p.waitForSelector('.task-row.list input.check')
   const rows = p.locator('.task-row.list')
@@ -87,18 +96,17 @@ for (const [name, br, width, height] of passes) {
   const target = p.locator(`.task-row.list[data-task-id="${start[0].id}"] input.check`)
   const tb = await target.boundingBox()
   const atTarget = async () => (touch ? p.touchscreen.tap(tb.x + tb.width / 2, tb.y + tb.height / 2) : p.mouse.click(tb.x + tb.width / 2, tb.y + tb.height / 2))
-  setMode('fail'); writes.length = 0
+  // With the outbox (B98 item 3, Jazz b8dee7ac): a failed tick is kept and shown done, so it leaves Today's list, with the
+  // usual Retry. Reloading instead of pressing Retry still shows it and sends the same change on open, with no banner.
+  setMode('fail'); writes.length = 0; ops.length = 0
   await atTarget(); await p.waitForTimeout(SLOW + 1500)
-  ok(!(await target.isChecked()), `${name} ${width} retry: the failed tick reverted first`)
+  const kept = await rows.evaluateAll(rs => rs.map(r => r.dataset.taskId))
+  ok(!kept.includes(start[0].id) && kept.includes(start[1].id) && await p.locator('.banner.save-failed').getByRole('button', { name: 'Retry' }).first().isVisible(), `${name} ${width} retry: the failed tick is kept and shown done (left Today), Retry shows; the neighbour stays`)
   setMode('slow')
-  await p.getByRole('button', { name: 'Retry' }).first().click(); await p.waitForTimeout(150)
-  ok(await target.isChecked(), `${name} ${width} retry: ticked at once while the retry saves`)
-  await atTarget(); await p.waitForTimeout(SLOW + 300)
-  ok(await target.count() === 1 && await target.isChecked(), `${name} ${width} retry: the row holds, ticked, after the answer`)
-  await p.waitForTimeout(1500)
+  const keptOp = ops[0]
+  await p.reload(); await p.waitForSelector('.task-row.list input.check'); await p.waitForTimeout(SLOW + 2000)
   const end = await rows.evaluateAll(rs => rs.map(r => r.dataset.taskId))
-  ok(!end.includes(start[0].id) && end.includes(start[1].id), `${name} ${width} retry: the row leaves after the hold; the neighbour "${start[1].title}" stays`)
-  ok(JSON.stringify(writes) === '["done","done"]', `${name} ${width} retry: the failed write, then one retry; the tap during it is ignored (${JSON.stringify(writes)})`)
+  ok(ops.at(-1) === keptOp && JSON.stringify(writes) === '["done","done"]' && await p.locator('.banner.save-failed').getByRole('button', { name: 'Retry' }).count() === 0 && !end.includes(start[0].id) && end.includes(start[1].id), `${name} ${width} retry: a reload instead of Retry sends the same change once on open, no banner (${JSON.stringify(writes)}, same op ${ops.at(-1) === keptOp})`)
   await b.close()
 }
 process.exitCode = fail ? 1 : 0
