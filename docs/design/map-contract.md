@@ -72,6 +72,18 @@ There's no page CSP in this step. That's its own hardening item.
     `tiles.openfreemap.org`, with no Referer and no cookies.
   - A unit test runs `transformRequest` and the style check against a hostile style, and nothing is fetched.
   - A day page, and a database page with no Map view, make zero requests to that host and load no MapLibre chunk.
+  - The Lead's release probe (`map-referer-probe.mjs`, #212 gate) reads `allHeaders()` and checks a positive control. A
+    plain fetch from the same page shows a Referer, so a missing one on map requests means something. `map.mjs` reads
+    `headers()`, which never includes cookies in Playwright, so its cookie half can't fail. The no-cookie half rests on
+    `credentials: 'omit'` on both paths, which MapLibre 6.18 passes into `fetch`. Headless engines never send a
+    third-party cookie, so no browser check can show it.
+- **Known residuals, accepted at release (Lead, #212):**
+  - The attribution text comes from the style and TileJSON. MapLibre's sanitizer stops scripts and `javascript:` or
+    `data:` links, but it still allows `<img src="https://…">`. A hostile OpenFreeMap could make the page load an
+    image from a third host, outside `transformRequest`. OpenFreeMap already sees his IP and the areas he views, so
+    the extra exposure is small. Closing it would mean our own fixed attribution in place of the style's text.
+  - MapLibre's tile requests follow redirects, but our style fetch refuses them. Any redirect keeps `omit` and
+    `no-referrer`.
 
 ## 4. Loading, size and speed (G8-12, R2-7)
 
