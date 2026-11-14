@@ -114,6 +114,13 @@ export interface OutboxView {
   /** Not durable and a change still unsent after a second, or after a failed send (§8.4, Jazz 3c65a099): never a flash on every change. */
   atRisk: boolean
 }
+/** Set while the outbox may hold changes, so a load reads the store before the first paint only then (R1-18). */
+const outboxHint = {
+  key: 'daythread:outbox:stored',
+  get(): boolean { try { return typeof localStorage !== 'undefined' && localStorage.getItem(this.key) === '1' } catch { return true } },
+  set(): void { try { localStorage.setItem(this.key, '1') } catch { /* no storage: the store is read after the paint */ } },
+  clear(): void { try { localStorage.removeItem(this.key) } catch { /* nothing to clear */ } },
+}
 /** Two taps on one to-do closer than this are one tap (B98 item 2; Jazz may tune it). */
 const doubleTapMs = 500
 const emptyOutbox: OutboxView = { pending: 0, held: null, waiting: 0, durable: true, keptBack: false, offline: false, atRisk: false }
@@ -230,7 +237,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const queue = useRef<Promise<unknown>>(undefined as unknown as Promise<unknown>)
   if (!queue.current) queue.current = store.current ? new Promise<void>(resolve => { openQueue.current = resolve }) : Promise.resolve()
   const storedAtMount = useRef<Promise<OutboxEntry[]> | null | undefined>(undefined)
-  if (storedAtMount.current === undefined) storedAtMount.current = store.current ? store.current.all().catch(() => { durable.current = false; return [] }) : null
+  // Read before the first paint only when a change was stored (a hint kept beside it): otherwise the store isn't even
+  // opened on the way to the page (R1-18), and is read just after, in case the hint was lost.
+  if (storedAtMount.current === undefined) storedAtMount.current = store.current && outboxHint.get() ? store.current.all().catch(() => { durable.current = false; return [] }) : null
 
   /** The server's workspace; what's shown has his pending changes on top, so a tick never shows unticked first (Jazz §8.1). */
   const adopt = useCallback((ws: Workspace) => {
@@ -238,6 +247,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     setWorkspace(entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!)) ? predicted(true) ?? ws : ws)
   }, [predicted])
   const showOutbox = useCallback(() => {
+    if (!entries.current.length && store.current && outboxHint.get()) void store.current.all().then(left => { if (!left.length) outboxHint.clear() }).catch(() => undefined)
     const held = entries.current.find(e => e.state === 'held') ?? null
     const pending = entries.current.filter(e => e.state === 'pending')
     const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
@@ -338,7 +348,18 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
 
   const reload = useCallback(() => {
     setLoadError(null)
-    void refresh().then(() => { legacy.current = false; netAway.current = false; if (!gateOpen.current) { gateOpen.current = true; openAfterDrain() } else void drain() }, async (e: unknown) => {
+    void refresh().then(async () => {
+      legacy.current = false; netAway.current = false
+      if (!gateOpen.current) {
+        gateOpen.current = true; openAfterDrain()
+        // No hint: nothing was stored, as far as this device knew. A look after the paint, in case the hint was lost
+        // (storage cleared but not IndexedDB): what it finds is shown and sent then.
+        if (store.current && !outboxHint.get() && !entries.current.length) {
+          const found = (await store.current.all().catch(() => [])).filter(e => e.owner === knownOwner)
+          if (found.length) { for (const e of found) kept.current.add(e.seq!); entries.current = [...found, ...entries.current]; outboxHint.set(); showOutbox(); void drain() }
+        }
+      } else void drain()
+    }, async (e: unknown) => {
       // No network: the last-loaded copy opens the app, read as it was; any other failure is shown as before.
       const copy = await offlineCopy.fallback(e)
       if (copy && !knownOwner) noteOwner(await offlineCopy.recallOwner())
@@ -431,6 +452,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           const { entry } = capture(ahead, built, operationId, entries.current.some(e => e.action.type === 'undo'))
           const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending' }
           stored = store.current.add(full).then(seq => {
+            outboxHint.set()
             const kept = { ...full, seq }
             entries.current = [...entries.current, kept]
             if (navigator.storage?.persist && entries.current.length === 1) void navigator.storage.persist().catch(() => undefined)

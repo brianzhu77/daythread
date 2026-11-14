@@ -4,8 +4,28 @@
 // claims they were kept (§4).
 import { applyCommand } from '../domain/workspace.ts'
 import type { Action, Workspace } from '../domain/types.ts'
-import { planWrites, rowsOf } from '../server/workspace-rows.ts'
-import { readsBeyondApplied, writeKeys } from '../server/outbox-replay.ts'
+import { readsBeyondApplied } from '../server/outbox-replay.ts'
+import { linkId } from '../domain/task-links.ts'
+
+/**
+ * The rows a change was predicted to write, by id, in the same keys the server's row check uses (`page:`, `task:`, …).
+ * Compared on the domain's own objects, not the stored rows the server diffs (that code would add ~130 KB to the page,
+ * R1-18): a pure reorder isn't seen here, but the ids a change names are (§6), so a dependency on it still is.
+ */
+export function predictedWrites(before: Workspace, after: Workspace): string[] {
+  const keys: string[] = []
+  const diff = <E extends { id: string }>(kind: string, was: readonly E[] | undefined, is: readonly E[] | undefined) => {
+    const old = new Map((was ?? []).map(e => [e.id, JSON.stringify(e)])), now = new Set<string>()
+    for (const e of is ?? []) { now.add(e.id); if (old.get(e.id) !== JSON.stringify(e)) keys.push(`${kind}:${e.id}`) }
+    for (const id of old.keys()) if (!now.has(id)) keys.push(`${kind}:${id}`)
+  }
+  // Synced blocks' records and smart notes are stored as page rows.
+  diff('page', [...before.pages, ...(before.synced ?? []), ...(before.smartNotes ?? [])] as Array<{ id: string }>, [...after.pages, ...(after.synced ?? []), ...(after.smartNotes ?? [])] as Array<{ id: string }>)
+  diff('task', before.tasks, after.tasks); diff('deleted', before.deletedTasks, after.deletedTasks)
+  diff('thread', before.threads, after.threads); diff('link', (before.links ?? []).map(l => ({ ...l, id: linkId(l) })), (after.links ?? []).map(l => ({ ...l, id: linkId(l) })))
+  if (before.timezone !== after.timezone || (before.weekStart ?? 0) !== (after.weekStart ?? 0) || JSON.stringify(before.todoAutomations ?? null) !== JSON.stringify(after.todoAutomations ?? null)) keys.push('settings')
+  return keys
+}
 
 export type HeldReason = 'conflict' | 'changed-since' | 'maybe-applied' | 'refused' | 'gone'
 
@@ -152,7 +172,7 @@ export function capture(predicted: Workspace, action: Action, operationId: strin
   if (action.type === 'undo') return { entry: { ...base, readsBeyond: true, writes: [] }, predicted: null }
   try {
     const result = applyCommand(predicted, { operationId, expectedRevision: predicted.revision, action })
-    const writes = writeKeys(planWrites(rowsOf(predicted), result.workspace).write)
+    const writes = predictedWrites(predicted, result.workspace)
     return { entry: { ...base, readsBeyond: undoPending || readsBeyondApplied(action, result.receipt), writes }, predicted: result.workspace }
   } catch {
     // Refused here, likely refused there too: still stored and sent, so the answer is the server's.
