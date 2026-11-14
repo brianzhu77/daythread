@@ -47,25 +47,8 @@ export const runOutboxCommand = createServerFn({ method: "POST" })
     basis: z.object({ baseRevision: z.number().int().nonnegative(), ownRevisions: z.array(z.number().int().nonnegative()).max(10_000), readsBeyond: z.boolean() }),
   }).parse(input))
   .handler(async ({ data }) => {
-    const { getRepository } = await import("./storage");
-    const [{ currentOwner }, { OutboxHeld }, { DomainError }] = await Promise.all([import("./auth/request-owner"), import("./outbox-replay"), import("../domain/workspace")]);
-    const owner = currentOwner() ?? "local";
-    // Checked before anything runs: a tab of one account still open after another signed in (§5 step 0).
-    if (owner !== data.expectedOwner) return { status: "owner-mismatch" as const, owner };
-    const { expectedOwner: _owner, basis, ...rest } = data;
-    const command = { ...rest, expectedRevision: basis.baseRevision };
-    try {
-      const { receipt, changes } = await getRepository().executeOutbox(command, basis);
-      return { status: "applied" as const, receipt, changes, owner };
-    } catch (error) {
-      if (error instanceof OutboxHeld) return { status: "held" as const, reason: error.reason, rows: error.rows, owner };
-      if (error instanceof DomainError) {
-        // A tombstone: applied long ago, its receipt compacted; nothing to do (§5 step 1).
-        if (/already applied/i.test(error.message)) return { status: "already-applied" as const, owner };
-        return { status: "refused" as const, message: error.message, owner };
-      }
-      throw error;
-    }
+    const [{ getRepository }, { currentOwner }, { runOutbox }] = await Promise.all([import("./storage"), import("./auth/request-owner"), import("./outbox-command")]);
+    return runOutbox(getRepository(), currentOwner() ?? "local", data);
   });
 
 /**
