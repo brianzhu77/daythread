@@ -12,7 +12,8 @@ export interface PlaceValue {
 }
 
 export const placeLimits = {
-  name: 200,
+  /** Text's own limit, so Text to Place and a kept name never cut his words (Ratchet c504bd98, Bumblebee fba653ee). */
+  name: 10_000,
   address: 300,
   ref: 64,
   /** Suggestions shown, and asked of the provider. */
@@ -53,11 +54,8 @@ export function cleanPlace(input: unknown): PlaceValue | null {
   return isPlaceValue(out) ? out : null
 }
 
-/** A place kept from words alone: no pin. Longer words are cut at the name's limit. */
-export const placeFromText = (words: string): PlaceValue | null => {
-  const name = text(words).slice(0, placeLimits.name).trim()
-  return name ? { name } : null
-}
+/** Words read as a place: the name, whole, with no pin. Only words with something in them; they're never cut. */
+export const placeFromText = (words: string): PlaceValue | null => (words.trim() ? { name: words.trim() } : null)
 
 export const hasPin = (v: PlaceValue): v is PlaceValue & { lat: number; lon: number } => finite(v.lat) && finite(v.lon)
 
@@ -84,8 +82,13 @@ const cjk = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hang
 export const searchFrom = (q: string): number => (cjk.test(q) ? 2 : 3)
 /** The query as searched: normalised and trimmed. */
 export const searchQuery = (q: string): string => text(q.normalize('NFC'))
+/**
+ * Whether these words can be searched at all: past 256 characters they're kept whole but never searched, rather than
+ * searching a cut-off part that may name another place (Ratchet 086c93e0). The editor says "Too long to search".
+ */
+export const searchable = (q: string): boolean => { const n = [...searchQuery(q)].length; return n > 0 && n <= placeLimits.query }
 /** Whether words this long search as he types; shorter ones wait for the Search row or Enter. */
-export const searchesAsTyped = (q: string): boolean => { const s = searchQuery(q); return [...s].length >= searchFrom(s) }
+export const searchesAsTyped = (q: string): boolean => { const s = searchQuery(q); return searchable(s) && [...s].length >= searchFrom(s) }
 
 /** "Location on Nov 14": the name a current location takes when the field is empty (Jazz 2b3eb494), his local date. */
 export const locationName = (now: Date = new Date()): string =>

@@ -2,7 +2,7 @@
 // only for the typed words, under limits shared by every instance, with a short in-memory cache that never becomes
 // search history. Everything outside the request (fetch, the clock, the limiter) is passed in, so tests drive it whole.
 import { createHash } from 'node:crypto'
-import { placeLimits, searchesAsTyped, searchQuery, type PlaceValue } from '../domain/place.ts'
+import { placeLimits, searchable, searchesAsTyped, searchQuery, type PlaceValue } from '../domain/place.ts'
 import type { PlaceLimiter } from './place-limits.ts'
 
 export const photonOrigin = 'https://photon.komoot.io'
@@ -43,7 +43,7 @@ export async function searchPlaces(input: { q: string; explicit: boolean }, deps
     deps.log?.({ event: 'place.search', status, ms: Math.round(now() - started), ...extra })
   const q = searchQuery(input.q)
   // The same rule the editor follows: a short query goes only when he asks (Lead b41107d1, cb4e0d08).
-  if (!q || [...q].length > placeLimits.query || (!input.explicit && !searchesAsTyped(q))) { log('refused'); return { status: 'refused' } }
+  if (!searchable(q) || (!input.explicit && !searchesAsTyped(q))) { log('refused'); return { status: 'refused' } }
   const key = cacheKey(deps.owner, q, 'default')
   const hit = cache.get(key)
   if (hit && now() - hit.at < searchLimits.cacheMs) {

@@ -15,7 +15,7 @@ A new property type, `place`, joins `propertyTypes`. A row stores its value unde
 
 ```ts
 interface PlaceValue {
-  name: string // 1..200 characters after trimming; required
+  name: string // 1..10,000 characters, Text's own limit; required
   address?: string // up to 300 characters
   lat?: number // -90..90, finite; only with lon
   lon?: number // -180..180, finite; only with lat
@@ -23,6 +23,10 @@ interface PlaceValue {
 }
 ```
 
+- **His words are never cut** (Ratchet c504bd98 and 086c93e0, Bumblebee fba653ee). A name holds as much as a Text
+  value can, 10,000 characters, so Text to Place reads every value whole, and the keep row saves whatever the field
+  holds. Only the search is shorter: up to 256 characters. Past that the Search row reads "Too long to search", and
+  nothing is sent. A cut-off part isn't searched, since it might name another place.
 - **Name only is a valid value** (a kept "golden dumpling", or Text changed to Place). A pin is `lat` and `lon` together;
   one without the other is refused. Coordinates are stored as Photon gives them, rounded to 7 decimals.
 - `storedValue` validates and trims. Anything else (an empty name, a bad pair, an over-long string, extra fields) is
@@ -76,6 +80,8 @@ That holds for every route. Locally, with sign-in off, the gate's this-machine-o
   - `{ status: 'unavailable' }` for a timeout, network error, non-2xx answer, malformed JSON, an oversized reply or
     a redirect.
   - The client shows both as "Search unavailable · Retry". The keep row works either way.
+- **The limiter fails closed.** If its database can't be reached or errors, the search is `unavailable` and nothing
+  goes to Photon.
 - **Logs** carry only an event name, the status, the elapsed time and the number of places. No query, coordinates,
   upstream URL or account id is logged, in errors either.
 
@@ -103,7 +109,8 @@ That holds for every route. Locally, with sign-in off, the gate's this-machine-o
 - **What counts.** Only a search that goes out counts, and it's counted before it goes, so a failed upstream call still
   counts. A cache hit and a refused search don't count.
 - **Provider 429:** `Retry-After` is honoured, at least 60 s and at most 1 hour. Until then every search returns
-  `limit` without going out. **The pause is deployment-wide** (Ratchet eecf6ded), so no instance keeps calling after
+  `limit` without going out. Overlapping 429s extend it with `max(existing, new)`, so a shorter one can't reopen it
+  early. **The pause is deployment-wide** (Ratchet eecf6ded), so no instance keeps calling after
   Photon has asked us to stop. It's held in `place_search_pause (id int primary key check (id = 1), until timestamptz)`
   in the same schema, also with RLS on, and read inside the same locked transaction as the counts.
 - **Local and test runs** (SQLite storage, sign-in off) use an in-process limiter with the same numbers and the same
@@ -151,10 +158,13 @@ That holds for every route. Locally, with sign-in off, the gate's this-machine-o
 - **When it searches as he types:**
   - It waits 300 ms after the last change, and needs 2 characters if the query has any CJK, 3 otherwise.
   - It sends nothing while `compositionstart` is open. It searches 300 ms after `compositionend`.
-- **Superseded and late replies.** Each search gets a sequence number and its own `AbortController`. A newer
+- **Superseded and late replies.** Each search, and each location request, gets a sequence number. Searches also get
+  their own `AbortController`. A newer
   keystroke, a pick, a keep, a close or the cell unmounting aborts it. A reply whose number isn't the latest, or that
   arrives after any of those, is dropped without touching the field, the list or any value. So a late reply can't
-  overwrite his typing, a picked value, another cell or a closed sheet.
+  overwrite his typing, a picked value, another cell or a closed sheet. Location uses the same token. A second tap
+  supersedes the first. Checks cover a late location success after each exit (close, unmount, an edit, a pick, a
+  keep) and two overlapping taps (Ratchet c504bd98).
 - **Retry** runs only on his tap, once per tap, with the same words. There's no automatic retry or loop.
 - **The keep row** stores `{ name: words }` and is always present while there are words, whatever the search state.
 - **Offline** (`navigator.onLine === false`, or a fetch that fails) is `unavailable`. Stored values read and open

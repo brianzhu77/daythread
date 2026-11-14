@@ -160,7 +160,7 @@ export const previewLinkPage = createServerFn({ method: "POST" })
  * the time and a count, never the words.
  */
 export const searchPlaces = createServerFn({ method: "POST" })
-  .validator((input: unknown) => z.object({ q: z.string().min(1).max(1000), explicit: z.boolean() }).parse(input))
+  .validator((input: unknown) => z.object({ q: z.string().min(1).max(10_000), explicit: z.boolean() }).parse(input))
   .handler(async ({ data }) => {
     const [{ searchPlaces: search }, { placeLimiter }, { currentOwner }] = await Promise.all([import("./place-search"), import("./place-limiter"), import("./auth/request-owner")]);
     return search(data, { fetch, limiter: placeLimiter(), owner: currentOwner() ?? "local", log: (event) => console.info(JSON.stringify({ level: "info", ...event })) });
