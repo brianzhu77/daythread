@@ -1,3 +1,15 @@
+# PR216 independent review — clear at 9cd4fbc0
+
+**Conclusion:** no remaining review blocker at 9cd4fbc0. The final repair reads the original IndexedDB row by its sequence number inside the handoff transaction, preserving the ownership check before the app-write exception. This closes 61ef1bab. Lead owns the final release gate and deployment decision.
+
+Independently checked the exact store source in real Chromium and WebKit IndexedDB, without starting an app or dev server: ordinary foreign-owner retirement, foreign-owner app replacement, and foreign replacement all return `not-held`, leave the original intact, and match the memory store. Both engines pass. Script `tests/evidence/outbox/ratchet-idb-owner.mjs` strips TypeScript and imports from the actual module solely to exercise these self-contained negative store paths; it does not substitute an implementation. Log `/tmp/ratchet-outbox-final-idb.log`. No local server/test process remains running.
+
+Supporting independent evidence: e6a01672 build/typecheck and 20 focused tests pass; focused handoff/lost-answer browser cases pass 16/16 across both engines, including Keep mine in the other tab. Earlier a6acfd48 full browser suites passed 40/40 Chromium and 39/39 WebKit, and same-filter UI 2/2 per engine; unchanged paths retain those results. The Lead separately reports Worker automations 23/23 in both engines at a6acfd48. The final commit changes only the IndexedDB lookup and adds its test; no broad rerun was performed by this reviewer during the active gate.
+
+No production operation, real account deletion or native-device check was performed by this reviewer. Migration on the fresh backup, old-tab Worker checks, performance and release remain the Lead’s gate. Earlier findings below are historical and superseded by the repairs noted above.
+
+---
+
 # PR216 focused recheck — e6a01672
 
 The owner-bound token and Web Lock repair is read and the ordinary owner-isolation probe now passes. Rehearsal 5c uses its generated Dashboard ID throughout. Independent build, full typecheck and 20 focused tests pass. (The reviewer’s probe fixture was corrected to supply Undo’s required target operation ID.)
