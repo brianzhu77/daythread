@@ -62,3 +62,11 @@ Shared-release extension independently passes: zero sends while held, one after 
 ### Remaining contract gap: shared pending entries are not drained in seq order (2d32d59f)
 
 §6 says replay in `seq` order, and §7 explicitly extends that ordering across tabs. The lock now reads the whole queue but sends its requested target without first selecting earlier eligible pending entries. `ratchet-shared-order.mjs` mounts A and B, injects an earlier pending Water tick into shared IndexedDB, then ticks Call the bank in B. Only the later B operation is sent; the assertion that A goes first fails. An injected pending record represents a committed A entry whose tab-local command queue has not reached it yet. Select/drain earlier eligible shared entries under the lock; unrelated held entries may still be skipped. No user data involved.
+
+## Recheck at 73b90f7a
+
+Closed-A ordering probe passes: A then B on the wire. Shared release, transitive waiting and original two-tab probes pass; build and 12 focused tests pass. Browser suites are being rerun.
+
+### Remaining: a blocked requested entry prevents draining an unrelated earlier orphan (a7f864c4)
+
+Queue X held on Water, A pending Bank left by a closed tab, then B ticks Water. B depends on X, A does not. In built Chromium the wire is empty: the early `blockedBy(shared, fresh)` returns before selecting earlier eligible A. The new cross-tab drain must send earlier eligible entries before deciding whether its requested target waits. `ratchet-blocked-current.mjs` fails its expected-earlier-send assertion. Recovery-state injection, local throwaway store only.
