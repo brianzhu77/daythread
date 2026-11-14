@@ -1,6 +1,6 @@
 # PR216 token repair recheck — pending at a6acfd48
 
-The prior timer/unrelated-command handoff defects are repaired with explicit caller tokens and one IndexedDB transaction. The caller-token paths and cell-draft recovery were read. Independent build, full typecheck, 18 focused client/replay/scheduler tests and 50 storage tests pass. Browser suites are still running; no clear yet.
+The prior timer/unrelated-command handoff defects are repaired with explicit caller tokens and one IndexedDB transaction. The caller-token paths and cell-draft recovery were read. Independent build, full typecheck, 18 focused client/replay/scheduler tests and 50 storage tests pass. Independent full browser suites pass Chromium 40/40 and WebKit 39/39, including failed replacement storage, unrelated activity during handoff, another tab’s dependant, and typed-cell lost answer followed by another edit. The same-filter UI check passes 2/2 in each engine. No clear yet: the owner-lock/ownership and rehearsal findings below remain open. Logs are `/tmp/ratchet-outbox-token-{chromium,webkit}.log` and `/tmp/ratchet-outbox-token-filter-{chromium,webkit}.log`.
 
 Two source findings remain with the author:
 
