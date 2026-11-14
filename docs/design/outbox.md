@@ -443,7 +443,10 @@ Where the build differs from, or adds to, the contract above:
 - **The store is read before the first paint only when a hint in localStorage says a change was stored** (R1-18).
 - **Also found**: a stored change whose base is above the store's revision (data restored from a backup) is held; the
   first replay after a rollback reads the gap from the locked workspace (Ratchet).
+- **Tabs** (§7): under the owner's Web Lock a tab reads the owner's stored queue as it is (other tabs' additions,
+  acknowledgements, holds and discards included), judges dependencies there, and sends every earlier eligible entry by
+  `seq` before its own, so a change left by a closed tab is sent by any open one (Ratchet, Lead 543a65f9).
 
 Evidence: `tests/outbox-contract.ts` (both stores), `tests/outbox-replay.test.ts`, `tests/outbox-client.test.ts`,
-`tests/evidence/outbox/outbox.mjs` (18 cases), `rollback.mjs` (rollback and forward under an open tab),
+`tests/evidence/outbox/outbox.mjs` (31 cases), `rollback.mjs` (rollback and forward under an open tab),
 `rehearse.ts` (the migration on a backup copy).

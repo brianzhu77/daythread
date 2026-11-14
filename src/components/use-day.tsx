@@ -278,19 +278,36 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       // Under the lock: the entry as stored now (another tab's acknowledgements may have added to its own revisions, or it
       // may be gone), the send, and the acknowledgement, so two tabs never send from stale bases (Ratchet 5e6bd5ac).
       const send = async (): Promise<OutboxAnswer | { status: 'gone-here' } | { status: 'waiting-here' }> => {
-        // The owner's whole queue as stored now, other tabs' changes included: a change held in another tab blocks this
-        // one just as one held here would (Ratchet 226e41dc). The tab's own list takes in what it didn't know.
-        // The store is the truth for this owner's queue: what another tab added, changed or discarded (Ratchet 7bb6a8af).
-        const shared = (await s.all()).filter(e => e.owner === entry.owner)
-        entries.current = shared
-        const now = shared.find(e => e.seq === seq)
-        if (!now) return { status: 'gone-here' }
-        const fresh = { ...entry, ownRevisions: now.ownRevisions, state: now.state }
-        if (now.state !== 'pending') return { status: 'gone-here' }
-        if (blockedBy(shared, fresh)) return { status: 'waiting-here' }
-        const answer = await transport.runOutbox!(wsRef.current!, fresh)
-        if (answer.status === 'applied') await s.acknowledge(seq, entry.owner, answer.receipt.revision)
-        return answer
+        for (;;) {
+          // The owner's whole queue as stored now, other tabs' changes included: a change held in another tab blocks this
+          // one just as one held here would (Ratchet 226e41dc). The store is the truth for this owner's queue: what
+          // another tab added, changed or discarded (Ratchet 7bb6a8af).
+          const shared = (await s.all()).filter(e => e.owner === entry.owner)
+          entries.current = shared
+          const now = shared.find(e => e.seq === seq)
+          if (!now || now.state !== 'pending') return { status: 'gone-here' }
+          const fresh = { ...entry, ownRevisions: now.ownRevisions, state: now.state }
+          if (blockedBy(shared, fresh)) return { status: 'waiting-here' }
+          // Order by `seq` across tabs (§6, §7): an earlier change still pending goes first, whichever tab made it, so one
+          // left by a closed tab is sent by an open one rather than stranded (Ratchet 2d32d59f, Lead 543a65f9). A held
+          // one it doesn't depend on is passed over, as here.
+          const earlier = shared.find(e => e.seq! < seq && e.state === 'pending' && !blockedBy(shared, e))
+          const target = earlier ?? fresh
+          const answer = await transport.runOutbox!(wsRef.current!, target)
+          if (answer.status === 'applied') await s.acknowledge(target.seq!, entry.owner, answer.receipt.revision)
+          if (!earlier) return answer
+          // An earlier change's answer is settled here, then the queue is read again for the next.
+          switch (answer.status) {
+            case 'applied': adopt(answer.workspace); continue
+            case 'already-applied': await s.acknowledge(earlier.seq!, entry.owner, undefined); continue
+            case 'held':
+              if (earlier.app) await s.remove(earlier.seq!)
+              else await s.update(earlier.seq!, { state: 'held', held: { reason: answer.reason, ...(answer.message ? { message: answer.message } : {}) } })
+              continue
+            // Not sent, so nothing after it is: this change waits behind it, kept, and is said as it would be.
+            default: return answer
+          }
+        }
       }
       const answer = typeof navigator !== 'undefined' && navigator.locks ? await navigator.locks.request(`daythread-outbox:${entry.owner}`, send) : await send()
       const drop = () => { entries.current = entries.current.filter(e => e.seq !== seq) }
@@ -327,7 +344,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         }
       }
     } finally { inFlight.current.delete(seq); showOutbox() }
-  }, [transport, showOutbox, retryLater])
+  }, [transport, showOutbox, retryLater, adopt])
 
   /** Once the owner is known (the first load, or the offline copy's), this owner's stored changes join the tab, before they're shown. */
   const takeStored = useCallback(async (owner: string | null) => {

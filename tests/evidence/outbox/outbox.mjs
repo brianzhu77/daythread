@@ -392,6 +392,22 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 17b the held change discarded in tab A: tab B lets go of it and sends its waiting tick`, statusOf('Water the plants') === 'done' && await b.locator('.banner.save-failed').count() === 0, `status ${statusOf('Water the plants')}`)
     await context.close()
   }
+  // 18. Tab A is closed with a change still pending (offline when made); tab B's next change sends A's first, then its
+  //     own: order by seq across tabs, and nothing stranded by a closed tab (Ratchet 2d32d59f, Lead 543a65f9).
+  {
+    reseed()
+    const ids = Object.fromEntries(stored().tasks.map(t => [t.title, t.id]))
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }), a = await context.newPage(), b = await context.newPage()
+    for (const p of [a, b]) { await p.goto(`${base}/`); await p.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(p) }
+    await cut(a); await a.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(800)
+    await a.close({ runBeforeUnload: false })
+    const before = stored().revision, wire = []
+    b.on('request', r => { if (r.url().includes('/_serverFn/cedd5fc6')) { const body = r.postData() ?? ''; wire.push(body.includes(ids['Water the plants']) ? 'A' : body.includes(ids['Call the bank']) ? 'B' : '?') } })
+    await b.getByRole('checkbox', { name: 'Complete Call the bank' }).click(); await wait(2000); await settle(b)
+    const banner = await b.locator('.banner.save-failed').count()
+    ok(`${tag} 18 a change left by a closed tab goes first, then the open tab's own`, wire.join(',') === 'A,B' && statusOf('Water the plants') === 'done' && statusOf('Call the bank') === 'done' && stored().revision === before + 2 && banner === 0, `wire ${wire.join(',')}, revision ${before} → ${stored().revision}, banner ${banner}`)
+    await context.close()
+  }
   // 10c. No IndexedDB at all (not just failing): a change on its way still warns after a second and guards the leave.
   {
     reseed(); const { context, page } = await fresh()
