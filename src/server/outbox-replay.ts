@@ -107,6 +107,13 @@ export function onlyOwnSince(basis: OutboxBasis, revision: number): boolean {
   return true
 }
 
+/**
+ * Whether a change held for these conflicting keys may be built again on the latest state by its caller. Not when a
+ * filter is among them: a filter edit saves its rules whole, or by position, so built again it would replace the other
+ * edit with nothing said; two edits to one filter stay held and named (Ratchet bab28cc3, Jazz 47fa67dd).
+ */
+export const rebuildable = (conflicts: string[]): boolean => !conflicts.some(key => key.endsWith('/filter'))
+
 /** The rows of the write set someone else wrote after the base. A row never stamped (null) predates the outbox. */
 export function rowConflicts(keys: string[], revisionOf: (key: string) => number | null | undefined, basis: OutboxBasis): string[] {
   const own = new Set(basis.ownRevisions)

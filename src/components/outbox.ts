@@ -69,7 +69,19 @@ export interface OutboxStore {
   remove(seq: number): Promise<void>
   /** Sign-out and Delete account (§7). */
   clearOwner(owner: string): Promise<void>
+  /**
+   * A change given back to its caller leaves the outbox (Lead bd4cc39e, Ratchet 6804fae5), in one transaction: what
+   * replaces it (its rebuild) is stored, every change of the owner still waiting on it, from any tab, is held for him
+   * to decide, and it's removed. Nothing changes if any part fails. The replacement's seq, or null.
+   */
+  handOff(seq: number, owner: string, replacement: OutboxEntry | null): Promise<number | null>
 }
+
+/** What a hand-off does to an owner's queue, as stored now: the changes to hold. Pure, so both stores do the same. */
+export function handOffHolds(queue: readonly OutboxEntry[], seq: number): number[] {
+  return [...schedule(queue).waiting].filter(([, roots]) => roots.includes(seq)).map(([w]) => w)
+}
+const handOffHeld = { state: 'held' as const, held: { reason: 'changed-since' as const } }
 
 /** For tests, and the fallback shape the IndexedDB store follows. */
 export function memoryOutboxStore(): OutboxStore {
@@ -86,6 +98,13 @@ export function memoryOutboxStore(): OutboxStore {
     async update(seq, patch) { const e = rows.get(seq); if (e) rows.set(seq, { ...e, ...structuredClone(patch), seq }) },
     async remove(seq) { rows.delete(seq) },
     async clearOwner(owner) { for (const e of sorted()) if (e.owner === owner) rows.delete(e.seq!) },
+    async handOff(seq, owner, replacement) {
+      const queue = sorted().filter(e => e.owner === owner)
+      for (const w of handOffHolds(queue, seq)) rows.set(w, { ...rows.get(w)!, ...structuredClone(handOffHeld) })
+      rows.delete(seq)
+      if (!replacement) return null
+      const at = next++; rows.set(at, structuredClone({ ...replacement, seq: at })); return at
+    },
   }
 }
 
@@ -122,6 +141,17 @@ export function idbOutboxStore(factory: IDBFactory = indexedDB): OutboxStore {
     update: (seq, patch) => tx<void>('readwrite', s => { const r = s.get(seq); r.onsuccess = () => { if (r.result) s.put({ ...r.result, ...patch, seq }) } }),
     remove: seq => tx<void>('readwrite', s => { s.delete(seq) }),
     clearOwner: owner => tx<void>('readwrite', s => later(s, owner, 0, (_e, c) => { c.delete() })),
+    handOff: (seq, owner, replacement) => tx<number | null>('readwrite', (s, done) => {
+      const r = s.index('owner').getAll(IDBKeyRange.only(owner))
+      r.onsuccess = () => {
+        const queue = (r.result as OutboxEntry[]).sort((a, b) => a.seq! - b.seq!)
+        for (const w of handOffHolds(queue, seq)) s.put({ ...queue.find(e => e.seq === w)!, ...handOffHeld })
+        s.delete(seq)
+        if (!replacement) { done(null); return }
+        const { seq: _seq, ...rest } = replacement
+        const added = s.add(rest); added.onsuccess = () => done(Number(added.result))
+      }
+    }),
   }
 }
 
@@ -279,6 +309,14 @@ export function labelFor(action: Action, ws: Workspace): string {
   const name = task(a.taskId)?.title || page(a.rowId ?? a.pageId)?.title || a.title
   const quoted = name ? `"${cut(name)}"` : null
   if (action.type === 'change-database') { const said = databaseLabel(action, ws, cut); if (said) return said }
+  if (action.type === 'set-values') {
+    // A cell: `set <Property> on "<row>"` (Jazz §8.3, 3d66a938); the row alone once its property is gone.
+    const row = page(action.pageId), db = row?.parentId ? page(row.parentId)?.database : undefined
+    const names = Object.keys(action.values).map(k => (k === 'title' ? 'Name' : db?.properties.find(p => p.id === k)?.name)).filter((x): x is string => Boolean(x))
+    const where = row ? `"${cut(row.title || 'Untitled')}"` : null
+    if (where && names.length === 1) return `set ${names[0]} on ${where}`
+    if (where && names.length > 1) return `set ${names.length} values on ${where}`
+  }
   switch (action.type) {
     case 'task-status': return quoted ? `${a.status === 'done' ? 'ticked' : a.status === 'open' ? 'unticked' : 'changed'} ${quoted}` : 'a change'
     case 'add-task': case 'add-row': case 'add-rows': return quoted ? `added ${quoted}` : 'added a row'

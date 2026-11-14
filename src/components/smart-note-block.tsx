@@ -13,7 +13,7 @@ import { RefreshIcon, SmartNoteIcon } from './icons'
 import { jumpInPage } from './line-jump'
 import { RowMenu, type MenuItem } from './row-menu'
 import { openSmartNoteSetup } from './smart-note-setup'
-import { newOperationId, useWorkspace, useWorkspaceIfAny, workspaceOwner } from './use-day'
+import { newOperationId, useWorkspace, useWorkspaceIfAny, workspaceOwner, type Handoff } from './use-day'
 
 /** What the block needs of the editor, declared here as `ButtonLine` declares its own. */
 type BlockEditor = { replaceBlocks(ids: string[], blocks: never): unknown; removeBlocks(ids: string[]): unknown }
@@ -187,10 +187,11 @@ export function useSmartRefresh(noteId: string): { state: 'idle' | 'running' | '
     let outcome: Ask = { state: 'failed', error: null }
     const lost = setTimeout(() => { if (asks.get(noteId) === mine) setAsk(noteId, { state: 'failed', error: null }) }, LOST_MS)
     // Another tab or the phone saved meanwhile: the paid result is sent once more on the latest workspace.
-    const store = async (result: SmartResult, spec: string, retried = false): Promise<boolean> => {
-      let refused = null as string | null
-      const receipt = await run({ type: 'set-smart-note-result', noteId, result, spec }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, { quiet: true, stale: 'rebuild', inlineRefusal: retried ? gone : stale, onRefused: m => { refused = m } })
-      if (refused === 'Saved elsewhere') return store(result, spec, true)
+    const store = async (result: SmartResult, spec: string, replaces?: Handoff): Promise<boolean> => {
+      let refused = null as string | null, handoff: Handoff | undefined
+      // Built again once: the second try isn't given back again.
+      const receipt = await run({ type: 'set-smart-note-result', noteId, result, spec }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, { quiet: true, ...(replaces ? { replaces } : { stale: 'rebuild' as const }), inlineRefusal: replaces ? gone : stale, onRefused: (m, h) => { refused = m; handoff = h } })
+      if (refused === 'Saved elsewhere' && handoff) return store(result, spec, handoff)
       return Boolean(receipt) || refused !== null
     }
     void (async () => {

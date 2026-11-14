@@ -15,7 +15,7 @@ import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
 import { useTreeDrag, type Drop } from './tree-drag'
 import { useDeletePage } from './trash'
-import { useWorkspace } from './use-day'
+import { useWorkspace, type Handoff } from './use-day'
 import { databaseOfRow } from '../domain/database'
 
 // pages-delta N-2 / N-5 / N-9 step B, laid out per Jazz docs/design/pages-tree-layout.md (cfc7b92): breadcrumb,
@@ -315,16 +315,16 @@ export function MovePageDialog({ page, onClose }: { page: Page; onClose: () => v
     groups = [{ options: [...('top level'.includes(q) ? [option(null, !current)] : []), ...matches.map(p => option(p, current?.id === p.id))] }]
   }
   const pickable = groups.flatMap(g => g.options).filter(o => !o.current)
-  const move = async (o: Option, retried = false): Promise<void> => {
+  const move = async (o: Option, retried = false, replaces?: Handoff): Promise<void> => {
     if (o.current) return
     setRefused(null)
-    let stale = false
+    let stale = false, handoff: Handoff | undefined
     const receipt = await run({ type: 'move-page', pageId: page.id, parentId: o.parentId },
       r => ({ text: o.parentId ? `Moved to ${o.label}` : 'Moved to top level', undoOperationId: r.operationId }), undefined,
-      { stale: 'rebuild', inlineRefusal: retried ? moveRefusals : moveOrStale, onRefused: m => { if (m === 'Saved elsewhere') stale = true; else setRefused({ key: o.key, label: o.label, text: refusalCopy(m) }) } })
+      { ...(retried ? {} : { stale: 'rebuild' as const }), ...(replaces ? { replaces } : {}), inlineRefusal: retried ? moveRefusals : moveOrStale, onRefused: (m, h) => { if (m === 'Saved elsewhere') { stale = true; handoff = h } else setRefused({ key: o.key, label: o.label, text: refusalCopy(m) }) } })
     // Something else was saved since the dialog opened. The move is checked again on the latest pages, once: it
     // either applies or is refused on its row.
-    if (stale) return move(o, true)
+    if (stale) return move(o, true, handoff)
     if (receipt) onClose()
   }
   // react-aria stops a key at this handler unless told otherwise; Escape must still reach the field and the dialog.
@@ -446,16 +446,16 @@ export function SidebarTree({ workspace, activeId, today }: { workspace: Workspa
 
   // B14: every drop says where the page went, with Undo, as Move to… does. A drop refused on the latest pages (the
   // target went meanwhile) changes nothing and the tree shows where things are now.
-  const dropPage = async (pageId: string, drop: Drop, retried = false): Promise<void> => {
+  const dropPage = async (pageId: string, drop: Drop, retried = false, replaces?: Handoff): Promise<void> => {
     const ws = latest() ?? workspace
     const page = ws.pages.find(p => p.id === pageId), parent = drop.parentId ? ws.pages.find(p => p.id === drop.parentId) : null
-    if (!page) return
+    if (!page) { void replaces?.done(); return }
     const reorder = (parentOf(ws, page)?.id ?? null) === drop.parentId
     const text = reorder ? 'Moved' : parent ? `Moved to ${pageLabel(parent, today)}` : 'Moved to top level'
-    let stale = false
+    let stale = false, handoff: Handoff | undefined
     const receipt = await run({ type: 'move-page', pageId, parentId: drop.parentId, beforeId: drop.beforeId }, r => ({ text, undoOperationId: r.operationId }), undefined,
-      { stale: 'rebuild', inlineRefusal: retried ? dropRefusals : dropOrStale, onRefused: m => { stale = m === 'Saved elsewhere' } })
-    if (stale) return dropPage(pageId, drop, true)
+      { ...(retried ? {} : { stale: 'rebuild' as const }), ...(replaces ? { replaces } : {}), inlineRefusal: retried ? dropRefusals : dropOrStale, onRefused: (m, h) => { stale = m === 'Saved elsewhere'; if (stale) handoff = h } })
+    if (stale) return dropPage(pageId, drop, true, handoff)
     if (receipt && drop.zone === 'inside' && drop.parentId) expand(drop.parentId)
   }
   const drag = useTreeDrag({

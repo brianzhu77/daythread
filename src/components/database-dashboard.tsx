@@ -16,7 +16,7 @@ import { filterLabel, openDashboardFilterFrom } from './dashboard-filter'
 import { displayPageTitle } from './page-title'
 import { RowMenu, type MenuItem } from './row-menu'
 import { useWide } from './property-editors'
-import { useWorkspace } from './use-day'
+import { useWorkspace, type Handoff } from './use-day'
 
 type DatabasePage = Page & { database: Database }
 const sourceTitle = (source: DatabasePage) => (source.id === todosSourceId ? todosTitle : displayPageTitle(source))
@@ -31,16 +31,16 @@ const elsewhereOnly = /That widget's gone|That row's gone|That row's changed sin
 function useDashboardRun(hostId: string, viewId: string) {
   const { run } = useWorkspace()
   return async (build: (dashboard: Dashboard) => DashboardChange | null, notice?: string) => {
-    const once = () => {
-      let stale = false, refusal: string | null = null, gone = false
+    const once = (replaces?: Handoff) => {
+      let stale = false, refusal: string | null = null, gone = false, handoff: Handoff | undefined
       const receipt = run(ws => {
         const host = ws.pages.find(p => p.id === hostId), view = isDatabase(host) ? host.database.views.find(v => v.id === viewId) : undefined
         const change = view?.dashboard ? build(view.dashboard) : null
         // Nothing to send: what it was for isn't there any more (a widget removed in another tab).
         if (!change) gone = true
         return change ? { type: 'change-database', pageId: hostId, change } : null
-      }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined, undefined, { stale: 'rebuild', inlineRefusal: refusals, onRefused: m => { if (/Saved elsewhere/.test(m)) stale = true; else refusal = m } })
-      return receipt.then(r => ({ r, stale, refusal, gone }))
+      }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined, undefined, { stale: 'rebuild', ...(replaces ? { replaces } : {}), inlineRefusal: refusals, onRefused: (m, h) => { if (/Saved elsewhere/.test(m)) { stale = true; handoff = h } else refusal = m } })
+      return receipt.then(r => ({ r, stale, refusal, gone, handoff }))
     }
     // A tab behind the workspace is refused whatever it sends, and comes back up to date (G6-5). Each command names only
     // its own widget or row, so it's built again from what's there now and sent once more; a real refusal says so.
@@ -50,7 +50,9 @@ function useDashboardRun(hostId: string, viewId: string) {
     if (first.r || !first.stale) { if (!first.r && first.refusal) toast(elsewhereOnly.test(first.refusal) ? 'Changed in another tab, so nothing was changed' : first.refusal, { timeout: 6000 }); return first.r }
     // Sent again and still refused (its neighbour moved, or it's been removed): said, and the dashboard as it is now is
     // drawn, so a change never fails silently (Bumblebee ba4322f2).
-    const again = await once()
+    const again = await once(first.handoff)
+    // Refused again as stale: said below; nothing builds it a third time.
+    void again.handoff?.done()
     if (!again.r && again.gone) toast("That widget's gone · removed in another tab", { timeout: 6000 })
     else if (!again.r && (again.stale || again.refusal)) toast('Changed in another tab, so nothing was changed', { timeout: 6000 })
     return again.r

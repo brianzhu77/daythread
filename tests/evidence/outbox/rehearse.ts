@@ -88,6 +88,42 @@ try {
     await self.asOwner(owner, () => repoOf(self).executeOutbox({ operationId: `rehearse-old-${Date.now()}`, expectedRevision: outboxBase, action: { type: 'add-task', pageId: day.id, title: 'Made before the rollback' } }, { baseRevision: outboxBase, ownRevisions: [], readsBeyond: false }))
   } catch (error) { held = (error as { reason?: string }).reason ?? String(error) }
   ok('5 this build sees the unstamped stretch and holds a change based before it', w!.through !== w!.revision && held === 'changed-since', `revision ${w!.revision}, last stamped ${w!.through ?? 'never'}, replay ${held || 'applied'}`)
+
+  // The parts inside a database page (Lead 197e76f3, Ratchet 58a63858): an older build's write to a part is caught before
+  // the first replay that checks parts, and a removed part's stamp outlives an older build's write.
+  const mine = <T,>(fn: () => Promise<T>) => self.asOwner(owner, fn)
+  const thisWrites = (action: unknown) => mine(async () => { const r = repoOf(self), ws = await r.load(); return r.execute({ operationId: `rehearse-${Date.now()}-${Math.random()}`, expectedRevision: ws.revision, action }) })
+  const replay = async (action: unknown, base: number) => {
+    try { await mine(() => repoOf(self).executeOutbox({ operationId: `rehearse-replay-${Date.now()}-${Math.random()}`, expectedRevision: base, action }, { baseRevision: base, ownRevisions: [], readsBeyond: false })); return { held: '', stale: false } }
+    catch (error) { const e = error as { reason?: string; stale?: boolean }; return { held: e.reason ?? String(error), stale: Boolean(e.stale) } }
+  }
+  let dbPage = (await read(self, owner)).pages.find((p: { database?: { fixed?: true }; trashedAt?: string | null }) => p.database && !p.database.fixed && !p.trashedAt) as { id: string; database: { views: Array<{ id: string; filter: unknown[] }> } } | undefined
+  const madeOne = !dbPage
+  if (!dbPage) { await thisWrites({ type: 'create-database', pageId: 'rehearse-db', homeBlockId: null, title: 'Rehearsal' }); dbPage = (await read(self, owner)).pages.find((p: { id: string }) => p.id === 'rehearse-db') as typeof dbPage }
+  const viewId = dbPage!.database.views[0]!.id
+  // 5b. This build writes (no gap left), then the live build edits that view's filter, unstamped; a filter edit this
+  // build replays from before it is held, as changed since (not given back to be built again), and nothing is written.
+  await thisWrites({ type: 'ensure-day', date: '2099-01-03' })
+  const base5b = (await read(self, owner)).revision
+  await live.asOwner(owner, async () => { const r = repoOf(live), ws = await r.load(); return r.execute({ operationId: `rehearse-live-filter-${Date.now()}`, expectedRevision: ws.revision, action: { type: 'change-database', pageId: dbPage!.id, change: { kind: 'updateView', viewId, filter: [{ by: 'title', op: 'contains', value: 'live' }] } } }) })
+  const before5b = await read(self, owner)
+  const r5b = await replay({ type: 'change-database', pageId: dbPage!.id, change: { kind: 'updateView', viewId, filter: [{ by: 'title', op: 'contains', value: 'replayed' }] } }, base5b)
+  const after5b = await read(self, owner)
+  ok('5b the live build edits a view\'s filter; a filter edit replayed from before it is held, not applied', r5b.held === 'changed-since' && !r5b.stale && isDeepStrictEqual(before5b, after5b), `${madeOne ? 'no database of his, made one; ' : ''}replay ${r5b.held || 'applied'}${r5b.stale ? ' (stale)' : ''}`)
+  // 5c. This build adds a dashboard with a widget and removes the widget; the floor build writes; the widget's stamp is
+  // still there, and an edit to it made before its removal is held.
+  const { firstWidgetView } = await import(resolve(import.meta.dirname, '../../../src/domain/dashboard.ts'))
+  const source = (await read(self, owner)).pages.find((p: { id: string }) => p.id === dbPage!.id) as { database: unknown }
+  const widgetId = `rehearse-w-${Date.now()}`
+  await thisWrites({ type: 'change-database', pageId: dbPage!.id, change: { kind: 'addDashboard', view: { id: `rehearse-dash-${Date.now()}`, name: 'Rehearsal dashboard' }, rows: [{ id: `rehearse-row-${Date.now()}`, widgets: [{ id: widgetId, source: dbPage!.id, view: firstWidgetView(source.database, `${widgetId}-v`) }] }] } })
+  const dashId = (await read(self, owner)).pages.find((p: { id: string }) => p.id === dbPage!.id).database.views.find((v: { dashboard?: unknown }) => v.dashboard).id
+  const base5c = (await read(self, owner)).revision
+  await thisWrites({ type: 'change-database', pageId: dbPage!.id, change: { kind: 'removeWidget', viewId: dashId, widgetId } })
+  await floor.asOwner(owner, async () => { const r = repoOf(floor), ws = await r.load(); return r.execute({ operationId: `rehearse-floor-2-${Date.now()}`, expectedRevision: ws.revision, action: { type: 'ensure-day', date: '2099-01-04' } }) })
+  const [{ id: wsId }] = (await sql.unsafe(`select id::text as id from ${schema}.workspaces where user_id = $1::uuid`, [owner])) as Array<{ id: string }>
+  const tomb = (await sql.unsafe(`select revision from ${schema}.part_revisions where workspace_id = $1::uuid and key = $2`, [wsId, `life:widget:${widgetId}`])) as Array<{ revision: number }>
+  const r5c = await replay({ type: 'change-database', pageId: dbPage!.id, change: { kind: 'updateWidget', viewId: dashId, widgetId, fields: { groupBy: 'title' } } }, base5c)
+  ok('5c a widget removed by this build keeps its stamp after the floor build writes; an edit to it from before is held', tomb.length === 1 && Boolean(r5c.held), `stamp ${tomb[0]?.revision ?? 'gone'}, replay ${r5c.held || 'applied'}`)
 } catch (error) {
   ok('rehearsal ran to the end', false, error instanceof Error ? error.message : String(error))
 } finally {
