@@ -28,6 +28,7 @@ test('the rule: as-is when nothing moved; whole when it reads beyond, predates a
   assert.deepEqual(replayRule(basis, 12, { ...tracked, untrackedUntil: 11 }), { rule: 'whole', reason: 'changed-since' })
   assert.deepEqual(replayRule(basis, 12, { ...tracked, forgottenThrough: 11 }), { rule: 'whole', reason: 'maybe-applied' })
   assert.deepEqual(replayRule(basis, 12, { ...tracked, forgottenThrough: 10 }), { rule: 'rows' }, 'an operation pruned at or before its base was made before it')
+  assert.deepEqual(replayRule(basis, 8, tracked), { rule: 'whole', reason: 'changed-since' }, 'a base newer than the store: restored from a backup')
 })
 
 test('row conflicts skip unstamped rows, rows at or before the base, and the queue\'s own revisions', () => {

@@ -42,6 +42,7 @@ outboxContract('Postgres rows (PGlite)', async () => {
   return {
     create: () => new PostgresWorkspaceRepository(pgliteClient(db)),
     olderBuildWrote: async () => { await db.exec('update daythread.workspaces set revision = revision + 1') },
+    restoredFromBackup: async back => { await db.exec(`update daythread.workspaces set revision = revision - ${back}`) },
     forgetOperations: async repo => {
       await db.exec("update daythread.operations set created_at = now() - interval '60 days'")
       const { rows } = await db.query<{ id: string }>('select id::text as id from daythread.workspaces')

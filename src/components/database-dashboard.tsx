@@ -10,7 +10,7 @@ import { isDatabase, type Database, type View } from '../domain/database'
 import { readingWorkspace, todosSourceId, todosTitle } from '../domain/todos-source'
 import type { Page, Workspace } from '../domain/types'
 import { DatabaseHeader, LaidOutView, rowCaps, setLinkedBlock, type ChangeView, type DatabaseViewProps } from './database-block'
-import { SourceLine, TrashedSource } from './database-linked'
+import { TrashedSource, useOpenSource } from './database-linked'
 import { openDatabaseMenu, opLabels } from './database-menu'
 import { filterLabel, openDashboardFilterFrom } from './dashboard-filter'
 import { displayPageTitle } from './page-title'
@@ -387,12 +387,14 @@ function WidgetView({ workspace, source, host, view, widget, blockId }: { worksp
     const now = findWidget(dashboard, widget.id)?.widget
     return now ? { kind: 'updateWidget', viewId: view.id, widgetId: widget.id, fields: build(now.view) } : null
   }, notice)
+  const openSource = useOpenSource()
   const json = JSON.stringify(widget.view)
   useLayoutEffect(() => { setLinkedBlock(blockId, { view: widget.view, json, change }) })
   useLayoutEffect(() => () => setLinkedBlock(blockId, null), [blockId])
-  // Its heading is its database, and its tab is its view ("Table"), as a linked view's is (Jazz 6f0ebb20).
+  // Its heading is its database, and its tab is its view ("Table"), as a linked view's is (Jazz 6f0ebb20). The heading
+  // always names the source, so it opens the source itself, and no "↳ from" line repeats it (Lead 7499568b).
   return <LaidOutView workspace={workspace} db={source} view={drawn} changeView={change} blockId={blockId} pageDate={null} cap={rowCaps.inline}
-    linked={{ title: sourceTitle(source), rename: () => {}, source: <SourceLine workspace={workspace} db={source} />, fixedTitle: true,
+    linked={{ title: sourceTitle(source), rename: () => {}, source: null, fixedTitle: true, open: () => openSource(source),
       ...(label ? { after: <button type="button" className="app-link dashboard-filter-label" onClick={() => { openDashboardFilterFrom(widget.id); openDatabaseMenu(hostBlock, host.id, 'filter') }}>{label}</button> } : {}) }} />
 }
 
