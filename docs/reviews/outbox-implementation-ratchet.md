@@ -54,3 +54,11 @@ Build and 12 focused storage/client/account tests pass. All five earlier browser
 ### Remaining: a resolved shared hold stays authoritative in another tab (7bb6a8af)
 
 Extend the shared-held probe: discard A's held entry in IndexedDB, wait past the visibility refresh guard, focus B, wait 1.8 seconds. B sends zero and still shows the discarded held item plus one waiting change. `ratchet-shared-release.mjs` fails (expected one send). The early local `blockedBy` check prevents rereading shared state, and reconciliation keeps rows missing from storage via `shared.find(...) ?? e`. Shared state must reconcile removals before deciding whether a local entry is blocked. Recovery-state injection represents the shared queue after another tab's Discard; no real user data is involved.
+
+## Recheck at 1f8d1838
+
+Shared-release extension independently passes: zero sends while held, one after removing the blocker and returning, no banner. Build, 12 focused tests, original two-tab and transitive browser probes also pass.
+
+### Remaining contract gap: shared pending entries are not drained in seq order (2d32d59f)
+
+§6 says replay in `seq` order, and §7 explicitly extends that ordering across tabs. The lock now reads the whole queue but sends its requested target without first selecting earlier eligible pending entries. `ratchet-shared-order.mjs` mounts A and B, injects an earlier pending Water tick into shared IndexedDB, then ticks Call the bank in B. Only the later B operation is sent; the assertion that A goes first fails. An injected pending record represents a committed A entry whose tab-local command queue has not reached it yet. Select/drain earlier eligible shared entries under the lock; unrelated held entries may still be skipped. No user data involved.
