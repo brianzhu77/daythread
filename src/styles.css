@@ -3412,3 +3412,13 @@ textarea.form-input { resize: vertical; }
 .dashboard-filter-adds { display: grid; gap: 2px; }
 .dashboard-filter-adds .database-add-rule { display: flex; justify-content: space-between; gap: 12px; }
 .dashboard-filter-count { color: var(--ink-2); font-size: var(--text-meta); }
+
+/* Place (place-contract.md §3, Jazz 74fb06f7): a pinned name reads as a link button does, Ink-soft underlined in
+   Border-control; its editor's second lines are Meta Ink-soft, and the attribution foot Meta Ink-faint. */
+.cell-place { color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+@media (hover: hover) { .cell-place:hover { color: var(--ink); } }
+.place-two-line { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; text-align: left; }
+.place-two-line > * { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.place-meta { color: var(--ink-2); font-size: var(--text-meta); }
+.place-rows .property-empty.place-meta { color: var(--ink-2); font-size: var(--text-meta); }
+.place-foot { margin: 6px 10px 2px; color: var(--ink-3); font-size: var(--text-meta); }

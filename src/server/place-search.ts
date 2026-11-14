@@ -4,8 +4,17 @@
 import { createHash } from 'node:crypto'
 import { placeLimits, searchable, searchesAsTyped, searchQuery, type PlaceValue } from '../domain/place.ts'
 import type { PlaceLimiter } from './place-limits.ts'
+import { onHostingPlatform } from './hosting.ts'
 
 export const photonOrigin = 'https://photon.komoot.io'
+/**
+ * The upstream asked. Always Photon on a hosting platform; on this machine alone, a browser check may point it at a
+ * stand-in on 127.0.0.1 (DAYTHREAD_PLACE_UPSTREAM), so its runs send nothing outside. Anything else is ignored.
+ */
+export function upstreamOrigin(env: NodeJS.ProcessEnv = process.env, hosted = onHostingPlatform(env)): string {
+  const local = env.DAYTHREAD_PLACE_UPSTREAM
+  return !hosted && local && /^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(local) ? local : photonOrigin
+}
 /** Names the app, as Photon asks, and nothing about him. */
 export const userAgent = 'Daythread place search (a personal notes app; one person typing)'
 export const searchLimits = {
@@ -28,6 +37,8 @@ export interface SearchDeps {
   /** Who is searching: the signed-in account, or "local" with sign-in off. */
   owner: string
   log?: (event: Record<string, unknown>) => void
+  /** Tests only: another origin than `upstreamOrigin()`. */
+  upstream?: string
   /** Tests only: a shorter wait than `searchLimits.timeoutMs`. */
   timeoutMs?: number
 }
@@ -85,7 +96,7 @@ type Asked = { status: 'ok'; places: PlaceSuggestion[] } | { status: 'unavailabl
 
 /** One GET to the fixed upstream with the query and a limit, and nothing of his but the words. */
 async function askPhoton(q: string, deps: SearchDeps): Promise<Asked> {
-  const url = new URL('/api', photonOrigin)
+  const url = new URL('/api', deps.upstream ?? upstreamOrigin())
   url.searchParams.set('q', q)
   url.searchParams.set('limit', String(placeLimits.suggestions))
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), deps.timeoutMs ?? searchLimits.timeoutMs)

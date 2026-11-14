@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
 import { pgliteClient } from '../src/server/db/sql.ts'
 import { MemoryPlaceLimiter, PostgresPlaceLimiter, placeQuota, type PlaceLimiter } from '../src/server/place-limits.ts'
-import { photonPlaces, resetPlaceSearch, searchPlaces, userAgent, type SearchDeps } from '../src/server/place-search.ts'
+import { photonPlaces, resetPlaceSearch, searchPlaces, upstreamOrigin, userAgent, type SearchDeps } from '../src/server/place-search.ts'
 
 const feature = (name: string | undefined, lon: number, lat: number, extra: Record<string, unknown> = {}) =>
   ({ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: { ...(name ? { name } : {}), ...extra } })
@@ -53,6 +53,14 @@ test('one GET to the fixed upstream with the words and a limit, and nothing of h
   assert.equal(init.credentials, 'omit')
   assert.equal(init.referrerPolicy, 'no-referrer')
   assert.ok(init.signal instanceof AbortSignal)
+})
+
+test('the upstream is Photon on any hosting platform; a stand-in only on this machine, only on 127.0.0.1', () => {
+  assert.equal(upstreamOrigin({}, false), 'https://photon.komoot.io')
+  assert.equal(upstreamOrigin({ DAYTHREAD_PLACE_UPSTREAM: 'http://127.0.0.1:3799' }, false), 'http://127.0.0.1:3799')
+  assert.equal(upstreamOrigin({ DAYTHREAD_PLACE_UPSTREAM: 'http://127.0.0.1:3799' }, true), 'https://photon.komoot.io', 'never when hosted')
+  for (const bad of ['https://evil.example', 'http://localhost:3799', 'http://127.0.0.1:3799/api', 'http://10.0.0.1:80'])
+    assert.equal(upstreamOrigin({ DAYTHREAD_PLACE_UPSTREAM: bad }, false), 'https://photon.komoot.io', bad)
 })
 
 test('the 2/3-character rule is the server\'s too; past 256 characters nothing is searched', async () => {

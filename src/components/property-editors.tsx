@@ -29,6 +29,8 @@ import {
 } from './property-values.ts'
 import { fileHref, fileSizeLabel, uploadFile, type FileItem, type UploadFailure } from './file-upload'
 import { ButtonCell } from './button-cell'
+import { isPlaceValue, locationName, placeLink, searchable, searchesAsTyped, searchQuery, type PlaceValue } from '../domain/place.ts'
+import { searchPlaces } from '../server/functions'
 
 export interface CommitInfo {
   /** Show this as the usual Undo notice ("Notes changed · Undo"): phone Text/URL commits only (Lead f1e56ab4). */
@@ -92,6 +94,7 @@ export function PropertyEditor(props: EditorProps) {
     case 'relation': case 'multiSelect': return props.property.targetTrashed ? <TargetInTrash {...props} /> : <OptionsEditor {...props} />
     case 'date': return <DateEditor {...props} />
     case 'files': return <FilesEditor {...props} />
+    case 'place': return <PlaceEditor {...props} />
     case 'checkbox': return null
   }
 }
@@ -661,6 +664,139 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange(
 // ---------- Cells (§6.3.2) ----------
 
 /** A formula's styled words, the colours being ones he typed (formula design §7). */
+// ---------- Place (place-contract.md §3, §4; D15 G8-2 to G8-4) ----------
+
+type PlaceRow =
+  | { kind: 'search' }
+  | { kind: 'location' }
+  | { kind: 'place'; place: PlaceSuggestion }
+  | { kind: 'keep' }
+interface PlaceSuggestion { value: PlaceValue; area?: string }
+type SearchState = { status: 'idle' } | { status: 'loading'; q: string } | { status: 'ok'; q: string; places: PlaceSuggestion[] } | { status: 'unavailable'; q: string }
+
+/** "Golden Dumpling, Richmond · Undo": the pick names its city, so a wrong match is seen at once; the name is cut first. */
+function pickNotice(s: PlaceSuggestion): string {
+  const room = 44 - (s.area ? s.area.length + 2 : 0)
+  const name = [...s.value.name].length > room ? `${[...s.value.name].slice(0, Math.max(8, room - 1)).join('')}…` : s.value.name
+  return `${s.area ? `${name}, ${s.area}` : name} · Undo`
+}
+
+function PlaceEditor(p: EditorProps) {
+  const wide = useWide()
+  const before = isPlaceValue(p.value) ? p.value : null
+  const [draft, setDraft] = useState(before?.name ?? '')
+  const [search, setSearch] = useState<SearchState>({ status: 'idle' })
+  const [location, setLocation] = useState<'idle' | 'finding' | 'off'>('idle')
+  // Every search and location request carries the number current when it started; typing, a pick, a keep, a close, a
+  // new request or the editor going all move it on, so a late answer finds it changed and touches nothing (G8-3).
+  const seq = useRef(0)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const composingNow = useRef(false)
+  useEffect(() => () => { seq.current++; clearTimeout(timer.current) }, [])
+  const words = draft.trim()
+  const q = searchQuery(draft)
+  const run = (text: string, explicit: boolean) => {
+    clearTimeout(timer.current)
+    const mine = ++seq.current, asked = searchQuery(text)
+    if (!searchable(asked)) return
+    setSearch({ status: 'loading', q: asked })
+    const answer = typeof navigator !== 'undefined' && navigator.onLine === false
+      ? Promise.resolve({ status: 'unavailable' as const })
+      : searchPlaces({ data: { q: asked, explicit } }).catch(() => ({ status: 'unavailable' as const }))
+    void answer.then(r => {
+      if (mine !== seq.current) return
+      setSearch(r.status === 'ok' ? { status: 'ok', q: asked, places: r.places } : r.status === 'refused' ? { status: 'idle' } : { status: 'unavailable', q: asked })
+      setActive(null)
+    })
+  }
+  // As he types: after 300 ms, from 2 characters with CJK in them and 3 otherwise; nothing while an IME is composing.
+  const typed = (text: string) => {
+    setDraft(text)
+    seq.current++
+    clearTimeout(timer.current)
+    setSearch({ status: 'idle' })
+    setActive(null)
+    if (!composingNow.current && searchesAsTyped(text)) timer.current = setTimeout(() => run(text, false), 300)
+  }
+  const shown = search.status === 'ok' && search.q === q ? search.places : []
+  // Words not yet searched (or being searched): the Search row, which Enter runs; it never pins (Jazz f705a3a0).
+  const unsearched = Boolean(words) && searchable(q) && !(search.status !== 'idle' && search.status !== 'loading' && search.q === q)
+  const rows: PlaceRow[] = [
+    ...(unsearched ? [{ kind: 'search' as const }] : []),
+    { kind: 'location' as const },
+    ...shown.map(place => ({ kind: 'place' as const, place })),
+    ...(words ? [{ kind: 'keep' as const }] : []),
+  ]
+  // Something is always highlighted when Enter can act: the Search row, else the first suggestion (Jazz f705a3a0).
+  const [active, setActive] = useState<number | null>(null)
+  const fallback = rows.findIndex(r => r.kind === 'search') >= 0 ? rows.findIndex(r => r.kind === 'search') : rows.findIndex(r => r.kind === 'place')
+  const current = active !== null && active < rows.length ? active : fallback
+  const end = () => { seq.current++; clearTimeout(timer.current) }
+  const pick = (s: PlaceSuggestion) => { end(); finish(p, s.value, p.property, { notice: pickNotice(s) }) }
+  const keep = () => { if (!words) return; end(); finish(p, { name: draft }) }
+  const locate = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { setLocation('off'); return }
+    clearTimeout(timer.current)
+    const mine = ++seq.current, name = words ? draft : locationName()
+    setLocation('finding')
+    navigator.geolocation.getCurrentPosition(
+      pos => { if (mine === seq.current) { end(); finish(p, { name, lat: pos.coords.latitude, lon: pos.coords.longitude }) } },
+      () => { if (mine === seq.current) setLocation('off') },
+      { timeout: 10_000, maximumAge: 60_000, enableHighAccuracy: false },
+    )
+  }
+  const take = (row: PlaceRow | undefined) => {
+    if (!row) return
+    if (row.kind === 'search') run(draft, true)
+    else if (row.kind === 'location') locate()
+    else if (row.kind === 'place') pick(row.place)
+    else keep()
+  }
+  // Closing ends it and saves nothing: only a pick, a keep or a location saves (Bumblebee b84193f7).
+  const onDismiss = () => { end(); p.onCancel() }
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActive(Math.max(0, Math.min(rows.length - 1, (current < 0 ? -1 : current) + (e.key === 'ArrowDown' ? 1 : -1))))
+    } else if (e.key === 'Enter' && !composing(e)) {
+      e.preventDefault()
+      // Only what's on screen now: a reply that lands after this Enter never picks anything.
+      if (current >= 0) take(rows[current])
+    }
+  }
+  const saved = words ? draft.trim() : locationName()
+  return (
+    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={onDismiss} maxWidth={360}>
+      <input className="property-field" value={draft} autoFocus={wide} placeholder="Search for a place" aria-label={`Search ${p.property.name}`}
+        aria-controls="place-rows" aria-activedescendant={current >= 0 ? `place-row-${current}` : undefined} enterKeyHint={wide ? undefined : 'search'}
+        onChange={e => typed(e.target.value)} onKeyDown={onKeyDown}
+        onCompositionStart={() => { composingNow.current = true; clearTimeout(timer.current) }}
+        onCompositionEnd={e => { composingNow.current = false; typed(e.currentTarget.value) }} />
+      <div className="property-options place-rows" id="place-rows" role="listbox" aria-label={p.property.name}>
+        {rows.map((row, i) => {
+          const common = { type: 'button' as const, role: 'option', id: `place-row-${i}`, 'aria-selected': i === current, className: `property-row ${i === current ? 'active' : ''}`,
+            onMouseDown: (e: { preventDefault(): void }) => e.preventDefault(), onMouseEnter: () => wide && setActive(i), onClick: () => take(row) }
+          if (row.kind === 'search') return <button key="search" {...common}>Search “{words}”</button>
+          if (row.kind === 'location') return <button key="location" {...common} className={`${common.className} place-two-line`}>
+            <span>Use current location</span>
+            <small className="place-meta">{location === 'finding' ? 'Finding your location…' : location === 'off' ? 'Location is off' : `Saved as “${saved}”`}</small>
+          </button>
+          if (row.kind === 'place') return <button key={`${row.place.value.ref ?? ''}${i}`} {...common} className={`${common.className} place-two-line`}>
+            <span className="place-name">{row.place.value.name}</span>
+            {row.place.value.address && <small className="place-meta">{row.place.value.address}</small>}
+          </button>
+          return <button key="keep" {...common}>Keep “{words}” without a place</button>
+        })}
+        {words && !searchable(q) && <p className="property-empty place-meta">Too long to search</p>}
+        {search.status === 'ok' && search.q === q && !shown.length && <p className="property-empty place-meta">No places for “{words}”</p>}
+        {search.status === 'unavailable' && search.q === q && <p className="property-empty place-meta">Search unavailable · <button type="button" className="app-link" onMouseDown={e => e.preventDefault()} onClick={() => run(draft, true)}>Retry</button></p>}
+      </div>
+      {before && <button type="button" className="property-row is-quiet" onMouseDown={e => e.preventDefault()} onClick={() => { end(); finish(p, undefined) }}>Clear</button>}
+      <p className="place-foot">Search by Photon · © OpenStreetMap</p>
+    </EditorShell>
+  )
+}
+
 function FormulaRun({ run }: { run: RichRun }) {
   const classes = [run.b && 'formula-b', run.u && 'formula-u', run.i && 'formula-i', run.c && 'formula-c', run.s && 'formula-s', run.color && `formula-color-${run.color}`, run.background && `formula-bg-${run.background}`].filter(Boolean).join(' ')
   if (!run.href) return <span className={classes}>{run.text}</span>
@@ -713,8 +849,21 @@ export function PropertyCell({ property, value, row, today = todayIso(), wrap = 
       return <span className="cell-chips">{chosen.map(o => <span key={o.id} className="property-chip">{o.name}</span>)}</span>
     }
     case 'date': return <span className="cell-text">{dateLabel(read as DateValue, today)}</span>
+    case 'place': return isPlaceValue(read) ? <PlaceCell value={read} /> : null
     case 'checkbox': return null
   }
+}
+
+/**
+ * A place in its cell (G8-1): with a pin, its name is a link to a maps app (Apple Maps on a phone and in the Home Screen
+ * app, OpenStreetMap at 1280), and a tap anywhere else in the cell edits; with none, plain text.
+ */
+function PlaceCell({ value }: { value: PlaceValue }) {
+  const wide = useWide()
+  const href = placeLink(value, !wide)
+  if (!href) return <span className="cell-text">{value.name}</span>
+  const stop = (e: { stopPropagation(): void }) => e.stopPropagation()
+  return <span className="cell-text"><a className="cell-place" href={href} target="_blank" rel="noopener noreferrer" onClick={stop} onPointerDown={stop}>{value.name}</a></span>
 }
 
 /** A linked title, our `[[` look. A row opens as its page; a to-do on its line, as To-dos does (R3-23). */

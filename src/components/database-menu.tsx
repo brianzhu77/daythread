@@ -484,7 +484,7 @@ export function RuleValue({ property, condition, onChange }: { property: Propert
   const { op, value } = condition
   if (op === 'isEmpty' || op === 'isNotEmpty') return null
   switch (property.type) {
-    case 'text': case 'url': case 'email': case 'phone': case 'files':
+    case 'text': case 'url': case 'email': case 'phone': case 'files': case 'place':
       return <CommitInput key={String(value ?? '')} initial={typeof value === 'string' ? value : ''} onCommit={v => onChange(v || undefined)} />
     case 'number': case 'id':
       // An ID can be typed as it shows, "BK-12": the prefix isn't part of its number.
