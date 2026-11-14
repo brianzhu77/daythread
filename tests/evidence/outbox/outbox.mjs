@@ -32,6 +32,9 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   const settle = async page => { await page.waitForLoadState('networkidle').catch(() => {}); await wait(400) }
   const openTasks = async page => { await page.goto(`${base}/tasks?view=open`); await page.getByRole('checkbox', { name: /^Mark / }).first().waitFor({ timeout: 20000 }); await settle(page) }
   const tick = (page, title) => page.getByRole('checkbox', { name: `Mark ${title} done` }).click()
+  /** Every outbox request fails as if offline: the change stays stored and never reaches the server, so closing the
+   *  page can't let a held request through (Chromium may deliver one held by a route as the page closes). */
+  const cut = page => page.route(OUTBOX, route => route.abort('internetdisconnected'))
   /** Holds every outbox request until released; `reach`: let it reach the server, hold only the answer. */
   const hold = async (page, reach = false) => {
     const held = []
@@ -71,10 +74,33 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 1d after the reload the to-do is ticked from the first frame it shows (no unticked frame)`, seen.length > 0 && seen.every(Boolean) && statusOf('Water the plants') === 'done', `${seen.length} samples, first ${seen[0]}, any unticked ${seen.some(v => !v)}`)
     await context.close()
   }
+  // 1e. A delete (a row deleted from its own page) not yet sent survives a reload: it doesn't come back.
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/pages?page=r2`); await page.getByRole('button', { name: 'Row actions' }).first().waitFor({ timeout: 20000 }); await settle(page)
+    await hold(page)
+    await page.getByRole('button', { name: 'Row actions' }).first().click(); await page.getByRole('menuitem', { name: 'Delete row' }).click(); await wait(500)
+    await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.goto(`${base}/pages?page=runs`); await settle(page); await wait(1200)
+    const r2 = stored().pages.find(p => p.id === 'r2')
+    ok(`${tag} 1e a row deleted, not yet sent, stays deleted after a reload`, !r2 || Boolean(r2.trashedAt), r2 ? `trashedAt ${r2.trashedAt}` : 'gone')
+    await context.close()
+  }
+  // 1f. A move (a to-do moved off today with Not today) not yet sent survives a reload.
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('button', { name: 'Actions for Pay rent' }).waitFor({ timeout: 20000 }); await settle(page)
+    const base0 = stored().revision
+    await hold(page)
+    await page.getByRole('button', { name: 'Actions for Pay rent' }).click(); await page.getByRole('menuitem', { name: /^Not today/ }).first().click(); await wait(500)
+    await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(1200)
+    const receipt = Object.values(stored().receipts).find(r => r.revision === base0 + 1)
+    ok(`${tag} 1f a to-do moved off today, not yet sent, is moved after a reload`, stored().revision === base0 + 1 && Boolean(receipt) && await page.locator('.banner.save-failed').count() === 0, `revision ${base0} → ${stored().revision}, "${receipt?.message ?? ''}"`)
+    await context.close()
+  }
   // 1b. The same with the tab closed and opened again.
   {
     reseed(); const { context, page } = await fresh()
-    await openTasks(page); await hold(page); await tick(page, 'Call the bank'); await wait(400)
+    await openTasks(page); await cut(page); await tick(page, 'Call the bank'); await wait(400)
     await page.close({ runBeforeUnload: false })
     const again = await context.newPage(); await openTasks(again); await wait(800)
     ok(`${tag} 1b a tick not yet sent survives the tab closing, applied when it's opened again`, statusOf('Call the bank') === 'done', `status ${statusOf('Call the bank')}`)
@@ -178,10 +204,35 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 6 offline: a tick and its undo are kept and said ("${line.trim()}"), then sent in order, the box open`, /Offline · 1 change will be sent/.test(line) && shownDone === true && shownOpen === false && statusOf('Water the plants') === 'open' && stored().revision === base0 + 2 && await page.getByRole('checkbox', { name: 'Complete Water the plants' }).isChecked() === false, `shown ${shownDone}→${shownOpen}, status ${statusOf('Water the plants')}, revision ${base0} → ${stored().revision}`)
     await context.close()
   }
+  // 6b. Offline, a tick, then a reload while still offline (the service worker serves the app): the tick shows from the
+  //     first frame with the offline line, and is sent once when the network is back (B98 item 6). Chromium only:
+  //     Playwright's WebKit doesn't reload a page from the service worker while offline.
+  if (engine === 'chromium') {
+    reseed()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } }), page = await context.newPage()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 })
+    await page.evaluate(async () => { await navigator.serviceWorker.ready; for (let i = 0; i < 40 && !navigator.serviceWorker.controller; i++) await new Promise(r => setTimeout(r, 100)) })
+    await page.reload(); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page); await wait(1500)
+    const base0 = stored().revision
+    await context.setOffline(true)
+    await page.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(800)
+    await page.addInitScript(() => {
+      const seen = []; window.__seen = seen
+      const look = () => { const box = document.querySelector('[aria-label="Complete Water the plants"]'); if (box) seen.push(box.checked ?? box.getAttribute('aria-checked') === 'true') }
+      new MutationObserver(look).observe(document, { subtree: true, childList: true, attributes: true })
+    })
+    await page.reload().catch(() => {}); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }).catch(() => {}); await wait(1500)
+    const line = (await page.locator('.banner.offline').innerText().catch(() => '')).trim()
+    const seen = await page.evaluate(() => window.__seen ?? []).catch(() => [])
+    const whileOffline = statusOf('Water the plants')
+    await context.setOffline(false); await wait(2500); await settle(page)
+    ok(`${tag} 6b offline, reloaded offline: shown ticked from the first frame ("${line}"), sent once back online`, whileOffline === 'open' && /1 change will be sent/.test(line) && seen.length > 0 && seen.every(Boolean) && statusOf('Water the plants') === 'done' && stored().revision === base0 + 1, `offline ${whileOffline}, ${seen.length} samples, all ticked ${seen.every(Boolean)}, revision ${base0} → ${stored().revision}`)
+    await context.close()
+  }
   // 13. Another device edits something else meanwhile: the tick is kept, with no notice.
   {
     reseed(); const { context, page } = await fresh()
-    await openTasks(page); await hold(page); await tick(page, 'Water the plants'); await wait(400)
+    await openTasks(page); await cut(page); await tick(page, 'Water the plants'); await wait(400)
     await page.close({ runBeforeUnload: false })
     await elsewhere(w => ({ type: 'rename-task', taskId: w.tasks.find(t => t.title === 'Call the bank').id, title: 'Call the bank today' }))
     await elsewhere({ type: 'set-values', pageId: 'r2', values: { st: 'b' }, expected: { st: 'a' }, at: new Date().toISOString() })
@@ -193,7 +244,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   // 14. open → done → open elsewhere: an old queued "done" is held, not applied, and he's told.
   {
     reseed(); const { context, page } = await fresh()
-    await openTasks(page); await hold(page); await tick(page, 'Water the plants'); await wait(400)
+    await openTasks(page); await cut(page); await tick(page, 'Water the plants'); await wait(400)
     await page.close({ runBeforeUnload: false })
     // Elsewhere: done, then open again.
     await elsewhere(w => ({ type: 'task-status', taskId: w.tasks.find(t => t.title === 'Water the plants').id, status: 'done', today: today() }))
@@ -211,14 +262,14 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   //    usual Retry, the change kept (Bumblebee 6233888d: the two take different paths).
   {
     reseed(); const { context, page } = await fresh()
-    await openTasks(page); await hold(page); await tick(page, 'Pay rent'); await wait(400)
+    await openTasks(page); await cut(page); await tick(page, 'Pay rent'); await wait(400)
     await page.close({ runBeforeUnload: false })
     await elsewhere(w => { const t = w.tasks.find(x => x.title === 'Pay rent'); return { type: 'remove-task-row', pageId: t.sourcePageId, taskId: t.id, today: today() } })
     const again = await context.newPage(); await openTasks(again)
     await again.locator('.banner.save-failed').waitFor({ timeout: 8000 }).catch(() => {})
     const text = (await again.locator('.banner.save-failed').innerText().catch(() => '')).replace(/\s+/g, ' ')
     const keep = await again.locator('.banner.save-failed').getByRole('button', { name: 'Keep mine' }).count()
-    ok(`${tag} 4 a refusal is held with Discard only ("${text}")`, /deleted elsewhere/.test(text) && /Discard/.test(text) && keep === 0 && !/Retry/.test(text))
+    ok(`${tag} 4 a refusal is held with Discard only ("${text}")`, /deleted elsewhere/.test(text) && /Discard/.test(text) && keep === 0 && !/Retry/.test(text), `Pay rent ${statusOf('Pay rent') ?? 'gone'}, deleted ${stored().deletedTasks.some(t => t.title === 'Pay rent')}, revision ${stored().revision}`)
     await context.close()
   }
   {
@@ -230,6 +281,21 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await page.unrouteAll({ behavior: 'ignoreErrors' })
     await page.locator('.banner.save-failed').getByRole('button', { name: 'Retry' }).click(); await settle(page); await wait(800)
     ok(`${tag} 4b a 5xx keeps the change under the usual Retry ("${text}"), and Retry sends it`, /Retry/.test(text) && !/Discard/.test(text) && statusOf('Call the bank') === 'done' && await page.locator('.banner.save-failed').count() === 0, `status ${statusOf('Call the bank')}`)
+    await context.close()
+  }
+  // 15. While one change is held, an unrelated tick still saves, and a change to the held row waits, counted (B98 item 2).
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    await cut(page); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(400)
+    await page.close({ runBeforeUnload: false })
+    await elsewhere(w => ({ type: 'task-status', taskId: w.tasks.find(t => t.title === 'Water the plants').id, status: 'done', today: today() }))
+    await elsewhere(w => ({ type: 'task-status', taskId: w.tasks.find(t => t.title === 'Water the plants').id, status: 'open', today: today() }))
+    const again = await context.newPage(); await again.goto(`${base}/`); await again.locator('.banner.save-failed').waitFor({ timeout: 10000 }).catch(() => {}); await settle(again)
+    await again.getByRole('checkbox', { name: 'Complete Call the bank' }).click(); await wait(1200)
+    await again.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(1200)
+    const text = (await again.locator('.banner.save-failed').innerText().catch(() => '')).replace(/\s+/g, ' ')
+    ok(`${tag} 15 with a change held, an unrelated tick saves and one on the held row waits, counted ("${text.trim()}")`, statusOf('Call the bank') === 'done' && statusOf('Water the plants') === 'open' && /1 later change waiting/.test(text))
     await context.close()
   }
   // 10. No IndexedDB: changes go as before, nothing claims they were kept.
@@ -246,7 +312,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   // 11. Two tabs open on the next load: the change is applied once.
   {
     reseed(); const { context, page } = await fresh()
-    await openTasks(page); await hold(page); await tick(page, 'Pay rent'); await wait(400)
+    await openTasks(page); await cut(page); await tick(page, 'Pay rent'); await wait(400)
     await page.close({ runBeforeUnload: false })
     const [a, b] = [await context.newPage(), await context.newPage()]
     await Promise.all([a.goto(`${base}/tasks?view=open`), b.goto(`${base}/tasks?view=open`)]); await settle(a); await settle(b); await wait(1200)

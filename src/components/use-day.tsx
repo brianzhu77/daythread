@@ -305,7 +305,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     const mine = (await all).filter(e => e.owner === owner)
     for (const e of mine) kept.current.add(e.seq!)
     entries.current = [...mine, ...entries.current.filter(e => !mine.some(m => m.seq === e.seq))]
-  }, [])
+    // The counts the banners read (an offline open shows "1 change will be sent" from its first paint).
+    if (mine.length) showOutbox()
+  }, [showOutbox])
   const refresh = useCallback(async (triggerOperationId?: string) => {
     const operationId=newOperationId(),started=performance.now()
     debugClient('workspace.refresh.start',{operationId,triggerOperationId})
