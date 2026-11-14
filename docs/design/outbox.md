@@ -252,8 +252,9 @@ added.
   receipt comes back. This is a check (8.7).
 
 ### 8.2 Pending while offline
-- Pending changes show as made, with today's marks unchanged: a cell's and a card's "Not saved". They stay true, since
-  the change isn't on the server yet.
+- Pending changes show as made. A cell kept on the device shows as on its way, with no mark: not today's "Not saved ·
+  Retry", whose Retry would send a second change, while the offline line already says what will be sent (as built,
+  Jazz 87e282e1). It clears once the change lands; if it's held, the banner has it.
 - The offline banner states what's kept, because that's his data's state (the Quiet Copy Rule) and is now true:
   `Offline · showing what was last loaded · 2 changes will be sent` (singular: `1 change will be sent`). Before the
   outbox that line would have been a promise we couldn't keep; now it's the reassurance Lead's note to him (f7b0e525)
@@ -474,7 +475,8 @@ Where the build differs from, or adds to, the contract above:
   rebuild calls `done`. Nothing else, no timer, takes the original out: until then it's held and unshown, and a reload
   shows it held. A rebuild that can't be stored goes as before and retires the original once it lands.
 - **A change kept for later** (offline, a failed send, waiting): the caller hears `onKept`, then `onLater(landed)`, so
-  a cell shows it on its way rather than "not saved · Retry", which would make a second change; a cell's draft (kept
+  a cell shows it on its way rather than "not saved · Retry", which would make a second change (§8.2 changed to say
+  so); a cell's draft (kept
   for a closed tab) goes once the outbox holds the change, so it's never recovered as a second change (gate
   4d6fbafe). A refusal saying "Changed elsewhere" reads as a conflict, with Keep mine, which re-reads a cell edit's
   expected values; a cell edit is labelled `set <Property> on "<row>"`.
