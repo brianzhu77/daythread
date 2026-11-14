@@ -106,6 +106,20 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 12 a tick and a line on the same page, reloaded at once: both kept, no notice`, statusOf('Water the plants') === 'done' && line && banner === 0, `status ${statusOf('Water the plants')}, line ${line}, banner ${banner}`)
     await context.close()
   }
+  // 2b. A second tap while the tick is still on its way unticks it: shown open at once, stored as its own change, replayed
+  //     after the tick (B98 item 2, Bumblebee 476900b9).
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    const base0 = stored().revision
+    await hold(page)
+    const box = page.getByRole('checkbox', { name: 'Complete Water the plants' })
+    await box.click(); await wait(400); await box.click(); await wait(400)
+    const shownOpen = await box.isChecked().catch(() => null)
+    await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(1500)
+    ok(`${tag} 2b a second tap during the tick's send unticks it, shown at once, replayed after the tick`, shownOpen === false && statusOf('Water the plants') === 'open' && stored().revision === base0 + 2 && await page.getByRole('checkbox', { name: 'Complete Water the plants' }).isChecked() === false, `shown open ${shownOpen === false}, status ${statusOf('Water the plants')}, revision ${base0} → ${stored().revision}`)
+    await context.close()
+  }
   // 6. Offline: a tick and a second tap to undo it are both kept, said in the offline line, and sent in order once the
   //    network is back (Bumblebee ec4ab466, Jazz 3c65a099).
   {
@@ -120,7 +134,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await box.click(); await wait(600)
     const shownOpen = await box.isChecked().catch(() => null)
     await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(1500)
-    ok(`${tag} 6 offline: a tick and its undo are kept and said ("${line.trim()}"), then sent in order`, /Offline · 1 change will be sent/.test(line) && shownDone === true && shownOpen === false && statusOf('Water the plants') === 'open' && stored().revision === base0 + 2, `shown ${shownDone}→${shownOpen}, status ${statusOf('Water the plants')}, revision ${base0} → ${stored().revision}`)
+    ok(`${tag} 6 offline: a tick and its undo are kept and said ("${line.trim()}"), then sent in order, the box open`, /Offline · 1 change will be sent/.test(line) && shownDone === true && shownOpen === false && statusOf('Water the plants') === 'open' && stored().revision === base0 + 2 && await page.getByRole('checkbox', { name: 'Complete Water the plants' }).isChecked() === false, `shown ${shownDone}→${shownOpen}, status ${statusOf('Water the plants')}, revision ${base0} → ${stored().revision}`)
     await context.close()
   }
   // 13. Another device edits something else meanwhile: the tick is kept, with no notice.

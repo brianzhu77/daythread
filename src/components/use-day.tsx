@@ -521,7 +521,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   /** Sends a tick through the B72 lifecycle: shown at once, other taps ignored while it saves, then the row's hold. */
   const runTick = useCallback((action: Extract<Action, { type: 'task-status' }> & { status: TickStatus }, notice?: NoticeArg, operationId?: string) => {
     const { taskId } = action
-    if (isSaving(ticksRef.current, taskId)) return
+    // With the outbox a tap during a tick's send is its own change, built on what the screen shows and queued after it
+    // (B98 item 2, Bumblebee 476900b9); without one, the second tap waits as before (B72).
+    if (isSaving(ticksRef.current, taskId) && !(store.current && durable.current && !legacy.current)) return
     const tick: Tick = { to: action.status, phase: 'saving', token: ++tickToken.current }
     updateTicks(t => withTick(t, taskId, tick))
     void run(action, notice, operationId).then(receipt => {
@@ -533,8 +535,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [run, updateTicks])
   const toggleTask = useCallback((taskId: string, notice: (to: Task['status'], r: Receipt) => NoticeSpec) => {
     // B98 (Bumblebee ec4ab466): a tick kept on the device and shown is what the next tap undoes, so it queues the reverse.
-    const task = (predicted(true) ?? wsRef.current)?.tasks.find(t => t.id === taskId)
-    const to = task && tapTarget(ticksRef.current, task)
+    // Built on what the screen shows: every change of this tab still on its way, in flight or kept (B98 item 2).
+    const task = (predicted() ?? wsRef.current)?.tasks.find(t => t.id === taskId)
+    const to = task && (entries.current.some(e => e.state === 'pending' && (e.action as { taskId?: string }).taskId === taskId) ? (task.status === 'done' ? 'open' : 'done') : tapTarget(ticksRef.current, task))
     if (to) runTick({ type: 'task-status', taskId, status: to, today: todayIso() }, r => notice(to, r))
   }, [runTick, predicted])
 
