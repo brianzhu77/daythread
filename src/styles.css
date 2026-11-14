@@ -3422,3 +3422,4 @@ textarea.form-input { resize: vertical; }
 .place-meta { color: var(--ink-2); font-size: var(--text-meta); }
 .place-rows .property-empty.place-meta { color: var(--ink-2); font-size: var(--text-meta); }
 .place-foot { margin: 6px 10px 2px; color: var(--ink-3); font-size: var(--text-meta); }
+.place-line { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

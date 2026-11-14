@@ -131,6 +131,8 @@ interface ShellProps {
   /** In-cell fields lie over the cell instead of under it. */
   overCell?: boolean
   maxWidth?: number
+  /** At least this wide at ≥ 900, whatever the cell's width. */
+  minWidth?: number
   onComment?(): void
   children: ReactNode
 }
@@ -155,7 +157,7 @@ function useNoCaretAfterSheet(sheet: boolean) {
   }, [sheet])
 }
 
-function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, maxWidth = 320, onComment, children }: ShellProps) {
+function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, maxWidth = 320, minWidth = 240, onComment, children }: ShellProps) {
   useNoCaretAfterSheet(!wide)
   // Keys stay inside: nothing typed here reaches the page editor's handlers through the React tree (§10). That also
   // keeps Esc from the dismiss listeners on the document, so the shell handles Esc itself. (They still catch an Esc
@@ -166,7 +168,7 @@ function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, ma
   }
   // What's typed saves as Done would save it, then the comment opens.
   const foot = onComment && <div className="property-editor-foot"><button type="button" className="app-link" onClick={() => { onDismiss('done'); onComment() }}>Comment</button></div>
-  if (wide) return <Popover anchor={anchor} label={property.name} onDismiss={onDismiss} overCell={overCell} maxWidth={maxWidth}><div onKeyDown={keep}>{children}{foot}</div></Popover>
+  if (wide) return <Popover anchor={anchor} label={property.name} onDismiss={onDismiss} overCell={overCell} maxWidth={maxWidth} minWidth={minWidth}><div onKeyDown={keep}>{children}{foot}</div></Popover>
   return (
     <Modal.Backdrop isOpen isDismissable onOpenChange={open => { if (!open) onDismiss('outside') }}>
       <Modal.Container placement="bottom" scroll="inside" className="property-sheet">
@@ -189,7 +191,7 @@ function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, ma
   )
 }
 
-function Popover({ anchor, label, onDismiss, overCell, maxWidth, children }: { anchor: HTMLElement | null; label: string; onDismiss(reason: Dismiss): void; overCell?: boolean; maxWidth: number; children: ReactNode }) {
+function Popover({ anchor, label, onDismiss, overCell, maxWidth, minWidth, children }: { anchor: HTMLElement | null; label: string; onDismiss(reason: Dismiss): void; overCell?: boolean; maxWidth: number; minWidth: number; children: ReactNode }) {
   const placement: Placement = 'bottom-start'
   const { refs, floatingStyles, context } = useFloating({
     open: true,
@@ -205,7 +207,7 @@ function Popover({ anchor, label, onDismiss, overCell, maxWidth, children }: { a
       flip({ padding: 8, fallbackPlacements: ['top-start'] }),
       shift({ padding: 8 }),
       size({ apply: ({ rects, elements }) => {
-        elements.floating.style.width = `${Math.min(maxWidth, Math.max(240, rects.reference.width))}px`
+        elements.floating.style.width = `${Math.min(maxWidth, Math.max(minWidth, rects.reference.width))}px`
       } }),
     ],
   })
@@ -766,7 +768,7 @@ function PlaceEditor(p: EditorProps) {
   }
   const saved = words ? draft.trim() : locationName()
   return (
-    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={onDismiss} maxWidth={360}>
+    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={onDismiss} maxWidth={360} minWidth={320}>
       <input className="property-field" value={draft} autoFocus={wide} placeholder="Search for a place" aria-label={`Search ${p.property.name}`}
         aria-controls="place-rows" aria-activedescendant={current >= 0 ? `place-row-${current}` : undefined} enterKeyHint={wide ? undefined : 'search'}
         onChange={e => typed(e.target.value)} onKeyDown={onKeyDown}
@@ -776,7 +778,7 @@ function PlaceEditor(p: EditorProps) {
         {rows.map((row, i) => {
           const common = { type: 'button' as const, role: 'option', id: `place-row-${i}`, 'aria-selected': i === current, className: `property-row ${i === current ? 'active' : ''}`,
             onMouseDown: (e: { preventDefault(): void }) => e.preventDefault(), onMouseEnter: () => wide && setActive(i), onClick: () => take(row) }
-          if (row.kind === 'search') return <button key="search" {...common}>Search “{words}”</button>
+          if (row.kind === 'search') return <button key="search" {...common}><span className="place-line">Search “{words}”</span></button>
           if (row.kind === 'location') return <button key="location" {...common} className={`${common.className} place-two-line`}>
             <span>Use current location</span>
             <small className="place-meta">{location === 'finding' ? 'Finding your location…' : location === 'off' ? 'Location is off' : `Saved as “${saved}”`}</small>
@@ -785,7 +787,7 @@ function PlaceEditor(p: EditorProps) {
             <span className="place-name">{row.place.value.name}</span>
             {row.place.value.address && <small className="place-meta">{row.place.value.address}</small>}
           </button>
-          return <button key="keep" {...common}>Keep “{words}” without a place</button>
+          return <button key="keep" {...common}><span className="place-line">Keep “{words}” without a place</span></button>
         })}
         {words && !searchable(q) && <p className="property-empty place-meta">Too long to search</p>}
         {search.status === 'ok' && search.q === q && !shown.length && <p className="property-empty place-meta">No places for “{words}”</p>}
