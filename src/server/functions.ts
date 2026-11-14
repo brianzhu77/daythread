@@ -37,6 +37,38 @@ export const runCommand = createServerFn({ method: "POST" })
   });
 
 /**
+ * B98 (docs/design/outbox.md §5, §11): a change from the browser's outbox. Its own server function, so an older build
+ * (which doesn't have it) executes nothing; `runCommand` stays for tabs of the build before. Every answer is an outcome,
+ * not a throw, except a failure of the server itself, which the browser retries later.
+ */
+export const runOutboxCommand = createServerFn({ method: "POST" })
+  .validator((input: unknown) => commandSchema.extend({
+    expectedOwner: z.string().min(1).max(200),
+    basis: z.object({ baseRevision: z.number().int().nonnegative(), ownRevisions: z.array(z.number().int().nonnegative()).max(10_000), readsBeyond: z.boolean() }),
+  }).parse(input))
+  .handler(async ({ data }) => {
+    const { getRepository } = await import("./storage");
+    const [{ currentOwner }, { OutboxHeld }, { DomainError }] = await Promise.all([import("./auth/request-owner"), import("./outbox-replay"), import("../domain/workspace")]);
+    const owner = currentOwner() ?? "local";
+    // Checked before anything runs: a tab of one account still open after another signed in (§5 step 0).
+    if (owner !== data.expectedOwner) return { status: "owner-mismatch" as const, owner };
+    const { expectedOwner: _owner, basis, ...rest } = data;
+    const command = { ...rest, expectedRevision: basis.baseRevision };
+    try {
+      const { receipt, changes } = await getRepository().executeOutbox(command, basis);
+      return { status: "applied" as const, receipt, changes, owner };
+    } catch (error) {
+      if (error instanceof OutboxHeld) return { status: "held" as const, reason: error.reason, rows: error.rows, owner };
+      if (error instanceof DomainError) {
+        // A tombstone: applied long ago, its receipt compacted; nothing to do (§5 step 1).
+        if (/already applied/i.test(error.message)) return { status: "already-applied" as const, owner };
+        return { status: "refused" as const, message: error.message, owner };
+      }
+      throw error;
+    }
+  });
+
+/**
  * B77: a draft for a day page, from the model when this account has it on, else the app's fallback only. The model
  * is on when the server has OPENROUTER_API_KEY and OPENROUTER_MODEL and, with sign-in on, the account's email is in
  * DAYTHREAD_DRAFT_EMAILS (off by default for invited accounts, Bumblebee/Lead). Logs carry counts and timings only,

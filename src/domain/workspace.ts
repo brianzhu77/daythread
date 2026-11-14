@@ -1829,7 +1829,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
     if (fired.length) { const run = runAutomations(state, fired, command.operationId); state = run.state; result = { ...result, automations: run.automations }; }
   }
   state.revision = input.revision + 1;
-  const receipt = { operationId: command.operationId, ...result, fingerprint };
+  const receipt = { operationId: command.operationId, ...result, revision: state.revision, fingerprint };
   state.receipts = compactReceipts({ ...state.receipts, [command.operationId]: receipt });
   // A line cut and pasted to another page keeps its id, so its thread goes with it: only when its own page no longer has it, or a copy could take it (comments.md §4).
   if (command.action.type === "save-editor" && state.threads?.some((t) => t.anchor)) {
