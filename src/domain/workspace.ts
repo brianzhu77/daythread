@@ -27,7 +27,7 @@ import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Work
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, storedDocument, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
 import { heldSmartNoteIds, smartLimits, smartSpecKey, type SmartResult } from "./smart-note.ts";
 import { askedQuestions, formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
-import { changeDashboard, isDashboardChange } from "./dashboard.ts";
+import { changeDashboard, firstWidgetView, isDashboardChange } from "./dashboard.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -1484,8 +1484,18 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       }
       if (parentId !== null) pageParent(state, parentId);
       if (action.homeBlockId !== null && (typeof action.homeBlockId !== "string" || !action.homeBlockId || parentId === null)) throw new DomainError("Invalid database block");
-      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000).trim(), ...(parentId ? { parentId } : {}), document: "[]", database: newDatabase(action.homeBlockId) });
-      return { message: "Database made", entityId: id };
+      const database = newDatabase(action.homeBlockId);
+      if (action.dashboard) {
+        // A dashboard only ever shows on its own page, so it's never an inline block's home (G6-1).
+        if (action.homeBlockId !== null) throw new DomainError("A dashboard is a full page");
+        const { viewId, rowId, widgetId, widgetViewId } = action.dashboard;
+        const view = firstWidgetView(database, widgetViewId);
+        try { changeDashboard(database, { kind: "addDashboard", view: { id: viewId, name: "Dashboard" }, rows: [{ id: rowId, widgets: [{ id: widgetId, source: id, view }] }] }, (x) => (x === id ? database : null)); } catch (error) { throw new DomainError((error as Error).message); }
+        // First, so the page opens on it; its Table stays next to it.
+        database.views.unshift(database.views.pop()!);
+      }
+      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000).trim(), ...(parentId ? { parentId } : {}), document: "[]", database });
+      return { message: action.dashboard ? "Dashboard made" : "Database made", entityId: id };
     }
     case "answer-form": {
       const p = state.pages.find((x) => x.id === action.databaseId);

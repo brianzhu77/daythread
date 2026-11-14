@@ -154,17 +154,14 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
   }
   const wide = useWide()
   // Between 900 and 1100, or with the Comments pane open, a row can wrap: a width handle shows only between neighbours side by side (§7).
-  useLayoutEffect(() => {
-    if (!wide || !root.current) return
-    for (const row of root.current.querySelectorAll<HTMLElement>('.dashboard-row[data-row]')) {
-      let top: number | null = null
-      for (const w of row.querySelectorAll<HTMLElement>(':scope > .dashboard-widget')) {
-        const now = Math.round(w.getBoundingClientRect().top)
-        w.toggleAttribute('data-wrapped', top !== null && now !== top)
-        top = now
-      }
-    }
-  })
+  const placeRows = () => root.current?.querySelectorAll<HTMLElement>('.dashboard-row[data-row]').forEach(placeSplits)
+  useLayoutEffect(() => { if (wide) placeRows() })
+  useEffect(() => {
+    if (!wide || !editing || !root.current || typeof ResizeObserver === 'undefined') return
+    const watch = new ResizeObserver(() => placeRows())
+    watch.observe(root.current)
+    return () => watch.disconnect()
+  }, [wide, editing])
   /** After a menu move at 390: scroll the widget into view and give it the moved-line wash (dashboard-edit.md §7). */
   const moved = (id: string) => requestAnimationFrame(() => {
     const el = root.current?.querySelector<HTMLElement>(`[data-widget="${CSS.escape(id)}"]`)
@@ -214,7 +211,7 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
         const width = drag && ownRow && into ? widget.width : widths?.[i] ?? 12 / Math.max(1, shown.length)
         return <WidgetFrame key={widget.id} workspace={workspace} host={db} view={view} row={row} widget={widget} width={width} editing={editing} blockId={`${blockId}|widget:${widget.id}`}
           previous={order[order.indexOf(widget.id) - 1]} next={order[order.indexOf(widget.id) + 1]} rowAbove={dashboard.rows[r - 1]} rowBelow={dashboard.rows[r + 1]} send={send}
-          onPointerDown={e => startDrag(e, widget.id)} split={!drag && i > 0 && editing ? i : undefined} />
+          onPointerDown={e => startDrag(e, widget.id)} />
       })
       if (into && landing && 'rowId' in landing) {
         const at = landing.beforeId ? shown.findIndex(w => w.id === landing.beforeId) : shown.length
@@ -222,7 +219,10 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
       }
       const rowEl = (shown.length || into) ? <div key={row.id} className="dashboard-row" data-row={row.id} style={{ ['--row-height' as string]: `${into && !ownRow ? row.height : row.height}px` }}>
         {items}
+        {/* After the row's widgets, so Tab reaches them there (§5); each is placed in the gap left of its widget (`placeSplits`). */}
+        {editing && !drag && row.widgets.slice(1).map((w, i) => <SplitHandle key={w.id} row={row} k={i + 1} viewId={view.id} send={send} />)}
         {editing && !drag && <RowSize row={row} viewId={view.id} send={send} />}
+        {editing && !drag && count < dashboardLimits.widgets && row.widgets.length < dashboardLimits.perRow && <RowAdd workspace={workspace} row={row} viewId={view.id} send={send} />}
       </div> : null
       const newRowSlot = landing && 'newRowBefore' in landing && landing.newRowBefore === row.id
         ? <div key={`new-${row.id}`} className="dashboard-row" style={{ ['--row-height' as string]: `${moving?.row.height ?? rowHeights.initial}px` }}>{slot(12, 'slot')}</div> : null
@@ -232,6 +232,20 @@ function FullDashboard({ workspace, db, view, changeView, blockId, showTitle }: 
     {!drag && adding}
     {!dashboard.rows.length && !editing && <p className="database-empty">No widgets · <button type="button" className="app-link" onClick={() => setEditing(true)}>Edit</button></p>}
   </div>
+}
+
+/**
+ * Each width handle of a row, centred in the gap left of its widget as the row is drawn now, and none between neighbours
+ * that wrapped apart (§5, §7). The handles sit after the row's widgets for Tab's sake, so they're placed, not nested.
+ */
+function placeSplits(row: HTMLElement) {
+  const widgets = [...row.querySelectorAll<HTMLElement>(':scope > .dashboard-widget')]
+  widgets.forEach((w, i) => w.toggleAttribute('data-wrapped', i > 0 && Math.round(w.getBoundingClientRect().top) !== Math.round(widgets[i - 1]!.getBoundingClientRect().top)))
+  for (const handle of row.querySelectorAll<HTMLElement>(':scope > .dashboard-split')) {
+    const w = widgets[Number(handle.dataset.k)], before = w?.previousElementSibling as HTMLElement | null
+    handle.toggleAttribute('data-wrapped', !w || !before || w.hasAttribute('data-wrapped'))
+    if (w && before) handle.style.left = `${(before.offsetLeft + before.offsetWidth + w.offsetLeft) / 2 - handle.offsetWidth / 2}px`
+  }
 }
 
 /**
@@ -271,6 +285,8 @@ function SplitHandle({ row, k, viewId, send }: { row: DashboardRow; k: number; v
   const drag = useHandleDrag<number[]>(widths => {
     setShown(widths)
     els.current.forEach((el, i) => el.style.setProperty('--widget-width', String((widths ?? now)[i])))
+    const rowEl = els.current[0]?.parentElement
+    if (rowEl) placeSplits(rowEl)
   }, save)
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault(); e.stopPropagation()
@@ -292,7 +308,7 @@ function SplitHandle({ row, k, viewId, send }: { row: DashboardRow; k: number; v
     if (next) save(next)
   }
   if (choices.length < 2) return null
-  return <button type="button" className={`dashboard-split${shown !== null ? ' is-held' : ''}`} aria-label={`Widths: ${now.map(fraction).join(' · ')}`}
+  return <button type="button" className={`dashboard-split${shown !== null ? ' is-held' : ''}`} data-k={k} aria-label={`Widths: ${now.map(fraction).join(' · ')}`}
     onPointerDown={onPointerDown} onKeyDown={e => { if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1) } if (e.key === 'ArrowRight') { e.preventDefault(); step(1) } }}>
     {shown !== null && <span className="dashboard-badge" style={{ top: badgeY }}>{shown.map(fraction).join(' · ')}</span>}
   </button>
@@ -317,10 +333,10 @@ function RowSize({ row, viewId, send }: { row: DashboardRow; viewId: string; sen
 }
 
 /** One widget: in read mode its linked view as any; in edit mode the same, inert, under a frame with its menu. */
-function WidgetFrame({ workspace, host, view, row, widget, width, editing, blockId, previous, next, rowAbove, rowBelow, send, onPointerDown, split, phone, onMoved }: {
+function WidgetFrame({ workspace, host, view, row, widget, width, editing, blockId, previous, next, rowAbove, rowBelow, send, onPointerDown, phone, onMoved }: {
   workspace: Workspace; host: DatabasePage; view: View; row: DashboardRow; widget: DashboardWidget; width: number; editing: boolean; blockId: string
   previous?: string; next?: string; rowAbove?: DashboardRow; rowBelow?: DashboardRow; send: ReturnType<typeof useDashboardRun>
-  onPointerDown?: (e: React.PointerEvent<HTMLElement>) => void; /** The handle on its left edge, between it and widget `split - 1`. */ split?: number
+  onPointerDown?: (e: React.PointerEvent<HTMLElement>) => void
   /** At 390: Move up and Move down, no row items, and its height following its content up to 360 px (§7). */ phone?: boolean; onMoved?: (id: string) => void
 }) {
   const body = useRef<HTMLDivElement>(null)
@@ -346,7 +362,6 @@ function WidgetFrame({ workspace, host, view, row, widget, width, editing, block
   }
   const label = source && isDatabase(source) ? `${sourceTitle(source)} · ${widget.view.name}` : widget.view.name
   return <section className="dashboard-widget" data-widget={id} style={{ ['--widget-width' as string]: width }} aria-label={label} tabIndex={editing ? 0 : undefined} onKeyDown={onKeyDown} {...(onPointerDown ? { onPointerDown } : {})}>
-    {split !== undefined && <SplitHandle row={row} k={split} viewId={viewId} send={send} />}
     {editing && <span className="dashboard-widget-menu"><RowMenu label={`Actions for ${label}`} triggerClass="dashboard-widget-more" groups={[{ items }]} /></span>}
     <div ref={body} className="dashboard-widget-body">
       {!source || !isDatabase(source)
@@ -381,16 +396,26 @@ function WidgetView({ workspace, source, host, view, widget, blockId }: { worksp
       ...(label ? { after: <button type="button" className="app-link dashboard-filter-label" onClick={() => { openDashboardFilterFrom(widget.id); openDatabaseMenu(hostBlock, host.id, 'filter') }}>{label}</button> } : {}) }} />
 }
 
+/** What a widget can show: To-dos, then every database not in Trash. */
+const widgetSources = (workspace: Workspace): DatabasePage[] => [
+  ...readingWorkspace(workspace, todosSourceId).pages.filter((p): p is DatabasePage => p.id === todosSourceId && isDatabase(p)),
+  ...workspace.pages.filter((p): p is DatabasePage => isDatabase(p) && !p.trashedAt && !p.database.fixed),
+]
+const sourceName = (s: DatabasePage) => (s.id === todosSourceId ? todosTitle : displayPageTitle(s))
+
+/** The ghost `+` in the page's right gutter beside a row with room: the widget joins at the row's end, and the row's widths go equal (§6). */
+function RowAdd({ workspace, row, viewId, send }: { workspace: Workspace; row: DashboardRow; viewId: string; send: ReturnType<typeof useDashboardRun> }) {
+  const items: MenuItem[] = widgetSources(workspace).map(s => ({ label: sourceName(s), onSelect: () => void send(() => ({ kind: 'addWidget', viewId, widget: { id: newId(), source: s.id, view: firstWidgetView(s.database, newId()) }, rowId: row.id, beforeId: null }), 'Widget added') }))
+  return <span className="dashboard-row-add"><RowMenu label="Add a widget to this row" trigger="+" triggerClass="dashboard-row-add-button" groups={[{ items }]} /></span>
+}
+
 /** `+ Add widget`: a database (To-dos too) and its first view a widget can be, as a full-width row at the end. */
 function AddWidget({ workspace, onPick }: { workspace: Workspace; onPick: (source: string, view: View) => void }) {
   const [open, setOpen] = useState(false)
-  const sources = [
-    ...readingWorkspace(workspace, todosSourceId).pages.filter((p): p is DatabasePage => p.id === todosSourceId && isDatabase(p)),
-    ...workspace.pages.filter((p): p is DatabasePage => isDatabase(p) && !p.trashedAt && !p.database.fixed),
-  ]
+  const sources = widgetSources(workspace)
   if (!open) return <button type="button" className="dashboard-add" onClick={() => setOpen(true)}>+ Add widget</button>
   return <div className="dashboard-add-pick app-menu" role="menu" aria-label="Add widget" onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false) } }}>
-    {sources.map(s => <button key={s.id} type="button" role="menuitem" onClick={() => { setOpen(false); onPick(s.id, firstWidgetView(s.database, newId())) }}>{s.id === todosSourceId ? todosTitle : displayPageTitle(s)}</button>)}
+    {sources.map(s => <button key={s.id} type="button" role="menuitem" onClick={() => { setOpen(false); onPick(s.id, firstWidgetView(s.database, newId())) }}>{sourceName(s)}</button>)}
     <button type="button" role="menuitem" onClick={() => setOpen(false)}>Cancel</button>
   </div>
 }

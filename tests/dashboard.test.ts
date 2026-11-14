@@ -423,3 +423,36 @@ test('a rule on Name reaches every widget, whatever its database calls its prope
   assert.deepEqual(dash().filter![0]!.on, { runs: { propertyId: 'title' }, books: { propertyId: 'title' } })
   assert.deepEqual(rows('w2'), ['Emma'])
 })
+
+test("Pages' + → Dashboard: one command makes a database opening on a dashboard of one widget, its own Table second (G6-1)", () => {
+  const h = harness()
+  const ids = { viewId: 'dv', rowId: 'dr', widgetId: 'dw', widgetViewId: 'dwv' }
+  const action = commandSchema.parse({ operationId: 'o', expectedRevision: 0, action: { type: 'create-database', pageId: 'made', homeBlockId: null, title: '', dashboard: ids } }).action
+  assert.deepEqual((action as { dashboard?: unknown }).dashboard, ids, 'the schema keeps its ids')
+  h.run(action as never)
+  const db = h.page('made').database!
+  assert.deepEqual(db.views.map(v => v.layout), ['dashboard', 'table'])
+  const d = db.views[0]!.dashboard!
+  assert.equal(shape(d), 'dr:dw/12')
+  const w = d.rows[0]!.widgets[0]!
+  assert.equal(w.source, 'made')
+  assert.equal(w.view.id, 'dwv')
+  assert.equal(w.view.layout, 'table')
+  assert.notEqual(w.view.id, db.views[1]!.id, 'its own copy, not the Table itself')
+  // Sent twice (a retry), it's still one database.
+  h.run(action as never)
+  assert.equal(h.page('made').database!.views.length, 2)
+  // Never an inline block's home: a dashboard only ever shows on its own page.
+  h.run({ type: 'create-document', title: 'Host', body: '', pageId: 'host' } as never)
+  assert.throws(() => h.run({ type: 'create-database', pageId: 'inline', parentId: 'host', homeBlockId: 'blk', title: '', dashboard: { ...ids, viewId: 'x' } } as never), /full page/)
+  assert.throws(() => h.page('inline'), /no page/, 'nothing made')
+})
+
+test('a linked block with a broken view falls back to the first view a block can show, not a dashboard', async () => {
+  const { linkedViewOf } = await import('../src/domain/linked-view.ts')
+  const h = harness()
+  h.run({ type: 'create-database', pageId: 'made', homeBlockId: null, title: '', dashboard: { viewId: 'dv', rowId: 'dr', widgetId: 'dw', widgetViewId: 'dwv' } } as never)
+  const db = h.page('made').database!
+  assert.equal(linkedViewOf(db, '').layout, 'table')
+  assert.equal(linkedViewOf(db, '{"id":"lv"}').layout, 'table')
+})

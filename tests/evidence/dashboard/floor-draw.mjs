@@ -11,6 +11,9 @@ for (const engine of ['chromium', 'webkit']) {
   await page.goto(`${base}/pages?page=home`); await page.locator('.database-block').first().waitFor({ timeout: 20000 }); await page.waitForTimeout(1500)
   ok(`${engine} floor: Home's dashboard view draws as a table`, await page.locator('.database-table-wrap, table').count() > 0 && await page.locator('.dashboard-widget').count() === 0, await page.locator('[data-database-views]').first().innerText().catch(() => ''))
   if (shots) await page.screenshot({ path: `${shots}/floor-${engine}.png` })
+  // A database made by Pages' `+` → Dashboard, whose first view is the dashboard: its own rows, as a table (Lead f0ba05a9).
+  await page.goto(`${base}/pages?page=made`); await page.locator('.database-block').first().waitFor({ timeout: 20000 }); await page.waitForTimeout(1500)
+  ok(`${engine} floor: a database made by Pages' + → Dashboard draws its rows as a table`, await page.getByText('Made row', { exact: true }).isVisible() && await page.locator('.dashboard-widget').count() === 0)
   await page.goto(`${base}/pages?page=runs`); await page.getByText('Alpha', { exact: true }).waitFor({ timeout: 20000 })
   ok(`${engine} floor: a widget's source opens as ever`, await page.getByText('Charlie', { exact: true }).isVisible())
   ok(`${engine} floor: no page errors`, errors.length === 0, errors.join(' | ').slice(0, 300))

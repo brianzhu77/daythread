@@ -186,7 +186,7 @@ export type Action =
   | { type: "apply-draft"; pageId: string; itemIds: string[]; edits?: Record<string, string>; today?: LocalDate }
   | { type: "skip-draft"; pageId: string; itemIds: string[] }
   /** A database page with the default schema; `homeBlockId`: its `database` block in the parent page, null for a full page. */
-  | { type: "create-database"; pageId: string; parentId?: string | null; homeBlockId: string | null; title: string }
+  | { type: "create-database"; pageId: string; parentId?: string | null; homeBlockId: string | null; title: string; /** Pages' `+` → Dashboard: its first view a dashboard of one widget, a copy of its own Table (G6-1). */ dashboard?: { viewId: string; rowId: string; widgetId: string; widgetViewId: string } }
   | { type: "change-database"; pageId: string; change: import("./database.ts").DatabaseChange }
   /** A row, at the end or before `beforeId`; `copyOf`: Duplicate row, copying that row's values and body. */
   | { type: "move-row"; pageId: string; databaseId: string; at: string }
