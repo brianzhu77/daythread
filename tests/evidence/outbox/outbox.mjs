@@ -349,6 +349,35 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 15 with a change held, an unrelated tick saves and one on the held row waits, counted ("${text.trim()}")`, statusOf('Call the bank') === 'done' && statusOf('Water the plants') === 'open' && /1 later change waiting/.test(text))
     await context.close()
   }
+  // 16. Two tabs on one device, one to-do: tab A's tick is held on its way; tab B ticks then unticks it; A's lands. B's
+  //     changes follow A's in order (their bases read fresh under the lock), nothing held (Ratchet 5e6bd5ac).
+  {
+    reseed()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }), a = await context.newPage(), b = await context.newPage()
+    for (const p of [a, b]) { await p.goto(`${base}/`); await p.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(p) }
+    let release; const gate = new Promise(r => { release = r })
+    await a.route(OUTBOX, async route => { await gate; await route.continue().catch(() => {}) })
+    await a.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(400)
+    await b.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(800)
+    await b.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(600)
+    release(); await wait(3000)
+    await b.evaluate(() => window.dispatchEvent(new Event('focus'))); await wait(1500)
+    const heldB = await b.locator('.banner.save-failed').count(), heldA = await a.locator('.banner.save-failed').count()
+    ok(`${tag} 16 two tabs, one to-do: A's tick then B's tick and untick apply in order, nothing held`, heldA === 0 && heldB === 0 && statusOf('Water the plants') === 'open', `status ${statusOf('Water the plants')}, held A ${heldA} B ${heldB}, revision ${stored().revision}`)
+    await context.close()
+  }
+  // 10c. No IndexedDB at all (not just failing): a change on its way still warns after a second and guards the leave.
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.addInitScript(() => Object.defineProperty(window, 'indexedDB', { value: undefined }))
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    await page.route('**/_serverFn/**', async r => { if (r.request().method() === 'POST') await new Promise(() => {}); else await r.continue() })
+    await page.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(1800)
+    const warned = await page.getByText('Not saved on this device', { exact: false }).count()
+    const guarded = await page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented })
+    ok(`${tag} 10c with no IndexedDB, a change still on its way warns and guards the leave (Ratchet 5ca37837)`, warned > 0 && guarded)
+    await context.close()
+  }
   // 10. No IndexedDB: changes go as before, nothing claims they were kept.
   {
     reseed(); const { context, page } = await fresh()

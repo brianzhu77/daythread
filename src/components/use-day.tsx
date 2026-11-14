@@ -6,7 +6,7 @@ import type { Action, DayView, LocalDate, Receipt, Task, Workspace } from '../do
 import { applyCommand, getDayView } from '../domain/workspace'
 import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand, runOutboxCommand } from '../server/functions'
-import { appWrites, capture, dependsOn, idbOutboxStore, type HeldReason, type OutboxEntry, type OutboxStore } from './outbox'
+import { appWrites, blockedBy, capture, dependsOn, idbOutboxStore, type HeldReason, type OutboxEntry, type OutboxStore } from './outbox'
 import { isNetworkFailure } from './offline-copy'
 import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
@@ -214,8 +214,12 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   /** Entries shown as made: stored before this load, or left after a send that didn't land. */
   const kept = useRef(new Set<number>())
   const durable = useRef(true), legacy = useRef(false), inFlight = useRef(new Set<number>())
+  // A browser with no IndexedDB at all keeps nothing on the device (Ratchet 5ca37837).
+  if (store.current === null && transport.runOutbox && durable.current) durable.current = false
   /** The last send failed for lack of network; cleared by the next one that gets through. */
   const netAway = useRef(false), slowUnsent = useRef(false)
+  /** Not durable, and a change failed to send and lives only in this tab's memory (its Retry): at risk until one gets through. */
+  const memoryUnsent = useRef(false)
   const [outbox, setOutbox] = useState<OutboxView>(emptyOutbox)
   /** The workspace with every pending change applied, in order (§4): what changes are built on, and what's shown meanwhile. */
   /**
@@ -252,7 +256,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     // His changes only: the app's own writes (opening a day, the draft) are never counted to him (Jazz 8887e299).
     const pending = entries.current.filter(e => e.state === 'pending' && !e.app)
     const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
-    setOutbox({ pending: pending.length, held, waiting: held ? pending.filter(e => e.seq! > held.seq! && dependsOn(e, held)).length : 0, durable: durable.current, keptBack: legacy.current && pending.length > 0, offline: away && pending.length > 0, atRisk: !durable.current && (slowUnsent.current || (away && commandsPending())) })
+    setOutbox({ pending: pending.length, held, waiting: held ? pending.filter(e => blockedBy(entries.current, e)).length : 0, durable: durable.current, keptBack: legacy.current && pending.length > 0, offline: away && pending.length > 0, atRisk: !durable.current && (slowUnsent.current || memoryUnsent.current || (away && commandsPending())) })
     if (entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
   // After a send that didn't land, try again on its own: 2 s, 5 s, 15 s, then every 30 s, without waiting for `online`,
@@ -268,18 +272,27 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   /** Sends one stored entry and makes its answer what `transport.run` would have returned, or an `OutboxStop`. */
   const sendEntry = useCallback(async (entry: OutboxEntry): Promise<{ workspace: Workspace; receipt: Receipt }> => {
     const s = store.current!, seq = entry.seq!
-    const held = entries.current.find(h => h.state === 'held' && h.seq! < seq && dependsOn(entry, h))
-    if (held) { kept.current.add(seq); throw new OutboxStop('waiting') }
+    if (blockedBy(entries.current, entry)) { kept.current.add(seq); throw new OutboxStop('waiting') }
     inFlight.current.add(seq)
     try {
       // One tab sends an owner's changes at a time; without Web Locks two may send one, and its receipt answers the second (§7).
-      const send = () => transport.runOutbox!(wsRef.current!, entry)
+      // Under the lock: the entry as stored now (another tab's acknowledgements may have added to its own revisions, or it
+      // may be gone), the send, and the acknowledgement, so two tabs never send from stale bases (Ratchet 5e6bd5ac).
+      const send = async (): Promise<OutboxAnswer | { status: 'gone-here' }> => {
+        const now = (await s.all()).find(e => e.seq === seq)
+        if (!now) return { status: 'gone-here' }
+        const fresh = { ...entry, ownRevisions: now.ownRevisions, state: now.state }
+        if (now.state !== 'pending') return { status: 'gone-here' }
+        const answer = await transport.runOutbox!(wsRef.current!, fresh)
+        if (answer.status === 'applied') await s.acknowledge(seq, entry.owner, answer.receipt.revision)
+        return answer
+      }
       const answer = typeof navigator !== 'undefined' && navigator.locks ? await navigator.locks.request(`daythread-outbox:${entry.owner}`, send) : await send()
       const drop = () => { entries.current = entries.current.filter(e => e.seq !== seq) }
       switch (answer.status) {
+        case 'gone-here': drop(); throw new OutboxStop('done')
         case 'applied': {
           netAway.current = false; retryStep.current = 0
-          await s.acknowledge(seq, entry.owner, answer.receipt.revision)
           drop()
           const r = answer.receipt.revision
           if (r !== undefined) for (const e of entries.current) if (e.seq! > seq && !e.ownRevisions.includes(r)) e.ownRevisions.push(r)
@@ -495,6 +508,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         debugClient('command.request',fields)
         try {
           const result = entry ? await sendEntry(entry) : await transport.run(current, action, operationId)
+          if (!entry && !durable.current && memoryUnsent.current) { memoryUnsent.current = false; showOutbox() }
           adopt(result.workspace)
           retireStaleUndo(result.workspace)
           debugClient('command.response',{...fields,afterRevision:result.workspace.revision,elapsedMs:performance.now()-started,result:'ok'})
@@ -523,6 +537,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
             if (e.kind === 'held' || e.kind === 'done') { try { await refresh(operationId) } catch { /* offline */ } }
             return null
           }
+          if (!entry && !durable.current) { memoryUnsent.current = true; showOutbox() }
           const message = e instanceof Error ? e.message : String(e)
           // A refusal the caller shows in place (e.g. "Can't undo · edited since"): nothing failed to save, so no red
           // bar and no Retry, which could only fail again (Jazz acdfa91).
@@ -636,7 +651,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [showOutbox])
   // Only where nothing could be stored is a change at risk on leaving (Lead 87eca3cf; §8.4).
   useEffect(() => {
-    const before = (e: BeforeUnloadEvent) => { if (!durable.current && commandsPending()) e.preventDefault() }
+    const before = (e: BeforeUnloadEvent) => { if (!durable.current && (commandsPending() || memoryUnsent.current)) e.preventDefault() }
     window.addEventListener('beforeunload', before)
     return () => window.removeEventListener('beforeunload', before)
   }, [])

@@ -145,6 +145,20 @@ export function dependsOn(entry: Pick<OutboxEntry, 'writes' | 'refs' | 'readsBey
   return entry.writes.some(k => writes.has(k)) || entry.refs.some(id => ids.has(id))
 }
 
+/**
+ * Whether a change must wait (§6): it depends on a held change, or on one that is itself waiting, transitively (Ratchet
+ * 12c9599b: a rename of a row whose add waits on its held database must wait too, not be sent and refused).
+ */
+export function blockedBy(all: readonly OutboxEntry[], entry: OutboxEntry): boolean {
+  const blockers: OutboxEntry[] = []
+  for (const e of [...all].sort((a, b) => a.seq! - b.seq!)) {
+    if (e.seq! >= entry.seq!) break
+    if (e.state === 'held' && !e.app) blockers.push(e)
+    else if (e.state === 'pending' && blockers.some(b => dependsOn(e, b))) blockers.push(e)
+  }
+  return blockers.some(b => dependsOn(entry, b))
+}
+
 /** The banner's words for a change (Jazz §8.3): a past-tense verb and the item's name, cut at 40 characters. */
 export function labelFor(action: Action, ws: Workspace): string {
   const cut = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s)

@@ -130,6 +130,7 @@ export function DeleteAccount({ onCancel, filesGo }: { onCancel: () => void; fil
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { clearOutbox } = useWorkspace()
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (busy || !password) return
@@ -139,7 +140,8 @@ export function DeleteAccount({ onCancel, filesGo }: { onCancel: () => void; fil
       const response = await fetch('/api/auth/delete-account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password }) })
       r = await response.json().catch(() => ({ error: 'unavailable' }))
     } catch { r = { error: 'unavailable' } }
-    if (r.ok) { await clearOfflineData(); return window.location.assign('/sign-in') }
+    // The deleted account's changes leave the device with it (§7, Ratchet 241fda62); a refused deletion keeps them.
+    if (r.ok) { await clearOutbox(); await clearOfflineData(); return window.location.assign('/sign-in') }
     setBusy(false)
     setError(r.error === 'wrong' ? "That didn't work · Check the password" : r.error === 'too-many' ? `Too many tries · Try again in ${Math.ceil((r.retryAfter ?? 60) / 60)} min` : "Couldn't delete the account · Try again")
   }
