@@ -3,7 +3,7 @@
 // Home Screen app never loses it. One IndexedDB store; where there is none, changes are sent as before and nothing
 // claims they were kept (§4).
 import { applyCommand } from '../domain/workspace.ts'
-import type { Action, Workspace } from '../domain/types.ts'
+import type { Action, Receipt, Workspace } from '../domain/types.ts'
 import { readsBeyondApplied } from '../server/outbox-replay.ts'
 import { linkId } from '../domain/task-links.ts'
 
@@ -145,18 +145,101 @@ export function dependsOn(entry: Pick<OutboxEntry, 'writes' | 'refs' | 'readsBey
   return entry.writes.some(k => writes.has(k)) || entry.refs.some(id => ids.has(id))
 }
 
+/** What the server made of a sent change (§5, §11). `offline`, `failed` and `missing` are passing: the change stays pending. */
+export type SendAnswer =
+  | { status: 'applied'; workspace: Workspace; receipt: Receipt }
+  | { status: 'already-applied' }
+  | { status: 'held'; reason: HeldReason; message?: string }
+  | { status: 'owner-mismatch' }
+  | { status: 'offline' }
+  | { status: 'missing' }
+  | { status: 'failed'; message: string }
+
+/** One owner's queue, split (§6): every pending entry is either sendable or waiting, never both. */
+export interface Schedule {
+  /** Pending entries free to go now, in `seq` order. */
+  sendable: OutboxEntry[]
+  /** Held entries, in `seq` order. */
+  held: OutboxEntry[]
+  /** Pending entries that wait, by `seq`: the held entries they wait on, directly or through another waiting one (Ratchet 12c9599b). */
+  waiting: Map<number, number[]>
+}
+
 /**
- * Whether a change must wait (§6): it depends on a held change, or on one that is itself waiting, transitively (Ratchet
- * 12c9599b: a rename of a row whose add waits on its held database must wait too, not be sent and refused).
+ * The one place that decides what may be sent (Lead 150bd86f). A pending change waits when it depends on a held change
+ * of his, or on a change that is itself waiting; everything else pending is sendable, oldest first. Which tab stored an
+ * entry, or whether that tab is still open, plays no part.
  */
-export function blockedBy(all: readonly OutboxEntry[], entry: OutboxEntry): boolean {
-  const blockers: OutboxEntry[] = []
-  for (const e of [...all].sort((a, b) => a.seq! - b.seq!)) {
-    if (e.seq! >= entry.seq!) break
-    if (e.state === 'held' && !e.app) blockers.push(e)
-    else if (e.state === 'pending' && blockers.some(b => dependsOn(e, b))) blockers.push(e)
+export function schedule(queue: readonly OutboxEntry[]): Schedule {
+  const sendable: OutboxEntry[] = [], held: OutboxEntry[] = [], waiting = new Map<number, number[]>()
+  const blockers: Array<{ entry: OutboxEntry; roots: number[] }> = []
+  const seen = new Set<number>()
+  for (const e of [...queue].sort((a, b) => a.seq! - b.seq!)) {
+    if (seen.has(e.seq!)) continue
+    seen.add(e.seq!)
+    if (e.state === 'held') {
+      held.push(e)
+      // The app's own write is never held for long: it's dropped when replay finds it unneeded.
+      if (!e.app) blockers.push({ entry: e, roots: [e.seq!] })
+      continue
+    }
+    const roots = new Set<number>()
+    for (const b of blockers) if (dependsOn(e, b.entry)) for (const r of b.roots) roots.add(r)
+    if (!roots.size) { sendable.push(e); continue }
+    const list = [...roots].sort((a, b) => a - b)
+    waiting.set(e.seq!, list)
+    blockers.push({ entry: e, roots: list })
   }
-  return blockers.some(b => dependsOn(entry, b))
+  return { sendable, held, waiting }
+}
+
+/** What the banners say (§8, Jazz b6c71626), from the same split: the held change shown, his changes waiting on it, his changes to send. */
+export function outboxCounts(queue: readonly OutboxEntry[]): { held: OutboxEntry | null; waiting: number; pending: number } {
+  const plan = schedule(queue)
+  const held = plan.held.find(e => !e.app) ?? null
+  const his = [...plan.sendable, ...queue.filter(e => plan.waiting.has(e.seq!))].filter(e => !e.app)
+  const pending = new Set(his.map(e => e.seq)).size
+  const waiting = held ? new Set(queue.filter(e => !e.app && plan.waiting.get(e.seq!)?.includes(held.seq!)).map(e => e.seq)).size : 0
+  return { held, waiting, pending }
+}
+
+export interface DrainResult {
+  /** What the server said to each entry this drain sent, by `seq`. */
+  answers: Map<number, SendAnswer>
+  /** The passing failure (or owner mismatch) that stopped it, at the entry it was sending; that entry and every later one stay pending. */
+  stop: { seq: number; answer: SendAnswer } | null
+  /** The owner's queue as the drain last read it. */
+  queue: OutboxEntry[]
+}
+
+/**
+ * Sends an owner's sendable changes, oldest first, until none is left or one can't be sent (§6, §7). Run under the
+ * owner's lock. The queue is read again and split again after every answer: an acknowledgement, a hold or another
+ * tab's change moves what may go next (Ratchet 006210e1). `send` only talks to the server; the store is written here.
+ */
+export async function drainQueue(store: OutboxStore, owner: string, send: (entry: OutboxEntry) => Promise<SendAnswer>, onQueue?: (queue: OutboxEntry[]) => void): Promise<DrainResult> {
+  const answers = new Map<number, SendAnswer>()
+  for (;;) {
+    const queue = (await store.all()).filter(e => e.owner === owner)
+    onQueue?.(queue)
+    const next = schedule(queue).sendable[0]
+    if (!next) return { answers, stop: null, queue }
+    const seq = next.seq!
+    // A store that didn't record the last answer would have the drain send the same change for ever.
+    if (answers.has(seq)) return { answers, stop: { seq, answer: { status: 'failed', message: 'The device did not record a sent change' } }, queue }
+    const answer = await send(next)
+    switch (answer.status) {
+      case 'applied': await store.acknowledge(seq, owner, answer.receipt.revision); break
+      case 'already-applied': await store.acknowledge(seq, owner, undefined); break
+      case 'held':
+        // The app's own write, no longer needed or allowed (the day was made elsewhere): dropped, unsaid.
+        if (next.app) await store.remove(seq)
+        else await store.update(seq, { state: 'held', held: { reason: answer.reason, ...(answer.message ? { message: answer.message } : {}) } })
+        break
+      default: return { answers, stop: { seq, answer }, queue }
+    }
+    answers.set(seq, answer)
+  }
 }
 
 /** The banner's words for a change (Jazz §8.3): a past-tense verb and the item's name, cut at 40 characters. */

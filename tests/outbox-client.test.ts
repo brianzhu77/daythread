@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { harness, today, todo, dayId, bullet, text } from './v2-helpers.ts'
-import { blockedBy, capture, dependsOn, labelFor, memoryOutboxStore, referencedIds, type OutboxEntry } from '../src/components/outbox.ts'
+import { capture, dependsOn, labelFor, memoryOutboxStore, referencedIds, schedule, type OutboxEntry } from '../src/components/outbox.ts'
 import type { Action } from '../src/domain/types.ts'
 import { applyCommand } from '../src/domain/workspace.ts'
 
@@ -72,8 +72,8 @@ test('waiting is transitive: a change on a row whose add waits on a held databas
   const b = entry({ seq: 2, writes: ['page:newrow'], refs: ['newdb'] })
   const c = entry({ seq: 3, writes: ['page:newrow'], refs: ['newrow'] })
   const d = entry({ seq: 4, writes: ['task:other'], refs: ['other'] })
-  const all = [a, b, c, d]
-  assert.equal(blockedBy(all, b), true)
-  assert.equal(blockedBy(all, c), true, 'through b')
-  assert.equal(blockedBy(all, d), false, 'an unrelated change goes')
+  const plan = schedule([d, c, b, a])
+  assert.deepEqual(plan.waiting.get(2), [1])
+  assert.deepEqual(plan.waiting.get(3), [1], 'through b')
+  assert.deepEqual(plan.sendable.map(e => e.seq), [4], 'an unrelated change goes')
 })

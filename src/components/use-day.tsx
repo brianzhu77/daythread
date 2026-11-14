@@ -6,7 +6,7 @@ import type { Action, DayView, LocalDate, Receipt, Task, Workspace } from '../do
 import { applyCommand, getDayView } from '../domain/workspace'
 import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand, runOutboxCommand } from '../server/functions'
-import { appWrites, blockedBy, capture, dependsOn, idbOutboxStore, type HeldReason, type OutboxEntry, type OutboxStore } from './outbox'
+import { appWrites, capture, drainQueue, idbOutboxStore, outboxCounts, schedule, type DrainResult, type OutboxEntry, type OutboxStore, type SendAnswer } from './outbox'
 import { isNetworkFailure } from './offline-copy'
 import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
@@ -26,14 +26,7 @@ export interface Transport {
 }
 
 /** What the server made of an outbox change (outbox.md §5, §11). `missing`: this server has no outbox (an older build). */
-export type OutboxAnswer =
-  | { status: 'applied'; workspace: Workspace; receipt: Receipt }
-  | { status: 'already-applied' }
-  | { status: 'held'; reason: HeldReason; message?: string }
-  | { status: 'owner-mismatch' }
-  | { status: 'offline' }
-  | { status: 'missing' }
-  | { status: 'failed'; message: string }
+export type OutboxAnswer = SendAnswer
 
 /** An older build answers an unknown server function with an error, never by running it (outbox.md §11). */
 const missingFunction = (error: unknown): boolean => /server function|not found|404/i.test(error instanceof Error ? error.message : String(error))
@@ -252,11 +245,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [predicted])
   const showOutbox = useCallback(() => {
     if (!entries.current.length && store.current && outboxHint.get()) void store.current.all().then(left => { if (!left.length) outboxHint.clear() }).catch(() => undefined)
-    const held = entries.current.find(e => e.state === 'held' && !e.app) ?? null
-    // His changes only: the app's own writes (opening a day, the draft) are never counted to him (Jazz 8887e299).
-    const pending = entries.current.filter(e => e.state === 'pending' && !e.app)
+    // The same split the drain sends by (Jazz b6c71626). His changes only: the app's own writes (opening a day, the
+    // draft) are never counted to him (Jazz 8887e299).
+    const { held, waiting, pending } = outboxCounts(entries.current)
     const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
-    setOutbox({ pending: pending.length, held, waiting: held ? pending.filter(e => blockedBy(entries.current, e)).length : 0, durable: durable.current, keptBack: legacy.current && pending.length > 0, offline: away && pending.length > 0, atRisk: !durable.current && (slowUnsent.current || memoryUnsent.current.size > 0 || (away && commandsPending())) })
+    setOutbox({ pending, held, waiting, durable: durable.current, keptBack: legacy.current && pending > 0, offline: away && pending > 0, atRisk: !durable.current && (slowUnsent.current || memoryUnsent.current.size > 0 || (away && commandsPending())) })
     if (entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
   // After a send that didn't land, try again on its own: 2 s, 5 s, 15 s, then every 30 s, without waiting for `online`,
@@ -269,82 +262,72 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     retryStep.current++
     retryTimer.current = setTimeout(() => { retryTimer.current = undefined; if (entries.current.some(e => e.state === 'pending')) void drainRef.current?.() }, delay)
   }, [])
-  /** Sends one stored entry and makes its answer what `transport.run` would have returned, or an `OutboxStop`. */
-  const sendEntry = useCallback(async (entry: OutboxEntry): Promise<{ workspace: Workspace; receipt: Receipt }> => {
-    const s = store.current!, seq = entry.seq!
-    inFlight.current.add(seq)
+  /** Answers for this tab's own changes, sent by whichever of its drains got to them first; read once by the change's own job. */
+  const ownJobs = useRef(new Set<number>()), outcomes = useRef(new Map<number, SendAnswer>())
+  /**
+   * The only way anything is sent from the outbox (Lead 150bd86f): under the owner's lock, the owner's stored queue is
+   * drained in `seq` order by `drainQueue`, whichever tab stored each change. Every trigger comes here: open, a return
+   * to the tab, the retry timer, Discard, Keep mine, a new change.
+   */
+  const drainLocked = useCallback(async (owner: string): Promise<DrainResult> => {
+    const s = store.current!
+    const work = () => drainQueue(s, owner, async entry => {
+      inFlight.current.add(entry.seq!)
+      try {
+        const answer = await transport.runOutbox!(wsRef.current!, entry)
+        if (answer.status === 'applied') adopt(answer.workspace)
+        return answer
+      } finally { inFlight.current.delete(entry.seq!) }
+    }, queue => { entries.current = queue })
     try {
       // One tab sends an owner's changes at a time; without Web Locks two may send one, and its receipt answers the second (§7).
-      // Under the lock: the entry as stored now (another tab's acknowledgements may have added to its own revisions, or it
-      // may be gone), the send, and the acknowledgement, so two tabs never send from stale bases (Ratchet 5e6bd5ac).
-      const send = async (): Promise<OutboxAnswer | { status: 'gone-here' } | { status: 'waiting-here' }> => {
-        for (;;) {
-          // The owner's whole queue as stored now, other tabs' changes included: a change held in another tab blocks this
-          // one just as one held here would (Ratchet 226e41dc). The store is the truth for this owner's queue: what
-          // another tab added, changed or discarded (Ratchet 7bb6a8af).
-          const shared = (await s.all()).filter(e => e.owner === entry.owner)
-          entries.current = shared
-          const now = shared.find(e => e.seq === seq)
-          if (!now || now.state !== 'pending') return { status: 'gone-here' }
-          const fresh = { ...entry, ownRevisions: now.ownRevisions, state: now.state }
-          if (blockedBy(shared, fresh)) return { status: 'waiting-here' }
-          // Order by `seq` across tabs (§6, §7): an earlier change still pending goes first, whichever tab made it, so one
-          // left by a closed tab is sent by an open one rather than stranded (Ratchet 2d32d59f, Lead 543a65f9). A held
-          // one it doesn't depend on is passed over, as here.
-          const earlier = shared.find(e => e.seq! < seq && e.state === 'pending' && !blockedBy(shared, e))
-          const target = earlier ?? fresh
-          const answer = await transport.runOutbox!(wsRef.current!, target)
-          if (answer.status === 'applied') await s.acknowledge(target.seq!, entry.owner, answer.receipt.revision)
-          if (!earlier) return answer
-          // An earlier change's answer is settled here, then the queue is read again for the next.
-          switch (answer.status) {
-            case 'applied': adopt(answer.workspace); continue
-            case 'already-applied': await s.acknowledge(earlier.seq!, entry.owner, undefined); continue
-            case 'held':
-              if (earlier.app) await s.remove(earlier.seq!)
-              else await s.update(earlier.seq!, { state: 'held', held: { reason: answer.reason, ...(answer.message ? { message: answer.message } : {}) } })
-              continue
-            // Not sent, so nothing after it is: this change waits behind it, kept, and is said as it would be.
-            default: return answer
-          }
-        }
+      const result = typeof navigator !== 'undefined' && navigator.locks ? await navigator.locks.request(`daythread-outbox:${owner}`, work) : await work()
+      for (const [seq, answer] of result.answers) if (ownJobs.current.has(seq)) outcomes.current.set(seq, answer)
+      if (result.answers.size) { netAway.current = false; retryStep.current = 0 }
+      const stop = result.stop?.answer
+      if (stop?.status === 'offline') { netAway.current = true; retryLater() }
+      else if (stop?.status === 'failed') retryLater()
+      else if (stop?.status === 'missing') legacy.current = true
+      return result
+    } finally { showOutbox() }
+  }, [transport, adopt, showOutbox, retryLater])
+
+  /** A change of his, stored in this tab: drained with the rest, and its own answer made what `transport.run` would have returned, or an `OutboxStop`. */
+  const sendOwn = useCallback(async (entry: OutboxEntry): Promise<{ workspace: Workspace; receipt: Receipt }> => {
+    const seq = entry.seq!, keptBefore = kept.current.has(seq)
+    try {
+      const result = outcomes.current.has(seq) ? null : await drainLocked(entry.owner)
+      const answer = outcomes.current.get(seq)
+      outcomes.current.delete(seq)
+      if (answer) switch (answer.status) {
+        // What every change sent so far has landed on: the drain adopted each in turn.
+        case 'applied': return { workspace: wsRef.current ?? answer.workspace, receipt: answer.receipt }
+        case 'already-applied': throw new OutboxStop('done')
+        case 'held': throw entry.app ? new OutboxStop('done') : new OutboxStop('held', answer.message ?? answer.reason)
+        default: break
       }
-      const answer = typeof navigator !== 'undefined' && navigator.locks ? await navigator.locks.request(`daythread-outbox:${entry.owner}`, send) : await send()
-      const drop = () => { entries.current = entries.current.filter(e => e.seq !== seq) }
-      switch (answer.status) {
-        case 'gone-here': drop(); throw new OutboxStop('done')
-        case 'waiting-here': kept.current.add(seq); throw new OutboxStop('waiting')
-        case 'applied': {
-          netAway.current = false; retryStep.current = 0
-          drop()
-          const r = answer.receipt.revision
-          if (r !== undefined) for (const e of entries.current) if (e.seq! > seq && !e.ownRevisions.includes(r)) e.ownRevisions.push(r)
-          return { workspace: answer.workspace, receipt: answer.receipt }
-        }
-        case 'already-applied': await s.acknowledge(seq, entry.owner, undefined); drop(); throw new OutboxStop('done')
-        case 'held': {
-          // The app's own write, no longer needed or no longer allowed (the day was made elsewhere): dropped, unsaid.
-          if (entry.app) { await s.remove(seq); drop(); throw new OutboxStop('done') }
-          const patch = { state: 'held' as const, held: { reason: answer.reason, ...(answer.message ? { message: answer.message } : {}) } }
-          await s.update(seq, patch)
-          entries.current = entries.current.map(e => (e.seq === seq ? { ...e, ...patch } : e))
-          throw new OutboxStop('held', answer.message ?? answer.reason)
-        }
+      const now = entries.current.find(e => e.seq === seq)
+      // Sent by another tab's drain, or discarded there.
+      if (!now) throw new OutboxStop('done')
+      if (now.state === 'held') throw new OutboxStop('held', now.held?.message ?? now.held?.reason)
+      kept.current.add(seq)
+      if (schedule(entries.current).waiting.has(seq)) throw new OutboxStop('waiting')
+      const stop = result?.stop?.answer
+      switch (stop?.status) {
+        case 'failed': throw new OutboxStop('failed', stop.message)
         case 'owner-mismatch': throw new OutboxStop('owner')
-        case 'offline': kept.current.add(seq); netAway.current = true; retryLater(); throw new OutboxStop('offline')
-        case 'failed': kept.current.add(seq); retryLater(); throw new OutboxStop('failed', answer.message)
         case 'missing': {
           // An older build is serving (a rollback). A stored change waits for a server that can check it (§11, Ratchet
           // c8c0f6f9); only one he made just now, in this tab, goes as before, as it would have without the outbox.
-          legacy.current = true
-          if (kept.current.has(seq)) throw new OutboxStop('offline')
-          const result = await transport.run(wsRef.current!, entry.action, entry.operationId)
-          await s.remove(seq); drop()
-          return result
+          if (keptBefore) throw new OutboxStop('offline')
+          const sent = await transport.run(wsRef.current!, entry.action, entry.operationId)
+          await store.current!.remove(seq); entries.current = entries.current.filter(e => e.seq !== seq); kept.current.delete(seq)
+          return sent
         }
+        default: throw new OutboxStop('offline')
       }
-    } finally { inFlight.current.delete(seq); showOutbox() }
-  }, [transport, showOutbox, retryLater, adopt])
+    } finally { ownJobs.current.delete(seq); showOutbox() }
+  }, [transport, drainLocked, showOutbox])
 
   /** Once the owner is known (the first load, or the offline copy's), this owner's stored changes join the tab, before they're shown. */
   const takeStored = useCallback(async (owner: string | null) => {
@@ -371,23 +354,20 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
 
   /** Sends every pending change of this owner, in order, through the queue (§6): on open, back online, Retry, Discard. */
   const drain = useCallback((first = false): Promise<void> => {
-    let chain: Promise<unknown> = first ? Promise.resolve() : queue.current
-    for (const e of entries.current) {
-      if (e.state !== 'pending' || inFlight.current.has(e.seq!)) continue
-      chain = chain.then(async () => {
-        const now = entries.current.find(x => x.seq === e.seq)
-        if (!now || now.state !== 'pending' || inFlight.current.has(e.seq!)) return
-        try { const r = await sendEntry(now); adopt(r.workspace); retireStaleUndo(r.workspace) }
-        catch (err) {
-          if (err instanceof OutboxStop && (err.kind === 'held' || err.kind === 'done')) { try { await refresh(e.operationId) } catch { /* offline */ } }
-          else if (err instanceof OutboxStop && err.kind === 'owner') reloadRef.current?.()
-        }
-      }).catch(() => undefined)
+    const go = async () => {
+      const owner = knownOwner
+      if (!store.current || !transport.runOutbox || !owner) return
+      const result = await drainLocked(owner)
+      if (result.stop?.answer.status === 'owner-mismatch') { reloadRef.current?.(); return }
+      if (result.answers.size) retireStaleUndo(wsRef.current!)
+      // A change held or found already there: the latest is loaded, so the screen shows what the server has.
+      if ([...result.answers.values()].some(a => a.status !== 'applied')) { try { await refresh() } catch { /* offline */ } }
     }
+    const chain = (first ? Promise.resolve() : queue.current).then(go).catch(() => undefined)
     if (!first) queue.current = chain
     showOutbox()
-    return chain.then(() => undefined)
-  }, [sendEntry, adopt, refresh, showOutbox])
+    return chain
+  }, [transport, drainLocked, refresh, showOutbox])
   drainRef.current = () => drain()
   // Stored changes first, then the queue opens for everything else (Jazz ef6b418a).
   const openAfterDrain = useCallback(() => {
@@ -514,8 +494,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending', ...(appWrites.has(built.type) ? { app: true } : {}) }
           stored = store.current.add(full).then(seq => {
             outboxHint.set()
+            ownJobs.current.add(seq)
             const kept = { ...full, seq }
-            entries.current = [...entries.current, kept]
+            // A drain in another tab may have read it into this tab's list already.
+            if (!entries.current.some(e => e.seq === seq)) entries.current = [...entries.current, kept]
             if (navigator.storage?.persist && entries.current.length === 1) void navigator.storage.persist().catch(() => undefined)
             showOutbox()
             return kept
@@ -536,7 +518,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         const fields={operationId,command:action.type,beforeRevision:current.revision,...('pageId' in action?{pageId:action.pageId}:{}),...('taskId' in action?{taskId:action.taskId}:{})}
         debugClient('command.request',fields)
         try {
-          const result = entry ? await sendEntry(entry) : await transport.run(current, action, operationId)
+          const result = entry ? await sendOwn(entry) : await transport.run(current, action, operationId)
           if (!entry && !durable.current && memoryUnsent.current.delete(operationId)) showOutbox()
           adopt(result.workspace)
           retireStaleUndo(result.workspace)
@@ -601,7 +583,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       void job.finally(() => { commandsOut-- }).catch(() => undefined)
       return job
     },
-    [transport, adopt, push, refresh, retireStaleUndo, predicted, sendEntry, showOutbox],
+    [transport, adopt, push, refresh, retireStaleUndo, predicted, sendOwn, showOutbox],
   )
   runRef.current = run
 
@@ -656,7 +638,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
 
   /** §6, §8.3: the held change dropped; what waited on it is tried again. */
   const discardHeld = useCallback(async () => {
-    const held = entries.current.find(e => e.state === 'held')
+    const { held } = outboxCounts(entries.current)
     if (!held) return
     await store.current?.remove(held.seq!)
     entries.current = entries.current.filter(e => e.seq !== held.seq)
@@ -666,7 +648,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [showOutbox, refresh, drain])
   /** §6 "Apply mine anyway", Jazz's "Keep mine": sent again on the latest revision, by his choice; a conflict only. */
   const keepMine = useCallback(async () => {
-    const held = entries.current.find(e => e.state === 'held')
+    const { held } = outboxCounts(entries.current)
     if (!held || !wsRef.current || (held.held?.reason !== 'conflict' && held.held?.reason !== 'changed-since' && held.held?.reason !== 'maybe-applied')) return
     const patch = { state: 'pending' as const, baseRevision: wsRef.current.revision, ownRevisions: [] as number[] }
     await store.current?.update(held.seq!, { ...patch, held: undefined })

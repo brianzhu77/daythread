@@ -408,6 +408,38 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 18 a change left by a closed tab goes first, then the open tab's own`, wire.join(',') === 'A,B' && statusOf('Water the plants') === 'done' && statusOf('Call the bank') === 'done' && stored().revision === before + 2 && banner === 0, `wire ${wire.join(',')}, revision ${before} → ${stored().revision}, banner ${banner}`)
     await context.close()
   }
+  // 18b. The same, but tab B makes no change: coming back to B sends A's tick on its own (B98 item 11, Bumblebee 2e1e02bf).
+  {
+    reseed()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }), a = await context.newPage(), b = await context.newPage()
+    for (const p of [a, b]) { await p.goto(`${base}/`); await p.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(p) }
+    await cut(a); await a.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(800)
+    await a.close({ runBeforeUnload: false })
+    const before = stored().revision
+    await wait(5200); const back = Date.now(); await b.evaluate(() => window.dispatchEvent(new Event('focus')))
+    for (let i = 0; i < 30 && statusOf('Water the plants') !== 'done'; i++) await wait(100)
+    const took = Date.now() - back
+    await settle(b)
+    const ticked = await b.getByRole('checkbox', { name: 'Complete Water the plants' }).isChecked().catch(() => false)
+    ok(`${tag} 18b a change left by a closed tab is sent when he comes back to an open tab that made none (${took} ms)`, statusOf('Water the plants') === 'done' && stored().revision === before + 1 && took < 3000 && ticked && await b.locator('.banner.save-failed').count() === 0, `revision ${before} → ${stored().revision}, B shows ticked ${ticked}`)
+    await context.close()
+  }
+  // 18c. A closed tab left two changes: a tick on a to-do edited elsewhere since, and an unrelated one. Tab B's tick on the
+  //      first: A's first is held, A's unrelated one still goes, B's waits on the hold (Ratchet a7f864c4).
+  {
+    reseed()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }), a = await context.newPage(), b = await context.newPage()
+    for (const p of [a, b]) { await p.goto(`${base}/`); await p.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(p) }
+    await cut(a); await a.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(800)
+    await a.getByRole('checkbox', { name: 'Complete Call the bank' }).click(); await wait(800)
+    await a.close({ runBeforeUnload: false })
+    await elsewhere(w => ({ type: 'task-status', taskId: w.tasks.find(t => t.title === 'Water the plants').id, status: 'done', today: today() }))
+    await elsewhere(w => ({ type: 'task-status', taskId: w.tasks.find(t => t.title === 'Water the plants').id, status: 'open', today: today() }))
+    await b.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(2000); await settle(b)
+    const text = (await b.locator('.banner.save-failed').innerText().catch(() => '')).replace(/\s+/g, ' ').trim()
+    ok(`${tag} 18c behind another tab's held change, its unrelated change still goes and B's waits ("${text}")`, statusOf('Call the bank') === 'done' && statusOf('Water the plants') === 'open' && /ticked "Water the plants" · changed since|was changed elsewhere/.test(text) && /1 later change waiting/.test(text), `bank ${statusOf('Call the bank')}, water ${statusOf('Water the plants')}`)
+    await context.close()
+  }
   // 10c. No IndexedDB at all (not just failing): a change on its way still warns after a second and guards the leave.
   {
     reseed(); const { context, page } = await fresh()
