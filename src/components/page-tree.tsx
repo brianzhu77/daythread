@@ -10,7 +10,7 @@ import { ChevronRightIcon, PageEmoji, PageKindIcon, PagesIcon } from './icons'
 import { openIconPicker } from './icon-picker'
 import { coverCanMove, openCoverPanel, startReposition, useCoverCanMove } from './page-cover'
 import { CommentCount, openComments } from './comments-pane'
-import { NewPageMenu } from './new-page-menu'
+import { NewPageMenu, newDatabaseAction } from './new-page-menu'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
 import { useTreeDrag, type Drop } from './tree-drag'
@@ -433,9 +433,9 @@ export function SidebarTree({ workspace, activeId, today }: { workspace: Workspa
   }, [activeId, expanded])
 
   // Both +s make an untitled page and open it with the caret in its title (Notion's way), at the top level or inside one.
-  const newDatabase = async () => {
+  const newDatabase = async (dashboard = false) => {
     const pageId = crypto.randomUUID()
-    const receipt = await run({ type: 'create-database', pageId, homeBlockId: null, title: '' })
+    const receipt = await run(newDatabaseAction(pageId, dashboard))
     if (receipt) open(`/pages?page=${encodeURIComponent(pageId)}&focus=title`)
   }
   const newPage = async (parent: Page | null) => {
@@ -504,7 +504,7 @@ export function SidebarTree({ workspace, activeId, today }: { workspace: Workspa
       <div className="side-label-row" data-drop-top data-first={roots[0]?.id ?? ''} data-drop-zone={drag.drop?.rowKey === 'top' ? 'after' : undefined}>
         <p className="side-label">Pages</p>
         {/* Page or Database, as Pages' + offers (design §3.1). */}
-        <NewPageMenu className="side-label-add" onPage={() => void newPage(null)} onDatabase={() => void newDatabase()}>+</NewPageMenu>
+        <NewPageMenu className="side-label-add" onPage={() => void newPage(null)} onDatabase={() => void newDatabase()} onDashboard={() => void newDatabase(true)}>+</NewPageMenu>
       </div>
       {/* Only top-level pages (Brian 992f14f8, Notion's model): pages made in a day stay under that day above. */}
       {roots.length > 0 ? <ul className="plain tree" role="tree" aria-label="Pages">{roots.map((p, i) => row(p, 0, roots[i + 1]?.id))}</ul> : <p className="side-hint">No pages yet</p>}

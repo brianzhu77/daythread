@@ -7,9 +7,10 @@ export interface LinkedView extends View {
   title?: string
 }
 
-/** The block's view. No view yet (a block from before R2) or a broken one reads as the source's first view. */
+/** The block's view. No view yet (a block from before R2) or a broken one reads as the source's first view a block can show. */
 export function linkedViewOf(db: Database, json: unknown): LinkedView {
-  const first = db.views[0]!
+  // A dashboard can be first (Pages' `+` → Dashboard), and it only ever opens on its own page.
+  const first = db.views.find(v => v.layout !== 'dashboard') ?? db.views[0]!
   if (typeof json !== 'string' || !json) return first
   try {
     const parsed = JSON.parse(json) as Partial<LinkedView>

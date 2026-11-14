@@ -13,7 +13,7 @@ import { BookmarksScreen, PagesBookmarksRow } from './bookmarks'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
 import { DatabasePage, RowProperties } from './database-block'
-import { NewPageMenu } from './new-page-menu'
+import { NewPageMenu, newDatabaseAction } from './new-page-menu'
 import { databaseOfRow, isDatabase } from '../domain/database'
 import { RowMenu } from './row-menu'
 import { openIconPicker, PageIconLine } from './icon-picker'
@@ -31,12 +31,12 @@ export function useCreatePage() {
   }
 }
 
-/** A full-page database at the top level (design §3.1: Pages' `+` → Database); resolves to its id, or null. */
+/** A full-page database at the top level (design §3.1: Pages' `+` → Database), or one opening on a dashboard (G6-1); resolves to its id, or null. */
 export function useCreateDatabase() {
   const { run } = useWorkspace()
-  return async () => {
+  return async (dashboard = false) => {
     const pageId = crypto.randomUUID()
-    const receipt = await run({ type: 'create-database', pageId, homeBlockId: null, title: '' })
+    const receipt = await run(newDatabaseAction(pageId, dashboard))
     return receipt ? pageId : null
   }
 }
@@ -66,7 +66,7 @@ export function PagesScreen() {
     <div className="list-screen">
       <div className="title-row">
         <h1 className="large-title">Pages</h1>
-        <NewPageMenu onPage={async () => { const id = await createPage(); if (id) setSelected(id, 'title') }} onDatabase={async () => { const id = await createDatabase(); if (id) setSelected(id, 'title') }} />
+        <NewPageMenu onPage={async () => { const id = await createPage(); if (id) setSelected(id, 'title') }} onDatabase={async () => { const id = await createDatabase(); if (id) setSelected(id, 'title') }} onDashboard={async () => { const id = await createDatabase(true); if (id) setSelected(id, 'title') }} />
       </div>
       <PagesBookmarksRow workspace={workspace} />
       {/* Pages lists only pages (Brian 77423ea0); Tags is a navigation destination of its own. */}

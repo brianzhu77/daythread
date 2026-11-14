@@ -3292,12 +3292,12 @@ textarea.form-input { resize: vertical; }
 .dashboard.is-dragging .dashboard-widget { cursor: grabbing; }
 .dashboard-row { position: relative; }
 /* Handles sit in the 24 px gaps: a bar between two neighbours and one under each row, shown on the row being hovered (§5). */
-.dashboard-split { position: absolute; top: 0; bottom: 0; left: -20px; z-index: 2; display: grid; place-items: center; width: 16px; min-height: 0; padding: 0; border: 0; background: none; cursor: col-resize; }
+.dashboard-split { position: absolute; top: 0; bottom: 0; left: 0; z-index: 2; display: grid; place-items: center; width: 16px; min-height: 0; padding: 0; border: 0; background: none; cursor: col-resize; }
 .dashboard-row-size { position: absolute; left: 0; right: 0; bottom: -20px; z-index: 2; display: grid; place-items: center; height: 16px; min-height: 0; padding: 0; border: 0; background: none; cursor: row-resize; }
 .dashboard-split::after, .dashboard-row-size::after { content: ''; border-radius: 1px; background: var(--line-strong); opacity: 0; transition: opacity 120ms; }
 .dashboard-split::after { width: 2px; height: 32px; }
 .dashboard-row-size::after { width: 32px; height: 2px; }
-.dashboard-row:hover > .dashboard-row-size::after, .dashboard-row:hover > .dashboard-widget > .dashboard-split::after,
+.dashboard-row:hover > .dashboard-row-size::after, .dashboard-row:hover > .dashboard-split::after,
 .dashboard-split:focus-visible::after, .dashboard-row-size:focus-visible::after { opacity: 1; }
 .dashboard-split.is-held::after, .dashboard-row-size.is-held::after { opacity: 1; background: var(--ink-3); }
 .dashboard-badge { position: absolute; z-index: 4; padding: 1px 7px; border-radius: 6px; background: var(--fill); color: var(--ink-2); font-size: var(--text-meta); line-height: 20px; white-space: nowrap; pointer-events: none; }
@@ -3306,7 +3306,12 @@ textarea.form-input { resize: vertical; }
 
 /* ---- At 390 (dashboard-edit.md §7, Jazz 352627d8): full width in reading order, content up to 360 px, no scrolling down inside. */
 .dashboard-head-main { overflow: hidden; }
-.dashboard-widget[data-wrapped] > .dashboard-split { display: none; }
+.dashboard-split[data-wrapped] { display: none; }
+/* The row's +, in the page's right gutter at the row's middle, so it never meets the last widget's ⋯ (§6). */
+.dashboard-row-add { position: absolute; top: 50%; left: calc(100% + 4px); z-index: 2; transform: translateY(-50%); opacity: 0; transition: opacity 120ms; }
+.dashboard-row:hover > .dashboard-row-add, .dashboard-row:focus-within > .dashboard-row-add { opacity: 1; }
+.dashboard-row-add-button { width: 44px; min-height: 44px; padding: 0; color: var(--ink-2); font-size: var(--text-row); }
+@media (hover: hover) { .dashboard-row-add-button:hover { background: var(--fill); } }
 .dashboard-widget { isolation: isolate; }
 .dashboard.is-phone .dashboard-widget { flex: none; width: 100%; min-width: 0; height: auto; }
 .dashboard.is-phone .dashboard-widget-body { overflow: visible; }
