@@ -6,7 +6,7 @@ import type { Action, DayView, LocalDate, Receipt, Task, Workspace } from '../do
 import { applyCommand, getDayView } from '../domain/workspace'
 import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand, runOutboxCommand } from '../server/functions'
-import { capture, dependsOn, idbOutboxStore, type HeldReason, type OutboxEntry, type OutboxStore } from './outbox'
+import { appWrites, capture, dependsOn, idbOutboxStore, type HeldReason, type OutboxEntry, type OutboxStore } from './outbox'
 import { isNetworkFailure } from './offline-copy'
 import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
@@ -107,8 +107,23 @@ class OutboxStop extends Error {
   constructor(kind: OutboxStop['kind'], detail?: string) { super(`Outbox: ${kind}`); this.name = 'OutboxStop'; this.kind = kind; if (detail !== undefined) this.detail = detail }
 }
 /** What the banners read (outbox.md §8): changes kept and not yet sent, the oldest held one, what waits on it. */
-export interface OutboxView { pending: number; held: OutboxEntry | null; waiting: number; durable: boolean; keptBack: boolean }
-const emptyOutbox: OutboxView = { pending: 0, held: null, waiting: 0, durable: true, keptBack: false }
+export interface OutboxView {
+  pending: number; held: OutboxEntry | null; waiting: number; durable: boolean; keptBack: boolean
+  /** A change couldn't be sent for lack of network, or the browser says it's offline (§8.2). */
+  offline: boolean
+  /** Not durable and a change still unsent after a second, or after a failed send (§8.4, Jazz 3c65a099): never a flash on every change. */
+  atRisk: boolean
+}
+/** Set while the outbox may hold changes, so a load reads the store before the first paint only then (R1-18). */
+const outboxHint = {
+  key: 'daythread:outbox:stored',
+  get(): boolean { try { return typeof localStorage !== 'undefined' && localStorage.getItem(this.key) === '1' } catch { return true } },
+  set(): void { try { localStorage.setItem(this.key, '1') } catch { /* no storage: the store is read after the paint */ } },
+  clear(): void { try { localStorage.removeItem(this.key) } catch { /* nothing to clear */ } },
+}
+/** Two taps on one to-do closer than this are one tap (B98 item 2; Jazz may tune it). */
+const doubleTapMs = 500
+const emptyOutbox: OutboxView = { pending: 0, held: null, waiting: 0, durable: true, keptBack: false, offline: false, atRisk: false }
 
 /** Commands queued or being sent in this tab, across providers: a reload waits for none (new-build.ts). */
 let commandsOut = 0
@@ -192,11 +207,15 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   // Commands are applied one at a time against the latest revision.
   const wsRef = useRef<Workspace | null>(null)
   // ---- B98: the outbox (outbox.md). This tab's owner's entries, mirrored from the store; the store is the truth.
-  const store = useRef<OutboxStore | null>(transport.runOutbox && typeof indexedDB !== 'undefined' ? idbOutboxStore() : null)
+  // Made once: a ref's initial value is evaluated on every render, so these are filled in only while empty.
+  const store = useRef<OutboxStore | null | undefined>(undefined)
+  if (store.current === undefined) store.current = transport.runOutbox && typeof indexedDB !== 'undefined' ? idbOutboxStore() : null
   const entries = useRef<OutboxEntry[]>([])
   /** Entries shown as made: stored before this load, or left after a send that didn't land. */
   const kept = useRef(new Set<number>())
   const durable = useRef(true), legacy = useRef(false), inFlight = useRef(new Set<number>())
+  /** The last send failed for lack of network; cleared by the next one that gets through. */
+  const netAway = useRef(false), slowUnsent = useRef(false)
   const [outbox, setOutbox] = useState<OutboxView>(emptyOutbox)
   /** The workspace with every pending change applied, in order (§4): what changes are built on, and what's shown meanwhile. */
   /**
@@ -215,8 +234,12 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [])
   // B98: until the first load's stored changes are sent, nothing else is (the app's own writes on open wait: Jazz ef6b418a).
   const openQueue = useRef<() => void>(() => undefined)
-  const queue = useRef<Promise<unknown>>(store.current ? new Promise<void>(resolve => { openQueue.current = resolve }) : Promise.resolve())
-  const storedAtMount = useRef<Promise<OutboxEntry[]> | null>(store.current ? store.current.all().catch(() => { durable.current = false; return [] }) : null)
+  const queue = useRef<Promise<unknown>>(undefined as unknown as Promise<unknown>)
+  if (!queue.current) queue.current = store.current ? new Promise<void>(resolve => { openQueue.current = resolve }) : Promise.resolve()
+  const storedAtMount = useRef<Promise<OutboxEntry[]> | null | undefined>(undefined)
+  // Read before the first paint only when a change was stored (a hint kept beside it): otherwise the store isn't even
+  // opened on the way to the page (R1-18), and is read just after, in case the hint was lost.
+  if (storedAtMount.current === undefined) storedAtMount.current = store.current && outboxHint.get() ? store.current.all().catch(() => { durable.current = false; return [] }) : null
 
   /** The server's workspace; what's shown has his pending changes on top, so a tick never shows unticked first (Jazz §8.1). */
   const adopt = useCallback((ws: Workspace) => {
@@ -224,11 +247,24 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     setWorkspace(entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!)) ? predicted(true) ?? ws : ws)
   }, [predicted])
   const showOutbox = useCallback(() => {
-    const held = entries.current.find(e => e.state === 'held') ?? null
-    const pending = entries.current.filter(e => e.state === 'pending')
-    setOutbox({ pending: pending.length, held, waiting: held ? pending.filter(e => e.seq! > held.seq! && dependsOn(e, held)).length : 0, durable: durable.current, keptBack: legacy.current && pending.length > 0 })
-    if (pending.some(e => kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
+    if (!entries.current.length && store.current && outboxHint.get()) void store.current.all().then(left => { if (!left.length) outboxHint.clear() }).catch(() => undefined)
+    const held = entries.current.find(e => e.state === 'held' && !e.app) ?? null
+    // His changes only: the app's own writes (opening a day, the draft) are never counted to him (Jazz 8887e299).
+    const pending = entries.current.filter(e => e.state === 'pending' && !e.app)
+    const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
+    setOutbox({ pending: pending.length, held, waiting: held ? pending.filter(e => e.seq! > held.seq! && dependsOn(e, held)).length : 0, durable: durable.current, keptBack: legacy.current && pending.length > 0, offline: away && pending.length > 0, atRisk: !durable.current && (slowUnsent.current || (away && commandsPending())) })
+    if (entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
+  // After a send that didn't land, try again on its own: 2 s, 5 s, 15 s, then every 30 s, without waiting for `online`,
+  // which a dead connection never fires (Jazz 8887e299).
+  const retryStep = useRef(0), retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const drainRef = useRef<(() => Promise<void>) | undefined>(undefined)
+  const retryLater = useCallback(() => {
+    if (retryTimer.current) return
+    const delay = [2000, 5000, 15000][retryStep.current] ?? 30000
+    retryStep.current++
+    retryTimer.current = setTimeout(() => { retryTimer.current = undefined; if (entries.current.some(e => e.state === 'pending')) void drainRef.current?.() }, delay)
+  }, [])
   /** Sends one stored entry and makes its answer what `transport.run` would have returned, or an `OutboxStop`. */
   const sendEntry = useCallback(async (entry: OutboxEntry): Promise<{ workspace: Workspace; receipt: Receipt }> => {
     const s = store.current!, seq = entry.seq!
@@ -242,6 +278,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       const drop = () => { entries.current = entries.current.filter(e => e.seq !== seq) }
       switch (answer.status) {
         case 'applied': {
+          netAway.current = false; retryStep.current = 0
           await s.acknowledge(seq, entry.owner, answer.receipt.revision)
           drop()
           const r = answer.receipt.revision
@@ -250,24 +287,28 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         }
         case 'already-applied': await s.acknowledge(seq, entry.owner, undefined); drop(); throw new OutboxStop('done')
         case 'held': {
+          // The app's own write, no longer needed or no longer allowed (the day was made elsewhere): dropped, unsaid.
+          if (entry.app) { await s.remove(seq); drop(); throw new OutboxStop('done') }
           const patch = { state: 'held' as const, held: { reason: answer.reason, ...(answer.message ? { message: answer.message } : {}) } }
           await s.update(seq, patch)
           entries.current = entries.current.map(e => (e.seq === seq ? { ...e, ...patch } : e))
           throw new OutboxStop('held', answer.message ?? answer.reason)
         }
         case 'owner-mismatch': throw new OutboxStop('owner')
-        case 'offline': kept.current.add(seq); throw new OutboxStop('offline')
-        case 'failed': kept.current.add(seq); throw new OutboxStop('failed', answer.message)
+        case 'offline': kept.current.add(seq); netAway.current = true; retryLater(); throw new OutboxStop('offline')
+        case 'failed': kept.current.add(seq); retryLater(); throw new OutboxStop('failed', answer.message)
         case 'missing': {
-          // An older build is serving (a rollback): this change goes as before; stored ones wait for the outbox (§11).
+          // An older build is serving (a rollback). A stored change waits for a server that can check it (§11, Ratchet
+          // c8c0f6f9); only one he made just now, in this tab, goes as before, as it would have without the outbox.
           legacy.current = true
+          if (kept.current.has(seq)) throw new OutboxStop('offline')
           const result = await transport.run(wsRef.current!, entry.action, entry.operationId)
           await s.remove(seq); drop()
           return result
         }
       }
     } finally { inFlight.current.delete(seq); showOutbox() }
-  }, [transport, showOutbox])
+  }, [transport, showOutbox, retryLater])
 
   /** Once the owner is known (the first load, or the offline copy's), this owner's stored changes join the tab, before they're shown. */
   const takeStored = useCallback(async (owner: string | null) => {
@@ -277,7 +318,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     const mine = (await all).filter(e => e.owner === owner)
     for (const e of mine) kept.current.add(e.seq!)
     entries.current = [...mine, ...entries.current.filter(e => !mine.some(m => m.seq === e.seq))]
-  }, [])
+    // The counts the banners read (an offline open shows "1 change will be sent" from its first paint).
+    if (mine.length) showOutbox()
+  }, [showOutbox])
   const refresh = useCallback(async (triggerOperationId?: string) => {
     const operationId=newOperationId(),started=performance.now()
     debugClient('workspace.refresh.start',{operationId,triggerOperationId})
@@ -309,6 +352,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     showOutbox()
     return chain.then(() => undefined)
   }, [sendEntry, adopt, refresh, showOutbox])
+  drainRef.current = () => drain()
   // Stored changes first, then the queue opens for everything else (Jazz ef6b418a).
   const openAfterDrain = useCallback(() => {
     const open = openQueue.current
@@ -320,7 +364,18 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
 
   const reload = useCallback(() => {
     setLoadError(null)
-    void refresh().then(() => { if (!gateOpen.current) { gateOpen.current = true; openAfterDrain() } else void drain() }, async (e: unknown) => {
+    void refresh().then(async () => {
+      legacy.current = false; netAway.current = false
+      if (!gateOpen.current) {
+        gateOpen.current = true; openAfterDrain()
+        // No hint: nothing was stored, as far as this device knew. A look after the paint, in case the hint was lost
+        // (storage cleared but not IndexedDB): what it finds is shown and sent then.
+        if (store.current && !outboxHint.get() && !entries.current.length) {
+          const found = (await store.current.all().catch(() => [])).filter(e => e.owner === knownOwner)
+          if (found.length) { for (const e of found) kept.current.add(e.seq!); entries.current = [...found, ...entries.current]; outboxHint.set(); showOutbox(); void drain() }
+        }
+      } else void drain()
+    }, async (e: unknown) => {
       // No network: the last-loaded copy opens the app, read as it was; any other failure is shown as before.
       const copy = await offlineCopy.fallback(e)
       if (copy && !knownOwner) noteOwner(await offlineCopy.recallOwner())
@@ -353,6 +408,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       if (document.visibilityState !== 'visible' || running || Date.now() - last < 5000) return
       running = true; last = Date.now()
       try {
+        // Changes kept on the device go as soon as he's back, whatever the network events said (Jazz 8887e299).
+        if (entries.current.some(e => e.state === 'pending')) { netAway.current = false; void drainRef.current?.() }
         if (!(await flushAllEditors())) return
         await queue.current
         await refresh()
@@ -360,7 +417,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
-    return () => { document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible) }
+    window.addEventListener('pageshow', onVisible)
+    return () => { document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible); window.removeEventListener('pageshow', onVisible) }
   }, [refresh])
 
   useEffect(() => {
@@ -411,8 +469,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         built = typeof source === 'function' ? source(ahead) : source
         if (built && built.type !== 'save-editor') {
           const { entry } = capture(ahead, built, operationId, entries.current.some(e => e.action.type === 'undo'))
-          const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending' }
+          const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending', ...(appWrites.has(built.type) ? { app: true } : {}) }
           stored = store.current.add(full).then(seq => {
+            outboxHint.set()
             const kept = { ...full, seq }
             entries.current = [...entries.current, kept]
             if (navigator.storage?.persist && entries.current.length === 1) void navigator.storage.persist().catch(() => undefined)
@@ -428,6 +487,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         const action = built !== undefined ? built : typeof source === 'function' ? source(current) : source
         if (!action) return null
         if (!options.quiet) setSaveState('saving')
+        // §8.4: where nothing could be stored, say so only if it's still on its way after a second.
+        const risk = !entry && !durable.current ? setTimeout(() => { slowUnsent.current = true; showOutbox() }, 1000) : undefined
+        void job.finally(() => { if (risk) { clearTimeout(risk); if (commandsOut <= 1) { slowUnsent.current = false; showOutbox() } } }).catch(() => undefined)
         const started=performance.now()
         const fields={operationId,command:action.type,beforeRevision:current.revision,...('pageId' in action?{pageId:action.pageId}:{}),...('taskId' in action?{taskId:action.taskId}:{})}
         debugClient('command.request',fields)
@@ -502,11 +564,18 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   // The guard reads the ref, so a second tap before React re-renders is still ignored.
   const ticksRef = useRef<Ticks>(ticks)
   const tickToken = useRef(0)
+  const lastTap = useRef(new Map<string, number>())
   const updateTicks = useCallback((next: (ticks: Ticks) => Ticks) => { ticksRef.current = next(ticksRef.current); setTicks(ticksRef.current) }, [])
   /** Sends a tick through the B72 lifecycle: shown at once, other taps ignored while it saves, then the row's hold. */
   const runTick = useCallback((action: Extract<Action, { type: 'task-status' }> & { status: TickStatus }, notice?: NoticeArg, operationId?: string) => {
     const { taskId } = action
-    if (isSaving(ticksRef.current, taskId)) return
+    // A second tap within 500 ms is the same tap (B72: his real double taps, 282b1ba1). After that, with the outbox, a tap
+    // during a tick's send is its own change, built on what the screen shows (B98 item 2, Bumblebee d538310b); without
+    // one, it waits for the send as before.
+    const now = Date.now(), last = lastTap.current.get(taskId)
+    if (last !== undefined && now - last < doubleTapMs) return
+    if (isSaving(ticksRef.current, taskId) && !(store.current && durable.current && !legacy.current)) return
+    lastTap.current.set(taskId, now)
     const tick: Tick = { to: action.status, phase: 'saving', token: ++tickToken.current }
     updateTicks(t => withTick(t, taskId, tick))
     void run(action, notice, operationId).then(receipt => {
@@ -517,10 +586,12 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     })
   }, [run, updateTicks])
   const toggleTask = useCallback((taskId: string, notice: (to: Task['status'], r: Receipt) => NoticeSpec) => {
-    const task = wsRef.current?.tasks.find(t => t.id === taskId)
-    const to = task && tapTarget(ticksRef.current, task)
+    // B98 (Bumblebee ec4ab466): a tick kept on the device and shown is what the next tap undoes, so it queues the reverse.
+    // Built on what the screen shows: every change of this tab still on its way, in flight or kept (B98 item 2).
+    const task = (predicted() ?? wsRef.current)?.tasks.find(t => t.id === taskId)
+    const to = task && (entries.current.some(e => e.state === 'pending' && (e.action as { taskId?: string }).taskId === taskId) ? (task.status === 'done' ? 'open' : 'done') : tapTarget(ticksRef.current, task))
     if (to) runTick({ type: 'task-status', taskId, status: to, today: todayIso() }, r => notice(to, r))
-  }, [runTick])
+  }, [runTick, predicted])
 
   const retry = useCallback(() => {
     if (!lastFailed) return
@@ -557,6 +628,12 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     entries.current = entries.current.map(e => (e.seq === held.seq ? { ...e, ...patch, held: undefined } : e))
     void drain()
   }, [drain])
+  // The browser's own word on the network changes what the banners say (§8.2).
+  useEffect(() => {
+    const changed = () => showOutbox()
+    window.addEventListener('offline', changed); window.addEventListener('online', changed)
+    return () => { window.removeEventListener('offline', changed); window.removeEventListener('online', changed) }
+  }, [showOutbox])
   // Only where nothing could be stored is a change at risk on leaving (Lead 87eca3cf; §8.4).
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => { if (!durable.current && commandsPending()) e.preventDefault() }

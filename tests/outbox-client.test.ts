@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { harness, today, todo, dayId, bullet, text } from './v2-helpers.ts'
 import { capture, dependsOn, labelFor, memoryOutboxStore, referencedIds, type OutboxEntry } from '../src/components/outbox.ts'
 import type { Action } from '../src/domain/types.ts'
+import { applyCommand } from '../src/domain/workspace.ts'
 
 const setup = () => {
   const h = harness()
@@ -53,4 +54,15 @@ test('acknowledging passes the revision to later entries of the same owner only'
 test('references are every string the action names, not its type', () => {
   assert.deepEqual(referencedIds({ type: 'add-row', databaseId: 'db1', pageId: 'r1', title: 'Dune', values: { st: 'a' }, at: '2026-11-14T00:00:00.000Z' } as unknown as Action).sort(), ['Dune', 'a', 'db1', 'r1', '2026-11-14T00:00:00.000Z'].sort())
   assert.equal(labelFor({ type: 'run-button', pageId: 'nowhere' } as Action, setup().h.ws), 'ran a button')
+})
+
+test('a new to-do gets the same id in the prediction and on the server, so a later change naming it means it (Ratchet c8c0f6f9)', () => {
+  const { h } = setup()
+  const action = { type: 'add-task', pageId: dayId(today), title: 'Buy milk' } as Action
+  const { predicted } = capture(h.ws, action, 'op-add', false)
+  const server = applyCommand(structuredClone(h.ws), { operationId: 'op-add', expectedRevision: h.ws.revision, action }).workspace
+  const id = (ws: typeof server) => ws.tasks.find(t => t.title === 'Buy milk')!.id
+  assert.equal(id(predicted!), id(server))
+  const other = applyCommand(structuredClone(h.ws), { operationId: 'op-other', expectedRevision: h.ws.revision, action }).workspace
+  assert.notEqual(id(other), id(server), 'another operation makes another id')
 })

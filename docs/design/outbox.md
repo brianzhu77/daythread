@@ -427,3 +427,23 @@ reported by Playwright as a page error even when caught; Roadbuster dc9541ce) no
 - Recovery actions (§8.3): **Keep mine** for a conflict (it applies his change on the latest data, by his choice) and
   **Discard**, plus Copy when the change carries text. There's no separate Keep button: leaving the banner up is
   keep, and the banner can't be dismissed.
+
+## 13. As built (feat/outbox)
+
+Where the build differs from, or adds to, the contract above:
+- **Ids** (§4): instead of commands carrying their new ids, every id the domain makes inside `applyCommand` comes from
+  the operation id (`src/domain/ids.ts`), so the prediction and the server make the same ids (Ratchet c8c0f6f9).
+- **Predicted writes** (§6) are diffed on the domain's own objects by id (`predictedWrites`), not the server's stored
+  rows: that code added ~130 KB to the page (R1-18). The server's row check still uses `planWrites`.
+- **A server without the outbox** is recognised by its answer for an unknown server function ("Server function info not
+  found"); only a change made just then in the tab goes through `runCommand`.
+- **A failed send** (network, 5xx) keeps the change, shown as made, under the usual Retry; a refusal goes to the held
+  banner (B98 item 3, Bumblebee 6233888d). B72's `b72.mjs` checks 3 and 5 changed accordingly.
+- **Taps**: two taps on one to-do within 500 ms are one tap; a later tap on a pending tick queues the reverse (B98 item 2).
+- **The store is read before the first paint only when a hint in localStorage says a change was stored** (R1-18).
+- **Also found**: a stored change whose base is above the store's revision (data restored from a backup) is held; the
+  first replay after a rollback reads the gap from the locked workspace (Ratchet).
+
+Evidence: `tests/outbox-contract.ts` (both stores), `tests/outbox-replay.test.ts`, `tests/outbox-client.test.ts`,
+`tests/evidence/outbox/outbox.mjs` (18 cases), `rollback.mjs` (rollback and forward under an open tab),
+`rehearse.ts` (the migration on a backup copy).
