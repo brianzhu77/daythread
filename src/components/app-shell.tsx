@@ -1,4 +1,5 @@
 import type { OutboxEntry } from './outbox'
+import type { Workspace } from '../domain/types'
 import { dueRepeats } from '../domain/repeats'
 import { Toast } from '@heroui/react'
 import { toIso, todayIso } from './dates'
@@ -189,6 +190,13 @@ function SampleBanner() {
         Offline · showing what was last loaded{willSend}
       </p>
     )
+  // Gone offline mid-session with changes kept (Jazz 3c65a099): said even though the load didn't fail.
+  if (outbox.offline)
+    return (
+      <p className="banner offline" role="status">
+        Offline{willSend}
+      </p>
+    )
   // §8.2a: a server without the outbox (a rollback) can't check them; they wait, and say so.
   if (outbox.keptBack)
     return (
@@ -225,27 +233,48 @@ function typedText(action: OutboxEntry['action']): string | null {
   return parts.length ? parts.join('\n') : null
 }
 
+/** Where the item a held change names lives: its page, or the page holding the to-do (Jazz §8.3 "Show"). */
+function placeOf(action: OutboxEntry['action'], ws: Workspace | null): string | null {
+  const a = action as { taskId?: string; pageId?: string; rowId?: string }
+  const task = a.taskId ? ws?.tasks.find(t => t.id === a.taskId) : undefined
+  const id = task?.sourcePageId ?? a.rowId ?? a.pageId
+  const page = id ? ws?.pages.find(p => p.id === id) : undefined
+  if (!page) return null
+  return page.date ? `/day/${page.date}` : `/pages?page=${encodeURIComponent(page.id)}`
+}
+
 /** B98 (outbox.md §8.3): a change that didn't stick, until he chooses. Never dismissable; the oldest first. */
 function HeldBanner() {
-  const { outbox, discardHeld, keepMine } = useWorkspace()
+  const { outbox, discardHeld, keepMine, workspace } = useWorkspace()
+  const [copied, setCopied] = useState(false)
   const held = outbox.held!
   const reason = held.held?.reason, label = held.label
+  const quoted = /"[^"]*"/.exec(label)?.[0] ?? null
   const waiting = outbox.waiting ? ` · ${outbox.waiting === 1 ? '1 later change' : `${outbox.waiting} later changes`} waiting` : ''
   const canKeep = reason === 'conflict' || reason === 'changed-since' || reason === 'maybe-applied'
-  const text = typedText(held.action)
+  const text = typedText(held.action), href = placeOf(held.action, workspace)
+  // The item's name, as a link to where it is (§8.3); the rest of the label stays plain.
+  const named = (words: string) => {
+    if (!quoted || !href || !words.includes(quoted)) return words
+    const at = words.indexOf(quoted)
+    return <>{words.slice(0, at)}<a className="app-link" href={href}>{quoted}</a>{words.slice(at + quoted.length)}</>
+  }
   const words =
     held.action.type === 'undo' || /cannot undo/i.test(held.held?.message ?? '') ? 'Can’t undo — changed since'
       : reason === 'conflict' ? `Not saved — ${label} was changed elsewhere`
         : reason === 'changed-since' ? `Not saved — ${label} · changed since`
           : reason === 'maybe-applied' ? `Not saved? — ${label} may already be in`
-            : reason === 'gone' ? `Not saved — ${label.replace(/^\S+ /, '')} was deleted elsewhere`
+            : reason === 'gone' ? `Not saved — ${quoted ?? 'it'} was deleted elsewhere`
               : `Not saved — can’t do this now: ${label}`
+  const copy = () => { void navigator.clipboard?.writeText(text!).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }) }
   return (
     <p className="banner save-failed" role="alert">
-      {words}{waiting} ·{' '}
-      {canKeep && <><button type="button" className="app-link" onClick={() => void keepMine()}>Keep mine</button>{' · '}</>}
-      {text && <><button type="button" className="app-link" onClick={() => void navigator.clipboard?.writeText(text)}>Copy</button>{' · '}</>}
-      <button type="button" className="app-link" onClick={() => void discardHeld()}>Discard</button>
+      <span>{named(words)}{waiting}</span>
+      <span>
+        {canKeep && <><button type="button" className="app-link" onClick={() => void keepMine()}>Keep mine</button>{' · '}</>}
+        {text && <><button type="button" className="app-link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>{' · '}</>}
+        <button type="button" className="app-link" onClick={() => void discardHeld()}>Discard</button>
+      </span>
     </p>
   )
 }
@@ -258,7 +287,7 @@ function SaveIndicator() {
   const { saveState, saveError, failedAction, retry, outbox } = useWorkspace()
   if (outbox.held) return <HeldBanner />
   // §8.4: only where nothing could be stored, and only while something is on its way.
-  if (!outbox.durable && saveState === 'saving')
+  if (outbox.atRisk)
     return <p className="banner save-failed" role="status">Not saved on this device · keep this open until it’s sent</p>
   if (saveState !== 'failed' || failedAction === 'save-editor') return null
   return (

@@ -107,8 +107,14 @@ class OutboxStop extends Error {
   constructor(kind: OutboxStop['kind'], detail?: string) { super(`Outbox: ${kind}`); this.name = 'OutboxStop'; this.kind = kind; if (detail !== undefined) this.detail = detail }
 }
 /** What the banners read (outbox.md §8): changes kept and not yet sent, the oldest held one, what waits on it. */
-export interface OutboxView { pending: number; held: OutboxEntry | null; waiting: number; durable: boolean; keptBack: boolean }
-const emptyOutbox: OutboxView = { pending: 0, held: null, waiting: 0, durable: true, keptBack: false }
+export interface OutboxView {
+  pending: number; held: OutboxEntry | null; waiting: number; durable: boolean; keptBack: boolean
+  /** A change couldn't be sent for lack of network, or the browser says it's offline (§8.2). */
+  offline: boolean
+  /** Not durable and a change still unsent after a second, or after a failed send (§8.4, Jazz 3c65a099): never a flash on every change. */
+  atRisk: boolean
+}
+const emptyOutbox: OutboxView = { pending: 0, held: null, waiting: 0, durable: true, keptBack: false, offline: false, atRisk: false }
 
 /** Commands queued or being sent in this tab, across providers: a reload waits for none (new-build.ts). */
 let commandsOut = 0
@@ -197,6 +203,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   /** Entries shown as made: stored before this load, or left after a send that didn't land. */
   const kept = useRef(new Set<number>())
   const durable = useRef(true), legacy = useRef(false), inFlight = useRef(new Set<number>())
+  /** The last send failed for lack of network; cleared by the next one that gets through. */
+  const netAway = useRef(false), slowUnsent = useRef(false)
   const [outbox, setOutbox] = useState<OutboxView>(emptyOutbox)
   /** The workspace with every pending change applied, in order (§4): what changes are built on, and what's shown meanwhile. */
   /**
@@ -226,7 +234,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const showOutbox = useCallback(() => {
     const held = entries.current.find(e => e.state === 'held') ?? null
     const pending = entries.current.filter(e => e.state === 'pending')
-    setOutbox({ pending: pending.length, held, waiting: held ? pending.filter(e => e.seq! > held.seq! && dependsOn(e, held)).length : 0, durable: durable.current, keptBack: legacy.current && pending.length > 0 })
+    const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
+    setOutbox({ pending: pending.length, held, waiting: held ? pending.filter(e => e.seq! > held.seq! && dependsOn(e, held)).length : 0, durable: durable.current, keptBack: legacy.current && pending.length > 0, offline: away && pending.length > 0, atRisk: !durable.current && (slowUnsent.current || (away && commandsPending())) })
     if (pending.some(e => kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
   /** Sends one stored entry and makes its answer what `transport.run` would have returned, or an `OutboxStop`. */
@@ -242,6 +251,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       const drop = () => { entries.current = entries.current.filter(e => e.seq !== seq) }
       switch (answer.status) {
         case 'applied': {
+          netAway.current = false
           await s.acknowledge(seq, entry.owner, answer.receipt.revision)
           drop()
           const r = answer.receipt.revision
@@ -256,7 +266,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           throw new OutboxStop('held', answer.message ?? answer.reason)
         }
         case 'owner-mismatch': throw new OutboxStop('owner')
-        case 'offline': kept.current.add(seq); throw new OutboxStop('offline')
+        case 'offline': kept.current.add(seq); netAway.current = true; throw new OutboxStop('offline')
         case 'failed': kept.current.add(seq); throw new OutboxStop('failed', answer.message)
         case 'missing': {
           // An older build is serving (a rollback). A stored change waits for a server that can check it (§11, Ratchet
@@ -430,6 +440,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         const action = built !== undefined ? built : typeof source === 'function' ? source(current) : source
         if (!action) return null
         if (!options.quiet) setSaveState('saving')
+        // §8.4: where nothing could be stored, say so only if it's still on its way after a second.
+        const risk = !entry && !durable.current ? setTimeout(() => { slowUnsent.current = true; showOutbox() }, 1000) : undefined
+        void job.finally(() => { if (risk) { clearTimeout(risk); if (commandsOut <= 1) { slowUnsent.current = false; showOutbox() } } }).catch(() => undefined)
         const started=performance.now()
         const fields={operationId,command:action.type,beforeRevision:current.revision,...('pageId' in action?{pageId:action.pageId}:{}),...('taskId' in action?{taskId:action.taskId}:{})}
         debugClient('command.request',fields)
@@ -519,10 +532,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     })
   }, [run, updateTicks])
   const toggleTask = useCallback((taskId: string, notice: (to: Task['status'], r: Receipt) => NoticeSpec) => {
-    const task = wsRef.current?.tasks.find(t => t.id === taskId)
+    // B98 (Bumblebee ec4ab466): a tick kept on the device and shown is what the next tap undoes, so it queues the reverse.
+    const task = (predicted(true) ?? wsRef.current)?.tasks.find(t => t.id === taskId)
     const to = task && tapTarget(ticksRef.current, task)
     if (to) runTick({ type: 'task-status', taskId, status: to, today: todayIso() }, r => notice(to, r))
-  }, [runTick])
+  }, [runTick, predicted])
 
   const retry = useCallback(() => {
     if (!lastFailed) return
@@ -559,6 +573,12 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     entries.current = entries.current.map(e => (e.seq === held.seq ? { ...e, ...patch, held: undefined } : e))
     void drain()
   }, [drain])
+  // The browser's own word on the network changes what the banners say (§8.2).
+  useEffect(() => {
+    const changed = () => showOutbox()
+    window.addEventListener('offline', changed); window.addEventListener('online', changed)
+    return () => { window.removeEventListener('offline', changed); window.removeEventListener('online', changed) }
+  }, [showOutbox])
   // Only where nothing could be stored is a change at risk on leaving (Lead 87eca3cf; §8.4).
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => { if (!durable.current && commandsPending()) e.preventDefault() }

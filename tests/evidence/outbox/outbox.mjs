@@ -106,6 +106,23 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 12 a tick and a line on the same page, reloaded at once: both kept, no notice`, statusOf('Water the plants') === 'done' && line && banner === 0, `status ${statusOf('Water the plants')}, line ${line}, banner ${banner}`)
     await context.close()
   }
+  // 6. Offline: a tick and a second tap to undo it are both kept, said in the offline line, and sent in order once the
+  //    network is back (Bumblebee ec4ab466, Jazz 3c65a099).
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    const base0 = stored().revision
+    await page.route(OUTBOX, route => route.abort('internetdisconnected'))
+    const box = page.getByRole('checkbox', { name: 'Complete Water the plants' })
+    await box.click(); await wait(600)
+    const line = await page.locator('.banner.offline').innerText().catch(() => '')
+    const shownDone = await box.isChecked().catch(() => null)
+    await box.click(); await wait(600)
+    const shownOpen = await box.isChecked().catch(() => null)
+    await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(1500)
+    ok(`${tag} 6 offline: a tick and its undo are kept and said ("${line.trim()}"), then sent in order`, /Offline · 1 change will be sent/.test(line) && shownDone === true && shownOpen === false && statusOf('Water the plants') === 'open' && stored().revision === base0 + 2, `shown ${shownDone}→${shownOpen}, status ${statusOf('Water the plants')}, revision ${base0} → ${stored().revision}`)
+    await context.close()
+  }
   // 13. Another device edits something else meanwhile: the tick is kept, with no notice.
   {
     reseed(); const { context, page } = await fresh()
@@ -129,7 +146,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const reopened = statusOf('Water the plants')
     const again = await context.newPage(); await openTasks(again); await wait(1200)
     const text = await again.locator('.banner.save-failed').innerText().catch(() => '')
-    ok(`${tag} 14 an old "done" for a to-do reopened elsewhere is held and named, not applied`, reopened === 'open' && statusOf('Water the plants') === 'open' && /Not saved — ticked "Water the plants" was changed elsewhere/.test(text) && /Keep mine/.test(text) && /Discard/.test(text), `${reopened} → ${statusOf('Water the plants')} · "${text.replace(/\s+/g, ' ')}"`)
+    const link = await again.locator('.banner.save-failed a', { hasText: '"Water the plants"' }).getAttribute('href').catch(() => null)
+    ok(`${tag} 14 an old "done" for a to-do reopened elsewhere is held and named (linked to ${link}), not applied`, Boolean(link) && reopened === 'open' && statusOf('Water the plants') === 'open' && /Not saved — ticked "Water the plants" was changed elsewhere/.test(text) && /Keep mine/.test(text) && /Discard/.test(text), `${reopened} → ${statusOf('Water the plants')} · "${text.replace(/\s+/g, ' ')}"`)
     await again.getByRole('button', { name: 'Discard' }).click(); await settle(again)
     ok(`${tag} 14b Discard drops it; the banner goes; the latest is shown`, await again.locator('.banner.save-failed').count() === 0 && statusOf('Water the plants') === 'open')
     await context.close()
@@ -139,8 +157,10 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     reseed(); const { context, page } = await fresh()
     // As in a private window or a full disk: the store is there but won't open.
     await page.addInitScript(() => { IDBFactory.prototype.open = function () { throw new DOMException('Storage unavailable', 'InvalidStateError') } })
-    await openTasks(page); await tick(page, 'Call the bank'); await settle(page); await wait(500)
-    ok(`${tag} 10 with no IndexedDB the tick is sent as before`, statusOf('Call the bank') === 'done')
+    await openTasks(page); await tick(page, 'Call the bank'); await wait(250)
+    const flash = await page.locator('.banner.save-failed').count()
+    await settle(page); await wait(500)
+    ok(`${tag} 10 with no IndexedDB the tick is sent as before, with no "not saved" flash`, statusOf('Call the bank') === 'done' && flash === 0, `banner during the send ${flash}`)
     await context.close()
   }
   // 11. Two tabs open on the next load: the change is applied once.
