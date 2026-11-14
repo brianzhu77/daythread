@@ -84,7 +84,7 @@ export const searchFrom = (q: string): number => (cjk.test(q) ? 2 : 3)
 export const searchQuery = (q: string): string => text(q.normalize('NFC'))
 /**
  * Whether these words can be searched at all: past 256 characters they're kept whole but never searched, rather than
- * searching a cut-off part that may name another place (Ratchet 086c93e0). The editor says "Too long to search".
+ * searching a cut-off part that may name another place (Ratchet 086c93e0): no Search row, and the keep row stays.
  */
 export const searchable = (q: string): boolean => { const n = [...searchQuery(q)].length; return n > 0 && n <= placeLimits.query }
 /** Whether words this long search as he types; shorter ones wait for the Search row or Enter. */

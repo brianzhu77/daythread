@@ -25,8 +25,9 @@ interface PlaceValue {
 
 - **His words are never cut** (Ratchet c504bd98 and 086c93e0, Bumblebee fba653ee). A name holds as much as a Text
   value can, 10,000 characters, so Text to Place reads every value whole, and the keep row saves whatever the field
-  holds. Only the search is shorter: up to 256 characters. Past that the Search row reads "Too long to search", and
-  nothing is sent. A cut-off part isn't searched, since it might name another place.
+  holds. Only the search is shorter: up to 256 characters. Past that there's no Search row and no suggestions, and
+  nothing is sent, while the keep row stays (G8-1, main 29b381ab). A cut-off part isn't searched, since it might name
+  another place.
 - **Name only is a valid value** (a kept "golden dumpling", or Text changed to Place). A pin is `lat` and `lon` together;
   one without the other is refused. Coordinates are stored as Photon gives them, rounded to 7 decimals.
 - `storedValue` validates and trims. Anything else (an empty name, a bad pair, an over-long string, extra fields) is
