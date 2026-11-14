@@ -443,10 +443,16 @@ Where the build differs from, or adds to, the contract above:
 - **The store is read before the first paint only when a hint in localStorage says a change was stored** (R1-18).
 - **Also found**: a stored change whose base is above the store's revision (data restored from a backup) is held; the
   first replay after a rollback reads the gap from the locked workspace (Ratchet).
-- **Tabs** (§7): under the owner's Web Lock a tab reads the owner's stored queue as it is (other tabs' additions,
-  acknowledgements, holds and discards included), judges dependencies there, and sends every earlier eligible entry by
-  `seq` before its own, so a change left by a closed tab is sent by any open one (Ratchet, Lead 543a65f9).
+- **One selection, one drain** (§6, §7; Lead 150bd86f): `schedule(queue)` in `src/components/outbox.ts` is the only place
+  that decides what may go. It splits one owner's stored queue into held, waiting (with the held changes each waits
+  on, through other waiting ones) and sendable, oldest first. `drainQueue` sends under the owner's Web Lock: it reads
+  the stored queue, sends the first sendable change, records the answer, then reads and splits again, until nothing is
+  sendable or a passing failure (offline, 5xx, an older build) stops it with that change still pending. Open, a return
+  to the tab, the retry timer, Discard, Keep mine and a new change all drain; a new change takes its own answer from
+  whichever drain of its tab sent it. Which tab stored a change, or whether that tab is still open, plays no part. The
+  banner's counts come from the same split (Jazz b6c71626). `tests/outbox-schedule.test.ts` checks both against a
+  reference model over seeded random runs across tabs.
 
 Evidence: `tests/outbox-contract.ts` (both stores), `tests/outbox-replay.test.ts`, `tests/outbox-client.test.ts`,
-`tests/evidence/outbox/outbox.mjs` (31 cases), `rollback.mjs` (rollback and forward under an open tab),
+`tests/outbox-schedule.test.ts`, `tests/evidence/outbox/outbox.mjs` (33 cases), `rollback.mjs` (rollback and forward under an open tab),
 `rehearse.ts` (the migration on a backup copy).
