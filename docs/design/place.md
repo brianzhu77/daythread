@@ -1,6 +1,6 @@
 # Place and Map: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **step 1 approved by the Lead with conditions (ad34ae2c); short queries and current location decided (b41107d1).** Acceptance is D15 in `docs/plan/first-version-checklist.md`, which wins where this doc is less precise. Look: Jazz 74fb06f7 and 2b3eb494. Boundary: Ratchet's `docs/reviews/place-boundary-ratchet.md` (`review/ratchet-place` 85d18064). Not built.
 - Asked by the Lead (3f046122), who listed Place. Map is in the same doc because a Place property mostly exists to feed it, and `databases.md` §14 lists both as Later. Nothing is cut for lack of evidence, and his use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's help page on [maps](https://www.notion.com/help/maps), which I read but haven't used. It doesn't cover clusters, a phone, or which search provider it uses. His use: no databases at the last read (Nov 2), so the examples are illustrations.
 
@@ -12,12 +12,12 @@ Both need outside services we don't have: **an address search and map images.** 
 
 ## 2. Place
 
-- **Value:** a name, an address and coordinates. Reads as the name in a cell, and a tap opens the row's pin in Apple Maps at 390, or the provider's map at 1280.
-- **Entering one:** a search field with suggestions as he types (a sheet at 390, a popover at 1280), plus **Use current location**.
-- **Never lost:** if search fails, or nothing matches, Enter keeps what he typed as a name with no pin. Such a value sits in "No place" on a map (§3).
+- **Value:** a name, an address and coordinates. Reads as the name in a cell, and a tap on the name opens the pin in Apple Maps on a phone and in the Home Screen app, or OpenStreetMap's own page at 1280, since Photon has no map page (Jazz 74fb06f7). A tap elsewhere in the cell edits.
+- **Entering one:** a search field with suggestions as he types (a sheet at 390, a popover at 1280), plus **Use current location**. Suggestions start at 2 characters when the query has Chinese, Japanese or Korean in it and at 3 otherwise; below that, a **Search "…"** row runs it on Enter (Lead b41107d1).
+- **Never lost:** if search fails, or nothing matches, the **Keep "…" without a place** row keeps what he typed as a name with no pin. Enter never keeps silently (Jazz 74fb06f7). Such a value sits in "No place" on a map (§3).
 - **Filter and sort,** as Notion: text in the name or address, and alphabetical. No distance.
-- **Changing type:** Text to Place keeps the words as names with no pin, and says how many, then offers "Find places" for those, one action with Undo. Addresses are never searched in bulk without asking, since that sends them to the provider. Place to Text gives the name and address. Changing back restores it (§6.2).
-- **Current location:** asks the browser's permission only on that tap. Denied says "Location is off", and search still works. To be tested in the Home Screen app, where permission can behave differently.
+- **Changing type:** Text to Place keeps the words as names with no pin, and says how many, and each gets its pin one at a time from the search. **No bulk "Find places" in step 1** (Ratchet: Photon's maintainers send batch lookups to a private instance). Place to Text gives the name and address. Changing back restores it (§6.2).
+- **Current location:** asks the browser's permission only on that tap. It stores his coordinates with the name in the field, or "Location on Nov 14" when empty, and looks up no address, so his location never goes to Photon (Lead b41107d1, Jazz 2b3eb494). Denied says "Location is off", and search still works. To be tested in the Home Screen app, where permission can behave differently.
 - **Copying:** a value pastes as text into a cell of another type. CSV export writes name, address and coordinates.
 
 ## 3. Map
@@ -45,7 +45,7 @@ Both need outside services we don't have: **an address search and map images.** 
 
 | | A. Open data | B. Mapbox |
 | --- | --- | --- |
-| Map images | OpenFreeMap with MapLibre: no key, no limit stated, donation-funded, best effort with no guarantee (from a third-party review; I didn't find its own terms) | Reported 50,000 map loads a month free |
+| Map images | OpenFreeMap with MapLibre: no key, no limit stated, donation-funded, best effort with no guarantee. Its own [terms](https://openfreemap.org/tos/) and [privacy](https://openfreemap.org/privacy/) pages now exist and allow embedded maps (Ratchet's review) | Reported 50,000 map loads a month free |
 | Search | Photon (OSM data). Nominatim's policy is reported to ban suggest-as-you-type, so it's out | Reported free tier, but sources disagree: 10,000 or 100,000 searches a month |
 | Cost for one person | None | None expected within the free tier. Needs an account, probably a card, and a key |
 | If it goes away | Pins are stored, so nothing is lost, and we'd switch | The same |
