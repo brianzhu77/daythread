@@ -247,6 +247,24 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 6c no network event: sent by the retry in ${byRetry} ms; on a return to the tab in ${onReturn} ms; no reload`, byRetry !== null && byRetry < 8000 && onReturn !== null && onReturn < 3000)
     await context.close()
   }
+  // 6e. Hours later, as it were: the retry has backed off to its 30 s step; the network comes back just after a retry
+  //     failed; a return to the tab sends it within about 2 s, long before the next retry (Lead 067eb554).
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    let attempts = 0
+    await page.route(OUTBOX, route => { attempts++; return route.abort('internetdisconnected') })
+    await page.getByRole('checkbox', { name: 'Complete Water the plants' }).click()
+    // The send, then retries after 2 s, 5 s and 15 s: the fourth attempt leaves the next one 30 s away.
+    const started = Date.now(); while (attempts < 4 && Date.now() - started < 40000) await wait(200)
+    await wait(300); await page.unrouteAll({ behavior: 'ignoreErrors' })
+    const before = statusOf('Water the plants')
+    const back = Date.now(); await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
+    while (statusOf('Water the plants') !== 'done' && Date.now() - back < 5000) await wait(100)
+    const took = statusOf('Water the plants') === 'done' ? Date.now() - back : null
+    ok(`${tag} 6e back after the retry reached 30 s: a return to the tab sends it in ${took} ms (${attempts} failed attempts first)`, attempts === 4 && before === 'open' && took !== null && took < 2000)
+    await context.close()
+  }
   // 6d. An offline open on a new day: the app's own "make today" is kept but never counted or shown; the day made
   //     elsewhere meanwhile, it's dropped unsaid (Jazz 8887e299, Lead b19f29b0).
   {
