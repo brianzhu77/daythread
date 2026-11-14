@@ -123,7 +123,7 @@ writing it; the PR lists any it finds.
 ### Cost of the row check (Lead ace3f9fa)
 
 - **Postgres:** an additive, nullable `revision integer` column on `pages`, `tasks`, `deleted_tasks`,
-  `comment_threads`, `task_links`, and `settings_revision integer` on `workspaces`, set to the new revision on every row
+  `comment_threads`, `task_links`, and `settings_revision`, `rows_tracked_through` and `rows_untracked_until` (integers) on `workspaces` (§11), set to the new revision on every row
   the command writes (`planWrites` already lists them). No backfill: null means "not written since the column came",
   which is older than any entry the outbox can hold (the outbox ships with it), so it reads as 0. Migration runs through
   the existing runner; backup first, as for every schema change. Rows a command writes are already being upserted, so
