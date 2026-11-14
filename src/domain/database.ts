@@ -1,6 +1,7 @@
 // Databases (docs/design/databases-model.md): a database is a page with `database` (its properties and views); a row
 // is a child page with `values`. Values are read through their property, never trusted as stored, so a schema change
 // rewrites only the database page. Pure: the domain's commands and the browser's views share it.
+import { newId } from './ids.ts'
 import { chartForms, chartKinds, type ChartSettings } from './chart.ts'
 import { rowTemplateTarget } from "./day-template.ts";
 import { formulaProblem, rollupProblem, worldOf } from "./formula.ts";
@@ -275,7 +276,6 @@ export function databaseRows(ws: Workspace, databaseId: string): Page[] {
 }
 
 const isTrashed = (p: Page): boolean => Boolean(p.trashedAt);
-const newId = (): string => crypto.randomUUID();
 export function defaultView(name = "Table"): View {
   return { id: newId(), name, layout: "table", columns: [], sort: [], filter: [] };
 }

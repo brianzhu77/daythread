@@ -37,6 +37,21 @@ export const runCommand = createServerFn({ method: "POST" })
   });
 
 /**
+ * B98 (docs/design/outbox.md §5, §11): a change from the browser's outbox. Its own server function, so an older build
+ * (which doesn't have it) executes nothing; `runCommand` stays for tabs of the build before. Every answer is an outcome,
+ * not a throw, except a failure of the server itself, which the browser retries later.
+ */
+export const runOutboxCommand = createServerFn({ method: "POST" })
+  .validator((input: unknown) => commandSchema.extend({
+    expectedOwner: z.string().min(1).max(200),
+    basis: z.object({ baseRevision: z.number().int().nonnegative(), ownRevisions: z.array(z.number().int().nonnegative()).max(10_000), readsBeyond: z.boolean() }),
+  }).parse(input))
+  .handler(async ({ data }) => {
+    const [{ getRepository }, { currentOwner }, { runOutbox }] = await Promise.all([import("./storage"), import("./auth/request-owner"), import("./outbox-command")]);
+    return runOutbox(getRepository(), currentOwner() ?? "local", data);
+  });
+
+/**
  * B77: a draft for a day page, from the model when this account has it on, else the app's fallback only. The model
  * is on when the server has OPENROUTER_API_KEY and OPENROUTER_MODEL and, with sign-in on, the account's email is in
  * DAYTHREAD_DRAFT_EMAILS (off by default for invited accounts, Bumblebee/Lead). Logs carry counts and timings only,

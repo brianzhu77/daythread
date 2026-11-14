@@ -1,3 +1,5 @@
+import type { OutboxEntry } from './outbox'
+import type { Workspace } from '../domain/types'
 import { dueRepeats } from '../domain/repeats'
 import { Toast } from '@heroui/react'
 import { toIso, todayIso } from './dates'
@@ -179,13 +181,30 @@ function useServiceWorker() {
 }
 
 function SampleBanner() {
-  const { workspace, loadError, offline, reload, addSampleData } = useWorkspace()
+  const { workspace, loadError, offline, reload, addSampleData, outbox } = useWorkspace()
+  // B98 (outbox.md §8.2): what's kept on this device and will be sent, said where the offline line is.
+  const willSend = outbox.pending ? ` · ${outbox.pending === 1 ? '1 change will be sent' : `${outbox.pending} changes will be sent`}` : ''
   if (offline)
     return (
       <p className="banner offline" role="status">
-        Offline · showing what was last loaded
+        Offline · showing what was last loaded{willSend}
       </p>
     )
+  // §8.2a: a server without the outbox (a rollback) can't check them; they wait, and say so.
+  if (outbox.keptBack)
+    return (
+      <p className="banner offline" role="status">
+        Not sent yet{willSend}
+      </p>
+    )
+  // Gone offline mid-session with changes kept (Jazz 3c65a099): said even though the load didn't fail.
+  if (outbox.offline)
+    return (
+      <p className="banner offline" role="status">
+        Offline{willSend}
+      </p>
+    )
+
   if (loadError)
     return (
       <p className="banner error" role="alert">
@@ -208,12 +227,69 @@ function SampleBanner() {
   )
 }
 
+/** Text a held change carries, so Discard never loses what he typed (Jazz §8.3). */
+function typedText(action: OutboxEntry['action']): string | null {
+  const a = action as { title?: unknown; values?: Record<string, unknown>; body?: unknown; text?: unknown }
+  const parts = [a.title, a.body, a.text, ...Object.values(a.values ?? {})].filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+  return parts.length ? parts.join('\n') : null
+}
+
+/** Where the item a held change names lives: its page, or the page holding the to-do (Jazz §8.3 "Show"). */
+function placeOf(action: OutboxEntry['action'], ws: Workspace | null): string | null {
+  const a = action as { taskId?: string; pageId?: string; rowId?: string }
+  const task = a.taskId ? ws?.tasks.find(t => t.id === a.taskId) : undefined
+  const id = task?.sourcePageId ?? a.rowId ?? a.pageId
+  const page = id ? ws?.pages.find(p => p.id === id) : undefined
+  if (!page) return null
+  return page.date ? `/day/${page.date}` : `/pages?page=${encodeURIComponent(page.id)}`
+}
+
+/** B98 (outbox.md §8.3): a change that didn't stick, until he chooses. Never dismissable; the oldest first. */
+function HeldBanner() {
+  const { outbox, discardHeld, keepMine, workspace } = useWorkspace()
+  const [copied, setCopied] = useState(false)
+  const held = outbox.held!
+  const reason = held.held?.reason, label = held.label
+  const quoted = /"[^"]*"/.exec(label)?.[0] ?? null
+  const waiting = outbox.waiting ? ` · ${outbox.waiting === 1 ? '1 later change' : `${outbox.waiting} later changes`} waiting` : ''
+  const canKeep = reason === 'conflict' || reason === 'changed-since' || reason === 'maybe-applied'
+  const text = typedText(held.action), href = placeOf(held.action, workspace)
+  // The item's name, as a link to where it is (§8.3); the rest of the label stays plain.
+  const named = (words: string) => {
+    if (!quoted || !href || !words.includes(quoted)) return words
+    const at = words.indexOf(quoted)
+    return <>{words.slice(0, at)}<a className="app-link" href={href}>{quoted}</a>{words.slice(at + quoted.length)}</>
+  }
+  const words =
+    held.action.type === 'undo' || /cannot undo/i.test(held.held?.message ?? '') ? 'Can’t undo — changed since'
+      : reason === 'conflict' ? `Not saved — ${label} was changed elsewhere`
+        : reason === 'changed-since' ? `Not saved — ${label} · changed since`
+          : reason === 'maybe-applied' ? `Not saved? — ${label} may already be in`
+            : reason === 'gone' ? `Not saved — ${quoted ?? 'it'} was deleted elsewhere`
+              : `Not saved — can’t do this now: ${label}`
+  const copy = () => { void navigator.clipboard?.writeText(text!).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }) }
+  return (
+    <p className="banner save-failed" role="alert">
+      <span>{named(words)}{waiting}</span>
+      <span>
+        {canKeep && <><button type="button" className="app-link" onClick={() => void keepMine()}>Keep mine</button>{' · '}</>}
+        {text && <><button type="button" className="app-link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>{' · '}</>}
+        <button type="button" className="app-link" onClick={() => void discardHeld()}>Discard</button>
+      </span>
+    </p>
+  )
+}
+
 /**
  * Save failures (01 §8), mounted once above every screen: persistent until Retry or the next successful save. Never a toast.
  * Saving and saved stay silent here. Editor saves have their own "Retry saving / Copy draft" line, which owns that retry.
  */
 function SaveIndicator() {
-  const { saveState, saveError, failedAction, retry } = useWorkspace()
+  const { saveState, saveError, failedAction, retry, outbox } = useWorkspace()
+  if (outbox.held) return <HeldBanner />
+  // §8.4: only where nothing could be stored, and only while something is on its way.
+  if (outbox.atRisk)
+    return <p className="banner save-failed" role="status">Not saved on this device · keep this open until it’s sent</p>
   if (saveState !== 'failed' || failedAction === 'save-editor') return null
   return (
     <p className="banner save-failed" role="alert">

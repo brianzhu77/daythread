@@ -1,5 +1,6 @@
 // A linked view (design §9, model §2.1): any `database` block that isn't its database's home. Rows and properties are the
 // source's; the view's settings live in the block, as JSON in its `view` prop, and save with the host page.
+import { newId } from './ids.ts'
 import type { Database, View } from './database.ts'
 
 export interface LinkedView extends View {
@@ -22,6 +23,6 @@ export function linkedViewOf(db: Database, json: unknown): LinkedView {
 }
 
 /** A new block's view: a copy, its own from then on (§9.1). */
-export function linkedViewJson(view: View, id: string = crypto.randomUUID()): string {
+export function linkedViewJson(view: View, id: string = newId()): string {
   return JSON.stringify({ ...view, id })
 }

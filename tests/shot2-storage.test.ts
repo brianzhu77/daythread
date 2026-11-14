@@ -7,6 +7,7 @@ import { pgliteClient, type SqlClient } from '../src/server/db/sql.ts'
 import { asOwner } from '../src/server/auth/request-owner.ts'
 import { convertV1 } from '../src/domain/convert-v1.ts'
 import { repositoryContract } from './repository-contract.ts'
+import { outboxContract } from './outbox-contract.ts'
 import type { Workspace } from '../src/domain/types.ts'
 
 // Shot 2 (docs: "Shot 2 in detail"): the workspace on Postgres as rows (workspaces, pages, tasks, deleted_tasks,
@@ -33,6 +34,24 @@ const pgFixture = async () => {
 }
 // With sign-in off (no owner), the store serves the one local workspace, as the Mac's Postgres mode does.
 repositoryContract('Postgres rows (PGlite), no owner', pgFixture)
+
+// B98: the outbox's row rule on the production store (outbox.md §5): row revisions, the gap an older build leaves, and
+// the mark pruning by age sets.
+outboxContract('Postgres rows (PGlite)', async () => {
+  const db = await PGlite.create()
+  return {
+    create: () => new PostgresWorkspaceRepository(pgliteClient(db)),
+    olderBuildWrote: async () => { await db.exec('update daythread.workspaces set revision = revision + 1') },
+    restoredFromBackup: async back => { await db.exec(`update daythread.workspaces set revision = revision - ${back}`) },
+    forgetOperations: async repo => {
+      await db.exec("update daythread.operations set created_at = now() - interval '60 days'")
+      const { rows } = await db.query<{ id: string }>('select id::text as id from daythread.workspaces')
+      const sql = pgliteClient(db)
+      await sql.transaction(tx => (repo as PostgresWorkspaceRepository).pruneOperations(tx, rows[0]!.id, new Date()))
+    },
+    cleanup: () => db.close(),
+  }
+})
 
 async function withWorkspaces(db: PGlite, users: [string, string][]): Promise<{ sql: SqlClient; repo: PostgresWorkspaceRepository }> {
   const sql = pgliteClient(db), repo = new PostgresWorkspaceRepository(sql, undefined, { today })

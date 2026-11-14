@@ -9,6 +9,8 @@ import type { Command, CommandResult, Workspace } from '../domain/types.ts'
 import { todayIn, type ServerRepository } from './repository.ts'
 import { completeLegacyColumns, legacyTables, readLegacyWorkspace } from './sqlite-legacy.ts'
 import { commandLogFields, debugLog, logOperationId } from './debug-log.ts'
+import { planWrites, rowsOf } from './workspace-rows.ts'
+import { OutboxHeld, readsBeyondApplied, replayRule, rowConflicts, trackedAfter, writeKeys, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
 
 const applicationId = 0x44544852
 /** Layout 8: the v2 workspace as one JSON document in one row. Layouts 1–7 are the v1 entity tables, converted on first open. */
@@ -112,23 +114,64 @@ export class SqliteWorkspaceRepository implements ServerRepository {
     finally { db?.close() }
   }
   async executeOnLatest(operationId: string, action: Command['action']): Promise<CommandResult> {
-    return this.transact(operationId, db => {
-      const current = this.read(db)
-      const result = applyCommand(current, { operationId, expectedRevision: current.revision, action })
-      if (result.workspace.revision !== current.revision) this.write(db, result.workspace)
-      return result
-    })
+    return this.transact(operationId, db => this.commit(db, { operationId, expectedRevision: 0, action }, 'latest').result)
+  }
+  /**
+   * B98 (outbox.md §5): the revision that last wrote each row, kept beside the document (local stores only; Postgres keeps
+   * it on the rows), and the tracking the outbox rule reads. Made on first use, so an older build's store just gains them.
+   */
+  private outboxTables(db: DatabaseSync): void {
+    db.exec(`CREATE TABLE IF NOT EXISTS row_revisions (key TEXT PRIMARY KEY, revision INTEGER NOT NULL) STRICT;
+      CREATE TABLE IF NOT EXISTS outbox_tracking (id INTEGER PRIMARY KEY CHECK(id = 1), tracked_through INTEGER, untracked_until INTEGER NOT NULL, forgotten_through INTEGER NOT NULL) STRICT`)
+  }
+  private tracking(db: DatabaseSync): RowTracking {
+    const t = db.prepare('SELECT tracked_through, untracked_until, forgotten_through FROM outbox_tracking WHERE id = 1').get() as { tracked_through: number | null; untracked_until: number; forgotten_through: number } | undefined
+    return t ? { trackedThrough: t.tracked_through, untrackedUntil: t.untracked_until, forgottenThrough: t.forgotten_through } : { trackedThrough: null, untrackedUntil: 0, forgottenThrough: 0 }
+  }
+  /**
+   * One command on the current document, in the caller's transaction: applied (`expected`: its own revision check, or
+   * the latest for background work), checked by the outbox rule when `outbox` is given, written, and its rows stamped.
+   */
+  private commit(db: DatabaseSync, command: Command, expected?: 'latest', outbox?: OutboxBasis): { result: CommandResult & { changes: WorkspaceChanges }; before: number } {
+    this.outboxTables(db)
+    const current = this.read(db), tracking = this.tracking(db)
+    const seen = Boolean(current.receipts[command.operationId])
+    let rule: ReturnType<typeof replayRule> | undefined
+    if (outbox && !seen) {
+      rule = replayRule(outbox, current.revision, tracking)
+      if (rule.rule === 'whole') throw new OutboxHeld(rule.reason)
+    }
+    const result = applyCommand(current, expected === 'latest' || rule?.rule === 'rows' ? { ...command, expectedRevision: current.revision } : command)
+    const after = result.workspace
+    if (after.revision !== current.revision) {
+      const keys = writeKeys(planWrites(rowsOf(current), after).write)
+      if (outbox && rule?.rule === 'rows') {
+        if (readsBeyondApplied(command.action, result.receipt)) throw new OutboxHeld('changed-since')
+        const read = db.prepare('SELECT revision FROM row_revisions WHERE key = ?')
+        const conflicts = rowConflicts(keys, key => (read.get(key) as { revision: number } | undefined)?.revision, outbox)
+        if (conflicts.length) throw new OutboxHeld('conflict', conflicts)
+      }
+      this.write(db, after)
+      const stampRow = db.prepare('INSERT INTO row_revisions (key, revision) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET revision = excluded.revision')
+      for (const key of keys) stampRow.run(key, after.revision)
+      // A receipt compacted out for good may be replayed later: everything up to now may have been forgotten (§5 step 1a).
+      const forgot = Object.keys(current.receipts).some(id => !after.receipts[id])
+      const next = trackedAfter(tracking, current.revision, after.revision)
+      db.prepare(`INSERT INTO outbox_tracking (id, tracked_through, untracked_until, forgotten_through) VALUES (1, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET tracked_through = excluded.tracked_through, untracked_until = excluded.untracked_until, forgotten_through = excluded.forgotten_through`)
+        .run(after.revision, next.untrackedUntil, forgot ? Math.max(tracking.forgottenThrough, after.revision) : tracking.forgottenThrough)
+    }
+    return { result: { ...result, changes: changesBetween(current, after) }, before: current.revision }
+  }
+  /** A change from the browser's outbox (outbox.md §5): applied, or `OutboxHeld` thrown with nothing written. */
+  async executeOutbox(command: Command, basis: OutboxBasis): Promise<CommandResult & { changes: WorkspaceChanges }> {
+    return this.transact(command.operationId, db => this.commit(db, command, undefined, basis)).result
   }
   async execute(command: Command): Promise<CommandResult & { changes: WorkspaceChanges }> {
     const started = performance.now(), fields = commandLogFields(command)
     debugLog('command.start', fields)
     try {
-      const { result, before } = this.transact(command.operationId, db => {
-        const current = this.read(db)
-        const result = applyCommand(current, command)
-        if (result.workspace.revision !== current.revision) this.write(db, result.workspace)
-        return { result: { ...result, changes: changesBetween(current, result.workspace) }, before: current.revision }
-      })
+      const { result, before } = this.transact(command.operationId, db => this.commit(db, command))
       debugLog('command.finish', { ...fields, beforeRevision: before, afterRevision: result.workspace.revision, elapsedMs: performance.now() - started, result: result.workspace.revision === before ? 'replay' : 'committed' })
       return result
     } catch (error) {

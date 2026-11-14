@@ -1,3 +1,4 @@
+import { newId } from './ids.ts'
 import type { LocalDate, Page, Task, Workspace } from './types.ts'
 import { mentionText, readMention } from './date-chip.ts'
 import { storedDocument } from './synced.ts'
@@ -18,7 +19,6 @@ export const dayTemplate: readonly { title: string; row: 'task' | 'bullet' }[] =
   { title: 'Notes', row: 'bullet' },
 ]
 
-const newId = (): string => crypto.randomUUID()
 export const textRun = (text: string) => ({ type: 'text', text, styles: {} })
 
 /** A to-do row as the editor makes it: a fresh identity until the save creates the task. */

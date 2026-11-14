@@ -11,6 +11,7 @@ import { pgliteClient } from '../src/server/db/sql.ts'
 import { convertV1 } from '../src/domain/convert-v1.ts'
 // The Postgres store's own suite (rows, accounts, the migration from shot 1) is tests/shot2-storage.test.ts.
 import { repositoryContract } from './repository-contract.ts'
+import { outboxContract } from './outbox-contract.ts'
 
 const v1Dir = new URL('./fixtures/v1/', import.meta.url)
 const today = '2026-10-22'
@@ -30,6 +31,29 @@ const sqliteFixture = async () => {
   }
 }
 repositoryContract('SQLite v2', sqliteFixture)
+
+// B98: the outbox's row rule on the local store (outbox.md §5).
+outboxContract('SQLite v2', async () => {
+  const f = await sqliteFixture()
+  const edit = (change: (data: { revision: number; receipts: Record<string, unknown> }) => void) => {
+    const db = new DatabaseSync(f.path), row = db.prepare('SELECT data FROM workspace WHERE id = 1').get() as { data: string }
+    const data = JSON.parse(row.data); change(data)
+    db.prepare('UPDATE workspace SET revision = ?, data = ? WHERE id = 1').run(data.revision, JSON.stringify(data)); db.close()
+  }
+  return {
+    create: f.create,
+    // A build without the outbox writes without stamping: the revision moves past what was stamped.
+    olderBuildWrote: async () => edit(data => { data.revision += 1 }),
+    restoredFromBackup: async back => edit(data => { data.revision -= back }),
+    // Past the 500 + 3,000 receipt window: the next command compacts the old receipts out for good.
+    forgetOperations: async repo => {
+      edit(data => { for (let i = 0; i < 3600; i++) data.receipts[`old-${i}`] = { operationId: `old-${i}`, message: '', fingerprint: 'x' } })
+      const ws = await repo.load()
+      await repo.execute({ operationId: 'compacts', expectedRevision: ws.revision, action: { type: 'ensure-day', date: '2026-10-30' } })
+    },
+    cleanup: f.cleanup,
+  }
+})
 
 test('SQLite: a v1 store (layout 7, entity tables) is upgraded in place to the v2 document; the next command writes v2', async () => {
   const f = await sqliteFixture()
