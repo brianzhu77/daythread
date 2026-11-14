@@ -2963,6 +2963,43 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
 @keyframes button-spin { to { transform: rotate(360deg); } }
 .editor-button-more { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); opacity: 0; cursor: pointer; }
 .editor-button-line:hover .editor-button-more, .editor-button-more:focus-visible, .editor-button-more[aria-expanded=true] { opacity: 1; }
+/* A smart note (smart-note.md §4): a hairline above and below, as the feed's cards, and no box. Read-only text. */
+.smart-note { width: 100%; min-width: 0; margin: 6px 0; padding: 4px 0 10px; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); color: var(--ink); cursor: default; }
+.smart-note-head { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; min-height: 36px; }
+.smart-note-name { display: flex; flex: 1 1 14em; align-items: center; gap: 6px; min-width: 0; font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.smart-note-name svg { flex: none; width: 18px; height: 18px; color: var(--ink-3); }
+.smart-note.is-deleted .smart-note-name { color: var(--ink-3); font-weight: var(--weight-medium); }
+.smart-note-meta { display: flex; flex: none; align-items: center; gap: 6px; margin-left: auto; color: var(--ink-3); font-size: var(--text-meta); white-space: nowrap; }
+.smart-note-actions { display: flex; flex: none; align-items: center; gap: 6px; }
+.smart-note-changed { padding: 1px 8px; border-radius: var(--radius-pill); background: var(--warn-soft); color: var(--warn); font-weight: var(--weight-medium); }
+.smart-note-status button { position: relative; min-height: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-decoration: underline; cursor: pointer; }
+.smart-note-refresh, .smart-note-more { flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.smart-note-refresh:hover, .smart-note-more:hover { background: var(--fill-soft); }
+.smart-note-refresh:disabled { cursor: default; }
+.smart-note-head[aria-busy=true] .smart-note-refresh svg { animation: button-spin 1.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .smart-note-head[aria-busy=true] .smart-note-refresh svg { animation: none; opacity: .5; } }
+/* The page's own text size, as a database block's rows have it. */
+.smart-note-body { font-size: var(--text-row); line-height: 24px; }
+.smart-note-body p, .smart-note-body ul { margin: 4px 0; }
+.smart-note-body ul { padding-left: 1.3em; list-style: disc; }
+.smart-note-body .smart-note-heading { margin-top: 12px; font-weight: var(--weight-semibold); }
+.smart-note-source { margin-left: 3px; font-size: 11px; line-height: 0; white-space: nowrap; }
+/* `.bn-editor a { color: revert; text-decoration: revert }` would make these browser-blue. */
+.bn-editor .smart-note .smart-note-source a, .smart-note-source a, .smart-note-source.is-inert { position: relative; padding: 0 4px; border-radius: var(--radius-tight); background: var(--fill); color: var(--ink); text-decoration: none; }
+/* A hit area 44 px tall around the small number; neighbours' areas may overlap. The glyph and the line keep their size. */
+.smart-note-source a::after { content: ''; position: absolute; top: 50%; left: -4px; right: -4px; height: 44px; transform: translateY(-50%); }
+.smart-note-source.is-gone { padding: 0 4px; color: var(--ink-3); }
+/* In setup's preview the numbers are shown but lead nowhere: a jump would leave the sheet's placement behind. */
+.smart-note-source.is-inert { cursor: default; }
+.smart-note-read { margin: 8px 0 0; color: var(--ink-3); font-size: var(--text-meta); }
+@media (max-width: 899px) {
+  /* The name and its controls on the first line; the status and Updated under them, from the block's left edge. */
+  .smart-note-name { flex: 1 1 0; }
+  .smart-note-actions { order: 1; }
+  .smart-note-meta { order: 2; flex: 1 1 100%; flex-wrap: wrap; margin-left: 0; }
+  .smart-note-refresh, .smart-note-more { width: 44px; height: 44px; }
+  .smart-note-status button::after { content: ''; position: absolute; top: 50%; left: -8px; right: -8px; height: 44px; transform: translateY(-50%); }
+}
 .database-menu.button-editor { width: 360px; max-height: min(80vh, 560px); padding-bottom: 6px; }
 .button-editor-head { position: sticky; top: 0; z-index: 2; background: var(--paper); }
 .database-menu .button-editor-done { margin-left: auto; min-height: 28px; height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: var(--ink); color: var(--paper); font: inherit; font-weight: var(--weight-medium); cursor: pointer; }
@@ -3011,6 +3048,45 @@ body:has(.button-editor) #bn-suggestion-menu { max-height: min(420px, 45vh); }
   .button-editor-name, .button-editor-field, .button-editor select, .button-editor input, .button-blocks { font-size: 16px; }
   .database-menu .button-step-row button { min-height: 44px; min-width: 36px; }
   .database-menu .button-editor-done { min-height: 36px; height: 36px; }
+}
+/* A smart note's picker and setup (smart-note.md §4), in Buttons' shell. */
+/* Room under a focused field for the sticky actions, so they never cover it. */
+.database-menu.button-editor.smart-setup { width: 400px; padding-bottom: 0; scroll-padding-bottom: 64px; }
+.smart-setup label.button-editor-label { display: block; }
+.smart-setup .smart-setup-prompt { min-height: 72px; resize: vertical; line-height: 1.4; }
+.database-menu > button.smart-setup-pick { gap: 8px; }
+.smart-setup-pick > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.smart-setup-pick > small { flex: none; color: var(--ink-3); font-size: var(--text-meta); }
+.smart-setup-range { display: flex; gap: 6px; margin: 2px 6px 6px; }
+.smart-setup-range .button-editor-field { flex: 1 1 0; min-width: 0; width: auto; margin: 0; }
+.smart-setup-pages { display: flex; flex-direction: column; }
+.smart-setup-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 6px 4px; }
+.smart-setup-chip { display: inline-flex; align-items: center; max-width: 100%; min-height: 28px; padding-left: 8px; border-radius: var(--radius-pill); background: var(--fill); color: var(--ink); font-size: var(--text-meta); }
+.smart-setup-chip > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.database-menu .smart-setup-chip button { flex: none; display: inline-grid; place-content: center; min-width: 28px; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+.smart-setup-page { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; color: var(--ink); cursor: pointer; }
+.smart-setup-page > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.smart-setup-page input { flex: none; accent-color: var(--blue); }
+.smart-setup-preview { margin: 4px 10px 6px; padding: 6px 0; border-top: 1px solid var(--line-soft); overflow-wrap: anywhere; }
+/* The sheet's bottom padding is the actions' own, so nothing shows beneath them as the sheet scrolls. */
+.smart-setup-actions { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 6px; margin-top: auto; padding: 8px 6px 6px; background: var(--paper); }
+.database-menu .smart-setup-actions button { min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-control); background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.database-menu .smart-setup-actions .smart-setup-run { margin-right: auto; }
+.database-menu .smart-setup-actions button:disabled { color: var(--ink-3); cursor: default; }
+/* The one primary on this surface: on the blue, the ink every control filled with it uses. */
+.database-menu .smart-setup-actions .smart-setup-save { border-color: var(--blue); background: var(--blue); color: var(--ink-on-blue); font-weight: var(--weight-medium); }
+.database-menu .smart-setup-actions .smart-setup-save:disabled { border-color: var(--fill); background: var(--fill); color: var(--ink-3); }
+@media (hover: hover) { .database-menu .smart-setup-actions .smart-setup-save:hover:not(:disabled) { border-color: var(--blue-pressed); background: var(--blue-pressed); } }
+@media (max-width: 899px) {
+  .database-menu.button-editor.smart-setup { width: auto; scroll-padding-bottom: 80px; }
+  .smart-setup textarea { font-size: 16px; }
+  .database-menu.smart-setup select, .database-menu.smart-setup input:not([type=checkbox]) { min-height: 44px; }
+  .smart-setup-page { min-height: 44px; }
+  .smart-setup-actions { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .smart-setup-page input { width: 20px; height: 20px; }
+  .smart-setup-chip { min-height: 44px; }
+  .database-menu .smart-setup-chip button { min-width: 44px; min-height: 44px; }
+  .database-menu .smart-setup-actions button { min-height: 44px; }
 }
 /* Comments (comments.md §2). Nothing shows until there's one. */
 /* Grey and quiet, so it doesn't read as an underline he made (comments.md §2). */

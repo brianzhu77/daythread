@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { commandSchema } from "../domain/command-schema";
+import { commandSchema, smartRange } from "../domain/command-schema";
+import { smartLimits } from "../domain/smart-note";
 
 export const loadWorkspace = createServerFn({ method: "GET" })
   .validator((input: unknown) => z.object({ operationId: z.string().min(1).max(200), triggerOperationId: z.string().max(200).optional() }).parse(input))
@@ -51,12 +52,11 @@ export const runCommand = createServerFn({ method: "POST" })
 export const prepareDayDraft = createServerFn({ method: "POST" })
   .validator((input: unknown) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), operationId: z.string().min(1).max(200) }).parse(input))
   .handler(async ({ data }) => {
-    const [{ getRepository }, { currentOwner }, { currentAccount }, { modelConfig }, { runDayDraft }, { draftOf, draftSettled, draftStale, DRAFT_RECIPE }] = await Promise.all([
-      import("./storage"), import("./auth/request-owner"), import("./auth/server"), import("./model/openrouter"), import("./model/day-draft"), import("../domain/day-draft"),
+    const [{ getRepository }, { currentOwner }, { currentAccount }, { accountModel }, { runDayDraft }, { draftOf, draftSettled, draftStale, DRAFT_RECIPE }] = await Promise.all([
+      import("./storage"), import("./auth/request-owner"), import("./auth/server"), import("./model/access"), import("./model/day-draft"), import("../domain/day-draft"),
     ]);
     const account = await currentAccount();
-    const allowed = (process.env.DAYTHREAD_DRAFT_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-    const config = modelConfig() && (!account || allowed.includes(account.email.toLowerCase())) ? modelConfig() : null;
+    const config = await accountModel();
     const ws = await getRepository().load();
     const page = ws.pages.find((p) => p.type === "daily" && p.date === data.date && !p.trashedAt);
     if (!page) throw new Error("Day page not found");
@@ -74,6 +74,40 @@ export const prepareDayDraft = createServerFn({ method: "POST" })
     if (old && draftSettled(old) && run.status !== "ready") return notRemade;
     const action = { type: "set-draft" as const, pageId: page.id, status: run.status, items: run.items, moreOpen: run.moreOpen, allowedTaskIds: run.allowedTaskIds, recipe: DRAFT_RECIPE };
     return { setDraft: JSON.stringify(action), owner: currentOwner() ?? "local", modelOn: Boolean(config), remakeFailed: false };
+  });
+
+/** Whether this account can run a smart note: the model is configured for it. */
+export const smartNotesOn = createServerFn({ method: "GET" }).handler(async () => {
+  const { accountModel } = await import("./model/access");
+  return { on: (await accountModel()) !== null };
+});
+
+/**
+ * A smart note's result from the model, for a preview (`prompt` and `range`) or a refresh of a stored note (`noteId`
+ * alone). Nothing is stored here: the tab stores the result through its own command queue, as with a day draft. Logs
+ * carry counts, timings and cost only, never the prompt, the notes or the answer.
+ */
+export const askSmartNote = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({
+    operationId: z.string().min(1).max(200),
+    today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    noteId: z.string().min(1).max(200).optional(),
+    prompt: z.string().trim().min(1).max(smartLimits.prompt).optional(),
+    range: smartRange.optional(),
+  }).parse(input))
+  .handler(async ({ data }) => {
+    const [{ getRepository }, { currentOwner }, { accountModel }, { resolveSmartAsk, runSmartNote }] = await Promise.all([
+      import("./storage"), import("./auth/request-owner"), import("./model/access"), import("./model/smart-note"),
+    ]);
+    const owner = currentOwner() ?? "local";
+    const config = await accountModel();
+    if (!config) return { owner, status: "off" as const };
+    const ws = await getRepository().load();
+    const spec = resolveSmartAsk(ws, data);
+    if ("error" in spec) return { owner, status: "failed" as const, error: spec.error };
+    const run = await runSmartNote(ws, spec, config, data.today, new Date().toISOString());
+    console.info(JSON.stringify({ level: "info", event: "smart.run", operationId: data.operationId, status: run.status, ...(run.status === "failed" ? { error: run.error } : { pagesRead: run.result.pagesRead, pagesLeftOut: run.result.pagesLeftOut, blocks: run.result.blocks.length, costUsd: run.costUsd }), elapsedMs: run.ms }));
+    return run.status === "ready" ? { owner, status: "ready" as const, result: run.result, spec: run.spec } : { owner, status: "failed" as const, error: run.error };
   });
 
 /**

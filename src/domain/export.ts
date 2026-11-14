@@ -8,7 +8,8 @@ import { clockIn } from './formula.ts'
 import { withLinks } from './relations.ts'
 import { blockedNow, type Blocked } from './task-links.ts'
 import { liveTaskIds } from './workspace.ts'
-import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, valueText, type Database, type FileValue } from './database.ts'
+import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, localWall, valueText, type Database, type FileValue } from './database.ts'
+import { smartNoteOf, smartNoteText } from './smart-note.ts'
 
 /**
  * Export: his words out of the app, readable without its code. A folder of Markdown (a day page per date, a document
@@ -138,6 +139,11 @@ function blockLines(n: EditorNode, ws: Workspace, names: Map<string, string>, as
     // What it draws, so a page never loses a line on the way out (buttons.md §8). Its steps stay in the app.
     case 'button':
       return [`${asItem ? '- ' : ''}${typeof props.label === 'string' && props.label ? props.label : 'Button'}`]
+    // As static text with when it last ran; the record stays in the app.
+    case 'smartNote': {
+      const note = typeof props.noteId === 'string' ? smartNoteOf(ws, props.noteId) : undefined
+      return note ? [`**${note.name}**`, ...smartNoteText(note).split('\n'), `_Updated ${localWall(note.result.at, ws.timezone).slice(0, 10)}_`] : []
+    }
     case 'database': {
       const target = typeof props.pageId === 'string' && props.pageId ? names.get(props.pageId) : undefined
       return target ? [`${asItem ? '- ' : ''}[[${target}]]`] : []
@@ -211,14 +217,14 @@ function yamlString(value: string): string {
   return JSON.stringify(value)
 }
 
-/** Every fact, readable without the app: pages with their documents (BlockNote JSON) and Markdown file, and tasks. */
+/** Every fact, readable without the app: pages with their documents (BlockNote JSON) and Markdown file, tasks, and smart notes (a page holds only a note's id). */
 export function exportJson(ws: Workspace, now: Date, names = fileNames(ws)) {
   const pages = ws.pages.map(p => {
     const { document: _document, ...rest } = p
     const folder = p.type === 'daily' && p.date ? 'days' : isTemplate(p) ? 'templates' : 'pages'
     return { ...rest, document: pageNodes(p), markdownFile: p.trashedAt ? null : `${folder}/${names.get(p.id)}.md` }
   })
-  return { format: 'daythread-export', formatVersion: exportFormatVersion, exportedAt: now.toISOString(), schemaVersion: ws.schemaVersion, revision: ws.revision, timezone: ws.timezone, pages, tasks: ws.tasks }
+  return { format: 'daythread-export', formatVersion: exportFormatVersion, exportedAt: now.toISOString(), schemaVersion: ws.schemaVersion, revision: ws.revision, timezone: ws.timezone, pages, tasks: ws.tasks, ...(ws.smartNotes?.length ? { smartNotes: ws.smartNotes } : {}) }
 }
 
 /** Files aren't in the zip, which is built in memory: each is named, so what's missing is plain. */

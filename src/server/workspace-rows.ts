@@ -1,6 +1,8 @@
 // The workspace as rows (shot 2): what the Postgres store reads and writes. Pure: no SQL here. A loaded workspace is
 // its rows with their positions; a command's result is turned back into rows, and the difference is what gets written,
 // with the rows as they were as the operation's inverse (what Undo puts back). The domain never sees positions.
+import { smartNote } from '../domain/command-schema.ts'
+import type { SmartNote } from '../domain/smart-note.ts'
 import { expandedWorkspace, storedDocument, type SyncedRecord } from '../domain/synced.ts'
 import type { CommentThread, CommentAnchor, CommentProperty } from '../domain/comments.ts'
 import type { Automation } from '../domain/automations.ts'
@@ -91,11 +93,13 @@ const linkRow = (l: TaskLink): LinkRow => ({ id: linkId(l), blocked_id: l.blocke
 const linkOf = (r: LinkRow): TaskLink => ({ blockedId: r.blocked_id, blockerId: r.blocker_id, createdAt: r.created_at })
 export function workspaceOf(rows: Rows): Workspace {
   const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)
+  const smartNotes = sorted.filter(r => r.type === 'smart').flatMap(r => smartOf(r) ?? [])
   return expandedWorkspace({
     schemaVersion: 2, revision: rows.revision, timezone: rows.timezone, ...(rows.weekStart === 1 ? { weekStart: 1 as const } : {}),
     ...(() => { const rules = readRules(rows.todoAutomations); return rules?.length ? { todoAutomations: rules } : rows.todoAutomations && !rules ? { todoAutomationsUnreadable: true as const } : {} })(),
     ...(synced.length ? { synced } : {}),
-    pages: sorted.filter(r => r.type !== 'synced').map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
+    ...(smartNotes.length ? { smartNotes } : {}),
+    pages: sorted.filter(r => r.type !== 'synced' && r.type !== 'smart').map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
     deletedTasks: byPosition(rows.deleted).map(r => JSON.parse(r.data) as Task), receipts: {},
     ...(rows.threads.length ? { threads: [...rows.threads].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(threadOf) } : {}),
     ...(rows.links?.length ? { links: [...rows.links].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(linkOf) } : {}),
@@ -111,11 +115,73 @@ function recordOf(row: PageRow): SyncedRecord {
   const { rev, original } = JSON.parse(row.row_values ?? '{}') as { rev: number; original: string }
   return { id: row.id.slice('synced:'.length), lines: row.document, rev, original, ...(row.edited_at != null ? { editedAt: row.edited_at } : {}) }
 }
-/** The pages' rows and the records', in that order: each record's row sits after every page. */
-const pageEntities = (ws: Workspace): { id: string; row(position: number): PageRow }[] => [
-  ...ws.pages.map(p => ({ id: p.id, row: (position: number) => pageRow(p, position) })),
-  ...(ws.synced ?? []).map(r => ({ id: `synced:${r.id}`, row: (position: number) => recordRow(r, position) })),
-]
+/** What this build reads and writes of a smart row's document. */
+const smartKeys = ['prompt', 'range', 'refresh', 'result'] as const
+function smartDocument(row: PageRow): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(row.document) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+  } catch { return null }
+}
+/** The note a stored row holds, or null when this build cannot read it. Read once per row: a load and the write after it share the answer. */
+const notesRead = new WeakMap<PageRow, SmartNote | null>()
+function readSmart(row: PageRow): SmartNote | null {
+  if (notesRead.has(row)) return notesRead.get(row)!
+  const stored = smartDocument(row), parsed = stored ? smartNote.safeParse({ ...stored, id: row.id.slice('smart:'.length), name: row.title }) : null
+  const note = parsed?.success ? parsed.data : null
+  notesRead.set(row, note)
+  return note
+}
+const newSmartRow = { date: null, url: null, parent_id: null, trashed_at: null, trash_id: null, handoff_done: false, review_saved: false, database_json: null, row_values: null, created_at: null, icon: null, cover: null, cover_position: null }
+/**
+ * A smart note takes a hidden page row too: its prompt, range and result are one document, and a result write is one row.
+ * `held`: the note's row as stored, and before that the row an Undo is putting back. Every column and every key of the
+ * document that this build does not write is kept from the first of them, and a key whose value did not change is
+ * written back as one of them stores it, so a note a newer build wrote loses nothing to a save or an Undo made here.
+ */
+function smartRow(n: SmartNote, position: number, held: PageRow[] = []): PageRow {
+  const known = held.flatMap(row => { const stored = smartDocument(row), was = readSmart(row); return stored && was ? [{ stored, was }] : [] })
+  const document: Record<string, unknown> = { ...known[0]?.stored }
+  for (const key of smartKeys) {
+    const same = JSON.stringify(n[key]), from = known.find(k => JSON.stringify(k.was[key]) === same)
+    document[key] = from ? from.stored[key] : n[key]
+  }
+  return { ...(held[0] ?? newSmartRow), id: `smart:${n.id}`, position, type: 'smart', title: clean(n.name), document: JSON.stringify(document), edited_at: n.result.at }
+}
+/**
+ * A row that does not parse, or is not a note's shape, is left out of the workspace, so one bad note never stops it
+ * from loading. The row itself stays as stored (`pageEntities`): it may be a newer build's, or one to mend.
+ */
+function smartOf(row: PageRow): SmartNote | null {
+  const note = readSmart(row)
+  const seen = `${row.id}\n${row.document}`
+  if (!note && !unreadable.has(seen)) { unreadable.add(seen); console.warn(JSON.stringify({ level: 'warn', event: 'smart.unreadable' })) }
+  return note
+}
+type PageEntity = { id: string; row(position: number): PageRow }
+/**
+ * The pages' rows, the synced records' and the smart notes', in that order: each hidden row sits after every page.
+ * `held`: the rows as stored, for a write; `restored`: the rows an Undo is putting back. A smart row this build cannot
+ * read is carried as it is, in its place.
+ */
+function pageEntities(ws: Workspace, held: PageRow[] = [], restored: PageRow[] = []): PageEntity[] {
+  const smart = (rows: PageRow[]) => new Map(rows.filter(r => r.type === 'smart').map(r => [r.id, r]))
+  const stored = smart(held), back = smart(restored)
+  const notes: PageEntity[] = (ws.smartNotes ?? []).map(n => {
+    const id = `smart:${n.id}`, rows = [back.get(id), stored.get(id)].filter(r => r !== undefined)
+    return { id, row: position => smartRow(n, position, rows) }
+  })
+  const taken = new Set(notes.map(n => n.id))
+  for (const r of [...stored.values()].filter(r => !taken.has(r.id) && !readSmart(r)).sort((a, b) => a.position - b.position)) {
+    const at = notes.findIndex(e => (stored.get(e.id)?.position ?? Infinity) > r.position)
+    notes.splice(at < 0 ? notes.length : at, 0, { id: r.id, row: position => ({ ...r, position }) })
+  }
+  return [
+    ...ws.pages.map(p => ({ id: p.id, row: (position: number) => pageRow(p, position) })),
+    ...(ws.synced ?? []).map(r => ({ id: `synced:${r.id}`, row: (position: number) => recordRow(r, position) })),
+    ...notes,
+  ]
+}
 
 /** Rows for a workspace with no history (a migration, a first import): positions are the indexes. */
 export function rowsOf(ws: Workspace): Rows {
@@ -160,14 +226,15 @@ function diffSet<R extends { id: string }>(before: R[], after: R[]): { write: Ro
 }
 
 /** What a command changed, as rows to write and the rows to put back. */
-export function planWrites(before: Rows, after: Workspace): { write: RowDiff; inverse: RowDiff; rows: Rows } {
+/** `restored`: for an Undo, the page rows its inverse puts back, so a smart note returns as it was stored. */
+export function planWrites(before: Rows, after: Workspace, restored: PageRow[] = []): { write: RowDiff; inverse: RowDiff; rows: Rows } {
   const positions = <E extends { id: string }, R extends { id: string; position: number }>(entities: E[], previous: R[], row: (e: E, position: number) => R): R[] => {
     const next = positionsFor(entities.map(e => e.id), new Map(previous.map(r => [r.id, r.position])))
     return entities.map(e => row(e, next.get(e.id)!))
   }
   const rows: Rows = {
     revision: after.revision, timezone: after.timezone, weekStart: after.weekStart ?? 0, todoAutomations: readableRules(before.todoAutomations) || rulesJson(after) !== null ? rulesJson(after) : before.todoAutomations ?? null,
-    pages: positions(pageEntities(after), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow), threads: (after.threads ?? []).map(threadRow), links: (after.links ?? []).map(linkRow),
+    pages: positions(pageEntities(after, before.pages, restored), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow), threads: (after.threads ?? []).map(threadRow), links: (after.links ?? []).map(linkRow),
   }
   const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted), threads = diffSet(before.threads, rows.threads), links = diffSet(before.links ?? [], rows.links ?? [])
   const timezone = before.timezone !== after.timezone

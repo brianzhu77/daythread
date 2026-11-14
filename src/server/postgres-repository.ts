@@ -306,15 +306,16 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       const { scope, rows, workspace } = await this.read(tx, true)
       const [replay] = await tx.query<{ receipt: string }>(`select receipt::text as receipt from ${this.t('operations')} where workspace_id = $1::uuid and operation_id = $2`, [scope.id, command.operationId])
       if (replay) workspace.receipts = { [command.operationId]: JSON.parse(replay.receipt) as Receipt }
+      let restored: PageRow[] = []
       if (command.action.type === 'undo' && workspace.undo?.operationId === command.action.targetOperationId) {
         const [op] = await tx.query<{ inverse: string | null }>(`select inverse::text as inverse from ${this.t('operations')} where workspace_id = $1::uuid and operation_id = $2`, [scope.id, command.action.targetOperationId])
-        if (op?.inverse) { const { undo: _undo, receipts: _receipts, ...before } = workspaceOf(applyDiff(rows, JSON.parse(op.inverse) as RowDiff)); workspace.undo = { ...workspace.undo, before: { ...before, receipts: {} } } }
+        if (op?.inverse) { const diff = JSON.parse(op.inverse) as RowDiff; restored = diff.pages.upsert; const { undo: _undo, receipts: _receipts, ...before } = workspaceOf(applyDiff(rows, diff)); workspace.undo = { ...workspace.undo, before: { ...before, receipts: {} } } }
       }
       if (leavesUndoAlone(command.action.type) && workspace.undo && await this.changedComments(tx, scope.id, workspace.undo.operationId)) delete workspace.undo
       const result = applyCommand(workspace, expected === 'latest' ? { ...command, expectedRevision: workspace.revision } : command)
       const after = result.workspace
       if (after.revision !== workspace.revision) {
-        const { write, inverse } = planWrites(rows, after)
+        const { write, inverse } = planWrites(rows, after, restored)
         await this.writeDiff(tx, scope.id, write)
         await tx.query(`update ${this.t('workspaces')} set revision = $2, timezone = $3, week_start = $4${write.todoAutomations !== undefined ? ', todo_automations = $5' : ''} where id = $1::uuid`, [scope.id, after.revision, after.timezone, after.weekStart ?? 0, ...(write.todoAutomations !== undefined ? [write.todoAutomations] : [])])
         await this.writeOperation(tx, scope.id, result.receipt, after.revision, command.action.type, after.undo?.operationId === command.operationId ? inverse : null)

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { chartForms, chartKinds } from "./chart.ts";
+import { smartLimits } from "./smart-note.ts";
 import { linkLimits } from "./task-links.ts";
 import { calcKinds, rollupFunctions, filterOpList, limits, propertyTypes, viewLayouts, type Json } from "./database.ts";
 const id = z.string().min(1).max(200);
@@ -73,6 +74,15 @@ const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("removeAutomation"), automationId: id }),
   z.object({ kind: z.literal("moveAutomation"), automationId: id, beforeId: id.nullable() }),
 ]);
+export const smartRange = z.object({
+  where: z.discriminatedUnion("kind", [z.object({ kind: z.literal("workspace") }), z.object({ kind: z.literal("pages"), pageIds: z.array(id).max(smartLimits.pages) }), z.object({ kind: z.literal("tag"), tag: z.string().max(smartLimits.tag) }), z.object({ kind: z.literal("days") })]),
+  days: z.union([z.literal(0), z.literal(7), z.literal(30), z.literal(90)]),
+});
+export const smartResult = z.object({
+  blocks: z.array(z.object({ kind: z.enum(["heading", "paragraph", "bullet"]), text: z.string().max(smartLimits.text), sources: z.array(z.object({ pageId: id, blockId: z.string().max(200) })).max(smartLimits.sourcesPerBlock) })).max(smartLimits.blocks),
+  at: at, inputKey: z.string().max(200), pagesRead: z.number().int().min(0), pagesLeftOut: z.number().int().min(0), from: day.nullable(), to: day.nullable(),
+});
+export const smartNote = z.object({ id, name: z.string().max(smartLimits.name), prompt: z.string().max(smartLimits.prompt), range: smartRange, refresh: z.enum(["manual", "daily", "hourly"]), result: smartResult });
 const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("save-editor"), pageId: id, expectedContent: z.string().max(200), document: z.string().max(2_000_000), singleDeleteIds: z.array(id).max(100).optional(), cutTaskIds: z.array(id).max(200).optional(),
     detachDatabaseIds: z.array(id).max(50).optional(), adoptDatabaseBlocks: z.array(z.object({ blockId: id, pageId: id })).max(50).optional(), today: day.optional(), at: at.optional() }),
@@ -113,6 +123,8 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("set-draft"), pageId: id, status: z.enum(["preparing", "ready", "failed"]), moreOpen: z.array(id).max(200), allowedTaskIds: z.array(id).max(500), recipe: z.number().int().min(1).max(1000).optional(),
     items: z.array(z.object({ id: z.string().min(1).max(100), anchor: z.string().max(200), place: z.enum(["fill", "after"]), taskId: id.optional(), source: z.enum(["model", "fallback"]), state: z.literal("open"),
       block: z.object({ id: z.string().min(1).max(200), type: z.enum(["paragraph", "bulletListItem", "task"]), props: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(), content: z.array(z.unknown()).max(50), children: z.array(z.never()).max(0).optional() }).optional() })).max(50) }),
+  z.object({ type: z.literal("save-smart-note"), note: smartNote }),
+  z.object({ type: z.literal("set-smart-note-result"), noteId: id, result: smartResult, spec: z.string().min(1).max(100) }),
   z.object({ type: z.literal("apply-draft"), pageId: id, itemIds: z.array(z.string().min(1).max(100)).min(1).max(50), edits: z.record(z.string().max(100), z.string().max(500)).optional(), today: day.optional() }),
   z.object({ type: z.literal("skip-draft"), pageId: id, itemIds: z.array(z.string().min(1).max(100)).min(1).max(50) }),
   z.object({ type: z.literal("create-database"), pageId: id, parentId: id.nullable().optional(), homeBlockId: id.nullable(), title, dashboard: z.object({ viewId: id, rowId: id, widgetId: id, widgetViewId: id }).optional() }),

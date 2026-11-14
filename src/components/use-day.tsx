@@ -363,6 +363,10 @@ export function useWorkspace(): WorkspaceContextValue {
   if (!ctx) throw new Error('useWorkspace must be used inside WorkspaceProvider')
   return ctx
 }
+/** The workspace, or null with no provider above: a block's copy for the clipboard may render outside the app. */
+export function useWorkspaceIfAny(): Workspace | null {
+  return useContext(WorkspaceContext)?.workspace ?? null
+}
 
 /** A to-do's box: what it shows (the tap at once, while it saves) and the tap. Reads the stored to-do, not a held copy. */
 export function useTaskTick(taskId: string | undefined): { status: Task['status'] | undefined; toggle(notice: (to: Task['status'], r: Receipt) => NoticeSpec): void } {
