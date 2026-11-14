@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactE
 import { createPortal } from 'react-dom'
 import { useRouterState } from '@tanstack/react-router'
 import { listedPages } from '../domain/page-tree'
-import { placedSmartNotes, smartLimits, smartNoteOf, smartSpecKey, type SmartNote, type SmartRange, type SmartResult, type SmartWhere, type SmartWindow } from '../domain/smart-note'
+import { placedSmartNotes, smartLimits, smartNoteName, smartNoteOf, smartSpecKey, type SmartNote, type SmartRange, type SmartResult, type SmartWhere, type SmartWindow } from '../domain/smart-note'
 import { tagIndex, tagKey } from '../domain/tags'
 import type { Workspace } from '../domain/types'
 import { askSmartNote } from '../server/functions'
@@ -129,7 +129,7 @@ function Setup({ note, workspace, onSaved }: { note: SmartNote | undefined; work
     <textarea id="smart-note-prompt" className="button-editor-field smart-setup-prompt" maxLength={smartLimits.prompt} rows={3} autoFocus={!note} value={prompt} onChange={e => setPrompt(e.target.value)} />
     <RangeFields range={range} workspace={workspace} onChange={setRange} />
     <label className="button-editor-label" htmlFor="smart-note-name">Name</label>
-    <input id="smart-note-name" className="button-editor-name" maxLength={smartLimits.name} placeholder={prompt.trim().slice(0, 60)} value={name} onChange={e => setName(e.target.value)} />
+    <input id="smart-note-name" className="button-editor-name" maxLength={smartLimits.name} placeholder={smartNoteName(prompt)} value={name} onChange={e => setName(e.target.value)} />
     {settled && <div ref={shown} className="smart-setup-preview" role="status">
       {settled.state === 'ready' ? <>
         <SmartNoteBody result={settled.result} workspace={workspace} inert />

@@ -20,6 +20,23 @@ export interface SmartResult { blocks: SmartBlock[]; at: string; inputKey: strin
 export interface SmartNote { id: string; name: string; prompt: string; range: SmartRange; refresh: 'manual' | 'daily' | 'hourly'; result: SmartResult }
 
 /** What a result answers: the prompt and the range, a pages range in any order. A result is stored only under the spec it was made for. */
+// A blank name's stand-in (Brian 5e7596ac): the prompt's first sentence when it fits, else a cut at a word with "…",
+// at a character where the words are Chinese, Japanese or Korean, which have no spaces to cut at.
+const nameRoom = 60
+const sentenceEnd = /[.!?](?=\s|$)|[。！？]/u
+const wideScript = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
+export function smartNoteName(prompt: string): string {
+  const line = prompt.trim().split('\n')[0].replace(/\s+/g, ' ').trim()
+  const end = line.search(sentenceEnd)
+  const first = (end < 0 ? line : line.slice(0, end + 1)).replace(/[.。]$/u, '').trim()
+  const chars = Array.from(first)
+  if (chars.length <= nameRoom) return first
+  const kept = chars.slice(0, nameRoom - 1)
+  const space = kept.lastIndexOf(' ')
+  const atWord = !wideScript.test(kept[kept.length - 1] + chars[nameRoom - 1]) && space >= nameRoom / 2
+  return (atWord ? kept.slice(0, space) : kept).join('').replace(/[\s,;:，、；：—-]+$/u, '') + '…'
+}
+
 export function smartSpecKey(prompt: string, range: SmartRange): string {
   const { where } = range
   return textKey(JSON.stringify([prompt.trim(), where.kind, where.kind === 'pages' ? [...new Set(where.pageIds)].sort() : where.kind === 'tag' ? where.tag : null, range.days]))

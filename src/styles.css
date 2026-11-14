@@ -2991,7 +2991,8 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
 .smart-note-source.is-gone { padding: 0 4px; color: var(--ink-3); }
 /* In setup's preview the numbers are shown but lead nowhere: a jump would leave the sheet's placement behind. */
 .smart-note-source.is-inert { cursor: default; }
-.smart-note-read { margin: 8px 0 0; color: var(--ink-3); font-size: var(--text-meta); }
+/* Meta, as Updated is: the editor's paragraph size would win over the bare class. */
+.bn-editor .smart-note .smart-note-read, .smart-note-read { margin: 8px 0 0; color: var(--ink-3); font-size: var(--text-meta); }
 @media (max-width: 899px) {
   /* The name and its controls on the first line; the status and Updated under them, from the block's left edge. */
   .smart-note-name { flex: 1 1 0; }
@@ -3001,7 +3002,9 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
   .smart-note-status button::after { content: ''; position: absolute; top: 50%; left: -8px; right: -8px; height: 44px; transform: translateY(-50%); }
 }
 .database-menu.button-editor { width: 360px; max-height: min(80vh, 560px); padding-bottom: 6px; }
-.button-editor-head { position: sticky; top: 0; z-index: 2; background: var(--paper); }
+/* The scroller's top padding sits above a sticky head, so content scrolled up showed through it. A paper shadow fills
+   that strip; the scroller clips it at its own edge. */
+.button-editor-head { position: sticky; top: 0; z-index: 2; background: var(--paper); box-shadow: 0 -16px 0 var(--paper); }
 .database-menu .button-editor-done { margin-left: auto; min-height: 28px; height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: var(--ink); color: var(--paper); font: inherit; font-weight: var(--weight-medium); cursor: pointer; }
 .button-editor-done.is-off { background: var(--fill); color: var(--ink-3); }
 .button-editor-discard { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 10px; background: var(--fill-soft); border-radius: var(--radius-tight); font-size: var(--text-meta); }

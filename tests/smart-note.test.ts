@@ -5,7 +5,7 @@ import { commandSchema } from '../src/domain/command-schema.ts'
 import { inlineText, isEmptyLine, type EditorNode } from '../src/domain/editor-document.ts'
 import { hasContent, writtenDays } from '../src/domain/page-tree.ts'
 import { exportJson, fileNames, pageMarkdown } from '../src/domain/export.ts'
-import { livePlaces, placedSmartNotes, smartNoteLines, smartNoteText, smartPlaces, smartSpecKey, sourceNumbers, type SmartBlock, type SmartNote, type SmartResult } from '../src/domain/smart-note.ts'
+import { livePlaces, placedSmartNotes, smartNoteLines, smartNoteName, smartNoteText, smartPlaces, smartSpecKey, sourceNumbers, type SmartBlock, type SmartNote, type SmartResult } from '../src/domain/smart-note.ts'
 import { bullet, harness, text, todo } from './v2-helpers.ts'
 
 const result = (over: Partial<SmartResult> = {}): SmartResult => ({ blocks: [{ kind: 'bullet', text: 'Guest checkout is out', sources: [{ pageId: 'doc', blockId: 'l1' }] }], at: '2026-11-12T09:00:00.000Z', inputKey: 'k1', pagesRead: 1, pagesLeftOut: 0, from: '2026-11-12', to: '2026-11-12', ...over })
@@ -24,12 +24,29 @@ test('save-smart-note stores the note; saving the same id replaces it', () => {
   assert.equal(second.receipt.message, 'Smart note saved')
 })
 
-test('a blank name is taken from the prompt, cut at 60 characters', () => {
+test("a blank name is taken from the prompt's first sentence", () => {
   const h = withDoc()
   h.run({ type: 'save-smart-note', note: note({ name: '   ' }) })
   assert.equal(h.ws.smartNotes![0].name, 'What do my notes say about checkout?')
-  h.run({ type: 'save-smart-note', note: note({ id: 'n2', name: '', prompt: 'x'.repeat(100) }) })
-  assert.equal(h.ws.smartNotes![1].name, 'x'.repeat(60))
+  h.run({ type: 'save-smart-note', note: note({ id: 'n2', name: '', prompt: 'Where does checkout stand? Decisions first, then open questions.' }) })
+  assert.equal(h.ws.smartNotes![1].name, 'Where does checkout stand?')
+})
+
+test('a name from the prompt: first sentence or line, else a cut at a word, or at a character in Chinese', () => {
+  // English: the first sentence, its full stop dropped; a long one is cut at a word.
+  assert.equal(smartNoteName('Summarize my week. Keep it short.'), 'Summarize my week')
+  assert.equal(smartNoteName('Weekly review\nWhat moved, what stalled'), 'Weekly review')
+  assert.equal(smartNoteName('List every decision we made about the checkout redesign and who made each of them'), 'List every decision we made about the checkout redesign…')
+  assert.equal(smartNoteName('x'.repeat(100)), 'x'.repeat(59) + '…')
+  // Chinese: sentence marks without spaces; a long sentence is cut at a character.
+  assert.equal(smartNoteName('这周结账改版进展如何？先列决定。'), '这周结账改版进展如何？')
+  const zh = '总结这个月所有关于结账改版的决定以及每一个决定是谁做出的'.repeat(3)
+  assert.equal(smartNoteName(zh), Array.from(zh).slice(0, 59).join('') + '…')
+  // Mixed: the cut falls on Chinese, so at a character; a sentence ending in English punctuation still ends there.
+  const mixed = 'Checkout 进展 ' + zh
+  assert.equal(smartNoteName(mixed), Array.from(mixed).slice(0, 59).join('') + '…')
+  assert.equal(smartNoteName('Checkout 进展? Then the rest'), 'Checkout 进展?')
+  for (const p of ['List every decision we made about the checkout redesign and who made each of them', zh, mixed]) assert.ok(Array.from(smartNoteName(p)).length <= 60)
 })
 
 test('a source whose page does not exist is dropped, not refused', () => {
