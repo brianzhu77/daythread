@@ -34,3 +34,15 @@ Independent Chromium test sets `window.indexedDB` to undefined before mounting, 
 ### Open: waiting is not transitive (12c9599b, b6f96aee)
 
 Captured commands A creates database `newdb`, B adds row `newrow` to it, C renames that row. B depends on A; C depends on B but not directly on A. With A held, the actual app skips B but sends C, which becomes held with “Page not found”. Independently reproduced in Chromium by putting the captured queue into IndexedDB and reopening; the assertion that neither descendant is sent fails (1 request). Repro `tests/evidence/outbox/ratchet-transitive.mjs <preview URL>`, log `/tmp/ratchet-outbox-transitive.log`. This is a recovery-state injection, not a claim of manually completing all three UI operations. Waiting and banner counts must include the transitive dependency closure.
+
+## Recheck at 626f3e3f (deletion helper/test at 85ca6fb8)
+
+Original three browser repros now pass independently: two-tab tick/untick ends open with no held banner and empty queue; transitive descendants remain pending with zero requests; absent IndexedDB warns and prevents leaving. Build passes, 11 focused storage/client tests pass, and the new account-deletion helper test passes. Successful/refused deletion paths were read; no real account deletion was executed.
+
+### Remaining shared-queue dependency gap (226e41dc)
+
+The lock rereads only the target entry, while `blockedBy` still runs on the tab's private mirror before acquiring the lock. A held predecessor written by another tab is invisible. Independent built-app Chromium test mounts two tabs, adds a captured-shaped held task entry to shared IndexedDB from A, then ticks that task in B. B sends and applies its dependent change rather than leaving it waiting. `ratchet-shared-held.mjs` fails its zero-send assertion (1 send). Queue injection models an already held entry produced in another tab; it does not claim a manually completed conflict scenario. Re-read the owner's shared queue and evaluate blocking inside the lock.
+
+### Remaining memory-risk bookkeeping gap
+
+With IndexedDB absent, abort Water's tick as a network error: warning appears. Successfully tick Call the bank next: warning disappears and beforeunload no longer prevents departure, while Water was never sent. Independent Chromium repro `ratchet-memory-failure.mjs` outputs `{before:1,after:0,leave:false}` and fails. `memoryUnsent` is reset by any successful memory-only command, so it must track unresolved operation IDs instead.
