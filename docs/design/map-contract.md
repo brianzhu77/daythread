@@ -133,7 +133,7 @@ There's no page CSP in this step. That's its own hardening item.
 
 - **At most one live map per page or dashboard** (Lead 9f694596): each live map holds a WebGL context, and browsers
   cap those, Safari sooner. Any other Map block or widget on the same page shows its frame with its count line and
-  "Show map ›" (wording Jazz's); a tap moves the live map there, and the previous one returns to its frame. Check: a
+  a Secondary "Show map" button in its middle, with no explanation (Jazz c659b8df); a tap moves the live map there, and the previous one returns to its frame. Check: a
   dashboard with three Map widgets has one WebGL context, MapLibre loaded once, and no page errors.
 - **No WebGL2** isn't retryable: "Map isn't available in this browser", with no Retry (Lead 9f694596). The other
   unavailable cases keep "Map unavailable · Retry".
