@@ -338,7 +338,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
 
   const reload = useCallback(() => {
     setLoadError(null)
-    void refresh().then(() => { legacy.current = false; if (!gateOpen.current) { gateOpen.current = true; openAfterDrain() } else void drain() }, async (e: unknown) => {
+    void refresh().then(() => { legacy.current = false; netAway.current = false; if (!gateOpen.current) { gateOpen.current = true; openAfterDrain() } else void drain() }, async (e: unknown) => {
       // No network: the last-loaded copy opens the app, read as it was; any other failure is shown as before.
       const copy = await offlineCopy.fallback(e)
       if (copy && !knownOwner) noteOwner(await offlineCopy.recallOwner())

@@ -190,13 +190,6 @@ function SampleBanner() {
         Offline · showing what was last loaded{willSend}
       </p>
     )
-  // Gone offline mid-session with changes kept (Jazz 3c65a099): said even though the load didn't fail.
-  if (outbox.offline)
-    return (
-      <p className="banner offline" role="status">
-        Offline{willSend}
-      </p>
-    )
   // §8.2a: a server without the outbox (a rollback) can't check them; they wait, and say so.
   if (outbox.keptBack)
     return (
@@ -204,6 +197,14 @@ function SampleBanner() {
         Not sent yet{willSend}
       </p>
     )
+  // Gone offline mid-session with changes kept (Jazz 3c65a099): said even though the load didn't fail.
+  if (outbox.offline)
+    return (
+      <p className="banner offline" role="status">
+        Offline{willSend}
+      </p>
+    )
+
   if (loadError)
     return (
       <p className="banner error" role="alert">
