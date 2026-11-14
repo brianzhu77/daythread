@@ -10,11 +10,17 @@ import { useWorkspace } from './use-day'
 
 type DatabasePage = Page & { database: Database }
 
+/** Opens a view's source database: To-dos opens Tasks, any other its own page (§9.2). */
+export function useOpenSource(): (db: DatabasePage) => void {
+  const navigate = useNavigate()
+  return db => void (db.database.fixed ? navigate({ to: '/tasks', search: { view: 'open' } }) : navigate({ to: '/pages', search: { page: db.id } }))
+}
+
 /** "↳ from Reading list · in Books": tap opens the source (§9.2). */
 export function SourceLine({ workspace, db }: { workspace: Workspace; db: DatabasePage }) {
-  const navigate = useNavigate()
+  const open = useOpenSource()
   const host = db.parentId ? workspace.pages.find(p => p.id === db.parentId) : undefined
-  return <button type="button" className="database-source" onClick={() => void (db.database.fixed ? navigate({ to: '/tasks', search: { view: 'open' } }) : navigate({ to: '/pages', search: { page: db.id } }))}>
+  return <button type="button" className="database-source" onClick={() => open(db)}>
     ↳ from {displayPageTitle(db)}{host ? ` · in ${displayPageTitle(host)}` : ''}
   </button>
 }
