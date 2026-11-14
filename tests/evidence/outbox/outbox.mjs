@@ -540,6 +540,25 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 19e tab B's change on the row, made while A's waited, is held once A's rebuild replaces it; the rebuild waits behind it ("${text}")`, r1?.values?.st === r1Before?.values?.st && states.filter(e => e.state === 'held').length === 1 && states.filter(e => e.state === 'pending').length === 1 && /changed since · 1 later change waiting/.test(text), `r1 ${r1Before?.values?.st} → ${r1?.values?.st}, stored ${JSON.stringify(states)}`)
     await context.close()
   }
+  // 19f. While tab A's edit waits to be built again, tab B shows it held and he chooses Keep mine there: it's sent from
+  //      B, and A's rebuild, coming after, finds it no longer held and isn't stored or sent too (Ratchet 23351123).
+  {
+    reseed()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }), a = await context.newPage()
+    await a.goto(`${base}/pages?page=runs`); await a.locator('[data-cell*="|r1|st"]').first().waitFor({ timeout: 20000 }); await settle(a)
+    await elsewhere({ type: 'rename-page', pageId: 'r1', title: 'Alpha two' })
+    const held = await holdAfterAnswer(a, req => !req.url().includes('cedd5fc6'))
+    await stage(a)
+    for (let i = 0; i < 40 && !held.answered(); i++) await wait(100)
+    await wait(400)
+    const r0 = stored().revision
+    const b = await context.newPage(); await b.goto(`${base}/pages?page=runs`); await b.locator('.banner.save-failed').waitFor({ timeout: 10000 }).catch(() => {}); await settle(b)
+    await b.locator('.banner.save-failed').getByRole('button', { name: 'Keep mine' }).click(); await wait(1500); await settle(b)
+    held.release(); await wait(2500); await settle(a)
+    const r1 = stored().pages.find(p => p.id === 'r1'), left = await outboxCount(a), banners = await a.locator('.banner.save-failed').count() + await b.locator('.banner.save-failed').count()
+    ok(`${tag} 19f Keep mine in another tab while it waited to be built again: sent once, the rebuild not stored or sent too`, r1?.values?.st === 'b' && stored().revision === r0 + 1 && left === 0 && banners === 0, `stage ${r1?.values?.st}, revision ${r0} → ${stored().revision}, left ${left}, banners ${banners}`)
+    await context.close()
+  }
   // 20. A typed cell whose answer is lost: its retry lands it once, by its own operation id; its draft (kept for a closed
   //     tab) is never sent again as a second change; nothing is held or left, and the next edit goes (gate 4d6fbafe).
   {

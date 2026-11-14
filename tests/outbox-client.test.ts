@@ -121,3 +121,15 @@ test('a hand-off, in one step: the original goes, its replacement is stored, and
   assert.equal(await store.handOff(lone, 'me', null), null)
   assert.equal((await store.all()).some(e => e.operationId === 'lone'), false)
 })
+
+test('a hand-off changes nothing when the original isn\'t held for its caller any more: another tab kept it, discarded it, or it isn\'t this owner\'s (Ratchet 23351123)', async () => {
+  const store = memoryOutboxStore()
+  const kept = await store.add(entry({ operationId: 'kept', writes: ['page:r1'], state: 'pending' }))
+  assert.equal(await store.handOff(kept, 'me', entry({ operationId: 'rebuilt', writes: ['page:r1'] })), 'not-held', 'Keep mine in another tab')
+  assert.equal(await store.handOff(999, 'me', entry({ operationId: 'rebuilt-2', writes: ['page:r1'] })), 'not-held', 'discarded in another tab')
+  const theirs = await store.add(entry({ operationId: 'theirs', owner: 'someone', writes: ['page:r1'], state: 'held' }))
+  assert.equal(await store.handOff(theirs, 'me', null), 'not-held', 'another account\'s')
+  assert.deepEqual((await store.all()).map(e => e.operationId), ['kept', 'theirs'], 'nothing stored, nothing removed')
+  // The app's own write was dropped when it was held: its rebuild is stored.
+  assert.equal(typeof await store.handOff(998, 'me', entry({ operationId: 'app-rebuilt', writes: ['page:n1'], app: true })), 'number')
+})

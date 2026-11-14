@@ -114,9 +114,9 @@ try {
   // still there, and an edit to it made before its removal is held.
   const { firstWidgetView } = await import(resolve(import.meta.dirname, '../../../src/domain/dashboard.ts'))
   const source = (await read(self, owner)).pages.find((p: { id: string }) => p.id === dbPage!.id) as { database: unknown }
-  const widgetId = `rehearse-w-${Date.now()}`
-  await thisWrites({ type: 'change-database', pageId: dbPage!.id, change: { kind: 'addDashboard', view: { id: `rehearse-dash-${Date.now()}`, name: 'Rehearsal dashboard' }, rows: [{ id: `rehearse-row-${Date.now()}`, widgets: [{ id: widgetId, source: dbPage!.id, view: firstWidgetView(source.database, `${widgetId}-v`) }] }] } })
-  const dashId = (await read(self, owner)).pages.find((p: { id: string }) => p.id === dbPage!.id).database.views.find((v: { dashboard?: unknown }) => v.dashboard).id
+  // Its own ids, used throughout: his database may have a dashboard already (Ratchet 4a9c313d).
+  const widgetId = `rehearse-w-${Date.now()}`, dashId = `rehearse-dash-${Date.now()}`
+  await thisWrites({ type: 'change-database', pageId: dbPage!.id, change: { kind: 'addDashboard', view: { id: dashId, name: 'Rehearsal dashboard' }, rows: [{ id: `rehearse-row-${Date.now()}`, widgets: [{ id: widgetId, source: dbPage!.id, view: firstWidgetView(source.database, `${widgetId}-v`) }] }] } })
   const base5c = (await read(self, owner)).revision
   await thisWrites({ type: 'change-database', pageId: dbPage!.id, change: { kind: 'removeWidget', viewId: dashId, widgetId } })
   await floor.asOwner(owner, async () => { const r = repoOf(floor), ws = await r.load(); return r.execute({ operationId: `rehearse-floor-2-${Date.now()}`, expectedRevision: ws.revision, action: { type: 'ensure-day', date: '2099-01-04' } }) })
