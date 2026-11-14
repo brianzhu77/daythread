@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { harness, today, todo, dayId, bullet, text } from './v2-helpers.ts'
-import { capture, dependsOn, labelFor, memoryOutboxStore, referencedIds, type OutboxEntry } from '../src/components/outbox.ts'
+import { blockedBy, capture, dependsOn, labelFor, memoryOutboxStore, referencedIds, type OutboxEntry } from '../src/components/outbox.ts'
 import type { Action } from '../src/domain/types.ts'
 import { applyCommand } from '../src/domain/workspace.ts'
 
@@ -65,4 +65,15 @@ test('a new to-do gets the same id in the prediction and on the server, so a lat
   assert.equal(id(predicted!), id(server))
   const other = applyCommand(structuredClone(h.ws), { operationId: 'op-other', expectedRevision: h.ws.revision, action }).workspace
   assert.notEqual(id(other), id(server), 'another operation makes another id')
+})
+
+test('waiting is transitive: a change on a row whose add waits on a held database waits too (Ratchet 12c9599b)', () => {
+  const a = entry({ seq: 1, state: 'held', writes: ['page:newdb'] })
+  const b = entry({ seq: 2, writes: ['page:newrow'], refs: ['newdb'] })
+  const c = entry({ seq: 3, writes: ['page:newrow'], refs: ['newrow'] })
+  const d = entry({ seq: 4, writes: ['task:other'], refs: ['other'] })
+  const all = [a, b, c, d]
+  assert.equal(blockedBy(all, b), true)
+  assert.equal(blockedBy(all, c), true, 'through b')
+  assert.equal(blockedBy(all, d), false, 'an unrelated change goes')
 })
