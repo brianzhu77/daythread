@@ -152,7 +152,11 @@ PR). The row check is on what a replay **writes**. These read other rows' values
 
 Rule for v1: a replay whose application on the latest workspace **ran steps or read a template** (the server knows:
 `run-button`/`run-row-button`, a non-empty `receipt.automations`, or a template used) does **not** get the row check. It
-gets the whole-revision rule: applied if nothing moved since its base, else held (§6). The browser marks such an entry
+gets the whole-revision rule: applied if nothing moved since its base, else held (§6). The classification only ever **strengthens**
+(Ratchet eeae819d): the request carries the entry's captured `readsBeyond`, and the server applies the whole-revision
+rule if **either** the captured entry says so **or** its application on the latest state ran steps or read a template.
+So a tick predicted to fire a rule stays conservative even if that rule was removed on another device before it was
+sent. The browser marks such an entry
 `readsBeyond` when it is made (its predicted application, §4, shows the same steps and fired rules) and treats it as
 depending on **every** earlier held entry. A cost, said plainly: these replays can be held by an unrelated edit made
 elsewhere meanwhile. They are buttons, template adds and changes that fire a rule, so the false alarm Bumblebee
@@ -375,6 +379,8 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 
 22. Rollback between a tab's load and its send: the send to `runOutboxCommand` fails on the older build without executing; the entry stays stored and shows as kept back; once the new build answers, it replays.
 23. A held database creation, then a row added to that database, then an unrelated tick: the add is held with the creation (it references the created id); the tick is applied.
+
+24. A tick captured as firing a rule (`readsBeyond`), whose rule is removed on another device before the send: still replayed under the whole-revision rule (held if anything moved), not the row check.
 
 Unit and contract tests: the outbox state machine against a fake store (write fails, quota, two drains, owner change,
 late reply); repository contract tests for `basis: 'rows'` on SQLite and Postgres (replay, tombstone, row conflict,
