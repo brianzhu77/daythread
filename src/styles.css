@@ -1912,30 +1912,14 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-view-name > svg { width: 14px; height: 14px; color: var(--ink-3); }
 
 /* Too wide: it scrolls sideways inside the block, Name stays pinned, and the clipped edge fades while there's more to
-   the right (a scroll-driven fade: without support, no fade, nothing else changes). */
+   the right. Both edges come from classes set in script (scroll-edges.ts), not a scroll timeline: WebKit crashes in
+   ScrollTimeline when a scroller with one is resized (Lead b43f8f97). */
 .database-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
-@supports (animation-timeline: scroll()) {
-  /* Named, so cells that clip (and so are scroll containers themselves) still follow this scroller. */
-  .database-scroll { scroll-timeline: --database-x inline; animation: database-edge-fade linear both; animation-timeline: --database-x; }
-}
-/* No scroll-driven CSS: the fade stays on, so a clipped table always hints at more columns (Bumblebee dbf24b36). */
-@supports not (animation-timeline: scroll()) {
-  .database-scroll { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
-}
-@keyframes database-edge-fade {
-  from, 96% { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
-  to { -webkit-mask-image: none; mask-image: none; }
-}
+.database-scroll.has-more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
 /* Once scrolled sideways, a hairline marks where the columns slide under pinned Name. (A box-shadow isn't painted on
    cells of a collapsed-border table, so it's a 1 px pseudo-element.) */
 .database-th.is-title::after, .database-td.is-title::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 1px; background: var(--line); opacity: 0; }
-@supports (animation-timeline: scroll()) {
-  .database-th.is-title::after, .database-td.is-title::after { animation: database-pin-edge linear both; animation-timeline: --database-x; }
-}
-@keyframes database-pin-edge {
-  from { opacity: 0; }
-  1%, to { opacity: 1; }
-}
+.database-scroll.is-scrolled .database-th.is-title::after, .database-scroll.is-scrolled .database-td.is-title::after { opacity: 1; }
 /* BlockNote's `.ProseMirror table` clips and sets width 100%; this one must not clip, or Name can't stay pinned inside
    .database-scroll. Two classes to outrank it. */
 /* The width is set on the table, from its columns: `max-content` would turn fixed layout off, and a long value would stretch its column. */
