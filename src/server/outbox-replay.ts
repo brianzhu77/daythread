@@ -52,8 +52,11 @@ export function readsBeyondApplied(action: Action, receipt: Receipt): boolean {
  * check can't be trusted for it (it reads beyond its writes, an older build wrote unstamped rows since its base, or a
  * receipt it may have had was forgotten); else `rows`.
  */
-export function replayRule(basis: OutboxBasis, revision: number, tracking: RowTracking): { rule: 'as-is' } | { rule: 'rows' } | { rule: 'whole'; reason: HeldReason } {
+export function replayRule(basis: OutboxBasis, revision: number, stored: RowTracking): { rule: 'as-is' } | { rule: 'rows' } | { rule: 'whole'; reason: HeldReason } {
   if (basis.baseRevision === revision) return { rule: 'as-is' }
+  // An older build may have written since the last stamp, with no command of this build after it yet to record the gap:
+  // read it from the workspace as it is now, before deciding (Ratchet: the first replay after a rollback and forward).
+  const tracking = stored.trackedThrough === revision ? stored : { ...stored, untrackedUntil: Math.max(stored.untrackedUntil, revision) }
   if (basis.baseRevision < tracking.forgottenThrough) return { rule: 'whole', reason: 'maybe-applied' }
   if (basis.readsBeyond || basis.baseRevision < tracking.untrackedUntil) return { rule: 'whole', reason: 'changed-since' }
   return { rule: 'rows' }

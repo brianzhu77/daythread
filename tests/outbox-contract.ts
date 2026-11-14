@@ -91,6 +91,8 @@ export function outboxContract(name: string, fixture: () => Promise<OutboxFixtur
     try {
       const repo = f.create(), { ws, water, bank } = await seeded(repo), base = ws.revision
       await f.olderBuildWrote()
+      // At once, before any command of this build has seen the gap (Ratchet: the first replay after rollback and forward).
+      await assert.rejects(repo.executeOutbox({ operationId: 'first-replay', expectedRevision: base, action: tick(water) }, basis(base)), held('changed-since'))
       await repo.execute({ operationId: 'after-rollback', expectedRevision: (await repo.load()).revision, action: rename(bank, 'Call the bank today') })
       await assert.rejects(repo.executeOutbox({ operationId: 'before-rollback', expectedRevision: base, action: tick(water) }, basis(base)), held('changed-since'))
     } finally { await f.cleanup() }

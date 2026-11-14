@@ -21,11 +21,13 @@ test('a tick writes only its task row; a line on the same day page only the page
 test('the rule: as-is when nothing moved; whole when it reads beyond, predates a gap or a forgotten receipt; else rows', () => {
   const basis = { baseRevision: 10, ownRevisions: [], readsBeyond: false }
   assert.deepEqual(replayRule(basis, 10, noTracking), { rule: 'as-is' })
-  assert.deepEqual(replayRule(basis, 12, noTracking), { rule: 'rows' })
-  assert.deepEqual(replayRule({ ...basis, readsBeyond: true }, 12, noTracking), { rule: 'whole', reason: 'changed-since' })
-  assert.deepEqual(replayRule(basis, 12, { ...noTracking, untrackedUntil: 11 }), { rule: 'whole', reason: 'changed-since' })
-  assert.deepEqual(replayRule(basis, 12, { ...noTracking, forgottenThrough: 11 }), { rule: 'whole', reason: 'maybe-applied' })
-  assert.deepEqual(replayRule(basis, 12, { ...noTracking, forgottenThrough: 10 }), { rule: 'rows' }, 'an operation pruned at or before its base was made before it')
+  const tracked = { trackedThrough: 12, untrackedUntil: 0, forgottenThrough: 0 }
+  assert.deepEqual(replayRule(basis, 12, tracked), { rule: 'rows' })
+  assert.deepEqual(replayRule(basis, 12, { ...tracked, trackedThrough: 11 }), { rule: 'whole', reason: 'changed-since' }, 'an older build wrote revision 12 unstamped')
+  assert.deepEqual(replayRule({ ...basis, readsBeyond: true }, 12, tracked), { rule: 'whole', reason: 'changed-since' })
+  assert.deepEqual(replayRule(basis, 12, { ...tracked, untrackedUntil: 11 }), { rule: 'whole', reason: 'changed-since' })
+  assert.deepEqual(replayRule(basis, 12, { ...tracked, forgottenThrough: 11 }), { rule: 'whole', reason: 'maybe-applied' })
+  assert.deepEqual(replayRule(basis, 12, { ...tracked, forgottenThrough: 10 }), { rule: 'rows' }, 'an operation pruned at or before its base was made before it')
 })
 
 test('row conflicts skip unstamped rows, rows at or before the base, and the queue\'s own revisions', () => {
