@@ -11,7 +11,7 @@ const [base, storePath, only] = process.argv.slice(2), results = []
 if (!base || !storePath) { console.error('Usage: node tests/evidence/outbox/outbox.mjs <base-url> <store-path> [chromium|webkit]'); process.exit(2) }
 const ok = (name, pass, detail = '') => { results.push(pass); console.log(`${pass ? 'PASS' : 'FAIL'} ${name}${detail ? ` · ${detail}` : ''}`) }
 const wait = ms => new Promise(r => setTimeout(r, ms))
-const reseed = () => execSync(`node --no-warnings tests/evidence/outbox/seed.ts ${storePath}`, { stdio: 'ignore' })
+const reseed = (variant = '') => execSync(`node --no-warnings tests/evidence/outbox/seed.ts ${storePath} ${variant}`, { stdio: 'ignore' })
 const stored = () => { const db = new DatabaseSync(storePath, { readOnly: true }); try { return JSON.parse(db.prepare('SELECT data FROM workspace WHERE id = 1').get().data) } finally { db.close() } }
 const statusOf = title => stored().tasks.find(t => t.title === title)?.status
 /** Another device: a command straight on the store, as the server would apply it from another tab. */
@@ -227,6 +227,39 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const whileOffline = statusOf('Water the plants')
     await context.setOffline(false); await wait(2500); await settle(page)
     ok(`${tag} 6b offline, reloaded offline: shown ticked from the first frame ("${line}"), sent once back online`, whileOffline === 'open' && /1 change will be sent/.test(line) && seen.length > 0 && seen.every(Boolean) && statusOf('Water the plants') === 'done' && stored().revision === base0 + 1, `offline ${whileOffline}, ${seen.length} samples, all ticked ${seen.every(Boolean)}, revision ${base0} → ${stored().revision}`)
+    await context.close()
+  }
+  // 6c. The network comes back with no event (a dead connection, or he returns to the app): the kept tick is sent within
+  //     a few seconds by the retry alone, and at once on a return to the tab (Jazz 8887e299, Lead b19f29b0).
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    await cut(page); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(800)
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+    const sentAt = Date.now(); while (statusOf('Water the plants') !== 'done' && Date.now() - sentAt < 8000) await wait(250)
+    const byRetry = statusOf('Water the plants') === 'done' ? Date.now() - sentAt : null
+    await cut(page); await page.getByRole('checkbox', { name: 'Complete Call the bank' }).click(); await wait(800)
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+    await wait(5200) // past the visibility check's 5 s guard
+    await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
+    const back = Date.now(); while (statusOf('Call the bank') !== 'done' && Date.now() - back < 3000) await wait(100)
+    const onReturn = statusOf('Call the bank') === 'done' ? Date.now() - back : null
+    ok(`${tag} 6c no network event: sent by the retry in ${byRetry} ms; on a return to the tab in ${onReturn} ms; no reload`, byRetry !== null && byRetry < 8000 && onReturn !== null && onReturn < 3000)
+    await context.close()
+  }
+  // 6d. An offline open on a new day: the app's own "make today" is kept but never counted or shown; the day made
+  //     elsewhere meanwhile, it's dropped unsaid (Jazz 8887e299, Lead b19f29b0).
+  {
+    reseed('no-today'); const { context, page } = await fresh()
+    await cut(page)
+    await page.goto(`${base}/`); await wait(2500)
+    const line = (await page.locator('.banner.offline').innerText().catch(() => '')).trim()
+    await elsewhere({ type: 'ensure-day', date: today() })
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+    await wait(5200); await page.evaluate(() => { window.dispatchEvent(new Event('focus')) }); await wait(2500)
+    const banner = (await page.locator('.banner.save-failed').innerText().catch(() => '')).trim()
+    const left = await page.evaluate(() => new Promise(res => { const r = indexedDB.open('daythread-outbox'); r.onsuccess = () => { const g = r.result.transaction('entries').objectStore('entries').getAll(); g.onsuccess = () => res(g.result.length) } }))
+    ok(`${tag} 6d an offline open on a new day: no count ("${line}"), no banner ("${banner}"), the app's own write gone once the day exists`, !/change/.test(line) && banner === '' && left === 0, `stored entries left ${left}`)
     await context.close()
   }
   // 13. Another device edits something else meanwhile: the tick is kept, with no notice.

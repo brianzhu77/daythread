@@ -8,8 +8,11 @@ for (const x of ['', '-wal', '-shm']) rmSync(S + x, { force: true })
 const r = new R(S, undefined, { allowMissingLegacy: true }); let w: any = await r.load()
 const run = async (action: any) => { w = (await r.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action })).workspace }
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' }).format(new Date())
-await run({ type: 'ensure-day', date: today })
-const day = w.pages.find((p: any) => p.date === today)
+// `no-today`: the to-dos live on a page of their own and today has no page yet (an offline open on a new morning).
+const noToday = process.argv[3] === 'no-today'
+if (noToday) await run({ type: 'create-document', title: 'Errands', body: '', pageId: 'errands' })
+else await run({ type: 'ensure-day', date: today })
+const day = noToday ? w.pages.find((p: any) => p.id === 'errands') : w.pages.find((p: any) => p.date === today)
 for (const title of ['Water the plants', 'Call the bank', 'Pay rent']) await run({ type: 'add-task', pageId: day.id, title, plannedOn: today })
 // A database for a cell edit: Runs, a Stage select, two rows.
 const at = new Date().toISOString()

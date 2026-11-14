@@ -45,6 +45,8 @@ export interface OutboxEntry {
   label: string
   createdAt: number
   state: 'pending' | 'held'
+  /** A write the app makes by itself (§6, Jazz 8887e299): not counted, never held; dropped silently when replay finds it unneeded. */
+  app?: boolean
   held?: { reason: HeldReason; message?: string }
 }
 
@@ -116,6 +118,9 @@ export function idbOutboxStore(factory: IDBFactory = indexedDB): OutboxStore {
     clearOwner: owner => tx<void>('readwrite', s => later(s, owner, 0, (_e, c) => { c.delete() })),
   }
 }
+
+/** Writes the app makes by itself, not he (Lead b19f29b0): opening a day, the day draft, repeats, a smart note's answer. */
+export const appWrites: ReadonlySet<string> = new Set(['ensure-day', 'set-draft', 'skip-draft', 'run-repeats', 'set-smart-note-result'])
 
 /** Every string an action names: the ids it may depend on, over-approximated on purpose (§6). */
 export function referencedIds(action: Action): string[] {

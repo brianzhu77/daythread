@@ -6,7 +6,7 @@ import type { Action, DayView, LocalDate, Receipt, Task, Workspace } from '../do
 import { applyCommand, getDayView } from '../domain/workspace'
 import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand, runOutboxCommand } from '../server/functions'
-import { capture, dependsOn, idbOutboxStore, type HeldReason, type OutboxEntry, type OutboxStore } from './outbox'
+import { appWrites, capture, dependsOn, idbOutboxStore, type HeldReason, type OutboxEntry, type OutboxStore } from './outbox'
 import { isNetworkFailure } from './offline-copy'
 import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
@@ -248,12 +248,23 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [predicted])
   const showOutbox = useCallback(() => {
     if (!entries.current.length && store.current && outboxHint.get()) void store.current.all().then(left => { if (!left.length) outboxHint.clear() }).catch(() => undefined)
-    const held = entries.current.find(e => e.state === 'held') ?? null
-    const pending = entries.current.filter(e => e.state === 'pending')
+    const held = entries.current.find(e => e.state === 'held' && !e.app) ?? null
+    // His changes only: the app's own writes (opening a day, the draft) are never counted to him (Jazz 8887e299).
+    const pending = entries.current.filter(e => e.state === 'pending' && !e.app)
     const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
     setOutbox({ pending: pending.length, held, waiting: held ? pending.filter(e => e.seq! > held.seq! && dependsOn(e, held)).length : 0, durable: durable.current, keptBack: legacy.current && pending.length > 0, offline: away && pending.length > 0, atRisk: !durable.current && (slowUnsent.current || (away && commandsPending())) })
-    if (pending.some(e => kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
+    if (entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
+  // After a send that didn't land, try again on its own: 2 s, 5 s, 15 s, then every 30 s, without waiting for `online`,
+  // which a dead connection never fires (Jazz 8887e299).
+  const retryStep = useRef(0), retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const drainRef = useRef<(() => Promise<void>) | undefined>(undefined)
+  const retryLater = useCallback(() => {
+    if (retryTimer.current) return
+    const delay = [2000, 5000, 15000][retryStep.current] ?? 30000
+    retryStep.current++
+    retryTimer.current = setTimeout(() => { retryTimer.current = undefined; if (entries.current.some(e => e.state === 'pending')) void drainRef.current?.() }, delay)
+  }, [])
   /** Sends one stored entry and makes its answer what `transport.run` would have returned, or an `OutboxStop`. */
   const sendEntry = useCallback(async (entry: OutboxEntry): Promise<{ workspace: Workspace; receipt: Receipt }> => {
     const s = store.current!, seq = entry.seq!
@@ -267,7 +278,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       const drop = () => { entries.current = entries.current.filter(e => e.seq !== seq) }
       switch (answer.status) {
         case 'applied': {
-          netAway.current = false
+          netAway.current = false; retryStep.current = 0
           await s.acknowledge(seq, entry.owner, answer.receipt.revision)
           drop()
           const r = answer.receipt.revision
@@ -276,14 +287,16 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         }
         case 'already-applied': await s.acknowledge(seq, entry.owner, undefined); drop(); throw new OutboxStop('done')
         case 'held': {
+          // The app's own write, no longer needed or no longer allowed (the day was made elsewhere): dropped, unsaid.
+          if (entry.app) { await s.remove(seq); drop(); throw new OutboxStop('done') }
           const patch = { state: 'held' as const, held: { reason: answer.reason, ...(answer.message ? { message: answer.message } : {}) } }
           await s.update(seq, patch)
           entries.current = entries.current.map(e => (e.seq === seq ? { ...e, ...patch } : e))
           throw new OutboxStop('held', answer.message ?? answer.reason)
         }
         case 'owner-mismatch': throw new OutboxStop('owner')
-        case 'offline': kept.current.add(seq); netAway.current = true; throw new OutboxStop('offline')
-        case 'failed': kept.current.add(seq); throw new OutboxStop('failed', answer.message)
+        case 'offline': kept.current.add(seq); netAway.current = true; retryLater(); throw new OutboxStop('offline')
+        case 'failed': kept.current.add(seq); retryLater(); throw new OutboxStop('failed', answer.message)
         case 'missing': {
           // An older build is serving (a rollback). A stored change waits for a server that can check it (§11, Ratchet
           // c8c0f6f9); only one he made just now, in this tab, goes as before, as it would have without the outbox.
@@ -295,7 +308,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         }
       }
     } finally { inFlight.current.delete(seq); showOutbox() }
-  }, [transport, showOutbox])
+  }, [transport, showOutbox, retryLater])
 
   /** Once the owner is known (the first load, or the offline copy's), this owner's stored changes join the tab, before they're shown. */
   const takeStored = useCallback(async (owner: string | null) => {
@@ -339,6 +352,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     showOutbox()
     return chain.then(() => undefined)
   }, [sendEntry, adopt, refresh, showOutbox])
+  drainRef.current = () => drain()
   // Stored changes first, then the queue opens for everything else (Jazz ef6b418a).
   const openAfterDrain = useCallback(() => {
     const open = openQueue.current
@@ -394,6 +408,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       if (document.visibilityState !== 'visible' || running || Date.now() - last < 5000) return
       running = true; last = Date.now()
       try {
+        // Changes kept on the device go as soon as he's back, whatever the network events said (Jazz 8887e299).
+        if (entries.current.some(e => e.state === 'pending')) { netAway.current = false; void drainRef.current?.() }
         if (!(await flushAllEditors())) return
         await queue.current
         await refresh()
@@ -401,7 +417,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
-    return () => { document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible) }
+    window.addEventListener('pageshow', onVisible)
+    return () => { document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible); window.removeEventListener('pageshow', onVisible) }
   }, [refresh])
 
   useEffect(() => {
@@ -452,7 +469,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         built = typeof source === 'function' ? source(ahead) : source
         if (built && built.type !== 'save-editor') {
           const { entry } = capture(ahead, built, operationId, entries.current.some(e => e.action.type === 'undo'))
-          const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending' }
+          const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending', ...(appWrites.has(built.type) ? { app: true } : {}) }
           stored = store.current.add(full).then(seq => {
             outboxHint.set()
             const kept = { ...full, seq }
