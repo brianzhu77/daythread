@@ -23,6 +23,10 @@ await run({ type: 'add-row', databaseId: 'eats', pageId: 'e-words', title: 'Some
 await run({ type: 'add-row', databaseId: 'eats', pageId: 'e-none', title: 'Unplaced', values: {}, at })
 await C('eats', { kind: 'addView', view: { id: 'eats-map', name: 'Map', layout: 'map', mapBy: 'pl', columns: [{ id: 'nt' }], sort: [], filter: [] } })
 await C('eats', { kind: 'moveView', viewId: 'eats-map', beforeId: w.pages.find((p: any) => p.id === 'eats').database.views[0].id })
+// A view whose Place property has gone: "Choose a Place property".
+await C('eats', { kind: 'addProperty', property: { id: 'gone', name: 'Old place', type: 'place' } })
+await C('eats', { kind: 'addView', view: { id: 'orphan', name: 'Old map', layout: 'map', mapBy: 'gone', columns: [], sort: [], filter: [] } })
+await C('eats', { kind: 'removeProperty', propertyId: 'gone' })
 // Many: a grid of pins over the city, past the cap.
 const many = Number(manyArg ?? 240)
 await run({ type: 'create-database', pageId: 'many', homeBlockId: null, title: 'Many' })

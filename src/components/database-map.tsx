@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Map as MapLibre, setWorkerUrl, type GeoJSONSource, type MapLayerMouseEvent, type RequestTransformFunction } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { useNavigate } from '@tanstack/react-router'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { cellValue, viewColumns, viewRows, type Database, type View } from '../domain/database.ts'
 import { mapRows, shownLine, viewMapBy, type MapRow } from '../domain/map.ts'
@@ -71,6 +72,7 @@ function savedArea(key: string): Area | null {
 
 export function DatabaseMap({ workspace, db, view, changeView, blockId, pageDate, showTitle = true, linked }: Props) {
   const wide = useWide()
+  const navigate = useNavigate()
   const context = useMemo(() => ({ today: todayIso(), pageDate, weekStart: workspace.weekStart ?? 0 }), [pageDate, workspace.weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   const openRow = useOpenRow(view, rows, blockId)
@@ -87,7 +89,7 @@ export function DatabaseMap({ workspace, db, view, changeView, blockId, pageDate
   // Inline at 390 waits for step 3 (G8-13): the full page holds the map.
   if (!wide && !fullPage) return <div className="database-map">
     {head}
-    <p className="map-line"><a className="app-link" href={`/pages?page=${encodeURIComponent(db.id)}`}>Open the map ›</a></p>
+    <p className="map-line"><button type="button" className="app-link" onClick={() => void navigate({ to: '/pages', search: { page: db.id } })}>Open the map ›</button></p>
   </div>
   const line = shownLine(m)
   return <div className={`database-map${fullPage ? ' is-page' : ''}${widget ? ' is-widget' : ''}`}>
@@ -142,9 +144,13 @@ function MapFrame({ db, view, blockId, pinned, onOpen, zone }: { db: DatabasePag
         ...(area ? { center: area.center, zoom: area.zoom } : city ? { center: [city[1], city[0]] as [number, number], zoom: 10 } : { center: [0, 20] as [number, number], zoom: 1 }),
       })
       map.current = instance
+      // For the browser checks: where a pin is drawn, without a global (tests/evidence/map/map.mjs).
+      Object.defineProperty(canvasHolder.current!, 'mapForChecks', { value: instance, configurable: true })
       instance.on('load', () => {
         if (gone) return
         clearTimeout(timer)
+        // Attribution starts folded to its ⓘ, linked and at the bottom right, so a small map isn't covered (G8-11).
+        instance.getContainer().querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show')
         addPinLayers(instance)
         drawPins(instance, pinsRef.current)
         if (!area && first.length) fit(instance, first)
@@ -172,12 +178,18 @@ function MapFrame({ db, view, blockId, pinned, onOpen, zone }: { db: DatabasePag
   // New rows, a filter or a pick: the same map, its pins redrawn.
   useEffect(() => { if (map.current && state === 'ready') drawPins(map.current, pinned) }, [pinned, state])
 
-  // Esc closes the card; keys meant for the map stay out of the page (R1-26).
-  const keep = (e: ReactKeyboardEvent) => {
-    e.stopPropagation()
-    if (e.key === 'Escape' && selected) { e.preventDefault(); setSelected(null) }
-  }
-  const stop = (e: { stopPropagation(): void }) => e.stopPropagation()
+  // Keys, cut, copy and paste meant for the map stay out of the page (R1-26). Native listeners on the frame, as the page
+  // editor around an inline map listens natively on its own element, which React's own handlers would reach too late.
+  useEffect(() => {
+    const el = frame.current
+    if (!el) return
+    const stop = (e: Event) => e.stopPropagation()
+    const kinds = ['keydown', 'keyup', 'keypress', 'cut', 'copy', 'paste', 'beforeinput'] as const
+    for (const k of kinds) el.addEventListener(k, stop)
+    return () => { for (const k of kinds) el.removeEventListener(k, stop) }
+  }, [])
+  // Esc closes the card.
+  const keep = (e: ReactKeyboardEvent) => { if (e.key === 'Escape' && selected) { e.preventDefault(); setSelected(null) } }
   const height = blockId.includes('|widget:') ? '100%' : undefined
   const card = selected && map.current && state === 'ready' ? (() => {
     const at = map.current!.project(selected.at)
@@ -185,11 +197,11 @@ function MapFrame({ db, view, blockId, pinned, onOpen, zone }: { db: DatabasePag
     return rows.length ? <PinCard db={db} view={view} rows={rows} x={at.x} y={at.y} onOpen={onOpen} /> : null
   })() : null
   return <div ref={frame} className={`map-frame is-${state}${live ? ' is-live' : ''}`} style={{ background: state === 'unavailable' || state === 'nowebgl' ? undefined : backgrounds[scheme], ...(height ? { height } : {}) }}
-    onKeyDown={keep} onKeyUp={stop} onCut={stop} onCopy={stop} onPaste={stop}>
+    onKeyDownCapture={keep}>
     {live && state !== 'unavailable' && state !== 'nowebgl' && <div ref={canvasHolder} className="map-canvas" aria-label={`Map of ${view.name}`} />}
     {card}
     {!live && <button type="button" className="map-show" onClick={takeLive}>Show map</button>}
-    {live && state === 'unavailable' && <p className="map-state">Map unavailable · <button type="button" className="app-link" onClick={() => setAttempt(n => n + 1)}>Retry</button></p>}
+    {live && state === 'unavailable' && <p className="map-state">Map unavailable · <button type="button" className="app-link" onClick={() => { setState('loading'); setAttempt(n => n + 1) }}>Retry</button></p>}
     {live && state === 'nowebgl' && <p className="map-state">Map isn't available in this browser</p>}
   </div>
 }
