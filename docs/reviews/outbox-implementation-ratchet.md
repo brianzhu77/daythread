@@ -17,7 +17,7 @@ At author head 0daed055, all four independent boundary probes plus five rule tes
 
 ## Browser review at e4c64e97
 
-Build passes. The four independent storage boundary probes and six client tests pass (10/10), including deterministic prediction/server task identity. Independent Chromium suite passes 24/24; WebKit rerun is in progress.
+Build passes. The four independent storage boundary probes and six client tests pass (10/10), including deterministic prediction/server task identity. Independent browser suites pass: Chromium 24/24 and WebKit 23/23. Those suites do not exercise the newly reported failures below. No full-PR clear: four browser/integration findings require repair and recheck.
 
 ### Open: cross-tab queue uses stale basis (5e6bd5ac)
 
