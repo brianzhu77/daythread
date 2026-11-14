@@ -16,10 +16,12 @@ function prng(seed: number) {
 
 // ---- The reference model: what must wait, from the contract's words, not from the code under test.
 /** §6: a change depends on an earlier one when they write the same row, it names a row the earlier one wrote, or it reads beyond its own writes. */
+/** The id in a row key: everything after the first colon, as ids may hold colons themselves (`page:day:2026-11-14`). */
+const rowId = (key: string) => key.slice(key.indexOf(':') + 1)
 function needs(later: OutboxEntry, earlier: OutboxEntry): boolean {
   if (later.readsBeyond) return true
   for (const key of later.writes) if (earlier.writes.includes(key)) return true
-  for (const id of later.refs) if (earlier.writes.some(key => key.split(':')[1] === id)) return true
+  for (const id of later.refs) if (earlier.writes.some(key => rowId(key) === id)) return true
   return false
 }
 /** The held changes of his a pending change waits on: directly, or through an earlier change that itself waits. */
@@ -72,11 +74,11 @@ test('schedule() splits a queue as the reference model does (random queues)', ()
   }
 })
 
-const rows = ['task:a', 'task:b', 'task:c', 'page:p1', 'page:p2']
+const rows = ['task:a', 'task:b', 'task:c', 'page:p1', 'page:p2', 'page:day:2026-11-14', 'page:day:2026-11-15']
 function made(r: ReturnType<typeof prng>, seq: number | undefined, state: OutboxEntry['state'], base = 0, owner = 'me'): OutboxEntry {
-  const write = r.pick(rows), id = write.split(':')[1]!
+  const write = r.pick(rows), id = rowId(write)
   const app = r.chance(0.12)
-  const refs = r.chance(0.3) ? [id, r.pick(rows).split(':')[1]!] : [id]
+  const refs = r.chance(0.3) ? [id, rowId(r.pick(rows))] : [id]
   return {
     ...(seq !== undefined ? { seq } : {}), owner, operationId: `op-${r.next().toString(36).slice(2, 10)}`,
     action: { type: app ? 'ensure-day' : 'task-status' } as unknown as Action,
