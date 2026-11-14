@@ -1,3 +1,4 @@
+import { newId } from './ids.ts'
 import type { LocalDate, Page, Workspace } from './types.ts'
 import { dayTemplate, emptyLine, emptyTaskRow, headingNode, inlineText, pageNodes, type EditorNode } from './editor-document.ts'
 import { readMention } from './date-chip.ts'
@@ -101,8 +102,8 @@ function freshInline(content: unknown): unknown {
   return content.map(item => {
     if (!item || typeof item !== 'object') return item
     const c = item as { type?: string; props?: Record<string, unknown> }
-    if (c.type === 'pageRef' && c.props) { const { at: _at, ...props } = c.props; return { ...c, props: { ...props, refId: crypto.randomUUID() } } }
-    if (readMention(c) && c.props) return { ...c, props: { ...c.props, eventId: crypto.randomUUID() } }
+    if (c.type === 'pageRef' && c.props) { const { at: _at, ...props } = c.props; return { ...c, props: { ...props, refId: newId() } } }
+    if (readMention(c) && c.props) return { ...c, props: { ...c.props, eventId: newId() } }
     return c
   })
 }
@@ -116,12 +117,12 @@ export function pageFromTemplate(template: Page, date: LocalDate | null, todo?: 
   const copy = (n: EditorNode): EditorNode[] => {
     // Made on the template: each new page gets its own, connected to nothing. A copy pasted into it stays connected, its lines read
     // from the record, so one note is edited once on every new day (design §7).
-    if (isSyncedBlock(n) && !isOriginal(n)) return [{ id: crypto.randomUUID(), type: n.type, props: { syncId: String(n.props?.syncId), roles: '' }, children: [] }]
-    if (isSyncedBlock(n)) return [{ id: crypto.randomUUID(), type: n.type, props: { syncId: crypto.randomUUID(), roles: '' }, children: (n.children ?? []).flatMap(copy) }]
+    if (isSyncedBlock(n) && !isOriginal(n)) return [{ id: newId(), type: n.type, props: { syncId: String(n.props?.syncId), roles: '' }, children: [] }]
+    if (isSyncedBlock(n)) return [{ id: newId(), type: n.type, props: { syncId: newId(), roles: '' }, children: (n.children ?? []).flatMap(copy) }]
     const children = (n.children ?? []).flatMap(copy)
     if (!copiedTypes.has(n.type)) return children
     if (n.type === 'task' || n.type === 'checkListItem') return [{ ...(todo ? todo(n) : emptyTaskRow(date)), children }]
-    return [{ id: crypto.randomUUID(), type: n.type, props: { ...n.props }, content: freshInline(structuredClone(n.content)), children }]
+    return [{ id: newId(), type: n.type, props: { ...n.props }, content: freshInline(structuredClone(n.content)), children }]
   }
   const out = pageNodes(template).flatMap(copy)
   return out.length ? out : [emptyLine('paragraph')]

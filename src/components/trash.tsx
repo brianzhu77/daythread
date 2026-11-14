@@ -14,7 +14,7 @@ import { LinkUrlRow } from './link-url-row'
 import { InlineWithRefs } from './line-text'
 import { displayPageTitle } from './page-title'
 import { PageLink, pageHref, pageLabel, useToday } from './page-tree'
-import { useWorkspace, type NoticeArg } from './use-day'
+import { useWorkspace, type Handoff, type NoticeArg } from './use-day'
 
 // A4 trash and restore, laid out per Jazz docs/design/pages-trash-layout.md (2956eea). Data: docs/design/a4-trash-data.md.
 
@@ -63,10 +63,10 @@ function restoredText(ws: Workspace, page: Page, comingBack: Set<string>, today:
 export function useRunFromButton() {
   const { run } = useWorkspace()
   return async (action: Action, notice: NoticeArg | undefined, failed: string): Promise<Receipt | null> => {
-    let stale = false
+    let stale = false, handoff: Handoff | undefined
     const said = () => toast(failed, { timeout: 6000 })
-    const first = await run(action, notice, undefined, { inlineRefusal: /Saved elsewhere/, onRefused: () => { stale = true }, quiet: true, onFailure: said })
-    return first ?? (stale ? run(action, notice, undefined, { quiet: true, onFailure: said }) : null)
+    const first = await run(action, notice, undefined, { stale: 'rebuild', inlineRefusal: /Saved elsewhere/, onRefused: (_m, h) => { stale = true; handoff = h }, quiet: true, onFailure: said })
+    return first ?? (stale ? run(action, notice, undefined, { quiet: true, onFailure: said, ...(handoff ? { replaces: handoff } : {}) }) : null)
   }
 }
 

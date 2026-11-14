@@ -8,7 +8,7 @@ import type { Action, Page } from '../domain/types'
 import { todayIso } from './dates'
 import { flushAllEditors, flushEditor } from './editor-flush'
 import { pageHref } from './page-tree'
-import { newOperationId, useWorkspace } from './use-day'
+import { newOperationId, useWorkspace, type Handoff } from './use-day'
 
 /** Buttons running now, so a second tap does nothing (§4.2), and pages they're changing, so the open editor merges the reply instead of calling it a conflict (§4.8). */
 const running = new Set<string>(), arriving = new Set<string>()
@@ -52,10 +52,13 @@ function useTap(onEdit: () => void) {
         const last = [...steps].reverse().find(changesStored)
         const notice = (r: { message: string; operationId: string; entityId?: string }) => ({ text: r.message, undoOperationId: r.operationId, ...(last?.kind === 'add-row' && r.entityId ? { extra: { label: 'Open', run: () => { void navigate({ href: `/pages?page=${encodeURIComponent(r.entityId!)}` }) } } } : {}) })
         let refusal: string | null = null
-        const once = () => run(action, notice, operationId, { inlineRefusal: refusals, onRefused: message => { refusal = message } })
+        let handoff: Handoff | undefined
+        const once = (replaces?: Handoff) => run(action, notice, operationId, { stale: 'rebuild', ...(replaces ? { replaces } : {}), inlineRefusal: refusals, onRefused: (message, h) => { refusal = message; handoff = h } })
         let receipt = await once()
         // A tab behind the workspace is refused whatever it sends, and comes back up to date; the keys in the action then decide (§4.8).
-        if (!receipt && refusal !== null && /Saved elsewhere/.test(refusal)) { refusal = null; receipt = await once() }
+        if (!receipt && refusal !== null && /Saved elsewhere/.test(refusal)) { refusal = null; const first = handoff; handoff = undefined; receipt = await once(first) }
+        // Refused as stale again: said, and not sent a third time.
+        void handoff?.done()
         if (!receipt) { if (refusal !== null) refused(refusal, steps, onEdit, run); return }
         madeRow = receipt.entityId
       }

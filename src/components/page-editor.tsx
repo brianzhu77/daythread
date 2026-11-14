@@ -1674,7 +1674,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!fresh || dirty.current || sending.current) { refuse("Can't undo · edited since"); return }
     undoingPaste.current = true
     try {
-      const receipt = await run({ type: 'undo', targetOperationId: operationId }, null, newOperationId(), { inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => refuse("Can't undo · edited since") })
+      const receipt = await run({ type: 'undo', targetOperationId: operationId }, null, newOperationId(), { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => refuse("Can't undo · edited since") })
       if (!receipt) return
       historyGuardBypass.current = true; suppress.current = true
       try { historyUndo(editor.prosemirrorState, tr => editor.prosemirrorView.dispatch(tr)) } finally { historyGuardBypass.current = false; suppress.current = false }

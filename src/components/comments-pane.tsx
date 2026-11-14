@@ -10,7 +10,7 @@ import type { Page } from '../domain/types'
 import { CloseIcon, CommentIcon } from './icons'
 import { displayPageTitle } from './page-title'
 import { useKeyboardTop } from './keyboard'
-import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
+import { newOperationId, useWorkspace, workspaceOwner, type Handoff } from './use-day'
 
 /** `clear`: what it was opened from, kept in sight beside the pane where its table can scroll (Jazz 73cd2b32). */
 type Open = { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null; property: CommentProperty | null; clear: Element | null }
@@ -48,10 +48,12 @@ const refusals = /^.*(Saved elsewhere|Changed elsewhere|That comment's gone|char
  * so it's sent once more, and the version the action carries decides: another page's change lets it through, a change to this thread doesn't (§3).
  */
 async function send(run: Run, action: Parameters<Run>[0], { operationId = newOperationId(), notice, quiet }: { operationId?: string; notice?: Parameters<Run>[1]; quiet: boolean }): Promise<Sent> {
-  let refusal: string | null = null
-  const attempt = () => run(action, notice, operationId, { quiet, inlineRefusal: refusals, onRefused: message => { refusal = message } })
+  let refusal: string | null = null, handoff: Handoff | undefined
+  const attempt = (replaces?: Handoff) => run(action, notice, operationId, { quiet, stale: 'rebuild', ...(replaces ? { replaces } : {}), inlineRefusal: refusals, onRefused: (message, h) => { refusal = message; handoff = h } })
   let receipt = await attempt()
-  if (!receipt && refusal !== null && /Saved elsewhere/.test(refusal)) { refusal = null; receipt = await attempt() }
+  if (!receipt && refusal !== null && /Saved elsewhere/.test(refusal)) { refusal = null; const first = handoff; handoff = undefined; receipt = await attempt(first) }
+  // Refused as stale again: said below, and not sent a third time.
+  void handoff?.done()
   if (receipt) return 'saved'
   if (refusal === null) return 'failed'
   toast(/elsewhere/.test(refusal) ? 'Changed in another tab, so nothing was changed' : refusal, { timeout: 6000 })

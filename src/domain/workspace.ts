@@ -1,5 +1,6 @@
 // The domain: commands over the workspace (pure, one at a time, with receipts for replay and one Undo slot) and the
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
+import { newId, withOperationIds } from './ids.ts'
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
@@ -42,7 +43,6 @@ export function validTimezone(value: string): string {
 /** Tombstones kept for ⌘Z (B33): newest last. */
 export const tombstoneLimit = 100;
 
-const newId = (): string => crypto.randomUUID();
 function date(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(`${value}T12:00:00Z`)) || new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) !== value)
     throw new DomainError("Invalid calendar date");
@@ -1796,7 +1796,11 @@ export function compactReceipts(receipts: Workspace["receipts"]): Workspace["rec
   return out;
 }
 
+/** A command applied to a workspace. Ids it makes come from its operation id (ids.ts), the same in the browser and on the server. */
 export function applyCommand(input: Workspace, command: Command): CommandResult {
+  return withOperationIds(typeof command?.operationId === "string" ? command.operationId : "", () => applyCommandAs(input, command));
+}
+function applyCommandAs(input: Workspace, command: Command): CommandResult {
   if (!command || typeof command.operationId !== "string" || !command.operationId || !command.action || command.operationId.length > 200) throw new DomainError("Invalid command");
   const serialized = JSON.stringify(command.action);
   const existing = input.receipts[command.operationId];
@@ -1829,7 +1833,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
     if (fired.length) { const run = runAutomations(state, fired, command.operationId); state = run.state; result = { ...result, automations: run.automations }; }
   }
   state.revision = input.revision + 1;
-  const receipt = { operationId: command.operationId, ...result, fingerprint };
+  const receipt = { operationId: command.operationId, ...result, revision: state.revision, fingerprint };
   state.receipts = compactReceipts({ ...state.receipts, [command.operationId]: receipt });
   // A line cut and pasted to another page keeps its id, so its thread goes with it: only when its own page no longer has it, or a copy could take it (comments.md §4).
   if (command.action.type === "save-editor" && state.threads?.some((t) => t.anchor)) {

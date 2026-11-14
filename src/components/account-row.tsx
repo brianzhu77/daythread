@@ -1,6 +1,7 @@
 import { ChevronDownIcon } from './icons'
 import { holdsFiles } from '../domain/database'
 import { useEffect, useState, type FormEvent } from 'react'
+import { afterDeletion } from './outbox'
 import { AccountItem } from './account-item'
 import { useNavigate } from '@tanstack/react-router'
 import { getAccount } from '../server/functions'
@@ -16,17 +17,24 @@ export type ExportState = 'idle' | 'busy' | 'failed' | 'unsaved'
 
 /**
  * The account's facts and actions, shared by the phone's account row (below) and the laptop sidebar's account menu
- * (`sidebar-account.tsx`). Sign out asks nothing; drafts stay on the device. With sign-in off there's no email, and
+ * (`sidebar-account.tsx`). Sign out asks nothing unless changes haven’t reached the server (B98 §8.5); drafts stay on the device. With sign-in off there's no email, and
  * the actions are Templates, the week start and Export. Shot 2: the time zone is the account's, picked here; Delete
  * account asks for the password and removes everything.
  */
 export function useAccount() {
-  const { refresh, run, workspace } = useWorkspace()
+  const { refresh, run, workspace, settleOutbox, clearOutbox } = useWorkspace()
   const [account, setAccount] = useState<Account | null>(null)
   const [exporting, setExporting] = useState<ExportState>('idle')
   const [deleting, setDeleting] = useState(false)
   useEffect(() => { void getAccount().then(setAccount).catch(() => undefined) }, [])
+  const [signingOut, setSigningOut] = useState(false)
   async function signOut() {
+    // B98 (outbox.md §8.5): what's only on this device is sent first ("Signing out…" meanwhile); what can't be is
+    // deleted only once he says so.
+    setSigningOut(true)
+    const left = await settleOutbox().finally(() => setSigningOut(false))
+    if (left && !window.confirm(`${left === 1 ? '1 change hasn’t' : `${left} changes haven’t`} reached the server. Signing out deletes ${left === 1 ? 'it' : 'them'} from this device.`)) return
+    await clearOutbox()
     await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => undefined)
     await clearOfflineData()
     window.location.assign('/sign-in')
@@ -64,7 +72,7 @@ export function useAccount() {
   // The account's zone leads when the list doesn't hold it, so the select always shows the current one.
   const zones = account?.timezone ? (account.timezones.includes(account.timezone) ? account.timezones : [account.timezone, ...account.timezones]) : []
   const weekStart = (workspace?.weekStart ?? 0) as 0 | 1
-  return { account, workspace, exporting, exportAll, signOut, pickZone, zones, weekStart, pickWeekStart, deleting, setDeleting }
+  return { account, workspace, exporting, exportAll, signOut, signingOut, pickZone, zones, weekStart, pickWeekStart, deleting, setDeleting }
 }
 
 /**
@@ -72,7 +80,7 @@ export function useAccount() {
  * the end of the Pages list on the phone. The laptop sidebar holds the same actions in its account menu.
  */
 export function AccountRow({ className }: { className: string }) {
-  const { account, workspace, exporting, exportAll, signOut, pickZone, zones, weekStart, pickWeekStart, deleting, setDeleting } = useAccount()
+  const { account, workspace, exporting, exportAll, signOut, signingOut, pickZone, zones, weekStart, pickWeekStart, deleting, setDeleting } = useAccount()
   const navigate = useNavigate()
   if (!account) return null
   const email = account.email
@@ -110,7 +118,7 @@ export function AccountRow({ className }: { className: string }) {
         {exportItems}
         <Reminders />
         <HomeScreenHint />
-        {email && <AccountItem><button type="button" className="link" onClick={() => void signOut()}>Sign out</button></AccountItem>}
+        {email && <AccountItem><button type="button" className="link" onClick={() => void signOut()}>{signingOut ? 'Signing out…' : 'Sign out'}</button></AccountItem>}
         {email && !deleting && <AccountItem><button type="button" className="link" onClick={() => setDeleting(true)}>Delete account</button></AccountItem>}
       </span></p>
       {email && deleting && <DeleteAccount onCancel={() => setDeleting(false)} filesGo={Boolean(workspace && holdsFiles(workspace))} />}
@@ -123,6 +131,7 @@ export function DeleteAccount({ onCancel, filesGo }: { onCancel: () => void; fil
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { clearOutbox } = useWorkspace()
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (busy || !password) return
@@ -132,7 +141,7 @@ export function DeleteAccount({ onCancel, filesGo }: { onCancel: () => void; fil
       const response = await fetch('/api/auth/delete-account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password }) })
       r = await response.json().catch(() => ({ error: 'unavailable' }))
     } catch { r = { error: 'unavailable' } }
-    if (r.ok) { await clearOfflineData(); return window.location.assign('/sign-in') }
+    if (await afterDeletion(Boolean(r.ok), { clearOutbox, clearOfflineData })) return window.location.assign('/sign-in')
     setBusy(false)
     setError(r.error === 'wrong' ? "That didn't work · Check the password" : r.error === 'too-many' ? `Too many tries · Try again in ${Math.ceil((r.retryAfter ?? 60) / 60)} min` : "Couldn't delete the account · Try again")
   }

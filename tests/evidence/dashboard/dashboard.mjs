@@ -142,7 +142,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   ok(`${tag} / finds Database by "dashboard"`, await page.getByRole('option', { name: /Database/ }).count() > 0 || await page.locator('.bn-suggestion-menu').getByText('Database').count() > 0)
   await page.keyboard.press('Escape')
   // ---- Four quarters fit a row at 1280, and wrap, unstored, at 200 px with the Comments pane open (Jazz, Bumblebee 3d09beed).
-  await page.keyboard.press('Escape'); await open('wall')
+  // Settled first: a save started as the page unloads is reported by WebKit as a page error even when caught (B98, Roadbuster dc9541ce).
+  await page.keyboard.press('Escape'); await settle(); await open('wall')
   const tops = () => page.evaluate(() => [...document.querySelectorAll('.dashboard-widget')].map(w => Math.round(w.getBoundingClientRect().top)))
   const lines = async () => new Set(await tops()).size
   ok(`${tag} wrap: four quarters on one line at 1280`, (await lines()) === 1, JSON.stringify(await tops()))

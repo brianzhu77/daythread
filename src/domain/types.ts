@@ -57,6 +57,8 @@ export interface Task {
 export interface Receipt {
   operationId: string;
   message: string;
+  /** The revision this operation produced: a replayed receipt passes it on to the outbox's later changes (outbox.md §4). Absent in receipts from before it. */
+  revision?: number;
   entityId?: string;
   /** save-editor: lines given a new id, because another page already holds the one they came with. */
   renamed?: Record<string, string>;

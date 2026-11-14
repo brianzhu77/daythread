@@ -11,7 +11,7 @@ import { holdsFiles } from '../domain/database'
  * time zone, the week start, Sign out and Delete account. Delete account asks for the password under the row.
  */
 export function SidebarAccount() {
-  const { account, workspace, exporting, exportAll, signOut, pickZone, zones, weekStart, pickWeekStart, deleting, setDeleting } = useAccount()
+  const { account, workspace, exporting, exportAll, signOut, signingOut, pickZone, zones, weekStart, pickWeekStart, deleting, setDeleting } = useAccount()
   const reminders = useReminders()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -98,7 +98,7 @@ export function SidebarAccount() {
           </div>
           {email && (
             <div className="menu-group" role="group">
-              {item('Sign out', () => void signOut())}
+              {item(signingOut ? 'Signing out…' : 'Sign out', () => void signOut())}
               {item('Delete account…', () => setDeleting(true), { danger: true })}
             </div>
           )}

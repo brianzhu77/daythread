@@ -26,7 +26,7 @@ import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide 
 import { whenQuiet } from './when-quiet'
 import { calcText, emailHref, phoneHref, urlHref } from './property-values'
 import { defaultRowTemplate } from '../domain/day-template'
-import { useTaskTick, useWorkspace } from './use-day'
+import { useTaskTick, useWorkspace, type Handoff } from './use-day'
 import { announceSave } from './draft-slots'
 import { taskRows } from '../domain/workspace'
 import { blockedByColumn, newTodo, newTodoRowId, taskIdOfRow, todoBarColumns, todoChange, todoLine, todoRowId, todosSourceId, readingWorkspace, withTodos } from '../domain/todos-source'
@@ -261,7 +261,7 @@ export function useCommitCell() {
     const alsoExpected = also.map(c => ({ ...c, expected: expectedOf(c.columnId) }))
     const values = { [columnId]: raw ?? null, ...Object.fromEntries(also.map(c => [c.columnId, c.raw ?? null])) } as Record<string, Json>
     const property = propertyOf(db.database, columnId) ?? titleProperty
-    let resentOnce = false, refused = false
+    let resentOnce = false, refused = false, keptForLater = false
     // Only the newest commit of a cell speaks for it: an older one landing must not clear what a newer one is showing.
     let mine: PendingCell | null = null
     // The first cell holds the row's place; a part leaves alone a newer value of its own cell.
@@ -284,7 +284,10 @@ export function useCommitCell() {
     const named = (Array.isArray(raw) ? raw : []).flatMap(id => namedTodos.get(String(id)) ?? [])
     const newTodos = named.map(todo => ({ ...todo, on: todayIso() }))
     const said = notice ?? (named.length ? (named.length === 1 ? 'To-do added' : `${named.length} to-dos added`) : undefined)
-    const send = () => run(
+    // A stale save given back (B98): its resend replaces it; any other outcome lets it go.
+    let handoff: Handoff | undefined
+    const letGo = () => { const h = handoff; handoff = undefined; void h?.done() }
+    const send = (replaces?: Handoff) => run(
       { type: 'set-values', pageId: row.id, databaseId: db.id, values, expected: { [columnId]: expected, ...Object.fromEntries(alsoExpected.map(c => [c.columnId, c.expected])) }, ...(beforeId !== undefined ? { beforeId } : {}), ...(newTodos.length ? { newTodos } : {}), at: new Date().toISOString() },
       // What moved with it, down a chain of dependencies: the notice says how many, and how many aren't in sight (sub-items design §3).
       r => {
@@ -294,8 +297,12 @@ export function useCommitCell() {
         }
         return said ? { text: said, undoOperationId: r.operationId } : null
       }, newId(),
-      { inlineRefusal: /Saved elsewhere|Changed elsewhere|This row moved|make a loop/, onRefused: m => {
+      // Kept in the outbox: the draft a closed tab would recover is that change already, never a second one (gate 4d6fbafe).
+      // Kept on the device to go later (offline, a failed send): shown on its way, never "not saved · Retry", which would
+      // send it a second time; cleared once it lands, or once it's held and the banner has it (gate 4d6fbafe).
+      { stale: 'rebuild', ...(replaces ? { replaces } : {}), onStored: () => onSaved?.(), onKept: () => { keptForLater = true }, onLater: landed => { show(null); if (landed) onSaved?.() }, inlineRefusal: /Saved elsewhere|Changed elsewhere|This row moved|make a loop/, onRefused: (m, h) => {
         refused = true
+        if (h) handoff = h
         // A loop stays a loop, so it says why and goes back, rather than "not saved" with a Retry that can't work.
         if (m === 'make a loop') { show(null); toast(loopRefusal, { timeout: 6000 }); return }
         // Another tab moved the row: this one's out of date, and the value goes nowhere, with a notice (move-row §7).
@@ -304,7 +311,7 @@ export function useCommitCell() {
       }, quiet: true })
     const settle = (r: unknown) => {
       if (r) { show(null); onSaved?.(); return }
-      if (!refused) show(pending(true))
+      if (!refused) show(pending(!keptForLater))
     }
     const again = async () => {
       show(null)
@@ -312,11 +319,12 @@ export function useCommitCell() {
       const now = fresh.pages.find(p => p.id === row.id)
       // A row deleted meanwhile: his value goes quietly (Bumblebee 3c5198d5). A kept copy is done with once its value
       // is saved, its row is gone, or he's been asked (the notice below); a save that only failed keeps it.
-      if (!now || now.trashedAt) { onSaved?.(); return }
+      if (!now || now.trashedAt) { letGo(); onSaved?.(); return }
       // Moved to another database by another tab: this value belongs to a column it's left behind (move-row §7).
       const nowIn = databaseOfRow(fresh, now)
-      if (nowIn && nowIn.id !== db.id) { onSaved?.(); toast(`This row moved to ${displayPageTitle(nowIn)}`, { timeout: 8000 }); return }
-      if (sameRaw(rawOf(now, columnId), expected) && alsoExpected.every(c => sameRaw(rawOf(now, c.columnId), c.expected)) && !resentOnce) { resentOnce = true; refused = false; show(pending(false)); void send().then(settle); return }
+      if (nowIn && nowIn.id !== db.id) { letGo(); onSaved?.(); toast(`This row moved to ${displayPageTitle(nowIn)}`, { timeout: 8000 }); return }
+      if (sameRaw(rawOf(now, columnId), expected) && alsoExpected.every(c => sameRaw(rawOf(now, c.columnId), c.expected)) && !resentOnce) { resentOnce = true; refused = false; show(pending(false)); const h = handoff; handoff = undefined; void send(h).then(settle); return }
+      letGo()
       onSaved?.()
       // One wording everywhere (Lead 0b05067c, design §13).
       const mine = typeof raw === 'string' ? `“${raw.length > 40 ? `${raw.slice(0, 40)}…` : raw}”` : raw === undefined ? 'empty' : String(raw)
@@ -637,7 +645,7 @@ export function useMoveRows(db: Page & { database: Database }, view: View, conte
     function send() {
       show(false)
       void run(todoItems ? { type: 'edit-todos', items: todoItems, today: todayIso() } : { type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: /couldn't/.test(r.message) ? r.message : notice, undoOperationId: r.operationId }), newId(), {
-        quiet: true, inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { show(null); toast('A row changed elsewhere, so nothing moved', { timeout: 6000 }) },
+        quiet: true, stale: 'outcome', inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { show(null); toast('A row changed elsewhere, so nothing moved', { timeout: 6000 }) },
       }).then(r => { if (r) show(null); else if ([...pendingCells.values()].some(p => p.databaseId === db.id && p.retry === send)) show(true) })
     }
     send()
@@ -781,7 +789,7 @@ export function useUndoKey() {
     if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== 'z' || (e.target as HTMLElement).tagName === 'INPUT') return false
     e.preventDefault()
     const undo = latest()?.undo
-    if (undo) void run({ type: 'undo', targetOperationId: undo.operationId }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
+    if (undo) void run({ type: 'undo', targetOperationId: undo.operationId }, { text: 'Undone' }, undefined, { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
     else toast("Can't undo · edited since", { timeout: 6000 })
     return true
   }
