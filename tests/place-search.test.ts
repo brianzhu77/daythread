@@ -213,3 +213,33 @@ test('real Postgres: 40 searches at once from two instances, exactly 30 counted;
     await Promise.all([x!.end(), y!.end()])
   }
 })
+
+test('Retry-After as seconds or an HTTP date, then held between a minute and an hour (Ratchet a4352286)', async () => {
+  const { retryAfterMs } = await import('../src/server/place-search.ts')
+  const now = Date.parse('2026-11-14T10:00:00Z')
+  assert.equal(retryAfterMs('120', now), 120_000)
+  assert.equal(retryAfterMs('Sat, 14 Nov 2026 10:10:00 GMT', now), 600_000)
+  assert.equal(retryAfterMs('soon', now), 0)
+  assert.equal(retryAfterMs(null, now), 0)
+  resetPlaceSearch()
+  let t = now
+  const limiter = new MemoryPlaceLimiter()
+  const up = upstream(() => new Response('', { status: 429, headers: { 'retry-after': 'Sat, 14 Nov 2026 10:10:00 GMT' } }))
+  assert.deepEqual(await searchPlaces({ q: 'Stanley Park', explicit: false }, deps(up.fetch, limiter, { now: () => t })), { status: 'limit' })
+  t += 61_000
+  assert.equal(await limiter.take('acct-1', new Date(t)), false, 'still paused after a minute: the date said ten')
+  t = now + 600_001
+  assert.equal(await limiter.take('acct-1', new Date(t)), true)
+})
+
+test('a limiter whose setup failed tries again on the next search, the failed one closed (Ratchet a4352286)', async () => {
+  const db = await PGlite.create()
+  const real = pgliteClient(db)
+  let down = true
+  const flaky = { ...real, query: (sql: string, params?: unknown[]) => (down ? Promise.reject(new Error('db down')) : real.query(sql, params)) } as typeof real
+  const limiter = new PostgresPlaceLimiter(flaky, 'daythread')
+  await assert.rejects(limiter.take('one', new Date()))
+  down = false
+  assert.equal(await limiter.take('one', new Date()), true)
+  await db.close()
+})

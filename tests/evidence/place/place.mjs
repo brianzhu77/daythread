@@ -64,7 +64,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   ok(`${tag} search: the foot says where the words go`, await page.getByText('Search by Photon · © OpenStreetMap').isVisible())
   await page.keyboard.press('Enter'); await settle()
   ok(`${tag} pick: Enter takes it, shown in the cell at once as a link`, (await cellText('e4')) === 'Stanley Park' && await cell('e4').locator('a.cell-place').count() === 1)
-  ok(`${tag} pick: the notice names the place and its city`, await page.getByText(/Stanley Park, Vancouver/).first().isVisible())
+  ok(`${tag} pick: the notice names the place and its city, with one Undo`, await page.getByText(/Stanley Park, Vancouver/).first().isVisible() && await page.getByText(/Vancouver · Undo/).count() === 0)
   await page.getByRole('button', { name: 'Undo' }).last().click(); await settle()
   ok(`${tag} pick: Undo takes it back`, (await cellText('e4')) === '')
 
@@ -83,7 +83,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
 
   // ---- No match, failure, Retry and Keep (G8-3).
   await edit('e4'); await type('zzzq'); await page.getByText('No places for “zzzq”').waitFor({ timeout: 5000 }).catch(() => {})
-  ok(`${tag} no match: "No places for …", no Retry, and the keep row`, await page.getByText('No places for “zzzq”').isVisible() && await page.getByRole('button', { name: 'Retry' }).count() === 0 && (await rowsShown()).at(-1) === 'Keep “zzzq” without a place')
+  const lineAbove = await page.evaluate(() => { const line = [...document.querySelectorAll('#place-rows .property-empty')].find(e => e.textContent.includes('No places')); const keep = [...document.querySelectorAll('#place-rows [role=option]')].at(-1); return Boolean(line && keep && line.compareDocumentPosition(keep) & Node.DOCUMENT_POSITION_FOLLOWING) })
+  ok(`${tag} no match: "No places for …" where the suggestions go, the keep row under it, no Retry`, await page.getByText('No places for “zzzq”').isVisible() && lineAbove && await page.getByRole('button', { name: 'Retry' }).count() === 0 && (await rowsShown()).at(-1) === 'Keep “zzzq” without a place')
   ok(`${tag} no match: Enter keeps nothing silently`, await (async () => { await page.keyboard.press('Enter'); await wait(300); return await field().isVisible() })())
   await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown')
   const keepHl = await highlighted()
@@ -106,6 +107,14 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   await page.locator('#place-rows [role=option]', { hasText: 'Keep' }).click(); await wait(3000)
   ok(`${tag} late reply: after a keep, the kept words stay`, (await cellText('e4')) === 'slow two')
 
+  // ---- Enter while suggestions are still loading runs the Search row and pins nothing (G8-2, Bumblebee f1bad398).
+  await edit('e4'); await field().fill(''); await type('slow three'); await wait(500)
+  const loadingHl = await highlighted(), n2 = sent().length
+  await page.keyboard.press('Enter'); await wait(3500)
+  ok(`${tag} Enter while loading: the Search row is highlighted, Enter searches again and pins nothing`,
+    loadingHl === 'Search “slow three”' && sent().length === n2 + 1 && sent().at(-1).q === 'slow three' && (await cellText('e4')) === 'slow two' && await field().isVisible(), `${loadingHl} · ${sent().length - n2} sent · ${await cellText('e4')}`)
+  await page.keyboard.press('Escape'); await settle()
+
   // ---- Over 256 characters: kept whole, never searched (G8-1).
   await edit('e4'); await field().fill('')
   const n0 = sent().length, long = 'a very long name '.repeat(17).trim()
@@ -113,6 +122,10 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   ok(`${tag} long words: "Too long to search", no Search row, nothing sent`, await page.getByText('Too long to search').isVisible() && !(await rowsShown()).some(t => t.startsWith('Search')) && sent().length === n0)
   await page.locator('#place-rows [role=option]', { hasText: 'Keep' }).click(); await settle()
   ok(`${tag} long words: kept whole`, (await cellText('e4')) === long)
+  await edit('e4'); await field().fill(''); await field().focus(); await page.keyboard.insertText('x'.repeat(10_001)); await wait(300)
+  const held = (await field().inputValue()).length
+  await page.locator('#place-rows [role=option]', { hasText: 'Keep' }).click(); await settle()
+  ok(`${tag} long words: the field holds at most 10,000 characters, and Keep saves them all`, held === 10_000 && (await cellText('e4')).length === 10_000, `${held} held, ${(await cellText('e4')).length} saved`)
 
   // ---- Errors.
   ok(`${tag} no page errors, and nothing sent outside this machine`, errors.length === 0 && outside.length === 0, `${errors.join(' | ').slice(0, 200)} ${outside.join(' ')}`)
@@ -151,6 +164,11 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await p2.getByRole('textbox', { name: 'Search Where' }).fill(''); await p2.getByRole('textbox', { name: 'Search Where' }).pressSequentially('Stanley Park', { delay: 10 })
     await p2.locator('#place-rows .place-name').first().waitFor(); await p2.locator('#place-rows .place-name').first().click(); await wait(2200)
     ok(`${tag} location: a pick before it arrives wins, and the late position is dropped`, (await c2('e2').innerText()).trim() === 'Stanley Park')
+    await ed2('e2'); await locRow().click(); await wait(100)
+    await p2.getByRole('textbox', { name: 'Search Where' }).pressSequentially('京', { delay: 10 }); await wait(200)
+    const back = await locRow().innerText()
+    await p2.keyboard.press('Escape'); await wait(2000)
+    ok(`${tag} location: typing ends a request still waiting, and the row goes back to what a tap would save`, back.includes('Saved as') && !back.includes('Finding') && (await c2('e2').innerText()).trim() === 'Stanley Park', back.replace(/\s+/g, ' '))
     await ed2('e2'); await p2.getByRole('textbox', { name: 'Search Where' }).fill('twice'); await locRow().click(); await locRow().click(); await wait(2500)
     ok(`${tag} location: two taps at once save once, from the second`, (await c2('e2').innerText()).trim() === 'twice' && (await p2.evaluate(() => window.__asks)) >= 2)
     await ctx.close()

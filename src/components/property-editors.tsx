@@ -10,7 +10,7 @@ import { parseDate } from '@internationalized/date'
 import { Link } from '@tanstack/react-router'
 import { taskIdOfRow, todoLine } from '../domain/todos-source'
 import { PagesIcon, PaperclipIcon, PageEmoji } from './icons'
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { fileLimits, todosSourceId, type FileValue } from '../domain/database.ts'
 import {
   sameRaw, storedValue, type CellValue, type DateValue, type Json, type Option, type Property,
@@ -29,7 +29,7 @@ import {
 } from './property-values.ts'
 import { fileHref, fileSizeLabel, uploadFile, type FileItem, type UploadFailure } from './file-upload'
 import { ButtonCell } from './button-cell'
-import { isPlaceValue, locationName, placeLink, searchable, searchesAsTyped, searchQuery, type PlaceValue } from '../domain/place.ts'
+import { isPlaceValue, locationName, placeLimits, placeLink, searchable, searchesAsTyped, searchQuery, type PlaceValue } from '../domain/place.ts'
 import { searchPlaces } from '../server/functions'
 
 export interface CommitInfo {
@@ -676,11 +676,11 @@ type PlaceRow =
 interface PlaceSuggestion { value: PlaceValue; area?: string }
 type SearchState = { status: 'idle' } | { status: 'loading'; q: string } | { status: 'ok'; q: string; places: PlaceSuggestion[] } | { status: 'unavailable'; q: string }
 
-/** "Golden Dumpling, Richmond · Undo": the pick names its city, so a wrong match is seen at once; the name is cut first. */
+/** "Golden Dumpling, Richmond", beside the notice's Undo: the pick names its city, so a wrong match is seen at once; the name is cut first. */
 function pickNotice(s: PlaceSuggestion): string {
   const room = 44 - (s.area ? s.area.length + 2 : 0)
   const name = [...s.value.name].length > room ? `${[...s.value.name].slice(0, Math.max(8, room - 1)).join('')}…` : s.value.name
-  return `${s.area ? `${name}, ${s.area}` : name} · Undo`
+  return s.area ? `${name}, ${s.area}` : name
 }
 
 function PlaceEditor(p: EditorProps) {
@@ -700,6 +700,8 @@ function PlaceEditor(p: EditorProps) {
   const run = (text: string, explicit: boolean) => {
     clearTimeout(timer.current)
     const mine = ++seq.current, asked = searchQuery(text)
+    // A search ends a location request still waiting, and the row says what a tap would save again (Ratchet 6dc6c8eb).
+    setLocation(l => (l === 'finding' ? 'idle' : l))
     if (!searchable(asked)) return
     setSearch({ status: 'loading', q: asked })
     const answer = typeof navigator !== 'undefined' && navigator.onLine === false
@@ -715,6 +717,8 @@ function PlaceEditor(p: EditorProps) {
   const typed = (text: string) => {
     setDraft(text)
     seq.current++
+    // Typing ends a location request still waiting (G8-4, Bumblebee 99b732ad).
+    setLocation(l => (l === 'finding' ? 'idle' : l))
     clearTimeout(timer.current)
     setSearch({ status: 'idle' })
     setActive(null)
@@ -769,7 +773,8 @@ function PlaceEditor(p: EditorProps) {
   const saved = words ? draft.trim() : locationName()
   return (
     <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onComment={p.onComment} onDismiss={onDismiss} maxWidth={360} minWidth={320}>
-      <input className="property-field" value={draft} autoFocus={wide} placeholder="Search for a place" aria-label={`Search ${p.property.name}`}
+      {/* As long as a name can be, so Keep always saves what the field holds (G8-1, Bumblebee 308792a6). */}
+      <input className="property-field" value={draft} maxLength={placeLimits.name} autoFocus={wide} placeholder="Search for a place" aria-label={`Search ${p.property.name}`}
         aria-controls="place-rows" aria-activedescendant={current >= 0 ? `place-row-${current}` : undefined} enterKeyHint={wide ? undefined : 'search'}
         onChange={e => typed(e.target.value)} onKeyDown={onKeyDown}
         onCompositionStart={() => { composingNow.current = true; clearTimeout(timer.current) }}
@@ -787,11 +792,14 @@ function PlaceEditor(p: EditorProps) {
             <span className="place-name">{row.place.value.name}</span>
             {row.place.value.address && <small className="place-meta">{row.place.value.address}</small>}
           </button>
-          return <button key="keep" {...common}><span className="place-line">Keep “{words}” without a place</span></button>
+          // The state line goes where the suggestions go, with Keep under it (G8-3, Jazz 281909ba).
+          return <Fragment key="keep">
+            {words && !searchable(q) && <p className="property-empty place-meta">Too long to search</p>}
+            {search.status === 'ok' && search.q === q && !shown.length && <p className="property-empty place-meta">No places for “{words}”</p>}
+            {search.status === 'unavailable' && search.q === q && <p className="property-empty place-meta">Search unavailable · <button type="button" className="app-link" onMouseDown={e => e.preventDefault()} onClick={() => run(draft, true)}>Retry</button></p>}
+            <button {...common}><span className="place-line">Keep “{words}” without a place</span></button>
+          </Fragment>
         })}
-        {words && !searchable(q) && <p className="property-empty place-meta">Too long to search</p>}
-        {search.status === 'ok' && search.q === q && !shown.length && <p className="property-empty place-meta">No places for “{words}”</p>}
-        {search.status === 'unavailable' && search.q === q && <p className="property-empty place-meta">Search unavailable · <button type="button" className="app-link" onMouseDown={e => e.preventDefault()} onClick={() => run(draft, true)}>Retry</button></p>}
       </div>
       {before && <button type="button" className="property-row is-quiet" onMouseDown={e => e.preventDefault()} onClick={() => { end(); finish(p, undefined) }}>Clear</button>}
       <p className="place-foot">Search by Photon · © OpenStreetMap</p>

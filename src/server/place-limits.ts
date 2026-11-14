@@ -41,6 +41,8 @@ export class PostgresPlaceLimiter implements PlaceLimiter {
         create table if not exists ${this.paused} (id int primary key check (id = 1), until timestamptz not null);
         alter table ${this.paused} enable row level security;`)
     }))
+    // A failed setup fails this request closed, and the next one tries again once the database is back (Ratchet a4352286).
+    this.ready.catch(() => { this.ready = undefined })
     return this.ready
   }
   prepare(): Promise<void> { return this.init() }
