@@ -28,7 +28,16 @@ await tried('renames the dashboard view', C('home', { kind: 'updateView', viewId
 await tried("edits the dashboard view's own filter", C('home', { kind: 'updateView', viewId: 'dash', filter: [] }))
 await tried('renames a widget\'s source property', C('runs', { kind: 'updateProperty', propertyId: 'st', name: 'Phase' }))
 await tried('renames an unrelated page', { type: 'rename-page', pageId: 'books', title: 'Books (renamed)' })
+// Made by Pages' `+` → Dashboard: the floor adds a row to it and renames its dashboard, and the dashboard stays first.
+const madeOf = (w: any) => w.pages.find((p: any) => p.id === 'made').database
+const madeBefore = madeOf(await now.load()).views[0]
+await tried("adds a row to a database made by Pages' + → Dashboard", { type: 'add-row', databaseId: 'made', pageId: 'mr2', title: 'Added by the floor', at: '2026-11-13T10:00:00.000Z' })
+await tried('renames its dashboard', C('made', { kind: 'updateView', viewId: 'madedash', name: 'Made, renamed' }))
 const after = dashOf(await new Now(S, undefined, { allowMissingLegacy: true }).load())
+{
+  const made = madeOf(await new Now(S, undefined, { allowMissingLegacy: true }).load())
+  ok("Pages' + → Dashboard read back: first, renamed, its widget byte for byte", made.views[0].id === 'madedash' && made.views[0].layout === 'dashboard' && made.views[0].name === 'Made, renamed' && JSON.stringify(made.views[0].dashboard) === JSON.stringify(madeBefore.dashboard), `${made.views.map((v: any) => `${v.id}:${v.layout}`).join(',')}`)
+}
 ok('this build reads it back: still a dashboard, renamed', after.layout === 'dashboard' && after.name === 'Renamed by the floor', `${after.layout} ${after.name}`)
 ok('rows, widths, heights and widget filters byte for byte', JSON.stringify(after.dashboard.rows) === JSON.stringify(before.dashboard.rows), JSON.stringify(after.dashboard.rows.map((r: any) => [r.height, r.widgets.map((w: any) => `${w.id}/${w.width}/${w.view.filter.length}`)])))
 ok('its rules across widgets kept, bindings and all', JSON.stringify([after.dashboard.filter, after.dashboard.filterAny]) === JSON.stringify([before.dashboard.filter, before.dashboard.filterAny]) && after.dashboard.filter?.[0]?.on?.runs?.propertyId === 'st', JSON.stringify(after.dashboard.filter?.[0]?.on))

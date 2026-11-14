@@ -62,6 +62,9 @@ await C('lens', { kind: 'addDashboard', view: { id: 'lensdash', name: 'Lens' }, 
   { id: 'l-wide', source: 'wide', view: firstWidgetView(db('wide'), 'lv-wide') },
 ] }] })
 await C('lens', { kind: 'moveView', viewId: 'lensdash', beforeId: w.pages.find((p: any) => p.id === 'lens').database.views[0].id })
+// Made from Pages' `+` → Dashboard: a database whose first view is a dashboard of one widget, its own Table (G6-1).
+await run({ type: 'create-database', pageId: 'made', homeBlockId: null, title: 'Made', dashboard: { viewId: 'madedash', rowId: 'm1', widgetId: 'm-own', widgetViewId: 'mv-own' } })
+await run({ type: 'add-row', databaseId: 'made', pageId: 'mr1', title: 'Made row', at })
 // A to-do planned for today, for the To-dos widget's tick.
 const today = new Date().toLocaleDateString('en-CA')
 await run({ type: 'ensure-day', date: today })
