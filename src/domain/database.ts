@@ -75,7 +75,7 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 export interface Condition { by: string; op: FilterOp; value?: Json }
 export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
-export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart", "form", "feed", "dashboard"] as const;
+export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart", "form", "feed", "dashboard", "map"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
 /** Values a new row takes from a template: not its number, which is its own. */
 export function templateValues(template: Pick<Page, "values">): NonNullable<Page["values"]> {
@@ -134,6 +134,8 @@ export interface View {
   hiddenSubGroups?: string[];
   /** Calendar: the date property its rows sit by. Ignored while it's deleted or no longer a date (design §13). */
   dateBy?: string;
+  /** Map: the Place property its rows sit by (map-contract.md §2). Ignored while it's deleted or no longer a Place. */
+  mapBy?: string;
   /** Calendar: a week at a time; a month when absent (R3-20). */
   calendarSpan?: "week";
   /** Timeline: a second date property its bars end on; a range in `dateBy` otherwise. */
@@ -1076,7 +1078,7 @@ export type DatabaseChange =
   | { kind: "duplicateProperty"; propertyId: string; newId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; form?: FormSettings; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; filterGroups?: FilterGroup[]; layout?: ViewLayout; chart?: ChartSettings; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; form?: FormSettings; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; filterGroups?: FilterGroup[]; layout?: ViewLayout; chart?: ChartSettings; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; mapBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setRepeat"; templateId: string; repeat: Omit<Repeat, "last" | "lastRan"> | null }
   | { kind: "setDefaultTemplate"; templateId: string | null }
@@ -1372,9 +1374,9 @@ function cleanLayout(input: unknown): ViewLayout {
 }
 const dateBys = new Set<unknown>(["day", "week", "month"]);
 const timelineUnitSet = new Set<unknown>(["hours", "day", "week", "month", "quarter", "year"]);
-type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "openIn" | "calendarSpan" | "timelineEnd" | "timelineUnit" | "timelineTable" | "colourRules" | "frozenThrough" | "nameWidth">;
+type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "mapBy" | "openIn" | "calendarSpan" | "timelineEnd" | "timelineUnit" | "timelineTable" | "colourRules" | "frozenThrough" | "nameWidth">;
 /** A view's group fields, checked. A new `groupBy` must name a live property that can group; one it already holds may be deleted since, and is kept unread, so Undo or changing the type back reads it again. */
-function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "subGroupBy" | "dateBy" | "timelineEnd">): GroupFields {
+function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "subGroupBy" | "dateBy" | "mapBy" | "timelineEnd">): GroupFields {
   const out: GroupFields = {};
   if (input.groupBy !== undefined) {
     if (input.groupBy !== before?.groupBy && !groupableProperties(db, layout).some((p) => p.id === input.groupBy)) throw new DatabaseError("Can't group by that");
@@ -1386,6 +1388,11 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
   if (input.dateBy !== undefined) {
     if (input.dateBy !== before?.dateBy && !db.properties.some((p) => p.id === input.dateBy && (p.type === "date" || isTimeType(p.type) || workedOut(p)))) throw new DatabaseError("Can't place rows by that");
     out.dateBy = input.dateBy;
+  }
+  // Like `dateBy`: a new one must be a live Place; the one it holds may be deleted since, kept for Undo.
+  if (input.mapBy !== undefined) {
+    if (input.mapBy !== before?.mapBy && !db.properties.some((p) => p.id === input.mapBy && p.type === "place")) throw new DatabaseError("Can't place rows by that");
+    out.mapBy = input.mapBy;
   }
   if (input.calendarSpan === "week") out.calendarSpan = "week";
   if (input.timelineEnd !== undefined) {
@@ -1501,7 +1508,7 @@ function cleanAutomation(input: Automation): Automation {
 export function updatedView(db: Database, old: View, change: ViewChange): View {
     // A rule on a deleted property stays where it's moved to: it's only new ones that must be on a column.
     const heldRules = [...old.filter, ...rulesIn(old.filterGroups)];
-    const { chart: _chart, filterAny: _filterAny, filterGroups: _filterGroups, cardImage: _cardImage, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
+    const { chart: _chart, filterAny: _filterAny, filterGroups: _filterGroups, cardImage: _cardImage, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, mapBy: _mapBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
     const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
     const group = cleanGroup(db, {
       groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1512,6 +1519,7 @@ export function updatedView(db: Database, old: View, change: ViewChange): View {
       subGroupDateBy: change.subGroupDateBy ?? old.subGroupDateBy,
       hiddenSubGroups: change.hiddenSubGroups ?? old.hiddenSubGroups,
       dateBy: change.dateBy ?? old.dateBy,
+      mapBy: change.mapBy ?? old.mapBy,
       ...(change.calendarSpan === null ? {} : { calendarSpan: change.calendarSpan ?? old.calendarSpan }),
       ...(change.timelineEnd === null ? {} : { timelineEnd: change.timelineEnd ?? old.timelineEnd }),
       timelineUnit: change.timelineUnit ?? old.timelineUnit,

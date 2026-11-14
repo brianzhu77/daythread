@@ -1,6 +1,7 @@
 # Place step 2, the Map view: implementation contract
 
-- Author: Roadbuster (Engineering) · 2026-11-14 · status: **for Ratchet's boundary read and the Lead, before code.**
+- Author: Roadbuster (Engineering) · 2026-11-14 · status: **approved by the Lead with inline 1280 and two additions
+  (9f694596); Ratchet's boundary read pending.**
 - From D15 G8-9 to G8-12 (main 4197fb5f), `place.md` §3, Jazz 74fb06f7 / 767879e2 / 754c8cf8, Ratchet's step 2
   boundary (`docs/reviews/place-boundary-ratchet.md`), and the Lead's CSP decision (26f8f7c5). D15 wins where this is
   less precise. Step 3 (inline at 390, G8-13) isn't in this step.
@@ -124,7 +125,18 @@ There's no page CSP in this step. That's its own hardening item.
 - **Keys** (R1-26):
   - Once the map has focus, arrow keys pan and `+`/`-` zoom, through MapLibre's keyboard handler.
   - The map's container stops cut, copy, paste and letter keys, so they never reach the page editor.
+- **Inline at 1280** (Bumblebee 480a54f2): a Map view in a page's block, on an ordinary page or a day page, draws inline
+  at a fixed 400 px tall, with the same frame, states and card. The map's chunk loads only once the block is near the
+  screen (the dashboard's `Lazy` rule, 300 px margin). A day page holding one is measured against R2-7's bar. The
+  height handle stays with step 3.
 - **390:** full page only, as D15 says. A block showing a Map view inline at 390 shows "Open the map ›" until step 3.
+
+- **At most one live map per page or dashboard** (Lead 9f694596): each live map holds a WebGL context, and browsers
+  cap those, Safari sooner. Any other Map block or widget on the same page shows its frame with its count line and
+  "Show map ›" (wording Jazz's); a tap moves the live map there, and the previous one returns to its frame. Check: a
+  dashboard with three Map widgets has one WebGL context, MapLibre loaded once, and no page errors.
+- **No WebGL2** isn't retryable: "Map isn't available in this browser", with no Retry (Lead 9f694596). The other
+  unavailable cases keep "Map unavailable · Retry".
 
 ## 6. Not in this step
 
