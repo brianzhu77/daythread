@@ -107,8 +107,8 @@ There's no page CSP in this step. That's its own hardening item.
   - The line under it ("100 of 240 shown", "No place · 3 ›") draws at once, from the rows.
   - There's no spinner and no words.
 - **Map unavailable** means the frame, in Paper-fill, at the same height, with "Map unavailable · Retry".
-  - It shows when the map hasn't drawn after 10 s, the chunk or style fails, the style fails the host check, or there's
-    no WebGL2.
+  - It shows when the map hasn't drawn after 10 s, the chunk or style fails, or the style fails the host check. No
+    WebGL2 has its own state, below.
   - Retry is only on his tap. There's no repeated request: MapLibre doesn't retry a failed tile by itself, and we never
     reload the style on our own.
   - The rows stay listed below.
