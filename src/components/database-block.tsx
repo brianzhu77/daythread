@@ -22,6 +22,7 @@ import { quoteLimit, type CommentProperty } from '../domain/comments'
 import { RowMenu } from './row-menu'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
+import { whenQuiet } from './when-quiet'
 import { calcText, emailHref, phoneHref, urlHref } from './property-values'
 import { defaultRowTemplate } from '../domain/day-template'
 import { useTaskTick, useWorkspace } from './use-day'
@@ -907,6 +908,55 @@ const loadChart = () => {
   }
   return chartLoading
 }
+// The map's code (MapLibre, ~445 KB) loads only once a Map view is near the screen (300 px), as a widget does: a day or a
+// database page without one pays nothing (map-contract.md §4). Until then its frame holds its place in the style's grey.
+type MapModule = typeof import('./database-map')
+let mapModule: MapModule | null = null, mapLoading: Promise<MapModule> | null = null
+const loadMap = () => {
+  if (!mapLoading) {
+    mapLoading = import('./database-map').then(m => (mapModule = m), (e: unknown) => { mapLoading = null; throw e })
+    mapLoading.catch(() => undefined)
+  }
+  return mapLoading
+}
+function MapView(props: LaidOutProps) {
+  const wide = useWide()
+  // At 390 a map in a scrolling page, an inline block or a dashboard widget, would take the page's one-finger scroll
+  // (Jazz's probe 3934e41e): until step 3 it's a line to the full page, decided here so no map code loads (Lead fc1d9019).
+  const fullPage = props.blockId.startsWith('page:') && !props.blockId.includes('|widget:')
+  if (!wide && !fullPage) return <MapLink {...props} />
+  return <LiveMapView {...props} />
+}
+function MapLink(props: LaidOutProps) {
+  const navigate = useNavigate()
+  return <div className="database-map">
+    <DatabaseHeader db={props.db} view={props.view} changeView={props.changeView} blockId={props.blockId} showTitle={props.showTitle ?? true} linked={props.linked} onTitleEnter={() => {}} />
+    <p className="map-line"><button type="button" className="app-link" onClick={() => { const own = props.db.database.views.find(v => v.id === props.view.id) ?? props.db.database.views.find(v => v.layout === 'map'); if (own) setShownView(`page:${props.db.id}`, own.id); void navigate({ to: '/pages', search: { page: props.db.id } }) }}>Open the map ›</button></p>
+  </div>
+}
+function LiveMapView(props: LaidOutProps) {
+  const [, setLoaded] = useState(mapModule)
+  const [failed, setFailed] = useState(false)
+  const holder = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (mapModule || !holder.current) return
+    let live = true
+    // Near the screen, then only once the page is quiet: a line he's typing never waits on the map's code (Lead cdc31250).
+    let cancel = () => {}
+    const start = () => { cancel = whenQuiet(() => void loadMap().then(m => { if (live) setLoaded(m) }, () => { if (live) setFailed(true) })) }
+    if (typeof IntersectionObserver === 'undefined') { start(); return () => { live = false; cancel() } }
+    const seen = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) { seen.disconnect(); start() } }, { rootMargin: '300px 0px' })
+    seen.observe(holder.current)
+    return () => { live = false; seen.disconnect(); cancel() }
+  }, [])
+  if (mapModule) return <mapModule.DatabaseMap {...props} />
+  return <div className="database-map" ref={holder}>
+    <DatabaseHeader db={props.db} view={props.view} changeView={props.changeView} blockId={props.blockId} showTitle={props.showTitle ?? true} linked={props.linked} onTitleEnter={() => {}} />
+    <div className={`map-frame${failed ? ' is-unavailable' : ' is-loading'}`}>
+      {failed && <p className="map-state">Map unavailable · <button type="button" className="app-link" onClick={() => void flushAllEditors().then(saved => { if (saved) location.reload() })}>Reload</button></p>}
+    </div>
+  </div>
+}
 function ChartView(props: LaidOutProps) {
   const [, setLoaded] = useState(chartModule)
   const [failed, setFailed] = useState(false)
@@ -935,6 +985,7 @@ export function LaidOutView(props: LaidOutProps) {
   if (props.view.layout === 'timeline') return <DatabaseTimeline {...props} />
   if (props.view.layout === 'feed') return <DatabaseFeed {...props} />
   if (props.view.layout === 'dashboard') return <DatabaseDashboard {...props} />
+  if (props.view.layout === 'map') return <MapView {...props} />
   // The header first, and a placeholder about the height of what's drawn, so the lines below don't jump when the chart arrives.
   if (props.view.layout === 'chart') return <>
     <DatabaseHeader db={props.db} view={props.view} changeView={props.changeView} blockId={props.blockId} showTitle={props.showTitle ?? true} linked={props.linked} onTitleEnter={() => {}} />
