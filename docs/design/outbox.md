@@ -81,6 +81,14 @@ iOS are not subject to Safari's 7-day eviction of website storage; a browser tab
 **Cleared** on the server's answer: a receipt (applied or replayed), or "already applied" (a tombstone), deletes the
 entry. A domain refusal holds it (§6). A network failure leaves it pending.
 
+**Clearing and passing on its revision are one IndexedDB transaction** (Ratchet): deleting the acknowledged entry and
+appending the revision it produced to `ownRevisions` of every later entry of the same owner commit together, and the
+queue moves on only after that transaction completes. A kill between the two would otherwise leave a later entry
+conflicting with its own acknowledged predecessor after the reopen. For that, the receipt says which revision the
+operation produced: receipts gain `revision` (stored with the receipt when it's applied, so a replayed receipt carries
+it too). A receipt from before this field (an operation applied by an older build) has none; a later entry that then
+conflicts on that row is held, visibly, rather than guessed.
+
 ## 5. Sending and replaying
 
 **Live.** As today: `run()` sends with `expectedRevision` = the tab's revision; one at a time, in the tab's queue.
@@ -128,9 +136,22 @@ edit writes its row's page, so two edits to different cells of one row conflict;
 (an automation, a move that renumbers positions) conflicts with any later write to those rows. Those are recovery
 notices, never silent overwrites.
 
-**Limit:** the check is on what the replay **writes**, not what it **read**. Two changes to different rows that only
-make sense together are not detected (write skew). No command today is known to depend on another row's value without
-writing it; the PR lists any it finds.
+**Commands that read beyond what they write** (Ratchet: they exist today, so they are classified here, not left to the
+PR). The row check is on what a replay **writes**. These read other rows' values to decide what to write:
+- `run-button` and `run-row-button`: their steps (`runSteps`) read a source row and write elsewhere (e.g. `add-row`
+  with formula values);
+- **any command that fires an automation** (`runAutomations`, `workspace.ts`: a `task-status`, `set-values`,
+  `move-row`, `add-row(s)`, … whose change matches a rule): the rule's steps read the triggering and source rows;
+- `add-row` / `add-rows` with a `templateId`: they read the template row.
+
+Rule for v1: a replay whose application on the latest workspace **ran steps or read a template** (the server knows:
+`run-button`/`run-row-button`, a non-empty `receipt.automations`, or a template used) does **not** get the row check. It
+gets the whole-revision rule: applied if nothing moved since its base, else held (§6). The browser marks such an entry
+`readsBeyond` when it is made (its predicted application, §4, shows the same steps and fired rules) and treats it as
+depending on **every** earlier held entry. A cost, said plainly: these replays can be held by an unrelated edit made
+elsewhere meanwhile. They are buttons, template adds and changes that fire a rule, so the false alarm Bumblebee
+warned about is limited to them. Recording read sets per step, to drop this, is a later step if it shows up in use.
+Outside this class, no command is known to read a row it doesn't write; the PR adds any it finds to the class.
 
 ### Cost of the row check (Lead ace3f9fa)
 
@@ -159,8 +180,8 @@ writing it; the PR lists any it finds.
   `rowsOf`/`planWrites` the server uses (pure code, shared). A later entry **depends** on a held one when their write
   sets share a row (it edits what the held one made or changed). Dependants are held with it, in order; every other
   entry carries on.
-  - Not detected: a later change that only *reads* a held one's row without writing it (the write-skew limit in §5).
-    The PR lists any command found to work that way, and holds it with the entry it reads from.
+  - A `readsBeyond` entry (§5: buttons, template adds, changes that fire a rule) depends on every earlier held entry,
+    since what it reads isn't in its write set.
 - **Recovery, chosen by him** (what he sees is §8; the notice is not dismissable while anything is held, and shows how
   many changes wait on it):
   - **Discard** drops the held entry; its dependants are re-checked one by one (each may now apply, or be refused or
@@ -318,6 +339,9 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 15. A held entry holds only its dependants (a later edit of the same row); an unrelated later change is applied at once. Discard re-checks the dependants; Apply mine anyway applies a conflicted one on the latest revision; a refusal offers only Discard; the notice can't be dismissed while anything is held.
 
 16. An entry older than every kept receipt (`baseRevision` below `receiptsForgottenThrough`, with its operation unknown) is held, never run again; including a create whose entity was then removed for good.
+
+17. Kill between an acknowledged entry and the next: the delete and the `ownRevisions` update are one transaction; after the reopen the dependent entry (a rename after a tick of the same to-do) applies without a conflict. Same with the first entry's reply lost while the dependent entry already exists: the replayed receipt carries its `revision`, and the dependent entry applies.
+18. A button whose source row was edited by a held entry, and a change that fires a rule: marked `readsBeyond`, held behind the held entry; on the server, replayed only if nothing moved since its base.
 
 Unit and contract tests: the outbox state machine against a fake store (write fails, quota, two drains, owner change,
 late reply); repository contract tests for `basis: 'rows'` on SQLite and Postgres (replay, tombstone, row conflict,
