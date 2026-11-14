@@ -1,3 +1,15 @@
+# PR216 focused recheck — e6a01672
+
+The owner-bound token and Web Lock repair is read and the ordinary owner-isolation probe now passes. Rehearsal 5c uses its generated Dashboard ID throughout. Independent build, full typecheck and 20 focused tests pass. (The reviewer’s probe fixture was corrected to supply Undo’s required target operation ID.)
+
+A focused extraction of author cases 19–20 passes **16/16 across Chromium and WebKit**, including successful rebuild, close before rebuild, failed replacement storage, unrelated changes, another tab’s dependant, Keep mine in the other tab, and typed-cell lost answer followed by another edit. An extra Chromium assertion confirms no unsaved-cell mark after the superseded rebuild. Scripts: `ratchet-handoff-focused.mjs`, `ratchet-handoff-superseded.mjs`; logs `/tmp/ratchet-outbox-lock-browser.log`, `/tmp/ratchet-outbox-superseded.log`. Full previous browser results remain evidence for unchanged paths.
+
+One narrow store API inconsistency remains, reported as 61ef1bab: IndexedDB finds the original only in the requested owner’s index results. With a foreign-owner seq and `replacement.app === true`, that original looks missing and passes the app-write exception, then is deleted. Memory correctly sees and rejects it. No normal UI path producing this mismatched app token was observed. Fetch the original by primary key inside the same transaction before applying the exception. The author owns this correction; no reviewer runtime edits.
+
+The reviewer’s local preview and browser processes are stopped. Lead’s full gate is running on e6a01672 and will rerun affected checks on the final store-only repair (c1a5ac82). No deployment or production operation is authorized by this report.
+
+---
+
 # PR216 token repair recheck — pending at a6acfd48
 
 The prior timer/unrelated-command handoff defects are repaired with explicit caller tokens and one IndexedDB transaction. The caller-token paths and cell-draft recovery were read. Independent build, full typecheck, 18 focused client/replay/scheduler tests and 50 storage tests pass. Independent full browser suites pass Chromium 40/40 and WebKit 39/39, including failed replacement storage, unrelated activity during handoff, another tab’s dependant, and typed-cell lost answer followed by another edit. The same-filter UI check passes 2/2 in each engine. No clear yet: the owner-lock/ownership and rehearsal findings below remain open. Logs are `/tmp/ratchet-outbox-token-{chromium,webkit}.log` and `/tmp/ratchet-outbox-token-filter-{chromium,webkit}.log`.
