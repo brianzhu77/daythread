@@ -1,6 +1,9 @@
 # Place step 1: implementation contract
 
-- Author: Roadbuster (Engineering) · 2026-11-14 · status: **for Ratchet's and the Lead's review, before code.**
+- Author: Roadbuster (Engineering) · 2026-11-14 · status: **approved by the Lead with additions (cb4e0d08), taken in below;
+  Ratchet's full read pending.** Changes since 3cd42c30: the shared 429 pause (Ratchet eecf6ded), Jazz's Enter rule
+  (f705a3a0, Bumblebee 8a29de95), the older-tab type assertion (Bumblebee ccef53c3), one threshold function, the pick
+  notice, and a live-Worker search before release (Lead cb4e0d08, Jazz d5c18c44).
 - From D15 G8-1 to G8-8 (main a57eed7e), `place.md`, Jazz 74fb06f7 / 2b3eb494 / 5e17371d, Lead ad34ae2c / b41107d1, and
   Ratchet's boundary review (`review/ratchet-place` 85d18064). D15 wins where this is less precise. This page fixes the
   numbers, scopes and failure rules the build follows, as Ratchet's handoff asks. Step 1 is the Place property only: no
@@ -49,6 +52,9 @@ That holds for every route. Locally, with sign-in off, the gate's this-machine-o
   - `explicit`: true for a Search row or Enter.
   - The server checks the 2/3-character rule again for automatic searches. CJK is any character in the Han, Hiragana,
     Katakana or Hangul scripts. A short query that isn't `explicit` is refused, so a client bug can't spend the quota.
+  - **One threshold function for both sides** (Lead cb4e0d08): `searchQuery`, `searchFrom` and `searchesAsTyped` live
+    in `src/domain/place.ts`. The editor and the server function both import them, and a unit test covers 西湖 (2),
+    京 (no), `ab` (no), `abc` (yes) and a mixed query such as `a西` (2, CJK present).
 - **Outbound:**
   - One GET to the fixed `https://photon.komoot.io/api` with `q` and `limit=5` only. There's no `lang`, so names come
     in the place's own language, which is what Bumblebee's 20-place test measured. There's no area or location bias.
@@ -96,9 +102,10 @@ That holds for every route. Locally, with sign-in off, the gate's this-machine-o
   - This serialises searches across the deployment. At a ceiling of 60 a minute that costs nothing measurable.
 - **What counts.** Only a search that goes out counts, and it's counted before it goes, so a failed upstream call still
   counts. A cache hit and a refused search don't count.
-- **Provider 429:** `Retry-After` is honoured, at least 60 s. Until then every search returns `limit` without going
-  out. That pause is held per instance: the shared 60 a minute ceiling already bounds the deployment, and a
-  shared pause would need a table for one value. **Ratchet: say if you want it shared.**
+- **Provider 429:** `Retry-After` is honoured, at least 60 s and at most 1 hour. Until then every search returns
+  `limit` without going out. **The pause is deployment-wide** (Ratchet eecf6ded), so no instance keeps calling after
+  Photon has asked us to stop. It's held in `place_search_pause (id int primary key check (id = 1), until timestamptz)`
+  in the same schema, also with RLS on, and read inside the same locked transaction as the counts.
 - **Local and test runs** (SQLite storage, sign-in off) use an in-process limiter with the same numbers and the same
   interface. Tests run both: the Postgres one on PGlite and on real Postgres. Two accounts and two limiter instances on
   one database show the shared counts.
@@ -129,11 +136,18 @@ That holds for every route. Locally, with sign-in off, the gate's this-machine-o
     - or "Search unavailable · Retry" for a failure or the limit
   - **Keep "…" without a place**, while there are words
   - the foot: "Search by Photon · © OpenStreetMap"
-- **Enter:**
-  - runs the Search row when it shows
-  - otherwise picks the highlighted suggestion
-  - with no suggestion highlighted and no Search row, it does nothing
-  - Enter never keeps his words silently
+- **Enter acts on what's highlighted, and something always is** (Jazz f705a3a0; Bumblebee withdrew the
+  alternative, 8a29de95):
+  - While the field holds words that haven't been searched, or a search is running, the Search row is highlighted,
+    so Enter searches. It never pins a place.
+  - When suggestions show, the first one is highlighted at once, in Paper-fill as a menu row is, and the arrows move
+    the highlight, the keep row included.
+  - Enter acts only on rows already on screen. A reply that lands after Enter never picks anything.
+  - Enter never keeps his words silently: the keep row is only taken when it's highlighted.
+- **A pick shows in the cell at once** under the place's own name, with an Undo notice naming the place and its city:
+  "Golden Dumpling, Richmond · Undo" (Lead cb4e0d08, Jazz d5c18c44).
+  - The city comes from the suggestion's reply, not from storage, falling back to the region and then the country.
+  - If it's too long, the name is cut with "…" first, and the city stays.
 - **When it searches as he types:**
   - It waits 300 ms after the last change, and needs 2 characters if the query has any CJK, 3 otherwise.
   - It sends nothing while `compositionstart` is open. It searches 300 ms after `compositionend`.
@@ -181,17 +195,24 @@ That holds for every route. Locally, with sign-in off, the gate's this-machine-o
 
     Then this build reads every Place value back byte for byte.
   - There's also a browser half on the floor's server, checking that the page draws with no page errors.
-  - **Not in the run:** changing the Place property's own type from an older tab. The floor can't change it back to
-    Place, since its `cleanProperty` refuses the type, so the run records what the floor does there rather than
-    promising a round trip.
+  - **Asserted, not just recorded** (Bumblebee ccef53c3): the floor's tab turns the Place property into Text and saves
+    a row edit. This build then turns it back to Place, and every value reads back byte for byte. That works because
+    a type change rewrites no values. If it fails, it's the one Place data-loss case, and it's known before release.
 
-## 6. Not in step 1
+## 6. Release checks beyond D15's rows
+
+- **One real search from the deployed Worker before Brian is told** (Lead cb4e0d08). Photon sees the Worker's
+  requests coming from Cloudflare's shared addresses, which no local run can show. The check is one signed-in search
+  each for "Stanley Park" and 西湖 on the live Worker, recording the status and the time taken. If either comes back
+  `limit` or `unavailable`, the release note says so and doesn't promise search.
+
+## 7. Not in step 1
 
 - the map, `layout: map`, MapLibre, OpenFreeMap and its CSP
 - reverse geocoding
 - an area hint
 - bulk "Find places"
 - distance sort
-- Place in Group, Chart, Rollup or Button set-value
+- Place in Group, Chart, Rollup, Button set-value or a Form question (a form has no place editor yet)
 - the release note, which Lead writes and which names Photon as the search provider
 - the native Home Screen checks, which stay with G8-4's native row
