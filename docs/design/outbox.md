@@ -177,8 +177,93 @@ writing it; the PR lists any it finds.
 
 ## 8. What he sees (Jazz)
 
-_Jazz writes this section: replayed fine (nothing said), held ("Couldn't keep: …" with Discard / Keep), pending while
-offline, not durable (storage unavailable), sign-out with pending changes._
+When the outbox works, he doesn't see it. It adds no "syncing" or "pending" indicator; saving and saved stay silent,
+as today (`SaveIndicator`, `app-shell.tsx`). He only hears about it when a change he made did not stick, or could be
+lost. Every message reuses a surface that exists today: the save-failed banner (persistent, never a toast, the same
+place on every screen, at the top on the phone), the offline banner and the per-cell "Not saved" marks. Nothing new is
+added.
+
+### 8.1 Replayed fine (the common case)
+- Nothing is said, and no Undo toast is shown for a replayed change (§6).
+- **No flicker.** Pending entries are applied to the loaded copy (§7) before the first paint of the page they touch.
+  A ticked to-do is ticked from the first frame after a reopen; it is never drawn unticked, then ticked when the
+  receipt comes back. This is a check (8.7).
+
+### 8.2 Pending while offline
+- Pending changes show as made, with today's marks unchanged: a cell's and a card's "Not saved". They stay true, since
+  the change isn't on the server yet.
+- The offline banner states what's kept, because that's his data's state (the Quiet Copy Rule) and is now true:
+  `Offline · showing what was last loaded · 2 changes will be sent` (singular: `1 change will be sent`). Before the
+  outbox that line would have been a promise we couldn't keep; now it's the reassurance Lead's note to him (f7b0e525)
+  points to.
+- When he's back online and they're sent, the clause goes with the banner. Nothing else is said.
+
+### 8.3 Held (a conflict or a refusal)
+Shown in the save-failed banner. It **can't be dismissed**: it stays, across reloads and on every screen, until he
+resolves it. A held change that only sits in a notice he closed is the silent disagreement B98 removes (Bumblebee
+d21888b7).
+
+**Copy.** `entry.label` is a past-tense verb and the item's name in quotes, the name cut to 40 characters with "…":
+`ticked "Water the plants"`, `set Status on "Dune"`, `moved "Book 3"`, `deleted "Old notes"`,
+`added "Call mum"`. When there's no name, it falls back to `a change on "{page}"`. The reason is in plain words:
+
+| Server answer | Banner |
+|---|---|
+| row conflict (§5.3) | `Not saved — ticked "Water the plants" was changed elsewhere · Keep mine · Discard` |
+| not found (deleted) | `Not saved — "Water the plants" was deleted elsewhere · Discard` |
+| Cannot undo | `Can't undo — changed since · Discard` (today's words) |
+| any other refusal | `Not saved — can't do this now: ticked "Water the plants" · Discard` |
+
+- **Keep mine** (conflicts only): he chose to put his change on top of the newer one, so it's sent once on the latest
+  revision, as a live command he made just now. It's never automatic, and never offered when the row is gone or the
+  action is refused, since there's nothing to put it on.
+- **Discard** drops the held entry; the page shows the latest from the server. Redoing it by hand is one tap where it
+  is.
+- **No Retry.** A held change would only be held again.
+- **No Keep button.** Leaving the banner up is "keep": the entry stays held until he picks one of the two.
+- **Text he typed is never lost to Discard.** If the held action carries text (a cell value, a title, a comment), the
+  banner adds `Copy` before `Discard`, and Discard asks nothing more.
+- **Show.** The item's name in the banner is a link to it: the page, scrolled to the row or to-do.
+
+**Changes waiting behind it.** Only changes that depend on the held one wait (Lead 87eca3cf): those touching a row it
+writes, or using an id it made. Everything else keeps saving. When some do wait, the banner gives the count after the
+reason, because that's the part that gets riskier the longer he leaves it: ` · 2 later changes waiting`. Those changes
+show on screen with today's pending marks, as when offline. When none wait, the clause is left out. If §6 finds a
+dependency the entries can't see and falls back to blocking the whole queue, the same clause carries the count. Either
+way, nothing waits silently behind a notice he can close.
+
+One held entry is shown at a time, the oldest. After Keep mine or Discard, the queue moves on, and the next held entry
+(if any) replaces it in the same place.
+
+### 8.4 Not durable (storage unavailable or full)
+- While commands go through, nothing is said: a tab that can't store anything still saves live, as today.
+- If a change is still unsent in a tab that's not durable (offline, or a slow send), the save-failed banner warns
+  before something is lost: `Not saved on this device · keep this open until it's sent`. It goes once nothing is
+  pending.
+- On desktop only, and only in this state, closing or reloading the tab triggers the browser's own leave prompt (§11).
+  iOS doesn't fire it reliably, so the banner is the warning there.
+
+### 8.5 Sign out or Delete account with pending changes
+- Online: the pending changes are sent first (§7). The Sign out link reads `Signing out…` while they go, then signs out
+  as today, asking nothing.
+- If some can't be sent (offline, or held), sign-out asks once, in the existing confirm dialog style:
+  title `Sign out?`, body `2 changes haven't reached the server. Signing out deletes them from this device.`,
+  buttons `Sign out` (Deadline Red) and `Cancel`. Delete account uses the same body above its own confirm.
+- An expired session (sent to sign-in) asks nothing: the entries wait for the same account (§7).
+
+### 8.6 What he never sees
+Another account's entries, a second tab's drain, a replay answered by a receipt or a tombstone, and an empty write set
+(§5.4). All of these are silent.
+
+### 8.7 Checks (Jazz, 390 and 1280, light and dark, Chromium and WebKit)
+1. A tick is ticked on the first frame after a reopen (sample the first paint; no unticked frame). Also natively, in
+   the Home Screen app (check 7).
+2. Offline with 1 and 2 pending: the banner clause, singular and plural; it goes when they're sent.
+3. Held: each row of the table above; Keep mine on a conflict applies it on top; Discard shows the latest; Copy on a
+   text change; the banner survives a reload and can't be dismissed; a change made after the hold that doesn't depend
+   on it still saves; one that does is counted in "later changes waiting".
+4. Not durable: the banner appears only while something is unsent; desktop leave prompt only in that state.
+5. Sign out offline with pending changes: the confirm and its count; online: `Signing out…`, then no question.
 
 ## 9. The Worker when the browser goes away mid-command
 
@@ -224,4 +309,6 @@ reported by Playwright as a page error even when caught; Roadbuster dc9541ce) no
 - Whether a tab that is **not durable** should get a `beforeunload` prompt while commands are pending (desktop only).
   Lead said no prompts (37e856f8) for the durable case; this is the case where nothing is kept. My recommendation:
   yes, since it is the only protection left there, and it never shows when storage works.
-- Discard / Keep as the two recovery actions (Jazz may shape them differently).
+- Recovery actions (Jazz, §8.3): **Keep mine** (conflicts only; it applies his change on the latest data, by his
+  choice) and **Discard**, plus Copy for text. There's no separate Keep button, since leaving the banner up is keep,
+  and the banner can't be dismissed. Decided: only dependent entries wait behind a held one (Lead 87eca3cf).
