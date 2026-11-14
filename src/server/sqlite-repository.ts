@@ -141,7 +141,7 @@ export class SqliteWorkspaceRepository implements ServerRepository {
       rule = replayRule(outbox, current.revision, tracking)
       if (rule.rule === 'whole') throw new OutboxHeld(rule.reason)
     }
-    const result = applyCommand(current, expected === 'latest' || rule?.rule === 'rows' ? { ...command, expectedRevision: current.revision } : command)
+    const result = applyCommand(current, expected === 'latest' || rule !== undefined ? { ...command, expectedRevision: current.revision } : command)
     const after = result.workspace
     if (after.revision !== current.revision) {
       const keys = writeKeys(planWrites(rowsOf(current), after).write)

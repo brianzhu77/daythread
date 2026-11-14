@@ -91,6 +91,36 @@ export function outboxContract(name: string, fixture: () => Promise<OutboxFixtur
     } finally { await f.cleanup() }
   })
 
+  test(`${name} outbox: a change behind only its own acknowledged writes applies as made, a rule firing included (gate e1a21c80)`, async () => {
+    const f = await fixture()
+    try {
+      const repo = f.create(), at = '2026-11-05T10:00:00.000Z'
+      let n = 0
+      const exec = async (action: unknown) => { const r = (await repo.load()).revision; return repo.execute({ operationId: `s${++n}`, expectedRevision: r, action: action as Action }) }
+      await exec({ type: 'create-database', pageId: 'runs', homeBlockId: null, title: 'Runs' })
+      await exec({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'st', name: 'Status', type: 'select', options: [{ id: 'todo', name: 'Todo', color: 'gray' }, { id: 'done', name: 'Done', color: 'gray' }] } } })
+      await exec({ type: 'add-row', databaseId: 'runs', pageId: 'r1', title: 'One', values: { st: 'todo' }, at })
+      await exec({ type: 'add-row', databaseId: 'runs', pageId: 'r2', title: 'Two', values: { st: 'todo' }, at })
+      // A rule whose step points at a property that isn't there: it pauses when it fires, and his edit stands.
+      const step = { id: 's-gone', kind: 'edit-property', set: [{ id: 'gone', name: 'Gone', type: 'number', value: { kind: 'fixed', raw: 5 } }] } as unknown as ButtonStep
+      const rule = { id: 'r', name: 'Log finish', active: true, triggers: [{ kind: 'property-edited', propertyId: 'st', name: 'Status', condition: { by: 'st', op: 'isAnyOf', value: ['done'] } }], steps: writeSteps([step]) } as unknown as Automation
+      await exec({ type: 'change-database', pageId: 'runs', change: { kind: 'addAutomation', automation: rule } })
+      const base = (await repo.load()).revision
+      const edit = (id: string, page: string) => ({ operationId: id, expectedRevision: base, action: { type: 'set-values', pageId: page, values: { st: 'done' }, expected: { st: 'todo' }, at } as unknown as Action })
+      // His earlier change from the same queue lands first; this one was made on top of it, and reads beyond (it fires the rule).
+      const first = await repo.executeOutbox({ operationId: 'own-1', expectedRevision: base, action: { type: 'rename-page', pageId: 'r2', title: 'Two!' } as Action }, basis(base))
+      const own = first.workspace.revision
+      const second = await repo.executeOutbox(edit('own-2', 'r1'), basis(base, { ownRevisions: [own], readsBeyond: true }))
+      const ws = await repo.load()
+      assert.equal(ws.pages.find(p => p.id === 'r1')!.values!.st, 'done', 'his edit lands')
+      assert.equal(second.receipt.automations?.paused.length, 1, 'the rule pauses, and says so')
+      // The same, but the write in between was someone else's: held, as before.
+      const b2 = ws.revision
+      await exec({ type: 'rename-page', pageId: 'r1', title: 'One!' })
+      await assert.rejects(repo.executeOutbox({ ...edit('other-2', 'r2'), expectedRevision: b2 }, basis(b2, { readsBeyond: true })), held('changed-since'))
+    } finally { await f.cleanup() }
+  })
+
   test(`${name} outbox: a change older than a stretch an older build wrote unstamped is held, not row-checked`, async () => {
     const f = await fixture()
     try {

@@ -48,7 +48,8 @@ export function readsBeyondApplied(action: Action, receipt: Receipt): boolean {
 }
 
 /**
- * Before applying: `as-is` when nothing moved since the base (its own revision check is exact); `whole` when the row
+ * Before applying: `as-is` when nothing moved since the base, or only his own earlier changes did (applied on the
+ * latest revision, which is what it was made on); `whole` when the row
  * check can't be trusted for it (it reads beyond its writes, an older build wrote unstamped rows since its base, or a
  * receipt it may have had was forgotten); else `rows`.
  */
@@ -60,8 +61,21 @@ export function replayRule(basis: OutboxBasis, revision: number, stored: RowTrac
   // read it from the workspace as it is now, before deciding (Ratchet: the first replay after a rollback and forward).
   const tracking = stored.trackedThrough === revision ? stored : { ...stored, untrackedUntil: Math.max(stored.untrackedUntil, revision) }
   if (basis.baseRevision < tracking.forgottenThrough) return { rule: 'whole', reason: 'maybe-applied' }
-  if (basis.readsBeyond || basis.baseRevision < tracking.untrackedUntil) return { rule: 'whole', reason: 'changed-since' }
+  if (basis.baseRevision < tracking.untrackedUntil) return { rule: 'whole', reason: 'changed-since' }
+  // Every revision since its base is one of his own earlier changes, acknowledged: the store holds exactly what it was
+  // made on (the browser applied those first), so it applies as made, whatever it reads (gate e1a21c80, Ratchet
+  // b6436b71). Only after the checks above, which no coverage can answer (Ratchet 58a63858).
+  if (onlyOwnSince(basis, revision)) return { rule: 'as-is' }
+  if (basis.readsBeyond) return { rule: 'whole', reason: 'changed-since' }
   return { rule: 'rows' }
+}
+
+/** Whether each revision after the base, up to `revision`, is one its own earlier changes produced. */
+export function onlyOwnSince(basis: OutboxBasis, revision: number): boolean {
+  if (revision - basis.baseRevision > basis.ownRevisions.length) return false
+  const own = new Set(basis.ownRevisions)
+  for (let r = basis.baseRevision + 1; r <= revision; r++) if (!own.has(r)) return false
+  return true
 }
 
 /** The rows of the write set someone else wrote after the base. A row never stamped (null) predates the outbox. */

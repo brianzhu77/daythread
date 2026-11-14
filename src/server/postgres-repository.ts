@@ -366,7 +366,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
         rule = replayRule(outbox, workspace.revision, tracking)
         if (rule.rule === 'whole') throw new OutboxHeld(rule.reason)
       }
-      const result = applyCommand(workspace, expected === 'latest' || rule?.rule === 'rows' ? { ...command, expectedRevision: workspace.revision } : command)
+      const result = applyCommand(workspace, expected === 'latest' || rule !== undefined ? { ...command, expectedRevision: workspace.revision } : command)
       const after = result.workspace
       if (after.revision !== workspace.revision) {
         const { write, inverse } = planWrites(rows, after, restored)
