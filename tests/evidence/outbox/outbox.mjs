@@ -114,10 +114,32 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const base0 = stored().revision
     await hold(page)
     const box = page.getByRole('checkbox', { name: 'Complete Water the plants' })
-    await box.click(); await wait(400); await box.click(); await wait(400)
+    await box.click(); await wait(700); await box.click(); await wait(400)
     const shownOpen = await box.isChecked().catch(() => null)
     await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(1500)
     ok(`${tag} 2b a second tap during the tick's send unticks it, shown at once, replayed after the tick`, shownOpen === false && statusOf('Water the plants') === 'open' && stored().revision === base0 + 2 && await page.getByRole('checkbox', { name: 'Complete Water the plants' }).isChecked() === false, `shown open ${shownOpen === false}, status ${statusOf('Water the plants')}, revision ${base0} → ${stored().revision}`)
+    await context.close()
+  }
+  // 2c. A double tap 150 ms apart is one tap (B72), with the outbox too: one Done write, the box ticked.
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    const base0 = stored().revision, box = page.getByRole('checkbox', { name: 'Complete Water the plants' })
+    await box.click(); await wait(150); await box.click(); await settle(page); await wait(800)
+    ok(`${tag} 2c a double tap 150 ms apart is one tick: one write, the box ticked`, statusOf('Water the plants') === 'done' && stored().revision === base0 + 1 && await box.isChecked(), `status ${statusOf('Water the plants')}, revision ${base0} → ${stored().revision}`)
+    await context.close()
+  }
+  // 2d. Offline, a second tap inside the 500 ms window is still the same tap: the box stays ticked, one change kept.
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    const base0 = stored().revision
+    await page.route(OUTBOX, route => route.abort('internetdisconnected'))
+    const box = page.getByRole('checkbox', { name: 'Complete Water the plants' })
+    await box.click(); await wait(300); await box.click(); await wait(600)
+    const ticked = await box.isChecked().catch(() => null)
+    await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(1500)
+    ok(`${tag} 2d offline, a second tap 300 ms later is the same tap: ticked, one change sent`, ticked === true && statusOf('Water the plants') === 'done' && stored().revision === base0 + 1, `ticked ${ticked}, status ${statusOf('Water the plants')}, revision ${base0} → ${stored().revision}`)
     await context.close()
   }
   // 6. Offline: a tick and a second tap to undo it are both kept, said in the offline line, and sent in order once the
@@ -128,7 +150,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const base0 = stored().revision
     await page.route(OUTBOX, route => route.abort('internetdisconnected'))
     const box = page.getByRole('checkbox', { name: 'Complete Water the plants' })
-    await box.click(); await wait(600)
+    await box.click(); await wait(700)
     const line = await page.locator('.banner.offline').innerText().catch(() => '')
     const shownDone = await box.isChecked().catch(() => null)
     await box.click(); await wait(600)

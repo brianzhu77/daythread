@@ -114,6 +114,8 @@ export interface OutboxView {
   /** Not durable and a change still unsent after a second, or after a failed send (§8.4, Jazz 3c65a099): never a flash on every change. */
   atRisk: boolean
 }
+/** Two taps on one to-do closer than this are one tap (B98 item 2; Jazz may tune it). */
+const doubleTapMs = 500
 const emptyOutbox: OutboxView = { pending: 0, held: null, waiting: 0, durable: true, keptBack: false, offline: false, atRisk: false }
 
 /** Commands queued or being sent in this tab, across providers: a reload waits for none (new-build.ts). */
@@ -198,7 +200,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   // Commands are applied one at a time against the latest revision.
   const wsRef = useRef<Workspace | null>(null)
   // ---- B98: the outbox (outbox.md). This tab's owner's entries, mirrored from the store; the store is the truth.
-  const store = useRef<OutboxStore | null>(transport.runOutbox && typeof indexedDB !== 'undefined' ? idbOutboxStore() : null)
+  // Made once: a ref's initial value is evaluated on every render, so these are filled in only while empty.
+  const store = useRef<OutboxStore | null | undefined>(undefined)
+  if (store.current === undefined) store.current = transport.runOutbox && typeof indexedDB !== 'undefined' ? idbOutboxStore() : null
   const entries = useRef<OutboxEntry[]>([])
   /** Entries shown as made: stored before this load, or left after a send that didn't land. */
   const kept = useRef(new Set<number>())
@@ -223,8 +227,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [])
   // B98: until the first load's stored changes are sent, nothing else is (the app's own writes on open wait: Jazz ef6b418a).
   const openQueue = useRef<() => void>(() => undefined)
-  const queue = useRef<Promise<unknown>>(store.current ? new Promise<void>(resolve => { openQueue.current = resolve }) : Promise.resolve())
-  const storedAtMount = useRef<Promise<OutboxEntry[]> | null>(store.current ? store.current.all().catch(() => { durable.current = false; return [] }) : null)
+  const queue = useRef<Promise<unknown>>(undefined as unknown as Promise<unknown>)
+  if (!queue.current) queue.current = store.current ? new Promise<void>(resolve => { openQueue.current = resolve }) : Promise.resolve()
+  const storedAtMount = useRef<Promise<OutboxEntry[]> | null | undefined>(undefined)
+  if (storedAtMount.current === undefined) storedAtMount.current = store.current ? store.current.all().catch(() => { durable.current = false; return [] }) : null
 
   /** The server's workspace; what's shown has his pending changes on top, so a tick never shows unticked first (Jazz §8.1). */
   const adopt = useCallback((ws: Workspace) => {
@@ -517,13 +523,18 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   // The guard reads the ref, so a second tap before React re-renders is still ignored.
   const ticksRef = useRef<Ticks>(ticks)
   const tickToken = useRef(0)
+  const lastTap = useRef(new Map<string, number>())
   const updateTicks = useCallback((next: (ticks: Ticks) => Ticks) => { ticksRef.current = next(ticksRef.current); setTicks(ticksRef.current) }, [])
   /** Sends a tick through the B72 lifecycle: shown at once, other taps ignored while it saves, then the row's hold. */
   const runTick = useCallback((action: Extract<Action, { type: 'task-status' }> & { status: TickStatus }, notice?: NoticeArg, operationId?: string) => {
     const { taskId } = action
-    // With the outbox a tap during a tick's send is its own change, built on what the screen shows and queued after it
-    // (B98 item 2, Bumblebee 476900b9); without one, the second tap waits as before (B72).
+    // A second tap within 500 ms is the same tap (B72: his real double taps, 282b1ba1). After that, with the outbox, a tap
+    // during a tick's send is its own change, built on what the screen shows (B98 item 2, Bumblebee d538310b); without
+    // one, it waits for the send as before.
+    const now = Date.now(), last = lastTap.current.get(taskId)
+    if (last !== undefined && now - last < doubleTapMs) return
     if (isSaving(ticksRef.current, taskId) && !(store.current && durable.current && !legacy.current)) return
+    lastTap.current.set(taskId, now)
     const tick: Tick = { to: action.status, phase: 'saving', token: ++tickToken.current }
     updateTicks(t => withTick(t, taskId, tick))
     void run(action, notice, operationId).then(receipt => {
