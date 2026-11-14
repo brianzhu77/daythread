@@ -272,7 +272,6 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   /** Sends one stored entry and makes its answer what `transport.run` would have returned, or an `OutboxStop`. */
   const sendEntry = useCallback(async (entry: OutboxEntry): Promise<{ workspace: Workspace; receipt: Receipt }> => {
     const s = store.current!, seq = entry.seq!
-    if (blockedBy(entries.current, entry)) { kept.current.add(seq); throw new OutboxStop('waiting') }
     inFlight.current.add(seq)
     try {
       // One tab sends an owner's changes at a time; without Web Locks two may send one, and its receipt answers the second (§7).
@@ -281,9 +280,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       const send = async (): Promise<OutboxAnswer | { status: 'gone-here' } | { status: 'waiting-here' }> => {
         // The owner's whole queue as stored now, other tabs' changes included: a change held in another tab blocks this
         // one just as one held here would (Ratchet 226e41dc). The tab's own list takes in what it didn't know.
+        // The store is the truth for this owner's queue: what another tab added, changed or discarded (Ratchet 7bb6a8af).
         const shared = (await s.all()).filter(e => e.owner === entry.owner)
-        const known = new Set(entries.current.map(e => e.seq))
-        entries.current = [...entries.current.map(e => shared.find(x => x.seq === e.seq) ?? e), ...shared.filter(e => !known.has(e.seq))].sort((a, b) => a.seq! - b.seq!)
+        entries.current = shared
         const now = shared.find(e => e.seq === seq)
         if (!now) return { status: 'gone-here' }
         const fresh = { ...entry, ownRevisions: now.ownRevisions, state: now.state }
@@ -429,6 +428,12 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       running = true; last = Date.now()
       try {
         // Changes kept on the device go as soon as he's back, whatever the network events said (Jazz 8887e299).
+        if (store.current && knownOwner) {
+          // Another tab may have sent, held or discarded changes meanwhile: take the stored queue as it is, then send.
+          const owner = knownOwner
+          entries.current = (await store.current.all().catch(() => entries.current)).filter(e => e.owner === owner)
+          showOutbox()
+        }
         if (entries.current.some(e => e.state === 'pending')) { netAway.current = false; void drainRef.current?.() }
         if (!(await flushAllEditors())) return
         await queue.current
@@ -439,7 +444,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     window.addEventListener('focus', onVisible)
     window.addEventListener('pageshow', onVisible)
     return () => { document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible); window.removeEventListener('pageshow', onVisible) }
-  }, [refresh])
+  }, [refresh, showOutbox])
 
   useEffect(() => {
     if (saveState !== 'saved') return
