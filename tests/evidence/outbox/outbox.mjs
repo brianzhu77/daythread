@@ -386,6 +386,10 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await b.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(2000)
     const text = (await b.locator('.banner.save-failed').innerText().catch(() => '')).replace(/\s+/g, ' ')
     ok(`${tag} 17 a change held in tab A blocks tab B's tick on the same to-do ("${text.trim()}")`, stored().revision === before && statusOf('Water the plants') === 'open' && /later change waiting/.test(text), `revision ${before} → ${stored().revision}`)
+    // A discards its held change; B, back in its tab, drops it too and sends its waiting tick (Ratchet 7bb6a8af).
+    await a.locator('.banner.save-failed').getByRole('button', { name: 'Discard' }).click(); await wait(800)
+    await wait(5200); await b.evaluate(() => window.dispatchEvent(new Event('focus'))); await wait(2000)
+    ok(`${tag} 17b the held change discarded in tab A: tab B lets go of it and sends its waiting tick`, statusOf('Water the plants') === 'done' && await b.locator('.banner.save-failed').count() === 0, `status ${statusOf('Water the plants')}`)
     await context.close()
   }
   // 10c. No IndexedDB at all (not just failing): a change on its way still warns after a second and guards the leave.
