@@ -6,6 +6,9 @@ import assert from 'node:assert/strict'
 import type { ServerRepository } from '../src/server/repository.ts'
 import { OutboxHeld, type OutboxBasis } from '../src/server/outbox-replay.ts'
 import type { Action, Workspace } from '../src/domain/types.ts'
+import { runOutbox } from '../src/server/outbox-command.ts'
+import { writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
+import type { Automation } from '../src/domain/automations.ts'
 
 export interface OutboxFixture {
   create(): ServerRepository
@@ -121,6 +124,40 @@ export function outboxContract(name: string, fixture: () => Promise<OutboxFixtur
       await f.restoredFromBackup(2)
       const before = await repo.load()
       await assert.rejects(repo.executeOutbox({ operationId: 'after-restore', expectedRevision: base, action: tick(water) }, basis(base)), held('changed-since'))
+      assert.deepEqual(await repo.load(), before)
+    } finally { await f.cleanup() }
+  })
+
+  test(`${name} outbox: another account's change gets owner-mismatch before anything runs, and nothing is written`, async () => {
+    const f = await fixture()
+    try {
+      const repo = f.create(), { ws, water } = await seeded(repo), before = await repo.load()
+      const answer = await runOutbox(repo, 'account-b', { operationId: 'a-tick', expectedRevision: ws.revision, action: tick(water), expectedOwner: 'account-a', basis: basis(ws.revision) })
+      assert.deepEqual(answer, { status: 'owner-mismatch', owner: 'account-b' })
+      assert.deepEqual(await repo.load(), before)
+    } finally { await f.cleanup() }
+  })
+
+  test(`${name} outbox: a plain change that fires a rule on the latest state is held when anything moved since its base`, async () => {
+    const f = await fixture()
+    try {
+      const repo = f.create(), at = '2026-11-05T10:00:00.000Z'
+      let n = 0
+      const exec = async (action: unknown) => { const r = (await repo.load()).revision; return repo.execute({ operationId: `s${++n}`, expectedRevision: r, action: action as Action }) }
+      await exec({ type: 'create-database', pageId: 'runs', homeBlockId: null, title: 'Runs' })
+      await exec({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'n', name: 'N', type: 'number' } } })
+      await exec({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'st', name: 'Status', type: 'select', options: [{ id: 'todo', name: 'Todo', color: 'gray' }, { id: 'done', name: 'Done', color: 'gray' }] } } })
+      await exec({ type: 'add-row', databaseId: 'runs', pageId: 'r1', title: 'One', values: { n: 1, st: 'todo' }, at })
+      await exec({ type: 'add-row', databaseId: 'runs', pageId: 'r2', title: 'Two', values: { n: 2, st: 'todo' }, at })
+      const step = { id: 's-n', kind: 'edit-property', set: [{ id: 'n', name: 'N', type: 'number', value: { kind: 'fixed', raw: 5 } }] } as unknown as ButtonStep
+      const rule = { id: 'r', name: 'Log finish', active: true, triggers: [{ kind: 'property-edited', propertyId: 'st', name: 'Status', condition: { by: 'st', op: 'isAnyOf', value: ['done'] } }], steps: writeSteps([step]) } as unknown as Automation
+      await exec({ type: 'change-database', pageId: 'runs', change: { kind: 'addAutomation', automation: rule } })
+      const base = (await repo.load()).revision
+      // Something unrelated moves: the other row's number.
+      await exec({ type: 'set-values', pageId: 'r2', values: { n: 3 }, expected: { n: 2 }, at })
+      const before = await repo.load()
+      // Captured as a plain edit (readsBeyond false); on the latest state it fires the rule, so it's held.
+      await assert.rejects(repo.executeOutbox({ operationId: 'fires', expectedRevision: base, action: { type: 'set-values', pageId: 'r1', values: { st: 'done' }, expected: { st: 'todo' }, at } as unknown as Action }, basis(base)), held('changed-since'))
       assert.deepEqual(await repo.load(), before)
     } finally { await f.cleanup() }
   })

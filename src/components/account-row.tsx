@@ -21,12 +21,16 @@ export type ExportState = 'idle' | 'busy' | 'failed' | 'unsaved'
  * account asks for the password and removes everything.
  */
 export function useAccount() {
-  const { refresh, run, workspace } = useWorkspace()
+  const { refresh, run, workspace, settleOutbox, clearOutbox } = useWorkspace()
   const [account, setAccount] = useState<Account | null>(null)
   const [exporting, setExporting] = useState<ExportState>('idle')
   const [deleting, setDeleting] = useState(false)
   useEffect(() => { void getAccount().then(setAccount).catch(() => undefined) }, [])
   async function signOut() {
+    // B98 (outbox.md §8.5): what's only on this device is sent first; what can't be is deleted only once he says so.
+    const left = await settleOutbox()
+    if (left && !window.confirm(`${left === 1 ? '1 change hasn’t' : `${left} changes haven’t`} reached the server. Signing out deletes ${left === 1 ? 'it' : 'them'} from this device.`)) return
+    await clearOutbox()
     await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => undefined)
     await clearOfflineData()
     window.location.assign('/sign-in')
