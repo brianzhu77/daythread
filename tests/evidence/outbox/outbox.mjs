@@ -12,14 +12,19 @@ if (!base || !storePath) { console.error('Usage: node tests/evidence/outbox/outb
 const ok = (name, pass, detail = '') => { results.push(pass); console.log(`${pass ? 'PASS' : 'FAIL'} ${name}${detail ? ` · ${detail}` : ''}`) }
 const wait = ms => new Promise(r => setTimeout(r, ms))
 const reseed = (variant = '') => execSync(`node --no-warnings tests/evidence/outbox/seed.ts ${storePath} ${variant}`, { stdio: 'ignore' })
-const stored = () => { const db = new DatabaseSync(storePath, { readOnly: true }); try { return JSON.parse(db.prepare('SELECT data FROM workspace WHERE id = 1').get().data) } finally { db.close() } }
+const stored = () => {
+  for (let i = 0; ; i++) {
+    try { const db = new DatabaseSync(storePath, { readOnly: true, timeout: 2000 }); try { return JSON.parse(db.prepare('SELECT data FROM workspace WHERE id = 1').get().data) } finally { db.close() } }
+    catch (e) { if (i > 5 || !/locked|busy/i.test(String(e))) throw e }
+  }
+}
 const statusOf = title => stored().tasks.find(t => t.title === title)?.status
 /** Another device: a command straight on the store, as the server would apply it from another tab. */
 const elsewhere = async action => {
   for (let i = 0; ; i++) {
     const r = new SqliteWorkspaceRepository(storePath), w = await r.load()
     try { return await r.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action: typeof action === 'function' ? action(w) : action }) }
-    catch (e) { if (i > 3 || !/Saved elsewhere/.test(String(e))) throw e; await wait(300) }
+    catch (e) { if (i > 3 || !/Saved elsewhere|locked|busy/.test(String(e))) throw e; await wait(300) }
   }
 }
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' }).format(new Date())
@@ -366,6 +371,23 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 16 two tabs, one to-do: A's tick then B's tick and untick apply in order, nothing held`, heldA === 0 && heldB === 0 && statusOf('Water the plants') === 'open', `status ${statusOf('Water the plants')}, held A ${heldA} B ${heldB}, revision ${stored().revision}`)
     await context.close()
   }
+  // 17. A change held in one tab blocks a dependent change made in another tab of the same device (Ratchet 226e41dc).
+  {
+    reseed()
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }), a = await context.newPage(), b = await context.newPage()
+    for (const p of [a, b]) { await p.goto(`${base}/`); await p.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(p) }
+    await cut(a); await a.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(600)
+    await elsewhere(w => ({ type: 'task-status', taskId: w.tasks.find(t => t.title === 'Water the plants').id, status: 'done', today: today() }))
+    await elsewhere(w => ({ type: 'task-status', taskId: w.tasks.find(t => t.title === 'Water the plants').id, status: 'open', today: today() }))
+    await a.unrouteAll({ behavior: 'ignoreErrors' }); await wait(5200); await a.evaluate(() => window.dispatchEvent(new Event('focus')))
+    await a.locator('.banner.save-failed').waitFor({ timeout: 8000 }).catch(() => {})
+    const before = stored().revision
+    await b.reload(); await b.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(b)
+    await b.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(2000)
+    const text = (await b.locator('.banner.save-failed').innerText().catch(() => '')).replace(/\s+/g, ' ')
+    ok(`${tag} 17 a change held in tab A blocks tab B's tick on the same to-do ("${text.trim()}")`, stored().revision === before && statusOf('Water the plants') === 'open' && /later change waiting/.test(text), `revision ${before} → ${stored().revision}`)
+    await context.close()
+  }
   // 10c. No IndexedDB at all (not just failing): a change on its way still warns after a second and guards the leave.
   {
     reseed(); const { context, page } = await fresh()
@@ -376,6 +398,21 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const warned = await page.getByText('Not saved on this device', { exact: false }).count()
     const guarded = await page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented })
     ok(`${tag} 10c with no IndexedDB, a change still on its way warns and guards the leave (Ratchet 5ca37837)`, warned > 0 && guarded)
+    await context.close()
+  }
+  // 10d. No IndexedDB: a change that failed stays at risk until it is itself sent; an unrelated success doesn't clear the
+  //     warning or the leave guard (Ratchet ff7e0d37).
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.addInitScript(() => Object.defineProperty(window, 'indexedDB', { value: undefined }))
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    await page.route('**/_serverFn/**', r => (r.request().method() === 'POST' ? r.abort('internetdisconnected') : r.continue()))
+    await page.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(1200)
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+    await page.getByRole('checkbox', { name: 'Complete Call the bank' }).click(); await settle(page); await wait(800)
+    const warned = await page.getByText('Not saved on this device', { exact: false }).count()
+    const guarded = await page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented })
+    ok(`${tag} 10d with no IndexedDB, an unrelated success keeps the failed change's warning and leave guard`, statusOf('Call the bank') === 'done' && warned > 0 && guarded, `warned ${warned}, guarded ${guarded}`)
     await context.close()
   }
   // 10. No IndexedDB: changes go as before, nothing claims they were kept.
