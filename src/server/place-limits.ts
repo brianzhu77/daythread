@@ -17,10 +17,12 @@ export interface PlaceLimiter {
 
 export class PostgresPlaceLimiter implements PlaceLimiter {
   private ready?: Promise<void>
+  private readonly sql: SqlClient
+  private readonly schema: string
   private readonly searches: string
   private readonly paused: string
-  constructor(private readonly sql: SqlClient, private readonly schema = schemaName()) {
-    this.searches = `${schema}.place_searches`; this.paused = `${schema}.place_search_pause`
+  constructor(sql: SqlClient, schema = schemaName()) {
+    this.sql = sql; this.schema = schema; this.searches = `${schema}.place_searches`; this.paused = `${schema}.place_search_pause`
   }
 
   /** Made once, when missing, under the same lock as the app's other tables, so two cold starts can't race. */
