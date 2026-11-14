@@ -1,3 +1,15 @@
+# PR216 repair review — changes required at 8acbcb65
+
+The previous clear below was superseded by the Lead’s full gate finding two regressions. Independent review of the repairs found a new client handoff blocker, reported in Raft message 6804fae5.
+
+At `src/components/use-day.tsx:538`, any subsequently stored command retires every ready handed-back original, without an explicit link to its replacement. At line 594, 1.5 seconds alone retires an original even if replacement storage failed or no terminal visible outcome occurred. This violates the accepted requirement to retain the original until its replacement is durably stored or its caller explicitly finishes with a visible outcome. Retirement also updates dependant holds and removes the original through separate store transactions. A process interruption or storage failure can split that transition. Required repair: explicit per-original replacement/terminal acknowledgement, an atomic storage transition, and failure/interruption tests. Do not infer acknowledgement from time or unrelated activity.
+
+The server fine-key and own-revision changes were read. Independently executed replay/client/scheduler/SQLite/PGlite suites pass **67/67** (`/tmp/ratchet-outbox-fine-focused.log`). This includes the own-predecessor failing-rule case, unrelated dashboard layout/filter changes, same-filter conflict, removed/recreated widget lifecycle, and the parts watermark gap on both stores. These passing server cases do not validate live UI recovery.
+
+Jazz and the Lead separately requested removal of whole-filter saves from automatic rebuilding and fine-key/tombstone additions to the real-copy rollback rehearsal. Those remain required before final clearance. The Lead is independently running Worker automations. No new browser build or production operation was performed in this repair review. Await the corrected author head before further handoff/browser validation.
+
+---
+
 # PR216 independent review — clear at 6b1d07f6
 
 **Conclusion:** no remaining review blocker at 6b1d07f6 (runtime bb5d7c8f, followed by a test-only oracle correction). Ready for the Lead’s full release gate; this review does not authorize deployment or production migration.
