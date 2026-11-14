@@ -22,7 +22,8 @@ Offline is where it bites: a command made offline fails into `lastFailed` (heade
 - **Replays are safe on the server.** `applyCommand` returns the stored receipt for an `operationId` it has seen with
   the same action (`workspace.ts`, "Operation identity reused with different input" otherwise). Receipts are kept for
   the last 500 operations, then as tombstones for 3,000 more ("This change was already applied · reload"); past that an
-  old operation is unknown, and its revision check refuses it (never applied twice).
+  old operation is unknown. Today its revision check refuses it; a row-scoped replay bypasses that check, so §5 adds
+  `receiptsForgottenThrough` to keep "unknown" from ever meaning "run it again" (Ratchet 3da5ff6b).
 - **The domain is pure and runs in the browser** (`applyCommand`), so a pending change can be shown applied locally.
 - **IndexedDB is already used** for the offline copy (`offline-copy.ts`), with owner stamping against late replies.
 - **Row-level storage on Postgres** (`workspace-rows.ts`: `rowsOf`, `planWrites`): pages (a database row is a page),
@@ -91,8 +92,19 @@ decision: live sends keep today's whole-revision refusal otherwise; §12.)
 `basis: 'rows'`, its original `baseRevision` and `operationId`, and `ownRevisions`: the revisions produced by this
 queue's earlier entries since its base (kept on each later entry as they land). The server, in one transaction:
 
+0. **Whose it is:** every send (live or replay) carries `expectedOwner`, the owner recorded on the entry. The server
+   compares it with the signed-in owner **before** anything runs and refuses a mismatch (`owner-mismatch`), executing
+   nothing (Ratchet 3da5ff6b: a tab of account A still open after another tab signed in as B would otherwise send A's
+   change with B's cookie). The entry stays stored for its owner; the tab reloads and drains only its new owner's.
 1. **Seen before:** a receipt for `operationId` → return it (applied already; the reply was lost). A tombstone →
    "already applied", treated the same. The browser drops the entry silently.
+1a. **Possibly forgotten:** if no receipt or tombstone is found **and** `baseRevision` is below the workspace's
+   `receiptsForgottenThrough`, the operation may have been applied and its receipt since dropped. The server can't
+   prove it wasn't, so the row check is not used: the whole-revision rule applies (a conflict unless nothing moved),
+   and the entry is held for him, never run again. `receiptsForgottenThrough` is set by `compactReceipts` to the
+   current revision whenever it drops a tombstone for good, so it bounds every forgotten operation from above. Below
+   it, "unknown" is never read as "not applied". That covers a create whose entity was later removed for good: its
+   receipt is either still there (answered by it) or possibly forgotten (held).
 2. **Nothing moved:** `baseRevision` equals the current revision → apply as a live command.
 3. **Row-scoped check:** apply the action to the latest workspace inside the transaction; take its **write set** (the
    rows it changes, from `planWrites`: page, task, deleted, thread and link ids, and `settings` for the workspace's own
@@ -123,7 +135,7 @@ writing it; the PR lists any it finds.
 ### Cost of the row check (Lead ace3f9fa)
 
 - **Postgres:** an additive, nullable `revision integer` column on `pages`, `tasks`, `deleted_tasks`,
-  `comment_threads`, `task_links`, and `settings_revision`, `rows_tracked_through` and `rows_untracked_until` (integers) on `workspaces` (§11), set to the new revision on every row
+  `comment_threads`, `task_links`, and `settings_revision`, `rows_tracked_through`, `rows_untracked_until` and `receipts_forgotten_through` (integers) on `workspaces` (§11), set to the new revision on every row
   the command writes (`planWrites` already lists them). No backfill: null means "not written since the column came",
   which is older than any entry the outbox can hold (the outbox ships with it), so it reads as 0. Migration runs through
   the existing runner; backup first, as for every schema change. Rows a command writes are already being upserted, so
@@ -165,7 +177,9 @@ writing it; the PR lists any it finds.
 
 - **Owner.** Each entry carries the owner the server last answered as (`workspaceOwner()`; a command can't run before
   the first load, so it is always known). A tab drains **only entries of the owner its own load just reported**;
-  others are never sent. A reply that arrives after the account changed is ignored, as for the offline copy.
+  others are never sent. The server enforces it too (§5 step 0): a send whose `expectedOwner` isn't the signed-in
+  owner is refused before it runs, so a stale tab can't send one account's change into another. A reply that arrives
+  after the account changed is ignored, as for the offline copy.
 - **Sign-out and Delete account:** if entries of this account are pending, it drains them first when online. Whatever
   is left is deleted with the offline copy (a shared device must not keep someone's changes), after he confirms (§8).
   A session that expires (401 → sign-in) is not a sign-out: entries stay and replay after he signs in as the same
@@ -291,7 +305,7 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 2. Three queued changes replay in the order made (store revisions in order).
 3. A command that committed but whose reply was held: after the reload it is not applied twice (one operation row).
 4. A refusal (row deleted elsewhere) → one notice naming it; Discard continues the queue; no `beforeunload` prompt.
-5. Account: entries made as A never replay as B; sign-out deletes them after the confirm; an expired session keeps them.
+5. Account: entries made as A never replay as B, and the server refuses a send whose `expectedOwner` isn't the signed-in owner before running it (a tab of A open while another tab signs in as B); sign-out deletes them after the confirm; an expired session keeps them.
 6. Offline → change → reload (offline copy shows it pending) → online: replayed once.
 7. Native: tick, swipe the Home Screen app away within a second, reopen: still ticked (iPhone Simulator, Jazz).
 8. The floor build opens with entries stored: nothing lost, nothing sent; the next build sends them.
@@ -302,6 +316,8 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 13. Other device: tick on one device, edit another page elsewhere, reopen the first: the tick kept, no notice.
 14. open → done → open: an old queued "done" for a task reopened elsewhere after its base is held, not applied.
 15. A held entry holds only its dependants (a later edit of the same row); an unrelated later change is applied at once. Discard re-checks the dependants; Apply mine anyway applies a conflicted one on the latest revision; a refusal offers only Discard; the notice can't be dismissed while anything is held.
+
+16. An entry older than every kept receipt (`baseRevision` below `receiptsForgottenThrough`, with its operation unknown) is held, never run again; including a create whose entity was then removed for good.
 
 Unit and contract tests: the outbox state machine against a fake store (write fails, quota, two drains, owner change,
 late reply); repository contract tests for `basis: 'rows'` on SQLite and Postgres (replay, tombstone, row conflict,
