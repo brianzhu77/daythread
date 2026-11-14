@@ -49,7 +49,7 @@ With IndexedDB absent, abort Water's tick as a network error: warning appears. S
 
 ## Recheck at bd5cd135
 
-Build and 12 focused storage/client/account tests pass. The shared-held probe now correctly sends zero while its predecessor is held.
+Build and 12 focused storage/client/account tests pass. All five earlier browser repros independently pass, including the shared-held zero-send check and memory-risk warning surviving an unrelated success. The shared-release extension below is the sole remaining reported blocker.
 
 ### Remaining: a resolved shared hold stays authoritative in another tab (7bb6a8af)
 
