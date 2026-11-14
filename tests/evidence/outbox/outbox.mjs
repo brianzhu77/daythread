@@ -93,6 +93,31 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 1c a cell edit not yet sent survives a reload, applied on the next open`, st === 'b', `Stage ${st}`)
     await context.close()
   }
+  // 12. On today's page: a to-do ticked and a line typed, then the page reloads at once. Both kept, with no notice (Jazz ef6b418a).
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    await hold(page)
+    await page.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(200)
+    await page.getByText('Pay rent', { exact: true }).click(); await page.keyboard.press('End'); await page.keyboard.press('Enter'); await page.keyboard.type('a line typed before the reload')
+    await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(2000)
+    const day = stored().pages.find(p => p.date === today())
+    const line = (day?.document ?? '').includes('a line typed before the reload'), banner = await page.locator('.banner.save-failed').count()
+    ok(`${tag} 12 a tick and a line on the same page, reloaded at once: both kept, no notice`, statusOf('Water the plants') === 'done' && line && banner === 0, `status ${statusOf('Water the plants')}, line ${line}, banner ${banner}`)
+    await context.close()
+  }
+  // 13. Another device edits something else meanwhile: the tick is kept, with no notice.
+  {
+    reseed(); const { context, page } = await fresh()
+    await openTasks(page); await hold(page); await tick(page, 'Water the plants'); await wait(400)
+    await page.close({ runBeforeUnload: false })
+    await elsewhere(w => ({ type: 'rename-task', taskId: w.tasks.find(t => t.title === 'Call the bank').id, title: 'Call the bank today' }))
+    await elsewhere({ type: 'set-values', pageId: 'r2', values: { st: 'b' }, expected: { st: 'a' }, at: new Date().toISOString() })
+    const again = await context.newPage(); await openTasks(again); await wait(1200)
+    const banner = await again.locator('.banner.save-failed').count()
+    ok(`${tag} 13 a tick made before another device edited other things is kept, with no notice`, statusOf('Water the plants') === 'done' && banner === 0, `status ${statusOf('Water the plants')}, banner ${banner}`)
+    await context.close()
+  }
   // 14. open → done → open elsewhere: an old queued "done" is held, not applied, and he's told.
   {
     reseed(); const { context, page } = await fresh()
