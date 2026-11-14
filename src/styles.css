@@ -3384,10 +3384,15 @@ textarea.form-input { resize: vertical; }
 .dashboard-head-main { overflow: hidden; }
 .dashboard-split[data-wrapped] { display: none; }
 /* The row's +, in the page's right gutter at the row's middle, so it never meets the last widget's ⋯ (§6). */
-.dashboard-row-add { position: absolute; top: 50%; left: calc(100% + 4px); z-index: 2; transform: translateY(-50%); opacity: 0; transition: opacity 120ms; }
+.dashboard-row-add { position: absolute; top: 50%; left: 100%; z-index: 2; padding-left: 4px; transform: translateY(-50%); opacity: 0; transition: opacity 120ms; }
 .dashboard-row:hover > .dashboard-row-add, .dashboard-row:focus-within > .dashboard-row-add { opacity: 1; }
-.dashboard-row-add-button { width: 44px; min-height: 44px; padding: 0; color: var(--ink-2); font-size: var(--text-row); }
-@media (hover: hover) { .dashboard-row-add-button:hover { background: var(--fill); } }
+/* The 44 px target fills the gutter past the widget's 8 px edit ring, so its fill and focus ring are drawn on a 32 px
+   square inside it: clear of the edit ring and of the window's edge (Jazz). */
+.dashboard-row-add-button { position: relative; width: 44px; min-height: 44px; padding: 0; color: var(--ink-2); font-size: var(--text-row); background: none; }
+.dashboard-row-add-button::before { content: ''; position: absolute; inset: 6px; z-index: -1; border-radius: var(--radius-control); transition: background 120ms; }
+@media (hover: hover) { .dashboard-row-add-button:hover::before { background: var(--fill); } }
+.dashboard-row-add-button:focus-visible { outline: none; }
+.dashboard-row-add-button:focus-visible::before { outline: 2px solid var(--app-accent); outline-offset: 2px; }
 .dashboard-widget { isolation: isolate; }
 .dashboard.is-phone .dashboard-widget { flex: none; width: 100%; min-width: 0; height: auto; }
 .dashboard.is-phone .dashboard-widget-body { overflow: visible; }
