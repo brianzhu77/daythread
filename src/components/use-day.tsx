@@ -155,6 +155,8 @@ export type NoticeArg = NoticeSpec | ((r: Receipt) => NoticeSpec)
  */
 export interface Handoff {
   readonly seq: number
+  /** Whose change it is, as it was when given back: never the tab's owner later on (Ratchet 1931aa3b). */
+  readonly owner: string
   /** Its caller won't build it again, and has said so to him: it leaves the outbox. */
   done(): Promise<void>
 }
@@ -389,14 +391,17 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
    * caller is done with it), every change waiting on it being held (Lead bd4cc39e, Ratchet 6804fae5). Nothing else, no
    * timer, takes it out. The replacement's seq, or null.
    */
-  const handOff = useCallback(async (seq: number, replacement: OutboxEntry | null): Promise<number | null> => {
-    const s = store.current, owner = knownOwner
-    if (!s || !owner) return null
+  const handOff = useCallback(async (token: Pick<Handoff, 'seq' | 'owner'>, replacement: OutboxEntry | null): Promise<number | null | 'not-held'> => {
+    const s = store.current, { seq, owner } = token
+    if (!s) return null
+    // A rebuild is his change for the account it was given back under, or nothing.
+    if (replacement && replacement.owner !== owner) return 'not-held'
     try {
-      const at = await s.handOff(seq, owner, replacement)
+      // Under the owner's lock, as every send is: never while another tab's drain is waiting on this original (Ratchet 23351123).
+      const work = () => s.handOff(seq, owner, replacement)
+      const at = typeof navigator !== 'undefined' && navigator.locks ? await navigator.locks.request(`daythread-outbox:${owner}`, work) : await work()
       handedBack.current.delete(seq)
-      entries.current = (await s.all()).filter(e => e.owner === owner)
-      settleLater(entries.current)
+      if (owner === knownOwner) { entries.current = (await s.all()).filter(e => e.owner === owner); settleLater(entries.current) }
       return at
     } finally { showOutbox() }
   }, [showOutbox, settleLater])
@@ -557,7 +562,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       commandsOut++
       // B98: built and stored now, against the predicted workspace, unless it's page text (the editor keeps its own drafts) or there's no outbox here.
       const owner = knownOwner, base = wsRef.current
-      let stored: Promise<OutboxEntry | null> = Promise.resolve(null), built: Action | null | undefined, storeFailed = false
+      let stored: Promise<OutboxEntry | null> = Promise.resolve(null), built: Action | null | undefined, storeFailed = false, superseded = false
       if (store.current && durable.current && !legacy.current && owner && base) {
         const ahead = predicted() ?? base
         built = typeof source === 'function' ? source(ahead) : source
@@ -565,7 +570,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           const { entry } = capture(ahead, built, operationId, entries.current.some(e => e.action.type === 'undo'))
           const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending', ...(appWrites.has(built.type) ? { app: true } : {}) }
           // The rebuild of a change given back takes its place in one transaction; if storing it fails, the original stays.
-          const adding = options.replaces ? handOff(options.replaces.seq, full).then(seq => seq!) : store.current.add(full)
+          // Not held any more (another tab chose Keep mine on it): it goes on as it is, and this rebuild isn't sent too.
+          const adding = options.replaces ? handOff(options.replaces, full).then(seq => { if (seq === 'not-held') { superseded = true; throw new Error('superseded') } if (seq === null) throw new Error('not stored'); return seq }) : store.current.add(full)
           stored = adding.then(async seq => {
             outboxHint.set()
             ownJobs.current.add(seq)
@@ -576,13 +582,14 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
             if (navigator.storage?.persist && entries.current.length === 1) void navigator.storage.persist().catch(() => undefined)
             showOutbox()
             return kept
-          }, () => { storeFailed = true; durable.current = false; showOutbox(); return null })
+          }, () => { if (superseded) return null; storeFailed = true; durable.current = false; showOutbox(); return null })
         }
       }
       const job = queue.current.then(async (): Promise<Receipt | null> => {
         const current = wsRef.current
         if (!current) return null
         const entry = await stored
+        if (superseded) return null
         // A rebuild with nothing to send: its caller has its outcome. One that failed to be stored leaves the original
         // until it lands (below).
         if (options.replaces && !entry && !storeFailed && !built) void options.replaces.done()
@@ -625,7 +632,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
               // The latest first, so what the caller builds again is built on it.
               try { await refresh(operationId) } catch { /* offline */ }
               let finished: Promise<void> | null = null
-              const handoff: Handoff = { seq, done: () => (finished ??= handOff(seq, null).then(() => undefined, () => undefined)) }
+              const token = { seq, owner: entry.owner }
+              const handoff: Handoff = { ...token, done: () => (finished ??= handOff(token, null).then(() => undefined, () => undefined)) }
               options.onRefused?.('Saved elsewhere', handoff)
               // Its own word said in place ("Can't undo · edited since"): that's its outcome.
               if (options.stale === 'outcome') await handoff.done()

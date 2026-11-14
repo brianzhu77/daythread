@@ -72,9 +72,11 @@ export interface OutboxStore {
   /**
    * A change given back to its caller leaves the outbox (Lead bd4cc39e, Ratchet 6804fae5), in one transaction: what
    * replaces it (its rebuild) is stored, every change of the owner still waiting on it, from any tab, is held for him
-   * to decide, and it's removed. Nothing changes if any part fails. The replacement's seq, or null.
+   * to decide, and it's removed. Nothing changes if any part fails. The replacement's seq, or null; `not-held` and
+   * nothing changed when the original isn't this owner's held change any more (another tab chose Keep mine, or it's
+   * gone: Ratchet 23351123).
    */
-  handOff(seq: number, owner: string, replacement: OutboxEntry | null): Promise<number | null>
+  handOff(seq: number, owner: string, replacement: OutboxEntry | null): Promise<number | null | 'not-held'>
 }
 
 /** What a hand-off does to an owner's queue, as stored now: the changes to hold. Pure, so both stores do the same. */
@@ -82,6 +84,16 @@ export function handOffHolds(queue: readonly OutboxEntry[], seq: number): number
   return [...schedule(queue).waiting].filter(([, roots]) => roots.includes(seq)).map(([w]) => w)
 }
 const handOffHeld = { state: 'held' as const, held: { reason: 'changed-since' as const } }
+/**
+ * Whether the original is still this owner's change held for its caller. The app's own write was already dropped when
+ * it was held (`drainQueue`), so for its rebuild a missing original is expected; for his, missing means another tab
+ * discarded it, and a pending one means another tab chose Keep mine: either way the rebuild isn't stored too.
+ */
+function originalStill(original: OutboxEntry | undefined, owner: string, replacement: OutboxEntry | null): boolean {
+  if (replacement && replacement.owner !== owner) return false
+  if (!original) return Boolean(replacement?.app)
+  return original.owner === owner && original.state === 'held'
+}
 
 /** For tests, and the fallback shape the IndexedDB store follows. */
 export function memoryOutboxStore(): OutboxStore {
@@ -99,6 +111,7 @@ export function memoryOutboxStore(): OutboxStore {
     async remove(seq) { rows.delete(seq) },
     async clearOwner(owner) { for (const e of sorted()) if (e.owner === owner) rows.delete(e.seq!) },
     async handOff(seq, owner, replacement) {
+      if (!originalStill(rows.get(seq), owner, replacement)) return 'not-held'
       const queue = sorted().filter(e => e.owner === owner)
       for (const w of handOffHolds(queue, seq)) rows.set(w, { ...rows.get(w)!, ...structuredClone(handOffHeld) })
       rows.delete(seq)
@@ -141,10 +154,11 @@ export function idbOutboxStore(factory: IDBFactory = indexedDB): OutboxStore {
     update: (seq, patch) => tx<void>('readwrite', s => { const r = s.get(seq); r.onsuccess = () => { if (r.result) s.put({ ...r.result, ...patch, seq }) } }),
     remove: seq => tx<void>('readwrite', s => { s.delete(seq) }),
     clearOwner: owner => tx<void>('readwrite', s => later(s, owner, 0, (_e, c) => { c.delete() })),
-    handOff: (seq, owner, replacement) => tx<number | null>('readwrite', (s, done) => {
+    handOff: (seq, owner, replacement) => tx<number | null | 'not-held'>('readwrite', (s, done) => {
       const r = s.index('owner').getAll(IDBKeyRange.only(owner))
       r.onsuccess = () => {
         const queue = (r.result as OutboxEntry[]).sort((a, b) => a.seq! - b.seq!)
+        if (!originalStill(queue.find(e => e.seq === seq), owner, replacement)) { done('not-held'); return }
         for (const w of handOffHolds(queue, seq)) s.put({ ...queue.find(e => e.seq === w)!, ...handOffHeld })
         s.delete(seq)
         if (!replacement) { done(null); return }
