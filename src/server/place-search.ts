@@ -28,6 +28,8 @@ export interface SearchDeps {
   /** Who is searching: the signed-in account, or "local" with sign-in off. */
   owner: string
   log?: (event: Record<string, unknown>) => void
+  /** Tests only: a shorter wait than `searchLimits.timeoutMs`. */
+  timeoutMs?: number
 }
 
 // One per Worker instance: gone with it, and never written anywhere.
@@ -86,7 +88,7 @@ async function askPhoton(q: string, deps: SearchDeps): Promise<Asked> {
   const url = new URL('/api', photonOrigin)
   url.searchParams.set('q', q)
   url.searchParams.set('limit', String(placeLimits.suggestions))
-  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), searchLimits.timeoutMs)
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), deps.timeoutMs ?? searchLimits.timeoutMs)
   try {
     const response = await deps.fetch(url, {
       method: 'GET',

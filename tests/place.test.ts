@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readValue, storedValue, viewRows, type Property, type View } from '../src/domain/database.ts'
 import { databaseSheet, pastedValue } from '../src/domain/csv.ts'
-import { cleanPlace, isPlaceValue, locationName, placeFromText, placeLink, placeText, searchesAsTyped, searchFrom, searchQuery } from '../src/domain/place.ts'
+import { cleanPlace, isPlaceValue, searchable, locationName, placeFromText, placeLink, placeText, searchesAsTyped, searchFrom, searchQuery } from '../src/domain/place.ts'
 import type { Action } from '../src/domain/types.ts'
 import { harness } from './v2-helpers.ts'
 
@@ -16,7 +16,7 @@ test('a value: a name, and a pin only as a pair in range; name only is valid', (
   assert.ok(isPlaceValue(dumpling))
   assert.ok(isPlaceValue({ name: 'golden dumpling' }), 'name only')
   for (const bad of [{}, { name: '' }, { name: '  ' }, { name: 'x', lat: 1 }, { name: 'x', lon: 1 }, { name: 'x', lat: 91, lon: 0 }, { name: 'x', lat: 0, lon: 181 },
-    { name: 'x', lat: Number.NaN, lon: 0 }, { name: 'x'.repeat(201) }, { name: 'x', address: 'y'.repeat(301) }, { name: 'x', ref: 'r'.repeat(65) }, { name: 'x', url: 'https://evil' }, 'x', ['x'], null])
+    { name: 'x', lat: Number.NaN, lon: 0 }, { name: 'x'.repeat(10_001) }, { name: 'x', address: 'y'.repeat(301) }, { name: 'x', ref: 'r'.repeat(65) }, { name: 'x', url: 'https://evil' }, 'x', ['x'], null])
     assert.equal(isPlaceValue(bad), false, JSON.stringify(bad))
   assert.deepEqual(cleanPlace({ name: '  Golden\nDumpling ', lat: 49.18591234567, lon: -123.13381234567 }), { name: 'Golden Dumpling', lat: 49.1859123, lon: -123.1338123 })
   assert.equal(cleanPlace({ name: 'x', lat: '49', lon: 1 }), null)
@@ -36,6 +36,9 @@ test('one threshold for the editor and the server: 2 characters with Chinese, Ja
   assert.equal(searchesAsTyped('  ab  '), false, 'trimmed first')
   assert.equal(searchQuery(' Stanley\u0000  Park '), 'Stanley Park')
   assert.equal(searchQuery('é'), 'é', 'NFC')
+  assert.equal(searchable('a'.repeat(256)), true)
+  assert.equal(searchable('a'.repeat(257)), false, 'past 256: kept whole, never searched or cut')
+  assert.equal(searchesAsTyped('西'.repeat(257)), false)
 })
 
 test('links come from two templates with encoded values, and only with a pin', () => {
@@ -82,6 +85,17 @@ test('Text to Place keeps the words as names with no pin and says how many; back
   assert.deepEqual(readValue(prop(), raw('r2')), dumpling, 'and back: the value as it was')
 })
 
+test('a Text value longer than a search reads whole as a name, and changing back gives it all back', () => {
+  const { h, C, raw, prop } = shelf()
+  const long = 'word '.repeat(400).trim()
+  h.run({ type: 'set-values', pageId: 'r1', values: { pl: long }, expected: {}, at } as never)
+  C({ kind: 'updateProperty', propertyId: 'pl', type: 'place' })
+  assert.deepEqual(readValue(prop(), raw('r1')), { name: long })
+  assert.deepEqual(storedValue(prop(), { name: long }), { name: long }, 'Keep saves it whole')
+  C({ kind: 'updateProperty', propertyId: 'pl', type: 'text' })
+  assert.equal(raw('r1'), long)
+})
+
 test('filter on text in the name or the address; sort by name; empty last', () => {
   const { h, C } = shelf()
   C({ kind: 'updateProperty', propertyId: 'pl', type: 'place' })
@@ -105,7 +119,7 @@ test('CSV writes name, address and coordinates; a paste keeps words as a name wi
   assert.deepEqual(sheet.map(r => r[1]), ['Where', 'golden dumpling', 'Golden Dumpling, 8391 Alexandra Rd, Richmond, BC, Canada (49.1859, -123.1338)', ''])
   assert.deepEqual(pastedValue(db, prop, '  Ramen Danbo '), { name: 'Ramen Danbo' })
   assert.equal(pastedValue(db, prop, '   '), undefined)
-  assert.deepEqual(placeFromText('x'.repeat(250)), { name: 'x'.repeat(200) })
+  assert.deepEqual(placeFromText('x'.repeat(5000)), { name: 'x'.repeat(5000) }, 'never cut')
 })
 
 test("Place isn't offered for Group, Rollup or a form question in step 1", async () => {
