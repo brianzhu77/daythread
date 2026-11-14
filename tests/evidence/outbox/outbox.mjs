@@ -52,6 +52,25 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 1 a tick not yet sent survives a reload, applied on the next open, nothing said`, statusOf('Water the plants') === 'done' && banner === 0, `status ${statusOf('Water the plants')}, banner ${banner}, errors ${errors.length}`)
     await context.close()
   }
+  // 1d. No flicker (Jazz §8.1): after the reload, the first frame that shows the to-do already shows it ticked.
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/`); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page)
+    await hold(page); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).click(); await wait(400)
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+    await page.addInitScript(() => {
+      const seen = []
+      const look = () => { const box = document.querySelector('input[aria-label="Complete Water the plants"], [aria-label="Complete Water the plants"]'); if (box) seen.push(box.checked ?? box.getAttribute('aria-checked') === 'true') }
+      new MutationObserver(look).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['checked', 'aria-checked', 'class'] })
+      const frame = () => { look(); if (seen.length < 400) requestAnimationFrame(frame) }
+      requestAnimationFrame(frame)
+      window.__seen = seen
+    })
+    await page.reload(); await page.getByRole('checkbox', { name: 'Complete Water the plants' }).waitFor({ timeout: 20000 }); await settle(page); await wait(800)
+    const seen = await page.evaluate(() => window.__seen)
+    ok(`${tag} 1d after the reload the to-do is ticked from the first frame it shows (no unticked frame)`, seen.length > 0 && seen.every(Boolean) && statusOf('Water the plants') === 'done', `${seen.length} samples, first ${seen[0]}, any unticked ${seen.some(v => !v)}`)
+    await context.close()
+  }
   // 1b. The same with the tab closed and opened again.
   {
     reseed(); const { context, page } = await fresh()
