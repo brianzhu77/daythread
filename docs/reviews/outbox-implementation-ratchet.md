@@ -1,4 +1,20 @@
-# B98 implementation review (in progress)
+# PR216 independent review — clear at 6b1d07f6
+
+**Conclusion:** no remaining review blocker at 6b1d07f6 (runtime bb5d7c8f, followed by a test-only oracle correction). Ready for the Lead’s full release gate; this review does not authorize deployment or production migration.
+
+The runtime restructure at bb5d7c8f uses one pure `schedule()` for queue partition, blocker roots and banner counts, and one shared locked `drainQueue()` for every trigger. Every result changes storage before the queue is reread and selected again; transient failures stop the attempt without changing the pending entry into a hold. There is no requested-target scheduling branch.
+
+The independent reference model follows dependencies recursively rather than calling the production selector. Reviewer requested colon-containing IDs, included in test-only 6b1d07f6. The selector and drain tests each pass 3,000 seeded runs independently; the 12 focused storage/client/account tests and build pass. The reviewer read model, oracle and integration; author mutation results are reported by the author, not independently reproduced here.
+
+The reviewer independently reran the blocked-current orphan probe (only eligible earlier A sends), closed-A ordering (A then B), and shared-discard recovery (zero while held, one after Discard, no banner): all pass. Independent browser suites pass: Chromium 33/33 and WebKit 32/32. Full application/test typecheck passes. The latest colon-ID model tests were rerun successfully after the test-only update.
+
+Production migration, old-tab Worker deployment, performance, backup/data checks and release remain the Lead's gate. No real account deletion, production write, deployment or real-phone run was performed by this reviewer.
+
+The history below documents findings that led to the restructure; it is not a list of current open findings.
+
+---
+
+# B98 implementation review — historical findings and rechecks
 
 Layer 1 initially reviewed at 816331ca. Browser and UX layers and the final PR are not yet reviewed.
 
