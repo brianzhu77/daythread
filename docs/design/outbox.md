@@ -243,6 +243,14 @@ added.
   points to.
 - When he's back online and they're sent, the clause goes with the banner. Nothing else is said.
 
+### 8.2a Kept back while the server can't take them (a rollback, Ratchet 22b0e8da point 2)
+- A new client talking to a server without the outbox keeps its entries unsent (§11). He is online, so the offline
+  banner isn't up, and the tab must not look saved: nothing waits silently (Bumblebee 6e4a90a0).
+- The offline banner's place and style, with the same clause: `Not sent yet · 2 changes will be sent` (singular:
+  `1 change will be sent`). The marks on the items are today's pending ones, as offline.
+- It goes once they're sent. Nothing else is said. Rollbacks are rare and short, so this is a fallback, not a
+  designed moment.
+
 ### 8.3 Held (a conflict or a refusal)
 Shown in the save-failed banner. It **can't be dismissed**: it stays, across reloads and on every screen, until he
 resolves it. A held change that only sits in a notice he closed is the silent disagreement B98 removes (Bumblebee
@@ -312,6 +320,8 @@ Another account's entries, a second tab's drain, a replay answered by a receipt 
    on it still saves; one that does is counted in "later changes waiting".
 4. Not durable: the banner appears only while something is unsent; desktop leave prompt only in that state.
 5. Sign out offline with pending changes: the confirm and its count; online: `Signing out…`, then no question.
+6. Against the floor build's server with 2 entries stored: `Not sent yet · 2 changes will be sent`; it goes once a
+   build with the outbox is back and they're sent.
 
 ## 9. The Worker when the browser goes away mid-command
 
