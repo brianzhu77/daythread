@@ -483,3 +483,40 @@ test('confirmation landing: the token from the emailed link signs the person in,
     assert.equal((await h.server.ownerSession(h.cookieOf(r)!))?.email, 'new@example.com')
   } finally { await h.close() }
 })
+
+test('the account of a request is the session the gate let in: one cookie, read one way', async () => {
+  const h = await handlers()
+  try {
+    const signIn = async (email: string, id: string) => {
+      h.supabase.verified.set(email, id); await h.accounts.invite(email)
+      return h.cookieOf(await h.server.handleSignIn(h.post('/api/auth/sign-in', { email, password: 'right', timezone: 'Asia/Tokyo' })))!
+    }
+    const a = await signIn('brian@example.com', A), b = await signIn('other@example.com', B)
+    const get = (origin: string, cookie: string) => new Request(`${origin}/_serverFn/x`, { headers: { cookie } })
+    const read = async (request: Request) => {
+      const checked = await h.server.checkRequest(request, 'serverFn')
+      return { gate: checked instanceof Response ? checked.status : checked.owner, account: (await h.server.accountOf(request))?.email ?? null }
+    }
+    const https = 'https://app.test', http = 'http://127.0.0.1:3000', host = '__Host-daythread_session', plain = 'daythread_session'
+    assert.deepEqual(await h.server.accountOf(get(https, `${host}=${a}`)), { email: 'brian@example.com', timezone: 'Asia/Tokyo' })
+    assert.deepEqual(await read(get(https, `theme=dark; ${host}=${b}`)), { gate: B, account: 'other@example.com' })
+    assert.deepEqual(await read(get(http, `${plain}=${a}`)), { gate: A, account: 'brian@example.com' })
+    // A second cookie under the other name never names the account: the gate does not read it either.
+    assert.deepEqual(await read(get(http, `${plain}=${a}; ${host}=${b}`)), { gate: A, account: 'brian@example.com' })
+    assert.deepEqual(await read(get(http, `${host}=${b}; ${plain}=${a}`)), { gate: A, account: 'brian@example.com' })
+    assert.deepEqual(await read(get(https, `${host}=${a}; ${plain}=${b}`)), { gate: A, account: 'brian@example.com' })
+    // No session under this request's own name: refused at the gate, and no account behind it.
+    assert.deepEqual(await read(get(https, `${plain}=${b}`)), { gate: 401, account: null })
+    assert.deepEqual(await read(get(https, `${host}=; ${plain}=${b}`)), { gate: 401, account: null })
+    assert.deepEqual(await read(get(http, `${host}=${b}`)), { gate: 401, account: null })
+    assert.deepEqual(await read(get(https, '')), { gate: 401, account: null })
+    // The same name twice: both take the first.
+    assert.deepEqual(await read(get(https, `${host}=${a}; ${host}=${b}`)), { gate: A, account: 'brian@example.com' })
+    assert.deepEqual(await read(get(https, `${host}=nope; ${host}=${b}`)), { gate: 401, account: null })
+    // Signed out: the account goes with the session.
+    await h.server.handleSignOut(h.post('/api/auth/sign-out', {}, a))
+    assert.deepEqual(await read(get(https, `${host}=${a}`)), { gate: 401, account: null })
+    process.env.DAYTHREAD_AUTH = 'off'
+    assert.equal(await h.server.accountOf(get(https, `${host}=${b}`)), null, 'sign-in off: no account')
+  } finally { await h.close() }
+})
