@@ -520,3 +520,32 @@ test('the account of a request is the session the gate let in: one cookie, read 
     assert.equal(await h.server.accountOf(get(https, `${host}=${b}`)), null, 'sign-in off: no account')
   } finally { await h.close() }
 })
+
+test('Ratchet: a second live cookie cannot lend its model access or timezone to this request', async () => {
+  const h = await handlers()
+  const { modelAllowed } = await import('../src/server/model/access.ts')
+  try {
+    const login = async (email: string, id: string, timezone: string) => {
+      h.supabase.verified.set(email, id); await h.accounts.invite(email)
+      return h.cookieOf(await h.server.handleSignIn(h.post('/api/auth/sign-in', { email, password: 'right', timezone })))!
+    }
+    const guest = await login('guest@example.com', A, 'Asia/Tokyo')
+    const allowed = await login('allowed@example.com', B, 'America/Vancouver')
+    for (const origin of ['http://127.0.0.1:3000', 'https://app.test']) {
+      const own = origin.startsWith('https') ? '__Host-daythread_session' : 'daythread_session'
+      const other = origin.startsWith('https') ? 'daythread_session' : '__Host-daythread_session'
+      for (const cookie of [`${other}=${allowed}; ${own}=${guest}`, `${own}=${guest}; ${other}=${allowed}`]) {
+        const req = new Request(`${origin}/_serverFn/x`, { headers: { cookie } })
+        assert.deepEqual(await h.server.checkRequest(req, 'serverFn'), { owner: A })
+        const account = await h.server.accountOf(req)
+        assert.deepEqual(account, { email: 'guest@example.com', timezone: 'Asia/Tokyo' })
+        assert.equal(modelAllowed(true, account, 'allowed@example.com'), false)
+      }
+      const empty = new Request(`${origin}/_serverFn/x`, { headers: { cookie: `${own}=; ${other}=${allowed}` } })
+      assert.equal(modelAllowed(true, await h.server.accountOf(empty), 'allowed@example.com'), false)
+    }
+    await h.repo.deleteWorkspace(h.sql, A)
+    const gone = new Request('https://app.test/_serverFn/x', { headers: { cookie: `__Host-daythread_session=${guest}; daythread_session=${allowed}` } })
+    assert.equal(await h.server.accountOf(gone), null, 'a deleted workspace does not borrow the other account')
+  } finally { await h.close() }
+})
