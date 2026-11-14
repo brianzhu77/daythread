@@ -58,7 +58,7 @@ That holds for every route. Locally, with sign-in off, the gate's this-machine-o
 - **Outbound:**
   - One GET to the fixed `https://photon.komoot.io/api` with `q` and `limit=5` only. There's no `lang`, so names come
     in the place's own language, which is what Bumblebee's 20-place test measured. There's no area or location bias.
-  - Only a fixed `User-Agent: Daythread/1 (place search; +https://<app origin>)` and `Accept: application/json` go
+  - Only a fixed `User-Agent: Daythread place search (a personal notes app; one person typing)` and `Accept: application/json` go
     out. No cookies, authorization, IP or forwarded headers, account, workspace or page ids, and no Referer.
   - `redirect: 'error'`, so a redirect is a failure, not a new host.
   - An `AbortController` timeout of 5 s.
@@ -172,6 +172,12 @@ That holds for every route. Locally, with sign-in off, the gate's this-machine-o
   - there's no address and no `ref`
   - **No lookup: the coordinates never leave the browser except in the saved value.** They're never sent to the
     Worker's search or to Photon.
+- **While it waits** (Jazz 9e67764b, Bumblebee b84193f7 and 3443eec6): the row's second line reads **Finding your
+  location…** in place of `Saved as "…"`. The field and the suggestions keep working meanwhile.
+  - When the position arrives, the value saves and the popover or sheet closes, as any pick does.
+  - Picking a suggestion or keeping the words ends the request.
+  - **Closing first saves nothing.** A position that arrives after a close, a pick or a keep is dropped, by the same
+    sequence and liveness check as a late search reply (§3).
 - **When it fails.** A denial or timeout shows "Location is off" in that row's second line, for the rest of that
   popover or sheet. Search and keep still work.
 
