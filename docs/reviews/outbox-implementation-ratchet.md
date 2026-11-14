@@ -17,7 +17,7 @@ At author head 0daed055, all four independent boundary probes plus five rule tes
 
 ## Browser review at e4c64e97
 
-Build passes. The four independent storage boundary probes and six client tests pass (10/10), including deterministic prediction/server task identity. Full browser rerun is in progress.
+Build passes. The four independent storage boundary probes and six client tests pass (10/10), including deterministic prediction/server task identity. Independent Chromium suite passes 24/24; WebKit rerun is in progress.
 
 ### Open: cross-tab queue uses stale basis (5e6bd5ac)
 
@@ -30,3 +30,7 @@ Successful Delete account only clears the offline copy/caches (`account-row.tsx`
 ### Open: entirely unavailable IndexedDB bypasses warnings (5ca37837)
 
 Independent Chromium test sets `window.indexedDB` to undefined before mounting, holds the legacy tick request, waits 1.8 s: zero not-durable warnings and a cancelable beforeunload event is not prevented. `store.current` is null but `durable.current` remains true. Repro `tests/evidence/outbox/ratchet-no-idb.mjs` (local port43845; seed a throwaway store first). Separately, code inspection shows the leaving guard only tracks active requests, not a memory-only failed change left awaiting Retry.
+
+### Open: waiting is not transitive (12c9599b, b6f96aee)
+
+Captured commands A creates database `newdb`, B adds row `newrow` to it, C renames that row. B depends on A; C depends on B but not directly on A. With A held, the actual app skips B but sends C, which becomes held with “Page not found”. Independently reproduced in Chromium by putting the captured queue into IndexedDB and reopening; the assertion that neither descendant is sent fails (1 request). Repro `tests/evidence/outbox/ratchet-transitive.mjs <preview URL>`, log `/tmp/ratchet-outbox-transitive.log`. This is a recovery-state injection, not a claim of manually completing all three UI operations. Waiting and banner counts must include the transitive dependency closure.
