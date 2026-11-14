@@ -99,3 +99,25 @@ test('a database change is named by what he sees: a dashboard by its view, a wid
   assert.equal(labelFor(D({ kind: 'removeWidget', widgetId: 'w1' }), ws), 'deleted "Runs · Table"')
   assert.equal(labelFor(D({ kind: 'swapWidget', widgetId: 'w1', withId: 'w2' }), ws), 'moved "Runs · Table"')
 })
+
+test('a hand-off, in one step: the original goes, its replacement is stored, and whatever waits on it, from any tab, is held (Ratchet 6804fae5, 13832939)', async () => {
+  const store = memoryOutboxStore()
+  const original = await store.add(entry({ operationId: 'orig', writes: ['page:r1'], state: 'held' }))
+  const before = await store.add(entry({ operationId: 'on-top', writes: ['page:r1'] }))
+  const unrelated = await store.add(entry({ operationId: 'other', writes: ['task:b'], refs: ['b'] }))
+  const otherTab = await store.add(entry({ operationId: 'other-tab', writes: ['page:r1'] }))
+  const replacement = await store.handOff(original, 'me', entry({ operationId: 'rebuilt', writes: ['page:r1'] }))
+  const all = await store.all()
+  const state = (op: string) => all.find(e => e.operationId === op)?.state ?? 'gone'
+  assert.equal(state('orig'), 'gone')
+  assert.equal(state('rebuilt'), 'pending', 'the replacement goes')
+  assert.equal(all.find(e => e.operationId === 'rebuilt')!.seq, replacement)
+  assert.equal(state('on-top'), 'held', 'made on top of it')
+  assert.equal(state('other-tab'), 'held', 'added by another tab during the hand-off, whatever its seq')
+  assert.equal(state('other'), 'pending', 'unrelated')
+  assert.ok(before < unrelated && unrelated < otherTab)
+  // Done with, nothing replacing it.
+  const lone = await store.add(entry({ operationId: 'lone', writes: ['task:z'], state: 'held' }))
+  assert.equal(await store.handOff(lone, 'me', null), null)
+  assert.equal((await store.all()).some(e => e.operationId === 'lone'), false)
+})

@@ -10,7 +10,7 @@ import { todayIn, type ServerRepository } from './repository.ts'
 import { completeLegacyColumns, legacyTables, readLegacyWorkspace } from './sqlite-legacy.ts'
 import { commandLogFields, debugLog, logOperationId } from './debug-log.ts'
 import { planWrites, rowsOf } from './workspace-rows.ts'
-import { OutboxHeld, readsBeyondApplied, replayRule, rowConflicts, trackedAfter, conflictKeys, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
+import { OutboxHeld, readsBeyondApplied, rebuildable, replayRule, rowConflicts, trackedAfter, conflictKeys, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
 
 const applicationId = 0x44544852
 /** Layout 8: the v2 workspace as one JSON document in one row. Layouts 1–7 are the v1 entity tables, converted on first open. */
@@ -152,7 +152,7 @@ export class SqliteWorkspaceRepository implements ServerRepository {
         if (readsBeyondApplied(command.action, result.receipt)) throw new OutboxHeld('changed-since', [], true)
         const read = db.prepare('SELECT revision FROM row_revisions WHERE key = ?')
         const conflicts = rowConflicts([...keys, ...guards], key => (read.get(key) as { revision: number } | undefined)?.revision, outbox)
-        if (conflicts.length) throw new OutboxHeld('conflict', conflicts, true)
+        if (conflicts.length) throw new OutboxHeld('conflict', conflicts, rebuildable(conflicts))
       }
       this.write(db, after)
       const stampRow = db.prepare('INSERT INTO row_revisions (key, revision) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET revision = excluded.revision')

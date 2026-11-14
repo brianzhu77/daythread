@@ -12,7 +12,7 @@ import type { SqlClient } from './db/sql.ts'
 import { commandLogFields, debugLog } from './debug-log.ts'
 import { currentOwner } from './auth/request-owner.ts'
 import { applyDiff, planWrites, rowsOf, threadOptional, workspaceOf, type DeletedRow, type LinkRow, type ThreadRow, type PageRow, type RowDiff, type Rows, type TaskRow } from './workspace-rows.ts'
-import { OutboxHeld, conflictKeys, readsBeyondApplied, replayRule, rowConflicts, trackedAfter, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
+import { OutboxHeld, conflictKeys, readsBeyondApplied, rebuildable, replayRule, rowConflicts, trackedAfter, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
 
 export function schemaName(value = process.env.DAYTHREAD_PG_SCHEMA ?? 'daythread'): string {
   if (!/^[a-z_][a-z0-9_]{0,62}$/.test(value)) throw new Error('DAYTHREAD_PG_SCHEMA must be a lowercase SQL identifier')
@@ -400,7 +400,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
           if (readsBeyondApplied(command.action, result.receipt)) throw new OutboxHeld('changed-since', [], true)
           const checked = [...keys, ...guards], revisions = await this.rowRevisions(tx, scope.id, checked)
           const conflicts = rowConflicts(checked, key => revisions.get(key), outbox)
-          if (conflicts.length) throw new OutboxHeld('conflict', conflicts, true)
+          if (conflicts.length) throw new OutboxHeld('conflict', conflicts, rebuildable(conflicts))
         }
         await this.writeDiff(tx, scope.id, write)
         await this.stamp(tx, scope.id, keys, workspace.revision, after.revision, tracking)

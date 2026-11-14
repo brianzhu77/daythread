@@ -119,7 +119,7 @@ async function run(seed: number, trace: string[]): Promise<void> {
   const failing = <T,>(fn: () => Promise<T>) => (storageFails && r.chance(0.5) ? Promise.reject(new Error('storage failed')) : fn())
   const store: OutboxStore = {
     add: e => inner.add(e), all: () => failing(() => inner.all()), acknowledge: (s, o, v) => failing(() => inner.acknowledge(s, o, v)),
-    update: (s, p) => failing(() => inner.update(s, p)), remove: s => inner.remove(s), clearOwner: o => inner.clearOwner(o),
+    update: (s, p) => failing(() => inner.update(s, p)), remove: s => inner.remove(s), clearOwner: o => inner.clearOwner(o), handOff: (s, o, e) => inner.handOff(s, o, e),
   }
   // The server: rows edited elsewhere at a revision; a change based before an edit to a row it writes is held.
   let revision = 10, mode: Mode = 'up'

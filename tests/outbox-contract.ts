@@ -151,13 +151,13 @@ export function outboxContract(name: string, fixture: () => Promise<OutboxFixtur
     } finally { await f.cleanup() }
   })
 
-  test(`${name} outbox: two edits to one filter meet; the later, made from behind, is held as stale, nothing written`, async () => {
+  test(`${name} outbox: two edits to one filter meet; the later, made from behind, is held and never given back to be built again, nothing written`, async () => {
     const f = await fixture()
     try {
       const repo = f.create(), { exec, D, rule, base } = await dashboard(repo)
       await exec(D({ kind: 'setDashboardFilter', rules: [rule('k1')] }))
       const before = await repo.load()
-      await assert.rejects(repo.executeOutbox({ operationId: 'filter-2', expectedRevision: base, action: D({ kind: 'setDashboardFilter', rules: [rule('k2')] }) }, basis(base)), (e: unknown) => held('conflict')(e) && (e as OutboxHeld).stale)
+      await assert.rejects(repo.executeOutbox({ operationId: 'filter-2', expectedRevision: base, action: D({ kind: 'setDashboardFilter', rules: [rule('k2')] }) }, basis(base)), (e: unknown) => held('conflict')(e) && !(e as OutboxHeld).stale)
       assert.deepEqual(await repo.load(), before)
     } finally { await f.cleanup() }
   })

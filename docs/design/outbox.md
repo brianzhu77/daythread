@@ -464,15 +464,21 @@ Where the build differs from, or adds to, the contract above:
 - **Only his own revisions since the base** (gate e1a21c80): when every revision after a change's base is one of its
   queue's acknowledged changes, it applies as made, even reading beyond (a property edit that fires a rule). The
   future-base, forgotten-receipt and untracked-gap checks come first.
-- **Given back to its caller** (Lead bd4cc39e, Ratchet d6a88f04): a change made just now in this tab, held only because
-  the workspace moved on (`stale`: a part conflict, or reading beyond after an outside revision; never a gap, a backup,
-  a forgotten receipt or an owner mismatch), goes back to a caller that declared `stale: 'rebuild'` (it builds it again
-  once on the latest state: page moves, dashboard commands, cells, comments, buttons, smart notes, Trash) or
-  `stale: 'outcome'` (it says its own word: Undo's "Can't undo · edited since", a bulk move). It's told "Saved
-  elsewhere" after the latest is loaded. The stored change stays, held and unshown, until its rebuild is stored or the
-  word is said; a reload in between shows it held. What was made on top of it before then is held, for him to decide.
-  Other callers' changes, and every change replayed from storage, keep the held banner.
+- **Given back to its caller** (Lead bd4cc39e, Ratchet d6a88f04, 6804fae5): a change made just now in this tab, held
+  only because the workspace moved on (`stale`: a part conflict, or reading beyond after an outside revision; never a
+  filter, which saves its rules whole or by position; never a gap, a backup, a forgotten receipt or an owner mismatch),
+  goes back with "Saved elsewhere" and a hand-off token to a caller that declared `stale: 'rebuild'` (page moves,
+  dashboard commands, cells, comments, buttons, smart notes, Trash) or `stale: 'outcome'` (Undo's "Can't undo · edited
+  since", a bulk move, repeats). The rebuild passes the token as `replaces`, and one IndexedDB transaction stores it,
+  removes the original and holds every change still waiting on the original, from any tab; a caller that won't
+  rebuild calls `done`. Nothing else, no timer, takes the original out: until then it's held and unshown, and a reload
+  shows it held. A rebuild that can't be stored goes as before and retires the original once it lands.
+- **A change kept for later** (offline, a failed send, waiting): the caller hears `onKept`, then `onLater(landed)`, so
+  a cell shows it on its way rather than "not saved · Retry", which would make a second change; a cell's draft (kept
+  for a closed tab) goes once the outbox holds the change, so it's never recovered as a second change (gate
+  4d6fbafe). A refusal saying "Changed elsewhere" reads as a conflict, with Keep mine, which re-reads a cell edit's
+  expected values; a cell edit is labelled `set <Property> on "<row>"`.
 
 Evidence: `tests/outbox-contract.ts` (both stores), `tests/outbox-replay.test.ts`, `tests/outbox-client.test.ts`,
-`tests/outbox-schedule.test.ts`, `tests/evidence/outbox/outbox.mjs` (35 cases), `rollback.mjs` (rollback and forward under an open tab),
+`tests/outbox-schedule.test.ts`, `tests/evidence/outbox/outbox.mjs` (40 cases), `tests/evidence/dashboard/filter-tabs.mjs`, `rollback.mjs` (rollback and forward under an open tab),
 `rehearse.ts` (the migration on a backup copy).
