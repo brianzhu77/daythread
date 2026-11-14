@@ -119,6 +119,9 @@
   --red-line: #efc9c4;
   --drop-line: #3484ed;
   --scrim: rgba(20, 20, 30, .18);
+  /* The scrim laid over Paper, as one opaque colour: what the strip below a Home Screen app's viewport shows (see
+     the sheet rules under 899 px). */
+  --scrim-on-paper: color-mix(in srgb, rgb(20, 20, 30) 18%, var(--paper));
 
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
   --text-large-title: 34px;
@@ -171,6 +174,7 @@
     --toast-bg: rgba(58, 58, 60, .96); --toast-ink: #f5f5f7;
     --glass: rgba(28, 28, 30, .86);
     --scrim: rgba(0, 0, 0, .55);
+    --scrim-on-paper: color-mix(in srgb, black 55%, var(--paper));
     --hover-dim: rgba(255, 255, 255, .08);
     --drop-line: var(--blue-9);
     --shadow-float: 0 2px 6px rgba(0, 0, 0, .35), 0 10px 30px rgba(0, 0, 0, .5);
@@ -2383,6 +2387,18 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .row-property-name[data-type="createdTime"]::before, .row-property-name[data-type="editedTime"]::before { content: '◔'; }
 .row-property-name[data-type="id"]::before { content: '№'; font-size: 11px; }
 
+/* Sheets in the Home Screen app (Jazz's native sweep, Nov 14). There iOS gives the page a layout viewport shorter than
+   the screen, and paints the strip below it in the body's colour, where no fixed scrim reaches. While a scrim is up,
+   the body takes the scrim's colour over Paper, and the page and root keep Paper, so only that strip changes (B97).
+   HeroUI's sheets also take the design's Scrim instead of their own 50% black, and stop below the status bar when
+   the keyboard pushes them up (G8-4); they scroll inside past that. */
+@media (max-width: 899px) {
+  .modal__backdrop--opaque { background: var(--scrim); }
+  .modal__container { padding-top: max(16px, calc(env(safe-area-inset-top) + 8px)); }
+  html:has(:is(.modal__backdrop--opaque, .database-menu-scrim, .sheet-scrim, .csv-import-scrim, .peek-scrim)) { background: var(--paper); }
+  body:has(:is(.modal__backdrop--opaque, .database-menu-scrim, .sheet-scrim, .csv-import-scrim, .peek-scrim)) { background: var(--scrim-on-paper); }
+  body:has(:is(.modal__backdrop--opaque, .database-menu-scrim, .sheet-scrim, .csv-import-scrim, .peek-scrim)) > .app { background: var(--paper); }
+}
 @media (max-width: 899px) {
   /* The phone gets a bottom sheet (design §7.3): the host's inline position is overridden, over a scrim that only
      closes it. */
@@ -2544,6 +2560,8 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
 }
 
 /* Linked views (design §9.2), a baseline. */
+.database-title.is-link { padding: 0; border: 0; background: none; font: inherit; font-weight: inherit; color: inherit; text-align: left; cursor: pointer; }
+@media (hover: hover) { .database-title.is-link:hover { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; } }
 .database-source { display: block; min-height: 0; padding: 0 0 4px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--text-meta); text-align: left; cursor: pointer; }
 .database-source:hover { color: var(--ink-2); }
 .database-title.is-static { display: block; }
