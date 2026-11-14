@@ -11,4 +11,9 @@ const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' }
 await run({ type: 'ensure-day', date: today })
 const day = w.pages.find((p: any) => p.date === today)
 for (const title of ['Water the plants', 'Call the bank', 'Pay rent']) await run({ type: 'add-task', pageId: day.id, title, plannedOn: today })
+// A database for a cell edit: Runs, a Stage select, two rows.
+const at = new Date().toISOString()
+await run({ type: 'create-database', pageId: 'runs', homeBlockId: null, title: 'Runs' })
+await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'st', name: 'Stage', type: 'select', options: [{ id: 'a', name: 'Idea', color: 'gray' }, { id: 'b', name: 'Done', color: 'gray' }] } } })
+for (const [id, title] of [['r1', 'Alpha'], ['r2', 'Bravo']]) await run({ type: 'add-row', databaseId: 'runs', pageId: id, title, values: { st: 'a' }, at })
 console.log(JSON.stringify({ revision: w.revision, tasks: w.tasks.length }))

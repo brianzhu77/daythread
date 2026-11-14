@@ -15,7 +15,13 @@ const reseed = () => execSync(`node --no-warnings tests/evidence/outbox/seed.ts 
 const stored = () => { const db = new DatabaseSync(storePath, { readOnly: true }); try { return JSON.parse(db.prepare('SELECT data FROM workspace WHERE id = 1').get().data) } finally { db.close() } }
 const statusOf = title => stored().tasks.find(t => t.title === title)?.status
 /** Another device: a command straight on the store, as the server would apply it from another tab. */
-const elsewhere = async action => { const r = new SqliteWorkspaceRepository(storePath), w = await r.load(); return r.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action: typeof action === 'function' ? action(w) : action }) }
+const elsewhere = async action => {
+  for (let i = 0; ; i++) {
+    const r = new SqliteWorkspaceRepository(storePath), w = await r.load()
+    try { return await r.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action: typeof action === 'function' ? action(w) : action }) }
+    catch (e) { if (i > 3 || !/Saved elsewhere/.test(String(e))) throw e; await wait(300) }
+  }
+}
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' }).format(new Date())
 const OUTBOX = '**/_serverFn/cedd5fc6*'
 
@@ -62,8 +68,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     for (const t of ['Water the plants', 'Call the bank', 'Pay rent']) { await tick(page, t); await wait(150) }
     await wait(300); await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(1200)
     const ws = stored(), done = ['Water the plants', 'Call the bank', 'Pay rent'].map(t => ws.tasks.find(x => x.title === t)?.status)
-    const receipts = Object.values(ws.receipts).filter(r => r.message && r.revision > 4).sort((a, b) => a.revision - b.revision)
-    ok(`${tag} 2 three queued ticks replay, all applied, in order`, done.every(s => s === 'done') && ws.revision === 7, `${done.join(',')} revision ${ws.revision}`)
+    const receipts = Object.values(ws.receipts).filter(r => r.message && r.revision > 8).sort((a, b) => a.revision - b.revision)
+    ok(`${tag} 2 three queued ticks replay, all applied, in order`, done.every(s => s === 'done') && ws.revision === 11, `${done.join(',')} revision ${ws.revision}`)
     void receipts
     await context.close()
   }
@@ -73,7 +79,18 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await openTasks(page); await hold(page, true); await tick(page, 'Pay rent'); await wait(800)
     const committed = stored().revision
     await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(1000)
-    ok(`${tag} 3 a reply lost after the server applied it: applied once, by its operation id`, statusOf('Pay rent') === 'done' && stored().revision === committed && committed === 5, `revision ${committed} → ${stored().revision}`)
+    ok(`${tag} 3 a reply lost after the server applied it: applied once, by its operation id`, statusOf('Pay rent') === 'done' && stored().revision === committed && committed === 9, `revision ${committed} → ${stored().revision}`)
+    await context.close()
+  }
+  // 1c. A cell edit (a change built from the database as it is) not yet sent survives a reload.
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/pages?page=runs`); await page.locator('[data-cell*="|r1|st"]').first().waitFor({ timeout: 20000 }); await settle(page)
+    await hold(page)
+    await page.locator('[data-cell*="|r1|st"]').first().click(); await page.getByRole('option', { name: 'Done' }).click().catch(() => page.getByText('Done', { exact: true }).last().click()); await page.keyboard.press('Escape'); await wait(400)
+    await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.reload(); await settle(page); await wait(1000)
+    const st = stored().pages.find(p => p.id === 'r1')?.values?.st
+    ok(`${tag} 1c a cell edit not yet sent survives a reload, applied on the next open`, st === 'b', `Stage ${st}`)
     await context.close()
   }
   // 14. open → done → open elsewhere: an old queued "done" is held, not applied, and he's told.
@@ -108,7 +125,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await page.close({ runBeforeUnload: false })
     const [a, b] = [await context.newPage(), await context.newPage()]
     await Promise.all([a.goto(`${base}/tasks?view=open`), b.goto(`${base}/tasks?view=open`)]); await settle(a); await settle(b); await wait(1200)
-    ok(`${tag} 11 two tabs opening with one stored change apply it once`, statusOf('Pay rent') === 'done' && stored().revision === 5, `revision ${stored().revision}`)
+    ok(`${tag} 11 two tabs opening with one stored change apply it once`, statusOf('Pay rent') === 'done' && stored().revision === 9, `revision ${stored().revision}`)
     await context.close()
   }
   await browser.close()

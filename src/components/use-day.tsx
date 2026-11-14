@@ -259,8 +259,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         case 'offline': kept.current.add(seq); throw new OutboxStop('offline')
         case 'failed': kept.current.add(seq); throw new OutboxStop('failed', answer.message)
         case 'missing': {
-          // An older build is serving (a rollback): this change goes as before; stored ones wait for the outbox (§11).
+          // An older build is serving (a rollback). A stored change waits for a server that can check it (§11, Ratchet
+          // c8c0f6f9); only one he made just now, in this tab, goes as before, as it would have without the outbox.
           legacy.current = true
+          if (kept.current.has(seq)) throw new OutboxStop('offline')
           const result = await transport.run(wsRef.current!, entry.action, entry.operationId)
           await s.remove(seq); drop()
           return result
@@ -320,7 +322,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
 
   const reload = useCallback(() => {
     setLoadError(null)
-    void refresh().then(() => { if (!gateOpen.current) { gateOpen.current = true; openAfterDrain() } else void drain() }, async (e: unknown) => {
+    void refresh().then(() => { legacy.current = false; if (!gateOpen.current) { gateOpen.current = true; openAfterDrain() } else void drain() }, async (e: unknown) => {
       // No network: the last-loaded copy opens the app, read as it was; any other failure is shown as before.
       const copy = await offlineCopy.fallback(e)
       if (copy && !knownOwner) noteOwner(await offlineCopy.recallOwner())
