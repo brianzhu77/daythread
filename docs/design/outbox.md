@@ -141,12 +141,22 @@ writing it; the PR lists any it finds.
 - **Before the app's own writes on open** (Jazz ef6b418a): after the first successful load, the outbox drains before
   `ensure-day`, the draft slots' re-save and any other write the app makes by itself. Those wait on one
   `outboxSettled` promise (resolved when the queue is empty, held or the network is away).
-- **A conflict or a refusal stops the queue at that entry**: it becomes `held`; every later entry stays pending and is
-  not sent, since it may depend on the held one (made a row, then edited it). He is told once (§8). From the notice:
-  - **Discard** drops the held entry and the queue continues with the next one (which may then be refused or conflict
-    on its own, and is reported the same way);
-  - **Keep** leaves it held; nothing after it is sent until he decides.
-  A held entry is never rebased or rewritten.
+- **A conflict or a refusal holds that entry and only what depends on it** (Bumblebee d21888b7: stopping everything
+  would leave unrelated changes unsent behind one notice, the B98 failure in a new form). Each entry records, when it
+  is made, its **predicted write set**: the row ids it writes and creates in the predicted workspace (§4), from the same
+  `rowsOf`/`planWrites` the server uses (pure code, shared). A later entry **depends** on a held one when their write
+  sets share a row (it edits what the held one made or changed). Dependants are held with it, in order; every other
+  entry carries on.
+  - Not detected: a later change that only *reads* a held one's row without writing it (the write-skew limit in §5).
+    The PR lists any command found to work that way, and holds it with the entry it reads from.
+- **Recovery, chosen by him** (what he sees is §8; the notice is not dismissable while anything is held, and shows how
+  many changes wait on it):
+  - **Discard** drops the held entry; its dependants are re-checked one by one (each may now apply, or be refused or
+    conflict and be reported the same way).
+  - **Apply mine anyway** (a conflict only, not a refusal): resends it as a live command on the latest revision, by his
+    explicit choice. This is the one way a change is applied over a newer write, and only he can take it.
+  - A refusal (the row was deleted elsewhere, the action is no longer allowed) can only be discarded.
+  A held entry is never rebased or rewritten automatically.
 - **The undo slot:** a replayed command becomes the newest operation, as it would live; no Undo toast is shown for it.
   An `undo` entry whose target is no longer the undo slot is refused ("Cannot undo") and held like any refusal.
 - **Network away:** entries stay pending; the drain retries on `online`, on return to the tab and on the next open.
@@ -206,7 +216,7 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 12. Same device: tick a to-do and type a line on the same day page, kill, reopen: both kept, no notice (Jazz).
 13. Other device: tick on one device, edit another page elsewhere, reopen the first: the tick kept, no notice.
 14. open → done → open: an old queued "done" for a task reopened elsewhere after its base is held, not applied.
-15. A held entry stops the entries after it; Discard sends them; Keep keeps them.
+15. A held entry holds only its dependants (a later edit of the same row); an unrelated later change is applied at once. Discard re-checks the dependants; Apply mine anyway applies a conflicted one on the latest revision; a refusal offers only Discard; the notice can't be dismissed while anything is held.
 
 Unit and contract tests: the outbox state machine against a fake store (write fails, quota, two drains, owner change,
 late reply); repository contract tests for `basis: 'rows'` on SQLite and Postgres (replay, tombstone, row conflict,
@@ -224,4 +234,4 @@ reported by Playwright as a page error even when caught; Roadbuster dc9541ce) no
 - Whether a tab that is **not durable** should get a `beforeunload` prompt while commands are pending (desktop only).
   Lead said no prompts (37e856f8) for the durable case; this is the case where nothing is kept. My recommendation:
   yes, since it is the only protection left there, and it never shows when storage works.
-- Discard / Keep as the two recovery actions (Jazz may shape them differently).
+- Discard / Apply mine anyway as the recovery actions, not dismissable while held (Jazz may shape the wording).
