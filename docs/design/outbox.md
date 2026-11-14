@@ -91,14 +91,14 @@ conflicts on that row is held, visibly, rather than guessed.
 
 ## 5. Sending and replaying
 
-**Live.** As today: `run()` sends with `expectedRevision` = the tab's revision; one at a time, in the tab's queue.
-If that is refused only because the revision moved ("Saved elsewhere"), the entry is resent once at once with
-`basis: 'rows'` (below) instead of failing into Retry, so a live change and a replayed one follow the same rule. (Lead's
-decision: live sends keep today's whole-revision refusal otherwise; §12.)
-
-**Replay** (an entry left from an earlier load, or one whose live send failed on the network) is sent with
-`basis: 'rows'`, its original `baseRevision` and `operationId`, and `ownRevisions`: the revisions produced by this
-queue's earlier entries since its base (kept on each later entry as they land). The server, in one transaction:
+**Every send, the first one included, uses the entry's recorded basis** (Ratchet 22b0e8da). There is no separate live
+path: a change sent the moment he makes it and one resent after a reload go out the same way, with `basis: 'rows'`,
+the entry's own `baseRevision` (the revision he made it against, §4), its `operationId`, `expectedOwner` and
+`ownRevisions`: the revisions produced by this queue's earlier entries since its base (kept on each later entry as
+they land). A tab never swaps in a newer revision it loaded while the entry waited its turn: if another device
+reopened the task meanwhile, the check sees it. (This replaces "live sends use the tab's revision, then resend once
+with rows on Saved elsewhere": one rule, as Lead decided, now with no window between the two.) The server, in one
+transaction:
 
 0. **Whose it is:** every send (live or replay) carries `expectedOwner`, the owner recorded on the entry. The server
    compares it with the signed-in owner **before** anything runs and refuses a mismatch (`owner-mismatch`), executing
@@ -190,6 +190,11 @@ Outside this class, no command is known to read a row it doesn't write; the PR a
     explicit choice. This is the one way a change is applied over a newer write, and only he can take it.
   - A refusal (the row was deleted elsewhere, the action is no longer allowed) can only be discarded.
   A held entry is never rebased or rewritten automatically.
+- **`undo` can't be predicted** (Ratchet 22b0e8da): the browser's copy has no `undo.before` (`forBrowser()` strips it),
+  so the client can't apply an Undo of the server's operation. An `undo` entry is still written at once (durable like
+  any other); it's not applied to the predicted workspace, it is `readsBeyond` (whole-revision rule on the server,
+  depends on every earlier held entry), and **every entry made while it is pending is `readsBeyond` too**, since it was
+  built on a prediction that leaves the Undo out. That ends when the Undo is acknowledged.
 - **The undo slot:** a replayed command becomes the newest operation, as it would live; no Undo toast is shown for it.
   An `undo` entry whose target is no longer the undo slot is refused ("Cannot undo") and held like any refusal.
 - **Network away:** entries stay pending; the drain retries on `online`, on return to the tab and on the next open.
@@ -346,6 +351,10 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 17. Kill between an acknowledged entry and the next: the delete and the `ownRevisions` update are one transaction; after the reopen the dependent entry (a rename after a tick of the same to-do) applies without a conflict. Same with the first entry's reply lost while the dependent entry already exists: the replayed receipt carries its `revision`, and the dependent entry applies.
 18. A button whose source row was edited by a held entry, and a change that fires a rule: marked `readsBeyond`, held behind the held entry; on the server, replayed only if nothing moved since its base.
 
+19. A queued entry whose tab loaded a newer revision while it waited (the task reopened on another device): its first send uses its recorded basis and is held, not applied.
+20. A new client against a server without `outbox: 1` (the floor build): no stored entry is sent, none is stored; the pending clause shows; once a server with `outbox: 1` answers, they replay.
+21. Undo pending (offline): the Undo entry is stored and not predicted; a change made after it is `readsBeyond`; after the reopen the Undo replays under the whole-revision rule.
+
 Unit and contract tests: the outbox state machine against a fake store (write fails, quota, two drains, owner change,
 late reply); repository contract tests for `basis: 'rows'` on SQLite and Postgres (replay, tombstone, row conflict,
 empty write set, deleted row); `planWrites` write sets for the commands in §5.
@@ -367,14 +376,18 @@ reported by Playwright as a page error even when caught; Roadbuster dc9541ce) no
   revision ahead of that, an older build wrote in between: it records `rows_untracked_until` = that revision. A replay
   whose `baseRevision` is below `rows_untracked_until` gets the whole-revision rule (a conflict unless nothing moved):
   held, never overwriting. The gate covers it: new → floor (write a row) → new, then replay an entry made before.
-- **A rollback while entries are stored:** the older build ignores the database (§7); a new client talking to an older
-  server sends `basis`, which the older server's schema strips, so it gets today's whole-revision check: a conflict is
-  held, never applied over newer data.
+- **A rollback while entries are stored:** the older build ignores the database (§7). A new client still open on an
+  older server must not rely on it either: that server strips every new field, `expectedOwner` included, so it could
+  neither check the account nor the rows (Ratchet 22b0e8da). So the server **advertises the outbox**: every load and
+  command reply carries `outbox: 1`. A tab whose last server answer lacks it sends **no stored entry** and stores no
+  new one; it keeps what is stored untouched until a server with `outbox: 1` answers, and runs new changes live as
+  today (not durable, so §8.4's banner and the desktop leave prompt apply). Stored changes kept back this way are not
+  silent: they show the same pending clause as offline (Bumblebee 6e4a90a0; wording §8).
 
 ## 12. Decided
 
-- **One rule for live and replayed changes** (Lead 87eca3cf): a live change refused only because the revision moved is
-  resent once at once with `basis: 'rows'`.
+- **One rule for live and replayed changes** (Lead 87eca3cf): every send uses the entry's recorded basis with
+  `basis: 'rows'`, the first send included (Ratchet 22b0e8da), so there's no live-only path to fall back from.
 - **`beforeunload` only when the tab couldn't store anything** (Lead 87eca3cf): while a command is pending that never
   reached IndexedDB; never when storage works.
 - **Held changes block only their dependants** (Bumblebee d21888b7, Lead 87eca3cf): rows shared with the held entry,
