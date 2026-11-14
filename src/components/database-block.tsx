@@ -919,6 +919,21 @@ const loadMap = () => {
   return mapLoading
 }
 function MapView(props: LaidOutProps) {
+  const wide = useWide()
+  // At 390 a map in a scrolling page, an inline block or a dashboard widget, would take the page's one-finger scroll
+  // (Jazz's probe 3934e41e): until step 3 it's a line to the full page, decided here so no map code loads (Lead fc1d9019).
+  const fullPage = props.blockId.startsWith('page:') && !props.blockId.includes('|widget:')
+  if (!wide && !fullPage) return <MapLink {...props} />
+  return <LiveMapView {...props} />
+}
+function MapLink(props: LaidOutProps) {
+  const navigate = useNavigate()
+  return <div className="database-map">
+    <DatabaseHeader db={props.db} view={props.view} changeView={props.changeView} blockId={props.blockId} showTitle={props.showTitle ?? true} linked={props.linked} onTitleEnter={() => {}} />
+    <p className="map-line"><button type="button" className="app-link" onClick={() => { const own = props.db.database.views.find(v => v.id === props.view.id) ?? props.db.database.views.find(v => v.layout === 'map'); if (own) setShownView(`page:${props.db.id}`, own.id); void navigate({ to: '/pages', search: { page: props.db.id } }) }}>Open the map ›</button></p>
+  </div>
+}
+function LiveMapView(props: LaidOutProps) {
   const [, setLoaded] = useState(mapModule)
   const [failed, setFailed] = useState(false)
   const holder = useRef<HTMLDivElement>(null)

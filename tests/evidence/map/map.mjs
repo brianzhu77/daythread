@@ -47,7 +47,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const hosts = [...new Set(log.outside.map(r => r.host))]
     ok(`${tag} boundary: every outside request is to tiles.openfreemap.org, with no Referer and no cookie`, log.outside.length > 3 && hosts.join() === 'tiles.openfreemap.org' && log.outside.every(r => !r.referer && !r.cookie), `${log.outside.length} requests to ${hosts.join(' ')}`)
     ok(`${tag} boundary: the light scheme asks positron`, log.outside.some(r => r.path === '/styles/positron') && !log.outside.some(r => r.path === '/styles/dark'))
-    ok(`${tag} boundary: attribution is linked, at the bottom right, folded`, await page.locator('.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib a[href*="openstreetmap.org/copyright"]').count() === 1)
+    ok(`${tag} boundary: attribution is linked, at the bottom right, and starts collapsed`, await page.locator('.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib a[href*="openstreetmap.org/copyright"]').count() === 1 && await page.locator('.maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show)').count() === 1)
     ok(`${tag} counts: "No place · 2 ›" and no "shown" line under 100`, await page.getByRole('button', { name: 'No place · 2 ›' }).isVisible() && await page.getByText(/ of \d+ shown/).count() === 0)
     await page.getByRole('button', { name: 'No place · 2 ›' }).click()
     ok(`${tag} counts: it opens the rows with words and no pin, and the empty ones`, await page.locator('.map-no-place').getByText('Someday').isVisible() && await page.locator('.map-no-place').getByText('Unplaced').isVisible())
@@ -104,8 +104,29 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const { context, page, log } = await fresh({ viewport: { width: 390, height: 844 }, hasTouch: true })
     await page.goto(`${base}/pages?page=notes`); await page.getByText('Above the map').waitFor(); await settle(page); await wait(800)
     ok(`${tag} 390: an inline block says "Open the map ›", with no map and nothing asked outside`, await page.getByRole('button', { name: 'Open the map ›' }).isVisible() && await page.locator('.map-canvas').count() === 0 && log.outside.length === 0)
-    await page.getByRole('button', { name: 'Open the map ›' }).click(); await ready(page)
-    ok(`${tag} 390: it opens the map on its database's page`, page.url().includes('page=eats') && await page.locator('.map-canvas canvas').count() === 1)
+    await page.getByRole('button', { name: 'Open the map ›' }).click(); await ready(page); await page.waitForTimeout(500)
+    ok(`${tag} 390: it opens the map on its database's page, attribution collapsed`, page.url().includes('page=eats') && await page.locator('.map-canvas canvas').count() === 1 && await page.locator('.maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show)').count() === 1)
+    await context.close()
+  }
+  // A dashboard at 390 stacks its widgets in a scrolling page: Map widgets are "Open the map ›", no chunk until the tap,
+  // and a one-finger drag over one scrolls the page (Lead fc1d9019, Jazz 3934e41e).
+  {
+    const { context, page, log } = await fresh({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: engine === 'chromium' })
+    await page.goto(`${base}/pages?page=board`); await page.getByText('Maps').first().waitFor(); await settle(page); await wait(800)
+    ok(`${tag} 390 dashboard: every Map widget is "Open the map ›", with no map chunk and nothing asked outside`, await page.getByRole('button', { name: 'Open the map ›' }).count() === 3 && log.chunks === 0 && log.outside.length === 0 && await page.locator('.map-canvas').count() === 0, `${log.chunks} chunks`)
+    if (engine === 'chromium') {
+      // A short window, so the stacked widgets overflow it; a one-finger swipe up from the first Map widget.
+      await page.setViewportSize({ width: 390, height: 420 }); await wait(300)
+      const cdp = await context.newCDPSession(page)
+      const at = await page.getByRole('button', { name: 'Open the map ›' }).first().boundingBox()
+      const y0 = await page.evaluate(() => window.scrollY)
+      await cdp.send('Input.synthesizeScrollGesture', { x: Math.round(at.x + 40), y: Math.round(at.y), yDistance: -200, gestureSourceType: 'touch', speed: 600 }); await wait(600)
+      const y1 = await page.evaluate(() => window.scrollY)
+      ok(`${tag} 390 dashboard: a one-finger swipe over a Map widget scrolls the page`, y1 > y0 + 50, `${y0} → ${y1}`)
+      await page.setViewportSize({ width: 390, height: 844 }); await page.evaluate(() => window.scrollTo(0, 0)); await wait(300)
+    }
+    await page.getByRole('button', { name: 'Open the map ›' }).first().click(); await ready(page)
+    ok(`${tag} 390 dashboard: the tap opens the full-page map, the chunk loading only then`, page.url().includes('page=eats') && log.chunks === 1 && await page.locator('.map-canvas canvas').count() === 1, `${log.chunks} chunks`)
     await context.close()
   }
 
@@ -138,6 +159,22 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await page.locator('[data-database-views]').first().click()
     await page.getByRole('menuitemradio', { name: /Old map/ }).click(); await settle(page)
     ok(`${tag} property gone: "Choose a Place property"`, await page.getByRole('button', { name: 'Choose a Place property' }).isVisible())
+    await context.close()
+  }
+
+  // ---- Made from + Add view → Map; with one Place property it needs no asking (G8-9).
+  {
+    const { context, page } = await fresh()
+    await page.goto(`${base}/pages?page=many`); await ready(page)
+    await page.locator('[data-database-views]').first().click()
+    const before = await page.locator('.database-menu button[aria-label="Map options"]').count()
+    await page.getByRole('menuitem', { name: '+ Add view' }).click().catch(() => page.getByText('+ Add view').click())
+    await page.getByRole('menuitem', { name: 'Map', exact: true }).click(); await settle(page)
+    await page.keyboard.press('Escape'); await ready(page)
+    await page.locator('[data-database-views]').first().click()
+    const maps = await page.locator('.database-menu button[aria-label="Map options"]').count()
+    await page.keyboard.press('Escape')
+    ok(`${tag} made: + Add view → Map makes another Map view, by the one Place property, drawn`, maps === before + 1 && await page.locator('.map-frame.is-ready').count() === 1 && await page.getByText('100 of 240 shown').isVisible(), `${before} → ${maps} Map views`)
     await context.close()
   }
 

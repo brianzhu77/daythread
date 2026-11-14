@@ -5,7 +5,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Map as MapLibre, setWorkerUrl, type GeoJSONSource, type MapLayerMouseEvent, type RequestTransformFunction } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useNavigate } from '@tanstack/react-router'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { cellValue, viewColumns, viewRows, type Database, type View } from '../domain/database.ts'
 import { mapRows, shownLine, viewMapBy, type MapRow } from '../domain/map.ts'
@@ -71,8 +70,6 @@ function savedArea(key: string): Area | null {
 }
 
 export function DatabaseMap({ workspace, db, view, changeView, blockId, pageDate, showTitle = true, linked }: Props) {
-  const wide = useWide()
-  const navigate = useNavigate()
   const context = useMemo(() => ({ today: todayIso(), pageDate, weekStart: workspace.weekStart ?? 0 }), [pageDate, workspace.weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   const openRow = useOpenRow(view, rows, blockId)
@@ -85,11 +82,6 @@ export function DatabaseMap({ workspace, db, view, changeView, blockId, pageDate
   if (!property || !m) return <div className="database-map">
     {head}
     <div className="map-frame is-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'layout')}>Choose a Place property</button></div>
-  </div>
-  // Inline at 390 waits for step 3 (G8-13): the full page holds the map.
-  if (!wide && !fullPage) return <div className="database-map">
-    {head}
-    <p className="map-line"><button type="button" className="app-link" onClick={() => void navigate({ to: '/pages', search: { page: db.id } })}>Open the map ›</button></p>
   </div>
   const line = shownLine(m)
   return <div className={`database-map${fullPage ? ' is-page' : ''}${widget ? ' is-widget' : ''}`}>
