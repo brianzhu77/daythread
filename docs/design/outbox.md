@@ -364,7 +364,7 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 18. A button whose source row was edited by a held entry, and a change that fires a rule: marked `readsBeyond`, held behind the held entry; on the server, replayed only if nothing moved since its base.
 
 19. A queued entry whose tab loaded a newer revision while it waited (the task reopened on another device): its first send uses its recorded basis and is held, not applied.
-20. A new client against a server without `outbox: 1` (the floor build): no stored entry is sent, none is stored; the pending clause shows; once a server with `outbox: 1` answers, they replay.
+20. A new client against a server without `runOutboxCommand` (the floor build): no stored entry is sent or executed, none is stored; the pending clause shows; once `runOutboxCommand` answers, they replay.
 21. Undo pending (offline): the Undo entry is stored and not predicted; a change made after it is `readsBeyond`; after the reopen the Undo replays under the whole-revision rule.
 
 22. Rollback between a tab's load and its send: the send to `runOutboxCommand` fails on the older build without executing; the entry stays stored and shows as kept back; once the new build answers, it replays.
