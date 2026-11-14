@@ -109,9 +109,15 @@ transaction:
 1a. **Possibly forgotten:** if no receipt or tombstone is found **and** `baseRevision` is below the workspace's
    `receiptsForgottenThrough`, the operation may have been applied and its receipt since dropped. The server can't
    prove it wasn't, so the row check is not used: the whole-revision rule applies (a conflict unless nothing moved),
-   and the entry is held for him, never run again. `receiptsForgottenThrough` is set by `compactReceipts` to the
-   current revision whenever it drops a tombstone for good, so it bounds every forgotten operation from above. Below
-   it, "unknown" is never read as "not applied". That covers a create whose entity was later removed for good: its
+   and the entry is held for him, never run again. The watermark is set wherever a store forgets an operation, in the
+   same transaction as the forgetting, so it bounds every forgotten operation from above:
+   - **SQLite / the domain:** `compactReceipts` sets it to the current revision whenever it drops a tombstone for good
+     (the 500 + 3,000 window).
+   - **Postgres** (production) doesn't use that window: `apply()` looks up only the requested operation's row, and
+     `pruneOperations()` deletes operation rows by age (30 days, keeping the newest). So `pruneOperations()` sets
+     `workspaces.receipts_forgotten_through` to the highest `revision` among the rows it deletes (or keeps the current
+     mark if higher), in the same statement's transaction (Ratchet 5b367776).
+   Below the mark, "unknown" is never read as "not applied". That covers a create whose entity was later removed for good: its
    receipt is either still there (answered by it) or possibly forgotten (held).
 2. **Nothing moved:** `baseRevision` equals the current revision → apply as a live command.
 3. **Row-scoped check:** apply the action to the latest workspace inside the transaction; take its **write set** (the
@@ -358,7 +364,7 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 14. open → done → open: an old queued "done" for a task reopened elsewhere after its base is held, not applied.
 15. A held entry holds only its dependants (a later edit of the same row); an unrelated later change is applied at once. Discard re-checks the dependants; Apply mine anyway applies a conflicted one on the latest revision; a refusal offers only Discard; the notice can't be dismissed while anything is held.
 
-16. An entry older than every kept receipt (`baseRevision` below `receiptsForgottenThrough`, with its operation unknown) is held, never run again; including a create whose entity was then removed for good.
+16. An entry older than every kept receipt (`baseRevision` below `receiptsForgottenThrough`, with its operation unknown) is held, never run again; including a create whose entity was then removed for good. Tested on both stores: SQLite past the 500 + 3,000 window, and Postgres with the operation row pruned by age (the mark set in the pruning transaction).
 
 17. Kill between an acknowledged entry and the next: the delete and the `ownRevisions` update are one transaction; after the reopen the dependent entry (a rename after a tick of the same to-do) applies without a conflict. Same with the first entry's reply lost while the dependent entry already exists: the replayed receipt carries its `revision`, and the dependent entry applies.
 18. A button whose source row was edited by a held entry, and a change that fires a rule: marked `readsBeyond`, held behind the held entry; on the server, replayed only if nothing moved since its base.
