@@ -25,7 +25,7 @@ import { inView, titleId, todosSourceId, changeDatabase, syncMirror, databaseBlo
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, storedDocument, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
-import { heldSmartNoteIds, smartLimits, smartSpecKey, type SmartResult } from "./smart-note.ts";
+import { heldSmartNoteIds, smartLimits, smartNoteName, smartSpecKey, type SmartResult } from "./smart-note.ts";
 import { askedQuestions, formOf, isEmptyAnswer, liveQuestions } from "./forms.ts";
 import { changeDashboard, firstWidgetView, isDashboardChange } from "./dashboard.ts";
 
@@ -1384,7 +1384,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!prompt) throw new DomainError("A smart note needs a prompt");
       if (action.note.range.where.kind === "pages" && !action.note.range.where.pageIds.length) throw new DomainError("Choose at least one page");
       const at = notes.findIndex((n) => n.id === action.note.id);
-      const note = { ...action.note, name: name || prompt.slice(0, 60), prompt, refresh: "manual" as const, result: heldSources(state, action.note.result) };
+      const note = { ...action.note, name: name || smartNoteName(prompt), prompt, refresh: "manual" as const, result: heldSources(state, action.note.result) };
       if (at >= 0) { notes[at] = note; return { message: "Smart note saved", entityId: note.id }; }
       if (notes.length >= smartLimits.notes) {
         // No menu removes a note: one with no block left on any page, the longest unrefreshed first, makes room. Only with none is the limit reached.

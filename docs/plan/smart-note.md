@@ -214,7 +214,7 @@ const note = (over: Partial<SmartNote> = {}): SmartNote => ({ id: 'n1', name: 'C
 const block = (id: string, noteId: string): EditorNode => ({ id, type: 'smartNote', props: { noteId }, children: [] })
 
 test('save-smart-note stores the note; saving the same id replaces it', () => { /* run twice with a changed name; ws.smartNotes has one entry with the new name; receipt.message === 'Smart note saved' */ })
-test('a blank name is taken from the prompt, cut at 60 characters', () => { /* name: '   ' → 'What do my notes say about checkout?' */ })
+test("a blank name is taken from the prompt's first sentence", () => { /* name: '   ' → 'What do my notes say about checkout?'; a long sentence is cut at a word with "…", at a character in Chinese (Brian 5e7596ac) */ })
 test('a source whose page does not exist is dropped, not refused', () => { /* sources [{pageId:'gone',…},{pageId:'doc',…}] → one source */ })
 test('refused: empty prompt; pages range with no page; a 101st note', () => { /* assert.throws with /prompt|page|limit/i */ })
 test('set-smart-note-result replaces the result; an unknown note is refused', () => { /* 'Smart note updated'; assert.throws(/Smart note not found/) */ })
@@ -229,7 +229,7 @@ Run: `node --test tests/smart-note.test.ts`
 Expected: FAIL, `Cannot find module '../src/domain/smart-note.ts'`
 
 - [ ] **Step 3: Implement** the types and the three functions in `src/domain/smart-note.ts`; add the fields and actions to `types.ts`; add the zod shapes and actions to `command-schema.ts`; add two cases to `execute` in `workspace.ts` beside `set-draft`:
-  - `save-smart-note`: trim `name` and `prompt`; refuse an empty prompt (`DomainError("A smart note needs a prompt")`), a `pages` range with no `pageIds` (`"Choose at least one page"`), and a new id when `smartNotes.length >= smartLimits.notes` (`"Smart note limit reached"`); a blank name becomes the prompt's first 60 characters; drop sources whose `pageId` is not in `state.pages`; force `refresh: 'manual'`; replace by id or append; return `{ message: "Smart note saved", entityId: note.id }`.
+  - `save-smart-note`: trim `name` and `prompt`; refuse an empty prompt (`DomainError("A smart note needs a prompt")`), a `pages` range with no `pageIds` (`"Choose at least one page"`), and a new id when `smartNotes.length >= smartLimits.notes` (`"Smart note limit reached"`); a blank name becomes `smartNoteName(prompt)`: the first sentence or line if it fits 60 characters, else a cut at a word with "…", at a character in Chinese, Japanese or Korean (Brian 5e7596ac); drop sources whose `pageId` is not in `state.pages`; force `refresh: 'manual'`; replace by id or append; return `{ message: "Smart note saved", entityId: note.id }`.
   - `set-smart-note-result`: `DomainError("Smart note not found")` when absent; same source filter; return `{ message: "Smart note updated", entityId: noteId }`.
   - Both are ordinary commands and take the Undo slot. Delete `state.smartNotes` when it becomes empty, as `threads` does.
 
@@ -520,7 +520,7 @@ export function SmartNoteSetupHost(): ReactElement | null
 - [ ] **Step 3: Build the setup view.** Fields, each with a stable `id`:
   - `Prompt`: a textarea, `maxLength` 2000.
   - `Range`: a select of `Whole workspace` (default), `Pages`, `Tag`, `Day pages`; a second select of `All time` (default), `Last 7 days`, `Last 30 days`, `Last 90 days`. `Pages` shows a text field filtering `listedPages(workspace)` by title (8 results at most, each a checkbox) and the chosen pages as removable chips, 50 at most. `Tag` shows a select of `tagIndex(workspace)`.
-  - `Name`: an input, `maxLength` 120, placeholder the prompt's first 60 characters.
+  - `Name`: an input, `maxLength` 120, placeholder `smartNoteName(prompt)`, the name a blank field saves.
   - `Run preview`: calls `askSmartNote` with `prompt` and `range` (and `noteId` on an Edit); while it runs the button is `aria-busy`; the reply is drawn with `SmartNoteBody` and the Read line; a failure shows `Couldn't refresh · Retry`; `empty-range` shows `No notes in this range`.
   - `Save` (the primary button) is enabled only when a preview exists for the prompt and range as they are now, or on an Edit when neither changed. It runs `{ type: 'save-smart-note', note: { id, name, prompt, range, refresh: 'manual', result } }` (a new id from `crypto.randomUUID()`), with the notice `r => ({ text: r.message, undoOperationId: r.operationId })`, then `onPlaced?.(id)` and closes. `Cancel` closes and stores nothing.
   - No Refresh field in this release.
