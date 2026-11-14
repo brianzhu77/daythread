@@ -84,8 +84,8 @@ entry. A domain refusal holds it (§6). A network failure leaves it pending.
 
 **Live.** As today: `run()` sends with `expectedRevision` = the tab's revision; one at a time, in the tab's queue.
 If that is refused only because the revision moved ("Saved elsewhere"), the entry is resent once at once with
-`basis: 'rows'` (below) instead of failing into Retry, so a live change and a replayed one follow the same rule. (A
-proposal: live sends keep today's whole-revision refusal otherwise; see §11.)
+`basis: 'rows'` (below) instead of failing into Retry, so a live change and a replayed one follow the same rule. (Lead's
+decision: live sends keep today's whole-revision refusal otherwise; §12.)
 
 **Replay** (an entry left from an earlier load, or one whose live send failed on the network) is sent with
 `basis: 'rows'`, its original `baseRevision` and `operationId`, and `ownRevisions`: the revisions produced by this
@@ -123,7 +123,7 @@ writing it; the PR lists any it finds.
 ### Cost of the row check (Lead ace3f9fa)
 
 - **Postgres:** an additive, nullable `revision integer` column on `pages`, `tasks`, `deleted_tasks`,
-  `comment_threads`, `task_links`, and `settings_revision integer` on `workspaces`, set to the new revision on every row
+  `comment_threads`, `task_links`, and `settings_revision`, `rows_tracked_through` and `rows_untracked_until` (integers) on `workspaces` (§11), set to the new revision on every row
   the command writes (`planWrites` already lists them). No backfill: null means "not written since the column came",
   which is older than any entry the outbox can hold (the outbox ships with it), so it reads as 0. Migration runs through
   the existing runner; backup first, as for every schema change. Rows a command writes are already being upserted, so
@@ -141,12 +141,22 @@ writing it; the PR lists any it finds.
 - **Before the app's own writes on open** (Jazz ef6b418a): after the first successful load, the outbox drains before
   `ensure-day`, the draft slots' re-save and any other write the app makes by itself. Those wait on one
   `outboxSettled` promise (resolved when the queue is empty, held or the network is away).
-- **A conflict or a refusal stops the queue at that entry**: it becomes `held`; every later entry stays pending and is
-  not sent, since it may depend on the held one (made a row, then edited it). He is told once (§8). From the notice:
-  - **Discard** drops the held entry and the queue continues with the next one (which may then be refused or conflict
-    on its own, and is reported the same way);
-  - **Keep** leaves it held; nothing after it is sent until he decides.
-  A held entry is never rebased or rewritten.
+- **A conflict or a refusal holds that entry and only what depends on it** (Bumblebee d21888b7: stopping everything
+  would leave unrelated changes unsent behind one notice, the B98 failure in a new form). Each entry records, when it
+  is made, its **predicted write set**: the row ids it writes and creates in the predicted workspace (§4), from the same
+  `rowsOf`/`planWrites` the server uses (pure code, shared). A later entry **depends** on a held one when their write
+  sets share a row (it edits what the held one made or changed). Dependants are held with it, in order; every other
+  entry carries on.
+  - Not detected: a later change that only *reads* a held one's row without writing it (the write-skew limit in §5).
+    The PR lists any command found to work that way, and holds it with the entry it reads from.
+- **Recovery, chosen by him** (what he sees is §8; the notice is not dismissable while anything is held, and shows how
+  many changes wait on it):
+  - **Discard** drops the held entry; its dependants are re-checked one by one (each may now apply, or be refused or
+    conflict and be reported the same way).
+  - **Apply mine anyway** (a conflict only, not a refusal): resends it as a live command on the latest revision, by his
+    explicit choice. This is the one way a change is applied over a newer write, and only he can take it.
+  - A refusal (the row was deleted elsewhere, the action is no longer allowed) can only be discarded.
+  A held entry is never rebased or rewritten automatically.
 - **The undo slot:** a replayed command becomes the newest operation, as it would live; no Undo toast is shown for it.
   An `undo` entry whose target is no longer the undo slot is refused ("Cannot undo") and held like any refusal.
 - **Network away:** entries stay pending; the drain retries on `online`, on return to the tab and on the next open.
@@ -214,7 +224,7 @@ d21888b7).
 | Cannot undo | `Can't undo — changed since · Discard` (today's words) |
 | any other refusal | `Not saved — can't do this now: ticked "Water the plants" · Discard` |
 
-- **Keep mine** (conflicts only): he chose to put his change on top of the newer one, so it's sent once on the latest
+- **Keep mine** (conflicts only; §6's "Apply mine anyway"): he chose to put his change on top of the newer one, so it's sent once on the latest
   revision, as a live command he made just now. It's never automatic, and never offered when the row is gone or the
   action is refused, since there's nothing to put it on.
 - **Discard** drops the held entry; the page shows the latest from the server. Redoing it by hand is one tap where it
@@ -291,7 +301,7 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 12. Same device: tick a to-do and type a line on the same day page, kill, reopen: both kept, no notice (Jazz).
 13. Other device: tick on one device, edit another page elsewhere, reopen the first: the tick kept, no notice.
 14. open → done → open: an old queued "done" for a task reopened elsewhere after its base is held, not applied.
-15. A held entry stops the entries after it; Discard sends them; Keep keeps them.
+15. A held entry holds only its dependants (a later edit of the same row); an unrelated later change is applied at once. Discard re-checks the dependants; Apply mine anyway applies a conflicted one on the latest revision; a refusal offers only Discard; the notice can't be dismissed while anything is held.
 
 Unit and contract tests: the outbox state machine against a fake store (write fails, quota, two drains, owner change,
 late reply); repository contract tests for `basis: 'rows'` on SQLite and Postgres (replay, tombstone, row conflict,
@@ -301,14 +311,33 @@ Also in the same PR (Lead 37e856f8): `tests/evidence/dashboard/dashboard.mjs` se
 `/ finds Database by "dashboard"` step, so WebKit's "access control checks" message (a fetch started during unload,
 reported by Playwright as a page error even when caught; Roadbuster dc9541ce) no longer fails "no page errors".
 
-## 11. Open for sign-off
+## 11. Release and rollback (Lead 87eca3cf)
 
-- The live resend on "Saved elsewhere" (§5): the same row rule for live changes as for replays. Without it, a change
-  made on the phone while the desktop edits another page fails into Retry live, then succeeds as a replay after a
-  reload, which reads as inconsistent. My recommendation: yes.
-- Whether a tab that is **not durable** should get a `beforeunload` prompt while commands are pending (desktop only).
-  Lead said no prompts (37e856f8) for the durable case; this is the case where nothing is kept. My recommendation:
-  yes, since it is the only protection left there, and it never shows when storage works.
-- Recovery actions (Jazz, §8.3): **Keep mine** (conflicts only; it applies his change on the latest data, by his
-  choice) and **Discard**, plus Copy for text. There's no separate Keep button, since leaving the banner up is keep,
-  and the banner can't be dismissed. Decided: only dependent entries wait behind a held one (Lead 87eca3cf).
+- **Migration:** additive and nullable, no backfill, through the existing runner, backup first. The gate rehearses it on
+  a copy of his data, and runs the floor build 4dcde91a and the build live at the time against the migrated schema.
+- **An old tab open during the deploy** sends commands without `basis`: the server treats them exactly as today
+  (whole-revision check) and still stamps the rows they write, so nothing it does escapes the row check later. The
+  gate sends such a command from the previous build's bundle against the new server.
+- **A rollback, then forward again.** A build without the outbox writes rows but doesn't stamp their `revision`, so on
+  the way forward those writes would be invisible to the row check, and a replay could overwrite them. So the new code
+  also keeps `workspaces.rows_tracked_through` (the last revision it stamped). When it commits and finds the workspace
+  revision ahead of that, an older build wrote in between: it records `rows_untracked_until` = that revision. A replay
+  whose `baseRevision` is below `rows_untracked_until` gets the whole-revision rule (a conflict unless nothing moved):
+  held, never overwriting. The gate covers it: new → floor (write a row) → new, then replay an entry made before.
+- **A rollback while entries are stored:** the older build ignores the database (§7); a new client talking to an older
+  server sends `basis`, which the older server's schema strips, so it gets today's whole-revision check: a conflict is
+  held, never applied over newer data.
+
+## 12. Decided
+
+- **One rule for live and replayed changes** (Lead 87eca3cf): a live change refused only because the revision moved is
+  resent once at once with `basis: 'rows'`.
+- **`beforeunload` only when the tab couldn't store anything** (Lead 87eca3cf): while a command is pending that never
+  reached IndexedDB; never when storage works.
+- **Held changes block only their dependants** (Bumblebee d21888b7, Lead 87eca3cf): rows shared with the held entry,
+  which includes ids it created (a created row is in its write set). If the PR finds a dependency the entries can't
+  see, it says so here and that command falls back to blocking behind the held entry, with the notice not
+  dismissable and its count of waiting changes. Nothing ever waits silently behind a notice he can close.
+- Recovery actions (§8.3): **Keep mine** for a conflict (it applies his change on the latest data, by his choice) and
+  **Discard**, plus Copy when the change carries text. There's no separate Keep button: leaving the banner up is
+  keep, and the banner can't be dismissed.
