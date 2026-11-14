@@ -11,6 +11,8 @@ export interface OutboxFixture {
   create(): ServerRepository
   /** As if a build without the outbox wrote once: the next commit finds a gap in what was stamped. */
   olderBuildWrote(): Promise<void>
+  /** As if his data were restored from a backup taken `back` revisions ago (the workspace's revision goes back). */
+  restoredFromBackup(back: number): Promise<void>
   /** As if every operation so far was forgotten (compacted out on SQLite, pruned by age on Postgres). */
   forgetOperations(repo: ServerRepository): Promise<void>
   cleanup(): Promise<void>
@@ -109,6 +111,17 @@ export function outboxContract(name: string, fixture: () => Promise<OutboxFixtur
       const before = await repo.load()
       await assert.rejects(repo.executeOutbox({ operationId: 'never-seen', expectedRevision: base, action: { type: 'add-task', pageId: day, title: 'Made long ago' } }, basis(base)), held('maybe-applied'))
       assert.deepEqual((await repo.load()).tasks.length, before.tasks.length)
+    } finally { await f.cleanup() }
+  })
+
+  test(`${name} outbox: a change made against a newer state than a restored backup is held, not applied over it`, async () => {
+    const f = await fixture()
+    try {
+      const repo = f.create(), { ws, water } = await seeded(repo), base = ws.revision
+      await f.restoredFromBackup(2)
+      const before = await repo.load()
+      await assert.rejects(repo.executeOutbox({ operationId: 'after-restore', expectedRevision: base, action: tick(water) }, basis(base)), held('changed-since'))
+      assert.deepEqual(await repo.load(), before)
     } finally { await f.cleanup() }
   })
 }

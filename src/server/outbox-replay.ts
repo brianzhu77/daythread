@@ -54,6 +54,8 @@ export function readsBeyondApplied(action: Action, receipt: Receipt): boolean {
  */
 export function replayRule(basis: OutboxBasis, revision: number, stored: RowTracking): { rule: 'as-is' } | { rule: 'rows' } | { rule: 'whole'; reason: HeldReason } {
   if (basis.baseRevision === revision) return { rule: 'as-is' }
+  // Made against a newer state than the store has now: the data was restored from a backup. Never applied over it.
+  if (basis.baseRevision > revision) return { rule: 'whole', reason: 'changed-since' }
   // An older build may have written since the last stamp, with no command of this build after it yet to record the gap:
   // read it from the workspace as it is now, before deciding (Ratchet: the first replay after a rollback and forward).
   const tracking = stored.trackedThrough === revision ? stored : { ...stored, untrackedUntil: Math.max(stored.untrackedUntil, revision) }

@@ -44,6 +44,7 @@ outboxContract('SQLite v2', async () => {
     create: f.create,
     // A build without the outbox writes without stamping: the revision moves past what was stamped.
     olderBuildWrote: async () => edit(data => { data.revision += 1 }),
+    restoredFromBackup: async back => edit(data => { data.revision -= back }),
     // Past the 500 + 3,000 receipt window: the next command compacts the old receipts out for good.
     forgetOperations: async repo => {
       edit(data => { for (let i = 0; i < 3600; i++) data.receipts[`old-${i}`] = { operationId: `old-${i}`, message: '', fingerprint: 'x' } })
