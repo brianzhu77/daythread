@@ -91,7 +91,11 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   const staleRevision = await other.evaluate(() => document.querySelectorAll('.dashboard-row[data-row]')[0]?.querySelector('.dashboard-widget')?.getAttribute('aria-label'))
   await widget(T, other).locator('.database-rule-remove, button[aria-label^="Remove"]').first().click(); await settle(other); await wait(600)
   other.off('response', count)
-  ok(`two tabs (${engine}): the other tab hadn't seen the move, was refused and sent again`, staleRevision !== T && sent.length >= 2, `it showed ${staleRevision} first; ${sent.length} requests`)
+  // B98 (Lead bd4cc39e): the outcome, not how many requests it took. The move and the filter edit touch different parts of
+  // the dashboard, so the filter edit lands as made; nothing is held, and nothing is left on the device.
+  const heldNow = await other.locator('.banner.save-failed').count()
+  const leftNow = await other.evaluate(() => new Promise(resolve => { const r = indexedDB.open('daythread-outbox', 1); r.onsuccess = () => { const c = r.result.transaction('entries').objectStore('entries').count(); c.onsuccess = () => resolve(c.result) }; r.onerror = () => resolve(-1) }))
+  ok(`two tabs (${engine}): the other tab hadn't seen the move; its filter edit went, nothing held or left`, staleRevision !== T && sent.length >= 1 && heldNow === 0 && leftNow === 0, `it showed ${staleRevision} first; ${sent.length} requests, held ${heldNow}, left ${leftNow}`)
   for (const p of [wide, other]) { await p.reload(); await p.locator('.dashboard-widget').first().waitFor(); await settle(p) }
   const both = await wide.evaluate(() => [...document.querySelectorAll('.dashboard-row[data-row]')][0]?.querySelector('.dashboard-widget')?.getAttribute('aria-label'))
   ok(`two tabs (${engine}): the move survives`, both === T, both)

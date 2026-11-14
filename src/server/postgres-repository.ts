@@ -12,7 +12,7 @@ import type { SqlClient } from './db/sql.ts'
 import { commandLogFields, debugLog } from './debug-log.ts'
 import { currentOwner } from './auth/request-owner.ts'
 import { applyDiff, planWrites, rowsOf, threadOptional, workspaceOf, type DeletedRow, type LinkRow, type ThreadRow, type PageRow, type RowDiff, type Rows, type TaskRow } from './workspace-rows.ts'
-import { OutboxHeld, readsBeyondApplied, replayRule, rowConflicts, trackedAfter, writeKeys, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
+import { OutboxHeld, conflictKeys, readsBeyondApplied, replayRule, rowConflicts, trackedAfter, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
 
 export function schemaName(value = process.env.DAYTHREAD_PG_SCHEMA ?? 'daythread'): string {
   if (!/^[a-z_][a-z0-9_]{0,62}$/.test(value)) throw new Error('DAYTHREAD_PG_SCHEMA must be a lowercase SQL identifier')
@@ -41,7 +41,7 @@ const deletedColumns = ['id', 'position', 'data'] as const
  * nullable, no backfill: null reads as "not written since the column came".
  */
 const outboxRowTables = ['pages', 'tasks', 'deleted_tasks', 'comment_threads', 'task_links'] as const
-const outboxWorkspaceColumns = ['settings_revision', 'rows_tracked_through', 'rows_untracked_until', 'receipts_forgotten_through'] as const
+const outboxWorkspaceColumns = ['settings_revision', 'rows_tracked_through', 'rows_untracked_until', 'receipts_forgotten_through', 'parts_tracked_through'] as const
 const rowTableOf: Record<string, (typeof outboxRowTables)[number]> = { page: 'pages', task: 'tasks', deleted: 'deleted_tasks', thread: 'comment_threads', link: 'task_links' }
 
 export class PostgresWorkspaceRepository implements ServerRepository {
@@ -72,7 +72,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
         where n.nspname = $1 and c.relname = $2 and a.attnum > 0 and not a.attisdropped`, [this.schema, table])).map(r => r.attname)
     const complete = async (sql: SqlClient) => {
       const have = await tables(sql)
-      if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations', 'comment_threads', 'task_links'].every(t => have.includes(t)) || have.includes('workspace')) return false
+      if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations', 'comment_threads', 'task_links', 'part_revisions'].every(t => have.includes(t)) || have.includes('workspace')) return false
       const columns = await columnsOf(sql, 'pages'), threadColumnsNow = await columnsOf(sql, 'comment_threads')
       const workspaceColumns = await columnsOf(sql, 'workspaces')
       if (!columns.includes('row_revision') || !outboxWorkspaceColumns.every(c => workspaceColumns.includes(c))) return false
@@ -142,7 +142,14 @@ export class PostgresWorkspaceRepository implements ServerRepository {
           alter table ${s}.workspaces add column if not exists todo_automations text;
           ${addedPageColumns.map(c => `alter table ${s}.pages add column if not exists ${c} text;`).join('\n          ')}
           ${outboxRowTables.map(t => `alter table ${s}.${t} add column if not exists row_revision integer;`).join('\n          ')}
-          ${outboxWorkspaceColumns.map(c => `alter table ${s}.workspaces add column if not exists ${c} integer;`).join('\n          ')}`)
+          ${outboxWorkspaceColumns.map(c => `alter table ${s}.workspaces add column if not exists ${c} integer;`).join('\n          ')}
+          create table if not exists ${s}.part_revisions (
+            workspace_id uuid not null references ${s}.workspaces (id) on delete cascade,
+            key text not null,
+            revision integer not null,
+            primary key (workspace_id, key)
+          );
+          alter table ${s}.part_revisions enable row level security;`)
         if ((await tables(tx)).includes('workspace')) await this.migrateShot1(tx)
       })
     }).catch(error => { this.ready = undefined; throw error })
@@ -319,18 +326,23 @@ export class PostgresWorkspaceRepository implements ServerRepository {
    */
   /** What the outbox rule needs from the workspace row (outbox.md §5, §11). */
   private async tracking(tx: SqlClient, workspaceId: string): Promise<RowTracking> {
-    const [t] = await tx.query<{ through: number | null; untracked: number | null; forgotten: number | null }>(`select rows_tracked_through as through, rows_untracked_until as untracked, receipts_forgotten_through as forgotten from ${this.t('workspaces')} where id = $1::uuid`, [workspaceId])
+    // The last revision whose parts were stamped (conflict-keys.ts): a build that stamps rows but not parts leaves a gap
+    // here, and the change falls back to the whole-revision rule (Lead 62f4818c).
+    const [t] = await tx.query<{ through: number | null; untracked: number | null; forgotten: number | null }>(`select parts_tracked_through as through, rows_untracked_until as untracked, receipts_forgotten_through as forgotten from ${this.t('workspaces')} where id = $1::uuid`, [workspaceId])
     return { trackedThrough: t?.through === null || t?.through === undefined ? null : Number(t.through), untrackedUntil: Number(t?.untracked ?? 0), forgottenThrough: Number(t?.forgotten ?? 0) }
   }
   /** The revision that last wrote each of these rows (null: never stamped). */
   private async rowRevisions(tx: SqlClient, workspaceId: string, keys: string[]): Promise<Map<string, number | null>> {
     const out = new Map<string, number | null>()
     const byTable = new Map<string, string[]>()
+    const parts: string[] = []
     for (const key of keys) {
       if (key === 'settings') continue
       const [kind, ...rest] = key.split(':'), table = rowTableOf[kind!]
       if (table) byTable.set(table, [...(byTable.get(table) ?? []), rest.join(':')])
+      else parts.push(key)
     }
+    if (parts.length) for (const r of await tx.query<{ key: string; at: number }>(`select key, revision as at from ${this.t('part_revisions')} where workspace_id = $1::uuid and key = any($2::text[])`, [workspaceId, parts])) out.set(r.key, Number(r.at))
     for (const [table, ids] of byTable) {
       const kind = Object.keys(rowTableOf).find(k => rowTableOf[k] === table)!
       for (const r of await tx.query<{ id: string; at: number | null }>(`select id, row_revision as at from ${this.t(table)} where workspace_id = $1::uuid and id = any($2::text[])`, [workspaceId, ids]))
@@ -339,12 +351,24 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     if (keys.includes('settings')) { const [w] = await tx.query<{ at: number | null }>(`select settings_revision as at from ${this.t('workspaces')} where id = $1::uuid`, [workspaceId]); out.set('settings', w?.at === null || w?.at === undefined ? null : Number(w.at)) }
     return out
   }
-  /** Every row this write upserts gets the new revision; the workspace keeps its tracking (outbox.md §5, §11). */
-  private async stamp(tx: SqlClient, workspaceId: string, write: RowDiff, before: number, after: number, tracking: RowTracking): Promise<void> {
-    const upserted: Array<[string, Array<{ id: string }>]> = [['pages', write.pages.upsert], ['tasks', write.tasks.upsert], ['deleted_tasks', write.deleted.upsert], ['comment_threads', write.threads?.upsert ?? []], ['task_links', write.links?.upsert ?? []]]
-    for (const [table, rows] of upserted) if (rows.length) await tx.query(`update ${this.t(table)} set row_revision = $3 where workspace_id = $1::uuid and id = any($2::text[])`, [workspaceId, rows.map(r => r.id), after])
-    const next = trackedAfter(tracking, before, after), settings = write.timezone !== undefined || write.weekStart !== undefined || write.todoAutomations !== undefined
-    await tx.query(`update ${this.t('workspaces')} set rows_tracked_through = $2, rows_untracked_until = $3${settings ? ', settings_revision = $2' : ''} where id = $1::uuid`, [workspaceId, after, next.untrackedUntil])
+  /**
+   * Every key this commit wrote gets the new revision (outbox.md §5, §11): a row's own column for the rows kept one per
+   * key, `part_revisions` for the parts inside a page (kept when the part is gone, as its tombstone); the workspace
+   * keeps its tracking, rows' and parts' alike.
+   */
+  private async stamp(tx: SqlClient, workspaceId: string, keys: string[], before: number, after: number, tracking: RowTracking): Promise<void> {
+    const byTable = new Map<string, string[]>(), parts: string[] = []
+    for (const key of keys) {
+      if (key === 'settings') continue
+      const [kind, ...rest] = key.split(':'), table = rowTableOf[kind!]
+      if (table) byTable.set(table, [...(byTable.get(table) ?? []), rest.join(':')])
+      else parts.push(key)
+    }
+    for (const [table, ids] of byTable) await tx.query(`update ${this.t(table)} set row_revision = $3 where workspace_id = $1::uuid and id = any($2::text[])`, [workspaceId, ids, after])
+    if (parts.length) await tx.query(`insert into ${this.t('part_revisions')} (workspace_id, key, revision) select $1::uuid, k, $3 from unnest($2::text[]) as k
+      on conflict (workspace_id, key) do update set revision = excluded.revision`, [workspaceId, parts, after])
+    const next = trackedAfter(tracking, before, after), settings = keys.includes('settings')
+    await tx.query(`update ${this.t('workspaces')} set rows_tracked_through = $2, parts_tracked_through = $2, rows_untracked_until = $3${settings ? ', settings_revision = $2' : ''} where id = $1::uuid`, [workspaceId, after, next.untrackedUntil])
   }
 
   private async apply(command: Command, expected?: 'latest', outbox?: OutboxBasis): Promise<{ result: CommandResult & { changes: WorkspaceChanges }; before: number }> {
@@ -364,21 +388,22 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       let rule: ReturnType<typeof replayRule> | undefined
       if (outbox && !replay) {
         rule = replayRule(outbox, workspace.revision, tracking)
-        if (rule.rule === 'whole') throw new OutboxHeld(rule.reason)
+        if (rule.rule === 'whole') throw new OutboxHeld(rule.reason, [], rule.stale)
       }
       const result = applyCommand(workspace, expected === 'latest' || rule !== undefined ? { ...command, expectedRevision: workspace.revision } : command)
       const after = result.workspace
       if (after.revision !== workspace.revision) {
         const { write, inverse } = planWrites(rows, after, restored)
+        const { writes: keys, guards } = conflictKeys(workspace, after, write)
         if (outbox && rule?.rule === 'rows') {
-          // Only now is it known whether it fired a rule; and only its written rows are compared, nothing is written yet.
-          if (readsBeyondApplied(command.action, result.receipt)) throw new OutboxHeld('changed-since')
-          const keys = writeKeys(write), revisions = await this.rowRevisions(tx, scope.id, keys)
-          const conflicts = rowConflicts(keys, key => revisions.get(key), outbox)
-          if (conflicts.length) throw new OutboxHeld('conflict', conflicts)
+          // Only now is it known whether it fired a rule; and only what it wrote is compared, nothing is written yet.
+          if (readsBeyondApplied(command.action, result.receipt)) throw new OutboxHeld('changed-since', [], true)
+          const checked = [...keys, ...guards], revisions = await this.rowRevisions(tx, scope.id, checked)
+          const conflicts = rowConflicts(checked, key => revisions.get(key), outbox)
+          if (conflicts.length) throw new OutboxHeld('conflict', conflicts, true)
         }
         await this.writeDiff(tx, scope.id, write)
-        await this.stamp(tx, scope.id, write, workspace.revision, after.revision, tracking)
+        await this.stamp(tx, scope.id, keys, workspace.revision, after.revision, tracking)
         await tx.query(`update ${this.t('workspaces')} set revision = $2, timezone = $3, week_start = $4${write.todoAutomations !== undefined ? ', todo_automations = $5' : ''} where id = $1::uuid`, [scope.id, after.revision, after.timezone, after.weekStart ?? 0, ...(write.todoAutomations !== undefined ? [write.todoAutomations] : [])])
         await this.writeOperation(tx, scope.id, result.receipt, after.revision, command.action.type, after.undo?.operationId === command.operationId ? inverse : null)
         if (after.revision % pruneEvery === 0) await this.pruneOperations(tx, scope.id, new Date())

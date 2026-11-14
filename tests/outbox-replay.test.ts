@@ -24,7 +24,7 @@ test('the rule: as-is when nothing moved; whole when it reads beyond, predates a
   const tracked = { trackedThrough: 12, untrackedUntil: 0, forgottenThrough: 0 }
   assert.deepEqual(replayRule(basis, 12, tracked), { rule: 'rows' })
   assert.deepEqual(replayRule(basis, 12, { ...tracked, trackedThrough: 11 }), { rule: 'whole', reason: 'changed-since' }, 'an older build wrote revision 12 unstamped')
-  assert.deepEqual(replayRule({ ...basis, readsBeyond: true }, 12, tracked), { rule: 'whole', reason: 'changed-since' })
+  assert.deepEqual(replayRule({ ...basis, readsBeyond: true }, 12, tracked), { rule: 'whole', reason: 'changed-since', stale: true }, 'held only because it moved on: a caller may build it again')
   assert.deepEqual(replayRule(basis, 12, { ...tracked, untrackedUntil: 11 }), { rule: 'whole', reason: 'changed-since' })
   assert.deepEqual(replayRule(basis, 12, { ...tracked, forgottenThrough: 11 }), { rule: 'whole', reason: 'maybe-applied' })
   assert.deepEqual(replayRule(basis, 12, { ...tracked, forgottenThrough: 10 }), { rule: 'rows' }, 'an operation pruned at or before its base was made before it')
@@ -36,9 +36,9 @@ test('only his own revisions since the base: applied as made, even reading beyon
   const tracked = { trackedThrough: 13, untrackedUntil: 0, forgottenThrough: 0 }
   const own = (ownRevisions: number[], readsBeyond = true) => ({ baseRevision: 10, ownRevisions, readsBeyond })
   assert.deepEqual(replayRule(own([11, 12, 13]), 13, tracked), { rule: 'as-is' })
-  assert.deepEqual(replayRule(own([11, 13]), 13, tracked), { rule: 'whole', reason: 'changed-since' }, 'an outside revision 12 between two of his')
+  assert.deepEqual(replayRule(own([11, 13]), 13, tracked), { rule: 'whole', reason: 'changed-since', stale: true }, 'an outside revision 12 between two of his')
   assert.deepEqual(replayRule(own([11, 13], false), 13, tracked), { rule: 'rows' })
-  assert.deepEqual(replayRule(own([13]), 13, tracked), { rule: 'whole', reason: 'changed-since' }, 'the last being his isn\'t enough')
+  assert.deepEqual(replayRule(own([13]), 13, tracked), { rule: 'whole', reason: 'changed-since', stale: true }, 'the last being his isn\'t enough')
   assert.deepEqual(replayRule(own([11, 12, 13]), 13, { ...tracked, trackedThrough: 12 }), { rule: 'whole', reason: 'changed-since' }, 'an older build wrote since')
   assert.deepEqual(replayRule(own([11, 12, 13]), 13, { ...tracked, untrackedUntil: 11 }), { rule: 'whole', reason: 'changed-since' })
   assert.deepEqual(replayRule(own([11, 12, 13]), 13, { ...tracked, forgottenThrough: 11 }), { rule: 'whole', reason: 'maybe-applied' })

@@ -5,9 +5,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ServerRepository } from '../src/server/repository.ts'
 import { OutboxHeld, type OutboxBasis } from '../src/server/outbox-replay.ts'
-import type { Action, Workspace } from '../src/domain/types.ts'
+import type { Action, Command, Workspace } from '../src/domain/types.ts'
 import { runOutbox } from '../src/server/outbox-command.ts'
 import { writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
+import { firstWidgetView } from '../src/domain/dashboard.ts'
 import type { Automation } from '../src/domain/automations.ts'
 
 export interface OutboxFixture {
@@ -16,6 +17,8 @@ export interface OutboxFixture {
   olderBuildWrote(): Promise<void>
   /** As if his data were restored from a backup taken `back` revisions ago (the workspace's revision goes back). */
   restoredFromBackup(back: number): Promise<void>
+  /** As if a build that stamps rows but not the parts inside pages wrote once (Lead 62f4818c). */
+  partsBehind(): Promise<void>
   /** As if every operation so far was forgotten (compacted out on SQLite, pruned by age on Postgres). */
   forgetOperations(repo: ServerRepository): Promise<void>
   cleanup(): Promise<void>
@@ -118,6 +121,68 @@ export function outboxContract(name: string, fixture: () => Promise<OutboxFixtur
       const b2 = ws.revision
       await exec({ type: 'rename-page', pageId: 'r1', title: 'One!' })
       await assert.rejects(repo.executeOutbox({ ...edit('other-2', 'r2'), expectedRevision: b2 }, basis(b2, { readsBeyond: true })), held('changed-since'))
+    } finally { await f.cleanup() }
+  })
+
+  /** A dashboard on Home with two widgets in one row, of Runs (with a Stage), and the workspace's revision after. */
+  async function dashboard(repo: ServerRepository) {
+    let n = 0
+    const exec = async (action: unknown) => { const r = (await repo.load()).revision; return repo.execute({ operationId: `d${++n}`, expectedRevision: r, action: action as Action }) }
+    await exec({ type: 'create-database', pageId: 'runs', homeBlockId: null, title: 'Runs' })
+    await exec({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'st', name: 'Stage', type: 'select', options: [{ id: 'a', name: 'Idea', color: 'gray' }] } } })
+    await exec({ type: 'create-database', pageId: 'home', homeBlockId: null, title: 'Home' })
+    const runs = (await repo.load()).pages.find(p => p.id === 'runs')!.database!
+    await exec({ type: 'change-database', pageId: 'home', change: { kind: 'addDashboard', view: { id: 'dash', name: 'Dashboard' }, rows: [{ id: 'row1', widgets: [{ id: 'w1', source: 'runs', view: firstWidgetView(runs, 'v1') }, { id: 'w2', source: 'runs', view: firstWidgetView(runs, 'v2') }] }] } })
+    const D = (change: Record<string, unknown>): Action => ({ type: 'change-database', pageId: 'home', change: { viewId: 'dash', ...change } } as unknown as Action)
+    const dash = async () => (await repo.load()).pages.find(p => p.id === 'home')!.database!.views.find(v => v.id === 'dash')!.dashboard!
+    const rule = (id: string) => ({ id, name: 'Stage', type: 'select', op: 'isAnyOf', value: ['Idea'] })
+    return { exec, D, dash, rule, base: (await repo.load()).revision }
+  }
+
+  test(`${name} outbox: inside a database page, a widget moved and the dashboard's filter edited from behind both land (G6-5)`, async () => {
+    const f = await fixture()
+    try {
+      const repo = f.create(), { exec, D, dash, rule, base } = await dashboard(repo)
+      await exec(D({ kind: 'swapWidget', widgetId: 'w1', withId: 'w2' }))
+      await repo.executeOutbox({ operationId: 'filter', expectedRevision: base, action: D({ kind: 'setDashboardFilter', rules: [rule('k1')] }) }, basis(base))
+      const d = await dash()
+      assert.deepEqual(d.rows[0]!.widgets.map(w => w.id), ['w2', 'w1'], 'the move survives')
+      assert.deepEqual(d.filter?.map(r => r.id), ['k1'], 'the filter edit survives')
+    } finally { await f.cleanup() }
+  })
+
+  test(`${name} outbox: two edits to one filter meet; the later, made from behind, is held as stale, nothing written`, async () => {
+    const f = await fixture()
+    try {
+      const repo = f.create(), { exec, D, rule, base } = await dashboard(repo)
+      await exec(D({ kind: 'setDashboardFilter', rules: [rule('k1')] }))
+      const before = await repo.load()
+      await assert.rejects(repo.executeOutbox({ operationId: 'filter-2', expectedRevision: base, action: D({ kind: 'setDashboardFilter', rules: [rule('k2')] }) }, basis(base)), (e: unknown) => held('conflict')(e) && (e as OutboxHeld).stale)
+      assert.deepEqual(await repo.load(), before)
+    } finally { await f.cleanup() }
+  })
+
+  test(`${name} outbox: an edit made before its widget was removed, or removed and made again with its id, never lands in it`, async () => {
+    const f = await fixture()
+    try {
+      const repo = f.create(), { exec, D, base } = await dashboard(repo)
+      const runs = (await repo.load()).pages.find(p => p.id === 'runs')!.database!
+      await exec(D({ kind: 'removeWidget', widgetId: 'w2' }))
+      // A field the widget's view didn't have (its groups): only the widget's own lifecycle can say it's gone.
+      const sortIt = (id: string): Command => ({ operationId: id, expectedRevision: base, action: D({ kind: 'updateWidget', widgetId: 'w2', fields: { groupBy: 'st' } }) })
+      await assert.rejects(repo.executeOutbox(sortIt('sort-gone'), basis(base)), (e: unknown) => e instanceof OutboxHeld || (e instanceof Error && /gone/i.test(e.message)))
+      // Made again with the same id: a different widget to him, so the old edit is still held, not applied into it.
+      await exec(D({ kind: 'addWidget', widget: { id: 'w2', source: 'runs', view: firstWidgetView(runs, 'v2b') }, rowId: 'row1', beforeId: null }))
+      await assert.rejects(repo.executeOutbox(sortIt('sort-again'), basis(base)), held('conflict'))
+    } finally { await f.cleanup() }
+  })
+
+  test(`${name} outbox: a build that stamped rows but not parts leaves a gap: what's based before it is held, not part-checked`, async () => {
+    const f = await fixture()
+    try {
+      const repo = f.create(), { D, rule, base } = await dashboard(repo)
+      await f.partsBehind()
+      await assert.rejects(repo.executeOutbox({ operationId: 'filter', expectedRevision: base, action: D({ kind: 'setDashboardFilter', rules: [rule('k1')] }) }, basis(base)), (e: unknown) => held('changed-since')(e) && !(e as OutboxHeld).stale)
     } finally { await f.cleanup() }
   })
 

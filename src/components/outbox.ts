@@ -3,7 +3,8 @@
 // Home Screen app never loses it. One IndexedDB store; where there is none, changes are sent as before and nothing
 // claims they were kept (§4).
 import { applyCommand } from '../domain/workspace.ts'
-import type { Action, Receipt, Workspace } from '../domain/types.ts'
+import type { Action, Page, Receipt, Workspace } from '../domain/types.ts'
+import { idsOfKey, pageKeys } from '../domain/conflict-keys.ts'
 import { readsBeyondApplied } from '../server/outbox-replay.ts'
 import { linkId } from '../domain/task-links.ts'
 
@@ -19,8 +20,13 @@ export function predictedWrites(before: Workspace, after: Workspace): string[] {
     for (const e of is ?? []) { now.add(e.id); if (old.get(e.id) !== JSON.stringify(e)) keys.push(`${kind}:${e.id}`) }
     for (const id of old.keys()) if (!now.has(id)) keys.push(`${kind}:${id}`)
   }
-  // Synced blocks' records and smart notes are stored as page rows.
-  diff('page', [...before.pages, ...(before.synced ?? []), ...(before.smartNotes ?? [])] as Array<{ id: string }>, [...after.pages, ...(after.synced ?? []), ...(after.smartNotes ?? [])] as Array<{ id: string }>)
+  // Synced blocks' records and smart notes are stored as page rows. Inside a page, the parts it changed (conflict-keys.ts).
+  const pagesOf = (ws: Workspace) => new Map([...ws.pages, ...(ws.synced ?? []), ...(ws.smartNotes ?? [])].map(p => [(p as { id: string }).id, p as Page]))
+  const was = pagesOf(before), now = pagesOf(after)
+  for (const id of new Set([...was.keys(), ...now.keys()])) {
+    const a = was.get(id), b = now.get(id)
+    if (a !== b && JSON.stringify(a) !== JSON.stringify(b)) keys.push(...pageKeys(a, b).writes)
+  }
   diff('task', before.tasks, after.tasks); diff('deleted', before.deletedTasks, after.deletedTasks)
   diff('thread', before.threads, after.threads); diff('link', (before.links ?? []).map(l => ({ ...l, id: linkId(l) })), (after.links ?? []).map(l => ({ ...l, id: linkId(l) })))
   if (before.timezone !== after.timezone || (before.weekStart ?? 0) !== (after.weekStart ?? 0) || JSON.stringify(before.todoAutomations ?? null) !== JSON.stringify(after.todoAutomations ?? null)) keys.push('settings')
@@ -135,13 +141,14 @@ export function referencedIds(action: Action): string[] {
   return [...out]
 }
 
-/** The id inside a row key: `task:abc` → `abc`. */
-const idOf = (key: string) => key.slice(key.indexOf(':') + 1)
-
-/** Whether `entry` must wait for `held` (§6): their writes meet, it names something the held one wrote or made, or it reads beyond its writes. */
+/**
+ * Whether `entry` must wait for `held` (§6): their writes meet, it names something the held one made, removed or wrote
+ * as a whole row (a page, view or widget's lifecycle, a task), or it reads beyond its writes. A part inside a page names
+ * nothing, so sibling parts of one page don't wait on each other (Ratchet 58a63858).
+ */
 export function dependsOn(entry: Pick<OutboxEntry, 'writes' | 'refs' | 'readsBeyond'>, held: Pick<OutboxEntry, 'writes'>): boolean {
   if (entry.readsBeyond) return true
-  const writes = new Set(held.writes), ids = new Set(held.writes.map(idOf))
+  const writes = new Set(held.writes), ids = new Set(held.writes.flatMap(idsOfKey))
   return entry.writes.some(k => writes.has(k)) || entry.refs.some(id => ids.has(id))
 }
 
@@ -149,7 +156,8 @@ export function dependsOn(entry: Pick<OutboxEntry, 'writes' | 'refs' | 'readsBey
 export type SendAnswer =
   | { status: 'applied'; workspace: Workspace; receipt: Receipt }
   | { status: 'already-applied' }
-  | { status: 'held'; reason: HeldReason; message?: string }
+  /** `stale`: held only because the workspace moved on since it was made (a part it writes changed elsewhere, or it reads beyond and anything moved). */
+  | { status: 'held'; reason: HeldReason; message?: string; stale?: true }
   | { status: 'owner-mismatch' }
   | { status: 'offline' }
   | { status: 'missing' }
@@ -243,6 +251,26 @@ export async function drainQueue(store: OutboxStore, owner: string, send: (entry
 }
 
 /** The banner's words for a change (Jazz §8.3): a past-tense verb and the item's name, cut at 40 characters. */
+const filterFields = ['filter', 'filterAny', 'filterGroups']
+/** A database's own change, named by what he sees (Jazz 0409ac87): a view by its name, a widget by its heading. */
+function databaseLabel(action: Extract<Action, { type: 'change-database' }>, ws: Workspace, cut: (s: string) => string): string | null {
+  const c = action.change as { kind: string; viewId?: string; widgetId?: string; fields?: Record<string, unknown> } & Record<string, unknown>
+  const db = ws.pages.find(p => p.id === action.pageId)?.database
+  const view = c.viewId ? db?.views.find(v => v.id === c.viewId) : undefined
+  const widget = c.widgetId ? view?.dashboard?.rows.flatMap(r => r.widgets).find(w => w.id === c.widgetId) : undefined
+  const source = widget ? ws.pages.find(p => p.id === widget.source) : undefined
+  const heading = widget ? `"${cut(`${source?.title || 'To-dos'} · ${widget.view.name}`)}"` : null
+  const named = view ? `"${cut(view.name)}"` : null
+  switch (c.kind) {
+    case 'setDashboardFilter': return named && `filtered ${named}`
+    case 'updateWidget': return heading && (Object.keys(c.fields ?? {}).some(f => filterFields.includes(f)) ? `filtered ${heading}` : `changed ${heading}`)
+    case 'moveWidget': case 'swapWidget': return heading && `moved ${heading}`
+    case 'removeWidget': return heading && `deleted ${heading}`
+    case 'updateView': return named && (Object.keys(c).some(f => filterFields.includes(f)) ? `filtered ${named}` : `changed ${named}`)
+    default: return null
+  }
+}
+
 export function labelFor(action: Action, ws: Workspace): string {
   const cut = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s)
   const page = (id: string | undefined) => (id ? ws.pages.find(p => p.id === id) : undefined)
@@ -250,6 +278,7 @@ export function labelFor(action: Action, ws: Workspace): string {
   const a = action as Action & { taskId?: string; pageId?: string; title?: string; status?: string; rowId?: string }
   const name = task(a.taskId)?.title || page(a.rowId ?? a.pageId)?.title || a.title
   const quoted = name ? `"${cut(name)}"` : null
+  if (action.type === 'change-database') { const said = databaseLabel(action, ws, cut); if (said) return said }
   switch (action.type) {
     case 'task-status': return quoted ? `${a.status === 'done' ? 'ticked' : a.status === 'open' ? 'unticked' : 'changed'} ${quoted}` : 'a change'
     case 'add-task': case 'add-row': case 'add-rows': return quoted ? `added ${quoted}` : 'added a row'

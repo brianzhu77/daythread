@@ -25,6 +25,8 @@ const newId = (): string => crypto.randomUUID()
 
 /** What a dashboard command can be refused for once the dashboard has changed under it: said in place, nothing to Retry. */
 const refusals = /Saved elsewhere|That widget's gone|That row's gone|That row's changed since|Not next to each other|Already there|widgets to a row at most|widgets at most|That database is gone/
+/** Refusals only a change in another tab can bring about: the dashboard here was drawn before it. */
+const elsewhereOnly = /That widget's gone|That row's gone|That row's changed since|Not next to each other|Already there|That database is gone/
 /** The commands' common part, built from the dashboard as the workspace holds it when the command goes. */
 function useDashboardRun(hostId: string, viewId: string) {
   const { run } = useWorkspace()
@@ -37,13 +39,15 @@ function useDashboardRun(hostId: string, viewId: string) {
         // Nothing to send: what it was for isn't there any more (a widget removed in another tab).
         if (!change) gone = true
         return change ? { type: 'change-database', pageId: hostId, change } : null
-      }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined, undefined, { inlineRefusal: refusals, onRefused: m => { if (/Saved elsewhere/.test(m)) stale = true; else refusal = m } })
+      }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined, undefined, { stale: 'rebuild', inlineRefusal: refusals, onRefused: m => { if (/Saved elsewhere/.test(m)) stale = true; else refusal = m } })
       return receipt.then(r => ({ r, stale, refusal, gone }))
     }
     // A tab behind the workspace is refused whatever it sends, and comes back up to date (G6-5). Each command names only
     // its own widget or row, so it's built again from what's there now and sent once more; a real refusal says so.
     const first = await once()
-    if (first.r || !first.stale) { if (!first.r && first.refusal) toast(first.refusal, { timeout: 6000 }); return first.r }
+    // B98: a change from a tab behind the workspace now reaches the dashboard as it is, so what only another tab can
+    // cause (a widget or row gone, a neighbour moved) can be the first answer; it's said as main says it after its retry.
+    if (first.r || !first.stale) { if (!first.r && first.refusal) toast(elsewhereOnly.test(first.refusal) ? 'Changed in another tab, so nothing was changed' : first.refusal, { timeout: 6000 }); return first.r }
     // Sent again and still refused (its neighbour moved, or it's been removed): said, and the dashboard as it is now is
     // drawn, so a change never fails silently (Bumblebee ba4322f2).
     const again = await once()

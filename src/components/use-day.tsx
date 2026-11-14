@@ -78,7 +78,7 @@ const sendOutbox = async (workspace: Workspace, entry: OutboxEntry): Promise<Out
     const answer = await runOutboxCommand({ data: { operationId: entry.operationId, expectedRevision: entry.baseRevision, action: entry.action, expectedOwner: entry.owner, basis: { baseRevision: entry.baseRevision, ownRevisions: entry.ownRevisions, readsBeyond: entry.readsBeyond } } })
     if (answer.status === 'owner-mismatch') return { status: 'owner-mismatch' }
     if (answer.status === 'already-applied') return { status: 'already-applied' }
-    if (answer.status === 'held') return { status: 'held', reason: answer.reason }
+    if (answer.status === 'held') return { status: 'held', reason: answer.reason, ...(answer.stale ? { stale: true as const } : {}) }
     if (answer.status === 'refused') return { status: 'held', reason: /not found|gone|no longer/i.test(answer.message) ? 'gone' : 'refused', message: answer.message }
     const ownerBefore = knownOwner
     noteOwner(answer.owner)
@@ -97,7 +97,9 @@ serverTransport.runOutbox = sendOutbox
 class OutboxStop extends Error {
   readonly kind: 'held' | 'waiting' | 'offline' | 'failed' | 'owner' | 'done'
   readonly detail?: string
-  constructor(kind: OutboxStop['kind'], detail?: string) { super(`Outbox: ${kind}`); this.name = 'OutboxStop'; this.kind = kind; if (detail !== undefined) this.detail = detail }
+  /** Held only because the workspace moved on, and given back to the caller that asked for it (RunOptions.stale). */
+  readonly handedBack: boolean
+  constructor(kind: OutboxStop['kind'], detail?: string, handedBack = false) { super(`Outbox: ${kind}`); this.name = 'OutboxStop'; this.kind = kind; this.handedBack = handedBack; if (detail !== undefined) this.detail = detail }
 }
 /** What the banners read (outbox.md §8): changes kept and not yet sent, the oldest held one, what waits on it. */
 export interface OutboxView {
@@ -145,7 +147,17 @@ export interface Notice {
 type NoticeSpec = Notice | null
 export type NoticeArg = NoticeSpec | ((r: Receipt) => NoticeSpec)
 /** A domain refusal matching `inlineRefusal` is handed to `onRefused` instead of the save-failed bar. */
-type RunOptions = { inlineRefusal?: RegExp; onRefused?: (message: string) => void; /** The failure's message, for a caller that retries by itself (B35). */ onFailure?: (message: string) => void; /** B40: a background save; its failure says so in its own line, never the header's bar and Retry. */ quiet?: boolean }
+type RunOptions = {
+  inlineRefusal?: RegExp; onRefused?: (message: string) => void; /** The failure's message, for a caller that retries by itself (B35). */ onFailure?: (message: string) => void; /** B40: a background save; its failure says so in its own line, never the header's bar and Retry. */ quiet?: boolean
+  /**
+   * B98 (Lead bd4cc39e, Ratchet d6a88f04): what this caller does when its change, made just now in this tab, is held only
+   * because the workspace moved on. `rebuild`: it builds the change again once on the latest state, as it does after
+   * "Saved elsewhere"; `outcome`: it shows its own last word ("Can't undo · edited since"). Either way it's told
+   * "Saved elsewhere" through `onRefused`, and the stored change stays until its rebuild is stored or the word is
+   * said. Absent: the change is held, with the banner. A stored change replayed after a reload is never handed back.
+   */
+  stale?: 'rebuild' | 'outcome'
+}
 
 export type ActionSource = Action | ((workspace: Workspace) => Action | null)
 
@@ -213,6 +225,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const netAway = useRef(false), slowUnsent = useRef(false)
   /** Not durable: changes that failed to send and live only in this tab's memory, by operation id, each at risk until that change itself gets through (Ratchet ff7e0d37). */
   const memoryUnsent = useRef(new Set<string>())
+  /**
+   * Changes given back to their caller (RunOptions.stale), by seq: kept, held and unshown until replaced. `newest`: the
+   * newest seq stored when it was; `ready`: the caller has been told, so the next change stored here is its rebuild.
+   */
+  const handedBack = useRef(new Map<number, { newest: number; ready: boolean }>())
   const [outbox, setOutbox] = useState<OutboxView>(emptyOutbox)
   /** The workspace with every pending change applied, in order (§4): what changes are built on, and what's shown meanwhile. */
   /**
@@ -247,7 +264,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     if (!entries.current.length && store.current && outboxHint.get()) void store.current.all().then(left => { if (!left.length) outboxHint.clear() }).catch(() => undefined)
     // The same split the drain sends by (Jazz b6c71626). His changes only: the app's own writes (opening a day, the
     // draft) are never counted to him (Jazz 8887e299).
-    const { held, waiting, pending } = outboxCounts(entries.current)
+    const { held, waiting, pending } = outboxCounts(entries.current.filter(e => !handedBack.current.has(e.seq!)))
     const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
     setOutbox({ pending, held, waiting, durable: durable.current, keptBack: legacy.current && pending > 0, offline: away && pending > 0, atRisk: !durable.current && (slowUnsent.current || memoryUnsent.current.size > 0 || (away && commandsPending())) })
     if (entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
@@ -293,7 +310,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [transport, adopt, showOutbox, retryLater])
 
   /** A change of his, stored in this tab: drained with the rest, and its own answer made what `transport.run` would have returned, or an `OutboxStop`. */
-  const sendOwn = useCallback(async (entry: OutboxEntry): Promise<{ workspace: Workspace; receipt: Receipt }> => {
+  const sendOwn = useCallback(async (entry: OutboxEntry, stale?: RunOptions['stale']): Promise<{ workspace: Workspace; receipt: Receipt }> => {
     const seq = entry.seq!, keptBefore = kept.current.has(seq)
     try {
       const result = outcomes.current.has(seq) ? null : await drainLocked(entry.owner)
@@ -303,7 +320,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         // What every change sent so far has landed on: the drain adopted each in turn.
         case 'applied': return { workspace: wsRef.current ?? answer.workspace, receipt: answer.receipt }
         case 'already-applied': throw new OutboxStop('done')
-        case 'held': throw entry.app ? new OutboxStop('done') : new OutboxStop('held', answer.message ?? answer.reason)
+        case 'held':
+          // Made just now, held only because the workspace moved on, and its caller rebuilds or answers it itself: given back.
+          if (answer.stale && stale && !keptBefore) throw new OutboxStop('held', 'Saved elsewhere', true)
+          throw entry.app ? new OutboxStop('done') : new OutboxStop('held', answer.message ?? answer.reason)
         default: break
       }
       const now = entries.current.find(e => e.seq === seq)
@@ -328,6 +348,25 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       }
     } finally { ownJobs.current.delete(seq); showOutbox() }
   }, [transport, drainLocked, showOutbox])
+
+  /**
+   * A change given back to its caller leaves the outbox once its rebuild is stored, or its caller has said its word
+   * (Lead bd4cc39e). What was made on top of it before then, in any tab, isn't sent on top of what replaces it: it's
+   * held, said, for him to keep or discard. `except`: the rebuild itself.
+   */
+  const retire = useCallback(async (seq: number, except?: number) => {
+    const newest = handedBack.current.get(seq)?.newest, s = store.current, owner = knownOwner
+    if (newest === undefined || !s || !owner) return
+    handedBack.current.delete(seq)
+    const work = async () => {
+      const plan = schedule((await s.all()).filter(e => e.owner === owner))
+      for (const [w, roots] of plan.waiting) if (w !== except && w <= newest && roots.includes(seq)) await s.update(w, { state: 'held', held: { reason: 'changed-since' } })
+      await s.remove(seq)
+      entries.current = (await s.all()).filter(e => e.owner === owner)
+    }
+    try { await (typeof navigator !== 'undefined' && navigator.locks ? navigator.locks.request(`daythread-outbox:${owner}`, work) : work()) }
+    finally { showOutbox() }
+  }, [showOutbox])
 
   /** Once the owner is known (the first load, or the offline copy's), this owner's stored changes join the tab, before they're shown. */
   const takeStored = useCallback(async (owner: string | null) => {
@@ -465,7 +504,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       onPress: () => {
         close()
         if (wsRef.current?.undo?.operationId === undoOperationId)
-          void runRef.current?.({ type: 'undo', targetOperationId: undoOperationId }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
+          void runRef.current?.({ type: 'undo', targetOperationId: undoOperationId }, { text: 'Undone' }, undefined, { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
       },
     }
     const other = extra && { children: extra.label, onPress: () => { close(); extra.run() } }
@@ -492,9 +531,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         if (built && built.type !== 'save-editor') {
           const { entry } = capture(ahead, built, operationId, entries.current.some(e => e.action.type === 'undo'))
           const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending', ...(appWrites.has(built.type) ? { app: true } : {}) }
-          stored = store.current.add(full).then(seq => {
+          stored = store.current.add(full).then(async seq => {
             outboxHint.set()
             ownJobs.current.add(seq)
+            // A change given back to its caller is replaced by the next one stored here, its rebuild (Lead bd4cc39e).
+            for (const [old, back] of [...handedBack.current]) if (back.ready) await retire(old, seq).catch(() => undefined)
             const kept = { ...full, seq }
             // A drain in another tab may have read it into this tab's list already.
             if (!entries.current.some(e => e.seq === seq)) entries.current = [...entries.current, kept]
@@ -518,7 +559,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         const fields={operationId,command:action.type,beforeRevision:current.revision,...('pageId' in action?{pageId:action.pageId}:{}),...('taskId' in action?{taskId:action.taskId}:{})}
         debugClient('command.request',fields)
         try {
-          const result = entry ? await sendOwn(entry) : await transport.run(current, action, operationId)
+          const result = entry ? await sendOwn(entry, options.stale) : await transport.run(current, action, operationId)
           if (!entry && !durable.current && memoryUnsent.current.delete(operationId)) showOutbox()
           adopt(result.workspace)
           retireStaleUndo(result.workspace)
@@ -537,6 +578,22 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         } catch (e) {
           if (e instanceof OutboxStop) {
             setSaveState('idle')
+            if (e.handedBack && entry) {
+              // Given back (RunOptions.stale): kept and unshown until its rebuild is stored, or its caller has said its word.
+              let newest = entry.seq!
+              for (const x of entries.current) newest = Math.max(newest, x.seq!)
+              const back = { newest, ready: false }
+              handedBack.current.set(entry.seq!, back); showOutbox()
+              debugClient('command.response', { ...fields, elapsedMs: performance.now() - started, result: 'refused', error: 'outbox-handed-back' })
+              // The latest first, so what the caller builds again is built on it; only then is the next change stored its rebuild.
+              try { await refresh(operationId) } catch { /* offline */ }
+              back.ready = true
+              options.onRefused?.('Saved elsewhere')
+              if (options.stale === 'outcome') await retire(entry.seq!).catch(() => undefined)
+              // A caller that ends up not building it again has said its word by then.
+              else setTimeout(() => void retire(entry.seq!).catch(() => undefined), 1500)
+              return null
+            }
             if (e.kind === 'held' && options.inlineRefusal?.test(e.detail ?? '')) {
               // A refusal shown in place (Undo's "Can't undo"): nothing to keep (Jazz acdfa91).
               if (entry) { await store.current?.remove(entry.seq!); entries.current = entries.current.filter(x => x.seq !== entry.seq); showOutbox() }
@@ -583,7 +640,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       void job.finally(() => { commandsOut-- }).catch(() => undefined)
       return job
     },
-    [transport, adopt, push, refresh, retireStaleUndo, predicted, sendOwn, showOutbox],
+    [transport, adopt, push, refresh, retireStaleUndo, predicted, sendOwn, showOutbox, retire],
   )
   runRef.current = run
 

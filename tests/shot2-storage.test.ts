@@ -42,6 +42,8 @@ outboxContract('Postgres rows (PGlite)', async () => {
   return {
     create: () => new PostgresWorkspaceRepository(pgliteClient(db)),
     olderBuildWrote: async () => { await db.exec('update daythread.workspaces set revision = revision + 1') },
+    // A build that stamps rows but knows nothing of parts: rows stamped through the new revision, parts not.
+    partsBehind: async () => { await db.exec('update daythread.workspaces set revision = revision + 1, rows_tracked_through = revision + 1') },
     restoredFromBackup: async back => { await db.exec(`update daythread.workspaces set revision = revision - ${back}`) },
     forgetOperations: async repo => {
       await db.exec("update daythread.operations set created_at = now() - interval '60 days'")

@@ -452,7 +452,27 @@ Where the build differs from, or adds to, the contract above:
   whichever drain of its tab sent it. Which tab stored a change, or whether that tab is still open, plays no part. The
   banner's counts come from the same split (Jazz b6c71626). `tests/outbox-schedule.test.ts` checks both against a
   reference model over seeded random runs across tabs.
+- **Conflict keys inside a page** (§6, Lead b9a9108b; `src/domain/conflict-keys.ts`): a page's own fields are one key;
+  inside a database page, its view order, properties and other fields, each view's fields (filter, any/all and groups
+  as one), a dashboard's layout and its filter, and each widget's source and view fields are keys of their own. A part
+  also has guards, the lifecycle keys of what it sits in (`life:<page>`, `life:view:<id>`, `life:widget:<id>`), checked
+  but not stamped, so nothing lands in a page, view or widget removed, trashed or made again since, even on a field it
+  never had. Postgres keeps part stamps in `part_revisions` (kept when the part goes, as its tombstone); SQLite in
+  `row_revisions`. `parts_tracked_through` beside `rows_tracked_through`: a build that stamps rows but not parts leaves
+  a gap, and the whole-revision rule applies (Lead 62f4818c). In the browser, only lifecycles and one-per-id rows
+  (tasks, threads, links) name ids for dependencies by reference, so sibling parts don't wait on each other.
+- **Only his own revisions since the base** (gate e1a21c80): when every revision after a change's base is one of its
+  queue's acknowledged changes, it applies as made, even reading beyond (a property edit that fires a rule). The
+  future-base, forgotten-receipt and untracked-gap checks come first.
+- **Given back to its caller** (Lead bd4cc39e, Ratchet d6a88f04): a change made just now in this tab, held only because
+  the workspace moved on (`stale`: a part conflict, or reading beyond after an outside revision; never a gap, a backup,
+  a forgotten receipt or an owner mismatch), goes back to a caller that declared `stale: 'rebuild'` (it builds it again
+  once on the latest state: page moves, dashboard commands, cells, comments, buttons, smart notes, Trash) or
+  `stale: 'outcome'` (it says its own word: Undo's "Can't undo · edited since", a bulk move). It's told "Saved
+  elsewhere" after the latest is loaded. The stored change stays, held and unshown, until its rebuild is stored or the
+  word is said; a reload in between shows it held. What was made on top of it before then is held, for him to decide.
+  Other callers' changes, and every change replayed from storage, keep the held banner.
 
 Evidence: `tests/outbox-contract.ts` (both stores), `tests/outbox-replay.test.ts`, `tests/outbox-client.test.ts`,
-`tests/outbox-schedule.test.ts`, `tests/evidence/outbox/outbox.mjs` (33 cases), `rollback.mjs` (rollback and forward under an open tab),
+`tests/outbox-schedule.test.ts`, `tests/evidence/outbox/outbox.mjs` (35 cases), `rollback.mjs` (rollback and forward under an open tab),
 `rehearse.ts` (the migration on a backup copy).

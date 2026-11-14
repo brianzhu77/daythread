@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { harness, today, todo, dayId, bullet, text } from './v2-helpers.ts'
 import { capture, dependsOn, labelFor, memoryOutboxStore, referencedIds, schedule, type OutboxEntry } from '../src/components/outbox.ts'
-import type { Action } from '../src/domain/types.ts'
+import type { Action, Workspace } from '../src/domain/types.ts'
 import { applyCommand } from '../src/domain/workspace.ts'
 
 const setup = () => {
@@ -32,11 +32,20 @@ test('Undo is stored, not predicted, and reads beyond; so does anything made whi
 })
 
 test('only changes sharing a row with a held one, naming what it made, or reading beyond, wait on it', () => {
-  const held = entry({ writes: ['page:db1', 'task:a'] })
+  const held = entry({ writes: ['life:db1', 'page:db1', 'task:a'] })
   assert.equal(dependsOn(entry({ writes: ['task:a'] }), held), true, 'the same row')
   assert.equal(dependsOn(entry({ writes: ['page:row9'], refs: ['db1'] }), held), true, 'a row added to the database it created')
   assert.equal(dependsOn(entry({ writes: ['task:b'], refs: ['b'] }), held), false, 'an unrelated tick goes ahead')
   assert.equal(dependsOn(entry({ writes: ['task:b'], readsBeyond: true }), held), true)
+})
+
+test('inside one page, sibling parts don\'t wait on each other; a removed view or widget holds what names it (Ratchet 58a63858)', () => {
+  const filter = entry({ writes: ['dash/v1/filter'], refs: ['home', 'v1'] })
+  assert.equal(dependsOn(entry({ writes: ['dash/v1/layout'], refs: ['home', 'v1', 'w1'] }), filter), false, 'a move beside a held filter edit')
+  assert.equal(dependsOn(entry({ writes: ['dash/v1/filter'], refs: ['home', 'v1'] }), filter), true, 'the same filter')
+  assert.equal(dependsOn(entry({ writes: ['page:home'], refs: ['home'] }), filter), false, 'a rename of the page')
+  const removed = entry({ writes: ['life:widget:w1', 'widget/w1/filter', 'dash/v1/layout'] })
+  assert.equal(dependsOn(entry({ writes: ['widget/w1/sort'], refs: ['home', 'v1', 'w1'] }), removed), true, 'an edit to the removed widget, even a field it never had')
 })
 
 test('acknowledging passes the revision to later entries of the same owner only', async () => {
@@ -68,12 +77,25 @@ test('a new to-do gets the same id in the prediction and on the server, so a lat
 })
 
 test('waiting is transitive: a change on a row whose add waits on a held database waits too (Ratchet 12c9599b)', () => {
-  const a = entry({ seq: 1, state: 'held', writes: ['page:newdb'] })
-  const b = entry({ seq: 2, writes: ['page:newrow'], refs: ['newdb'] })
+  const a = entry({ seq: 1, state: 'held', writes: ['life:newdb', 'page:newdb'] })
+  const b = entry({ seq: 2, writes: ['life:newrow', 'page:newrow'], refs: ['newdb'] })
   const c = entry({ seq: 3, writes: ['page:newrow'], refs: ['newrow'] })
   const d = entry({ seq: 4, writes: ['task:other'], refs: ['other'] })
   const plan = schedule([d, c, b, a])
   assert.deepEqual(plan.waiting.get(2), [1])
   assert.deepEqual(plan.waiting.get(3), [1], 'through b')
   assert.deepEqual(plan.sendable.map(e => e.seq), [4], 'an unrelated change goes')
+})
+
+test('a database change is named by what he sees: a dashboard by its view, a widget by its heading (Jazz 0409ac87)', () => {
+  const view = { id: 'v-w1', name: 'Table', layout: 'table', columns: [], sort: [], filter: [] }
+  const ws = { pages: [
+    { id: 'runs', title: 'Runs', database: { views: [] } },
+    { id: 'home', title: 'Home', database: { views: [{ id: 'dash', name: 'Overview', layout: 'dashboard', columns: [], sort: [], filter: [], dashboard: { rows: [{ id: 'row1', height: 320, widgets: [{ id: 'w1', width: 12, source: 'runs', view }] }] } }] } },
+  ], tasks: [] } as unknown as Workspace
+  const D = (change: object) => ({ type: 'change-database', pageId: 'home', change: { viewId: 'dash', ...change } }) as unknown as Action
+  assert.equal(labelFor(D({ kind: 'setDashboardFilter', rules: [] }), ws), 'filtered "Overview"')
+  assert.equal(labelFor(D({ kind: 'updateWidget', widgetId: 'w1', fields: { filter: [] } }), ws), 'filtered "Runs · Table"')
+  assert.equal(labelFor(D({ kind: 'removeWidget', widgetId: 'w1' }), ws), 'deleted "Runs · Table"')
+  assert.equal(labelFor(D({ kind: 'swapWidget', widgetId: 'w1', withId: 'w2' }), ws), 'moved "Runs · Table"')
 })

@@ -321,7 +321,7 @@ export function MovePageDialog({ page, onClose }: { page: Page; onClose: () => v
     let stale = false
     const receipt = await run({ type: 'move-page', pageId: page.id, parentId: o.parentId },
       r => ({ text: o.parentId ? `Moved to ${o.label}` : 'Moved to top level', undoOperationId: r.operationId }), undefined,
-      { inlineRefusal: retried ? moveRefusals : moveOrStale, onRefused: m => { if (m === 'Saved elsewhere') stale = true; else setRefused({ key: o.key, label: o.label, text: refusalCopy(m) }) } })
+      { stale: 'rebuild', inlineRefusal: retried ? moveRefusals : moveOrStale, onRefused: m => { if (m === 'Saved elsewhere') stale = true; else setRefused({ key: o.key, label: o.label, text: refusalCopy(m) }) } })
     // Something else was saved since the dialog opened. The move is checked again on the latest pages, once: it
     // either applies or is refused on its row.
     if (stale) return move(o, true)
@@ -454,7 +454,7 @@ export function SidebarTree({ workspace, activeId, today }: { workspace: Workspa
     const text = reorder ? 'Moved' : parent ? `Moved to ${pageLabel(parent, today)}` : 'Moved to top level'
     let stale = false
     const receipt = await run({ type: 'move-page', pageId, parentId: drop.parentId, beforeId: drop.beforeId }, r => ({ text, undoOperationId: r.operationId }), undefined,
-      { inlineRefusal: retried ? dropRefusals : dropOrStale, onRefused: m => { stale = m === 'Saved elsewhere' } })
+      { stale: 'rebuild', inlineRefusal: retried ? dropRefusals : dropOrStale, onRefused: m => { stale = m === 'Saved elsewhere' } })
     if (stale) return dropPage(pageId, drop, true)
     if (receipt && drop.zone === 'inside' && drop.parentId) expand(drop.parentId)
   }

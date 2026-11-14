@@ -189,7 +189,7 @@ export function useSmartRefresh(noteId: string): { state: 'idle' | 'running' | '
     // Another tab or the phone saved meanwhile: the paid result is sent once more on the latest workspace.
     const store = async (result: SmartResult, spec: string, retried = false): Promise<boolean> => {
       let refused = null as string | null
-      const receipt = await run({ type: 'set-smart-note-result', noteId, result, spec }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, { quiet: true, inlineRefusal: retried ? gone : stale, onRefused: m => { refused = m } })
+      const receipt = await run({ type: 'set-smart-note-result', noteId, result, spec }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, { quiet: true, stale: 'rebuild', inlineRefusal: retried ? gone : stale, onRefused: m => { refused = m } })
       if (refused === 'Saved elsewhere') return store(result, spec, true)
       return Boolean(receipt) || refused !== null
     }

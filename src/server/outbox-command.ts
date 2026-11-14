@@ -9,7 +9,7 @@ import { OutboxHeld, type HeldReason, type OutboxBasis } from './outbox-replay.t
 export type OutboxOutcome =
   | { status: 'owner-mismatch'; owner: string }
   | { status: 'applied'; receipt: Receipt; changes: WorkspaceChanges; owner: string }
-  | { status: 'held'; reason: HeldReason; rows: string[]; owner: string }
+  | { status: 'held'; reason: HeldReason; rows: string[]; stale: boolean; owner: string }
   | { status: 'already-applied'; owner: string }
   | { status: 'refused'; message: string; owner: string }
 
@@ -21,7 +21,7 @@ export async function runOutbox(repo: ServerRepository, owner: string, data: Com
     const { receipt, changes } = await repo.executeOutbox({ ...rest, expectedRevision: basis.baseRevision }, basis)
     return { status: 'applied', receipt, changes, owner }
   } catch (error) {
-    if (error instanceof OutboxHeld) return { status: 'held', reason: error.reason, rows: error.rows, owner }
+    if (error instanceof OutboxHeld) return { status: 'held', reason: error.reason, rows: error.rows, stale: error.stale, owner }
     if (error instanceof DomainError) {
       // A tombstone: applied long ago, its receipt compacted; nothing to do (§5 step 1).
       if (/already applied/i.test(error.message)) return { status: 'already-applied', owner }
