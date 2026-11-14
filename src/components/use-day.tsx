@@ -192,14 +192,21 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   // ---- B98: the outbox (outbox.md). This tab's owner's entries, mirrored from the store; the store is the truth.
   const store = useRef<OutboxStore | null>(transport.runOutbox && typeof indexedDB !== 'undefined' ? idbOutboxStore() : null)
   const entries = useRef<OutboxEntry[]>([])
+  /** Entries shown as made: stored before this load, or left after a send that didn't land. */
+  const kept = useRef(new Set<number>())
   const durable = useRef(true), legacy = useRef(false), inFlight = useRef(new Set<number>())
   const [outbox, setOutbox] = useState<OutboxView>(emptyOutbox)
   /** The workspace with every pending change applied, in order (§4): what changes are built on, and what's shown meanwhile. */
-  const predicted = useCallback((): Workspace | null => {
+  /**
+   * `shown`: only changes this tab isn't sending live right now (stored from before, or kept after a failed send). A
+   * change on its way is shown by today's own marks (a tick's hold, a cell's pending value), which the prediction would
+   * pre-empt: a ticked to-do would leave an Open list at once instead of after its hold.
+   */
+  const predicted = useCallback((shown = false): Workspace | null => {
     let ws = wsRef.current
     if (!ws) return null
     for (const e of entries.current) {
-      if (e.state !== 'pending' || e.action.type === 'undo') continue
+      if (e.state !== 'pending' || e.action.type === 'undo' || (shown && !kept.current.has(e.seq!))) continue
       try { ws = applyCommand(ws, { operationId: e.operationId, expectedRevision: ws.revision, action: e.action }).workspace } catch { /* the server will say */ }
     }
     return ws
@@ -212,19 +219,19 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   /** The server's workspace; what's shown has his pending changes on top, so a tick never shows unticked first (Jazz §8.1). */
   const adopt = useCallback((ws: Workspace) => {
     wsRef.current = ws
-    setWorkspace(entries.current.some(e => e.state === 'pending') ? predicted() ?? ws : ws)
+    setWorkspace(entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!)) ? predicted(true) ?? ws : ws)
   }, [predicted])
   const showOutbox = useCallback(() => {
     const held = entries.current.find(e => e.state === 'held') ?? null
     const pending = entries.current.filter(e => e.state === 'pending')
     setOutbox({ pending: pending.length, held, waiting: held ? pending.filter(e => e.seq! > held.seq! && dependsOn(e, held)).length : 0, durable: durable.current, keptBack: legacy.current && pending.length > 0 })
-    if (pending.length) { const shown = predicted(); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
+    if (pending.some(e => kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
   /** Sends one stored entry and makes its answer what `transport.run` would have returned, or an `OutboxStop`. */
   const sendEntry = useCallback(async (entry: OutboxEntry): Promise<{ workspace: Workspace; receipt: Receipt }> => {
     const s = store.current!, seq = entry.seq!
     const held = entries.current.find(h => h.state === 'held' && h.seq! < seq && dependsOn(entry, h))
-    if (held) throw new OutboxStop('waiting')
+    if (held) { kept.current.add(seq); throw new OutboxStop('waiting') }
     inFlight.current.add(seq)
     try {
       // One tab sends an owner's changes at a time; without Web Locks two may send one, and its receipt answers the second (§7).
@@ -247,8 +254,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           throw new OutboxStop('held', answer.message ?? answer.reason)
         }
         case 'owner-mismatch': throw new OutboxStop('owner')
-        case 'offline': throw new OutboxStop('offline')
-        case 'failed': throw new OutboxStop('failed', answer.message)
+        case 'offline': kept.current.add(seq); throw new OutboxStop('offline')
+        case 'failed': kept.current.add(seq); throw new OutboxStop('failed', answer.message)
         case 'missing': {
           // An older build is serving (a rollback): this change goes as before; stored ones wait for the outbox (§11).
           legacy.current = true
@@ -265,7 +272,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     const all = storedAtMount.current
     if (!all || !owner) return
     storedAtMount.current = null
-    entries.current = [...(await all).filter(e => e.owner === owner), ...entries.current.filter(e => !e.seq)]
+    const mine = (await all).filter(e => e.owner === owner)
+    for (const e of mine) kept.current.add(e.seq!)
+    entries.current = [...mine, ...entries.current.filter(e => !mine.some(m => m.seq === e.seq))]
   }, [])
   const refresh = useCallback(async (triggerOperationId?: string) => {
     const operationId=newOperationId(),started=performance.now()
