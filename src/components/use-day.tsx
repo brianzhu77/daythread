@@ -166,6 +166,8 @@ interface WorkspaceContextValue {
   outbox: OutboxView
   discardHeld(): Promise<void>
   keepMine(): Promise<void>
+  settleOutbox(): Promise<number>
+  clearOutbox(): Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -562,6 +564,18 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     return () => window.removeEventListener('beforeunload', before)
   }, [])
 
+  /** Sign-out (§7, §8.5): sends what it can; how many changes are still only on this device. */
+  const settleOutbox = useCallback(async (): Promise<number> => {
+    if (navigator.onLine !== false) await drain()
+    return entries.current.length
+  }, [drain])
+  /** Sign-out and Delete account, after he confirmed: this account's changes leave the device. */
+  const clearOutbox = useCallback(async () => {
+    if (knownOwner) await store.current?.clearOwner(knownOwner).catch(() => undefined)
+    entries.current = []
+    showOutbox()
+  }, [showOutbox])
+
   const latest = useCallback(() => wsRef.current, [])
   const value = useMemo(
     () => ({
@@ -582,8 +596,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       outbox,
       discardHeld,
       keepMine,
+      settleOutbox,
+      clearOutbox,
     }),
-    [workspace, latest, loadError, offline, saveState, saveError, lastFailed, run, retry, reload, refresh, addSampleData, ticks, toggleTask, outbox, discardHeld, keepMine],
+    [workspace, latest, loadError, offline, saveState, saveError, lastFailed, run, retry, reload, refresh, addSampleData, ticks, toggleTask, outbox, discardHeld, keepMine, settleOutbox, clearOutbox],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }
