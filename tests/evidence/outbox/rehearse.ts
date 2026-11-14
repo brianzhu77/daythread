@@ -51,7 +51,7 @@ try {
     if (!existsSync(file)) { loaded[t] = 0; continue }
     const rows = JSON.parse(readFileSync(file, 'utf8')) as Array<Record<string, unknown>>
     loaded[t] = rows.length
-    if (rows.length) await sql.unsafe(`insert into ${schema}.${t} select * from json_populate_recordset(null::${schema}.${t}, $1::json)`, [JSON.stringify(rows)])
+    if (rows.length) await sql.unsafe(`insert into ${schema}.${t} select * from json_populate_recordset(null::${schema}.${t}, $1::text::json)`, [JSON.stringify(rows)])
   }
   const accounts = (await sql.unsafe(`select user_id::text as id, (select count(*) from ${schema}.pages p where p.workspace_id = w.id)::int as pages from ${schema}.workspaces w where user_id is not null order by 2 desc`)) as Array<{ id: string; pages: number }>
   const owner = accounts[0]?.id
