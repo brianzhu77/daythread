@@ -84,8 +84,8 @@ entry. A domain refusal holds it (§6). A network failure leaves it pending.
 
 **Live.** As today: `run()` sends with `expectedRevision` = the tab's revision; one at a time, in the tab's queue.
 If that is refused only because the revision moved ("Saved elsewhere"), the entry is resent once at once with
-`basis: 'rows'` (below) instead of failing into Retry, so a live change and a replayed one follow the same rule. (A
-proposal: live sends keep today's whole-revision refusal otherwise; see §11.)
+`basis: 'rows'` (below) instead of failing into Retry, so a live change and a replayed one follow the same rule. (Lead's
+decision: live sends keep today's whole-revision refusal otherwise; §12.)
 
 **Replay** (an entry left from an earlier load, or one whose live send failed on the network) is sent with
 `basis: 'rows'`, its original `baseRevision` and `operationId`, and `ownRevisions`: the revisions produced by this
