@@ -440,6 +440,39 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 18c behind another tab's held change, its unrelated change still goes and B's waits ("${text}")`, statusOf('Call the bank') === 'done' && statusOf('Water the plants') === 'open' && /ticked "Water the plants" · changed since|was changed elsewhere/.test(text) && /1 later change waiting/.test(text), `bank ${statusOf('Call the bank')}, water ${statusOf('Water the plants')}`)
     await context.close()
   }
+  // 19. A cell edited from a tab behind a rename of its row elsewhere: held only because the row moved on, so it's given
+  //     back to the cell, which builds it again on the latest row, as after "Saved elsewhere" on main (Lead bd4cc39e).
+  //     Both land; no banner; nothing left on the device.
+  const outboxCount = p => p.evaluate(() => new Promise(resolve => { const r = indexedDB.open('daythread-outbox', 1); r.onsuccess = () => { const c = r.result.transaction('entries').objectStore('entries').count(); c.onsuccess = () => resolve(c.result) }; r.onerror = () => resolve(-1) }))
+  const stage = async page => { await page.locator('[data-cell*="|r1|st"]').first().click(); await page.getByRole('option', { name: 'Done' }).click().catch(() => page.getByText('Done', { exact: true }).last().click()); await page.keyboard.press('Escape') }
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/pages?page=runs`); await page.locator('[data-cell*="|r1|st"]').first().waitFor({ timeout: 20000 }); await settle(page)
+    await elsewhere({ type: 'rename-page', pageId: 'r1', title: 'Alpha two' })
+    await stage(page); await wait(2500); await settle(page)
+    const row = stored().pages.find(p => p.id === 'r1'), banner = await page.locator('.banner.save-failed').count(), left = await outboxCount(page)
+    ok(`${tag} 19 a cell edited from behind a rename of its row is built again on the latest row: both land, nothing held or left`, row?.values?.st === 'b' && row?.title === 'Alpha two' && banner === 0 && left === 0, `stage ${row?.values?.st}, title ${row?.title}, banner ${banner}, left ${left}`)
+    await context.close()
+  }
+  // 19b. The same, but the tab closes after the edit is given back and before it's built again: it isn't lost; the next
+  //      open shows it held, for him to keep or discard (Lead bd4cc39e).
+  {
+    reseed(); const { context, page } = await fresh()
+    await page.goto(`${base}/pages?page=runs`); await page.locator('[data-cell*="|r1|st"]').first().waitFor({ timeout: 20000 }); await settle(page)
+    await elsewhere({ type: 'rename-page', pageId: 'r1', title: 'Alpha two' })
+    // Once the edit has been answered, every load hangs: the refresh before the rebuild never comes back.
+    let answered = false
+    page.on('response', r => { if (r.url().includes('/_serverFn/cedd5fc6')) answered = true })
+    await page.route('**/_serverFn/**', async route => { if (answered && !route.request().url().includes('cedd5fc6')) await new Promise(() => {}); else await route.continue().catch(() => {}) })
+    await stage(page)
+    for (let i = 0; i < 40 && !answered; i++) await wait(100)
+    await wait(400)
+    await page.close({ runBeforeUnload: false })
+    const again = await context.newPage(); await again.goto(`${base}/pages?page=runs`); await again.locator('.banner.save-failed').waitFor({ timeout: 10000 }).catch(() => {}); await settle(again)
+    const text = (await again.locator('.banner.save-failed').innerText().catch(() => '')).replace(/\s+/g, ' ').trim()
+    ok(`${tag} 19b closed between being given back and built again: the edit is kept and shown held ("${text}")`, stored().pages.find(p => p.id === 'r1')?.values?.st === 'a' && /changed elsewhere/.test(text) && /Keep mine/.test(text), `answered ${answered}`)
+    await context.close()
+  }
   // 10c. No IndexedDB at all (not just failing): a change on its way still warns after a second and guards the leave.
   {
     reseed(); const { context, page } = await fresh()

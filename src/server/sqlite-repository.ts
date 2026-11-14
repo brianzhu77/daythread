@@ -10,7 +10,7 @@ import { todayIn, type ServerRepository } from './repository.ts'
 import { completeLegacyColumns, legacyTables, readLegacyWorkspace } from './sqlite-legacy.ts'
 import { commandLogFields, debugLog, logOperationId } from './debug-log.ts'
 import { planWrites, rowsOf } from './workspace-rows.ts'
-import { OutboxHeld, readsBeyondApplied, replayRule, rowConflicts, trackedAfter, writeKeys, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
+import { OutboxHeld, readsBeyondApplied, replayRule, rowConflicts, trackedAfter, conflictKeys, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
 
 const applicationId = 0x44544852
 /** Layout 8: the v2 workspace as one JSON document in one row. Layouts 1–7 are the v1 entity tables, converted on first open. */
@@ -122,11 +122,14 @@ export class SqliteWorkspaceRepository implements ServerRepository {
    */
   private outboxTables(db: DatabaseSync): void {
     db.exec(`CREATE TABLE IF NOT EXISTS row_revisions (key TEXT PRIMARY KEY, revision INTEGER NOT NULL) STRICT;
-      CREATE TABLE IF NOT EXISTS outbox_tracking (id INTEGER PRIMARY KEY CHECK(id = 1), tracked_through INTEGER, untracked_until INTEGER NOT NULL, forgotten_through INTEGER NOT NULL) STRICT`)
+      CREATE TABLE IF NOT EXISTS outbox_tracking (id INTEGER PRIMARY KEY CHECK(id = 1), tracked_through INTEGER, untracked_until INTEGER NOT NULL, forgotten_through INTEGER NOT NULL) STRICT;
+      CREATE TABLE IF NOT EXISTS outbox_parts (id INTEGER PRIMARY KEY CHECK(id = 1), tracked_through INTEGER NOT NULL) STRICT`)
   }
   private tracking(db: DatabaseSync): RowTracking {
     const t = db.prepare('SELECT tracked_through, untracked_until, forgotten_through FROM outbox_tracking WHERE id = 1').get() as { tracked_through: number | null; untracked_until: number; forgotten_through: number } | undefined
-    return t ? { trackedThrough: t.tracked_through, untrackedUntil: t.untracked_until, forgottenThrough: t.forgotten_through } : { trackedThrough: null, untrackedUntil: 0, forgottenThrough: 0 }
+    // The last revision whose parts were stamped: a build that stamped rows but not parts left a gap (Lead 62f4818c).
+    const parts = db.prepare('SELECT tracked_through FROM outbox_parts WHERE id = 1').get() as { tracked_through: number } | undefined
+    return t ? { trackedThrough: parts?.tracked_through ?? null, untrackedUntil: t.untracked_until, forgottenThrough: t.forgotten_through } : { trackedThrough: null, untrackedUntil: 0, forgottenThrough: 0 }
   }
   /**
    * One command on the current document, in the caller's transaction: applied (`expected`: its own revision check, or
@@ -139,17 +142,17 @@ export class SqliteWorkspaceRepository implements ServerRepository {
     let rule: ReturnType<typeof replayRule> | undefined
     if (outbox && !seen) {
       rule = replayRule(outbox, current.revision, tracking)
-      if (rule.rule === 'whole') throw new OutboxHeld(rule.reason)
+      if (rule.rule === 'whole') throw new OutboxHeld(rule.reason, [], rule.stale)
     }
-    const result = applyCommand(current, expected === 'latest' || rule?.rule === 'rows' ? { ...command, expectedRevision: current.revision } : command)
+    const result = applyCommand(current, expected === 'latest' || rule !== undefined ? { ...command, expectedRevision: current.revision } : command)
     const after = result.workspace
     if (after.revision !== current.revision) {
-      const keys = writeKeys(planWrites(rowsOf(current), after).write)
+      const { writes: keys, guards } = conflictKeys(current, after, planWrites(rowsOf(current), after).write)
       if (outbox && rule?.rule === 'rows') {
-        if (readsBeyondApplied(command.action, result.receipt)) throw new OutboxHeld('changed-since')
+        if (readsBeyondApplied(command.action, result.receipt)) throw new OutboxHeld('changed-since', [], true)
         const read = db.prepare('SELECT revision FROM row_revisions WHERE key = ?')
-        const conflicts = rowConflicts(keys, key => (read.get(key) as { revision: number } | undefined)?.revision, outbox)
-        if (conflicts.length) throw new OutboxHeld('conflict', conflicts)
+        const conflicts = rowConflicts([...keys, ...guards], key => (read.get(key) as { revision: number } | undefined)?.revision, outbox)
+        if (conflicts.length) throw new OutboxHeld('conflict', conflicts, true)
       }
       this.write(db, after)
       const stampRow = db.prepare('INSERT INTO row_revisions (key, revision) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET revision = excluded.revision')
@@ -160,6 +163,7 @@ export class SqliteWorkspaceRepository implements ServerRepository {
       db.prepare(`INSERT INTO outbox_tracking (id, tracked_through, untracked_until, forgotten_through) VALUES (1, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET tracked_through = excluded.tracked_through, untracked_until = excluded.untracked_until, forgotten_through = excluded.forgotten_through`)
         .run(after.revision, next.untrackedUntil, forgot ? Math.max(tracking.forgottenThrough, after.revision) : tracking.forgottenThrough)
+      db.prepare('INSERT INTO outbox_parts (id, tracked_through) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET tracked_through = excluded.tracked_through').run(after.revision)
     }
     return { result: { ...result, changes: changesBetween(current, after) }, before: current.revision }
   }

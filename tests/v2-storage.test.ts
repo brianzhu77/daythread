@@ -44,6 +44,12 @@ outboxContract('SQLite v2', async () => {
     create: f.create,
     // A build without the outbox writes without stamping: the revision moves past what was stamped.
     olderBuildWrote: async () => edit(data => { data.revision += 1 }),
+    // A build that stamps rows but knows nothing of parts: rows stamped through the new revision, parts not.
+    partsBehind: async () => {
+      edit(data => { data.revision += 1 })
+      const db = new DatabaseSync(f.path)
+      try { db.prepare('UPDATE outbox_tracking SET tracked_through = (SELECT revision FROM workspace WHERE id = 1)').run() } finally { db.close() }
+    },
     restoredFromBackup: async back => edit(data => { data.revision -= back }),
     // Past the 500 + 3,000 receipt window: the next command compacts the old receipts out for good.
     forgetOperations: async repo => {

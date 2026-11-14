@@ -65,7 +65,7 @@ export function useRunFromButton() {
   return async (action: Action, notice: NoticeArg | undefined, failed: string): Promise<Receipt | null> => {
     let stale = false
     const said = () => toast(failed, { timeout: 6000 })
-    const first = await run(action, notice, undefined, { inlineRefusal: /Saved elsewhere/, onRefused: () => { stale = true }, quiet: true, onFailure: said })
+    const first = await run(action, notice, undefined, { stale: 'rebuild', inlineRefusal: /Saved elsewhere/, onRefused: () => { stale = true }, quiet: true, onFailure: said })
     return first ?? (stale ? run(action, notice, undefined, { quiet: true, onFailure: said }) : null)
   }
 }

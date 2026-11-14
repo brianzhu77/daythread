@@ -36,7 +36,7 @@ const sql = postgres(url, { max: 4, onnotice: () => {} })
 const repoOf = (b: Build) => new b.Repo(b.client(sql), schema)
 // The tables a workspace lives in; others in a backup (accounts, sessions, push) belong to sign-in and stay out.
 const tables = ['workspaces', 'pages', 'tasks', 'deleted_tasks', 'comment_threads', 'task_links', 'operations']
-const newColumns = new Set(['row_revision', 'settings_revision', 'rows_tracked_through', 'rows_untracked_until', 'receipts_forgotten_through'])
+const newColumns = new Set(['row_revision', 'settings_revision', 'rows_tracked_through', 'rows_untracked_until', 'receipts_forgotten_through', 'parts_tracked_through'])
 const counts = async () => Object.fromEntries(await Promise.all(tables.map(async t => [t, Number((await sql.unsafe(`select count(*)::int as n from ${schema}.${t}`))[0]!.n)])))
 /** The workspace as a build reads it, without what only Undo or replays use. */
 const read = async (b: Build, owner: string) => { const ws = await b.asOwner(owner, () => repoOf(b).load()); const { undo: _u, receipts: _r, ...rest } = ws; return rest }
@@ -64,7 +64,8 @@ try {
   for (let i = 0; i < 2; i++) { const started = performance.now(); await repoOf(self).prepare(); times.push(Math.round(performance.now() - started)) }
   const columns = (await sql.unsafe(`select table_name, column_name from information_schema.columns where table_schema = $1`, [schema])) as Array<{ table_name: string; column_name: string }>
   const added = columns.filter(c => newColumns.has(c.column_name)).map(c => `${c.table_name}.${c.column_name}`)
-  ok('2 this build migrates, and again with nothing to do', added.length === 9, `${times[0]} ms, then ${times[1]} ms; added ${added.length} columns`)
+  const partsTable = columns.some(c => c.table_name === 'part_revisions')
+  ok('2 this build migrates, and again with nothing to do', added.length === 10 && partsTable, `${times[0]} ms, then ${times[1]} ms; added ${added.length} columns${partsTable ? ' and part_revisions' : ', no part_revisions'}`)
 
   // 3. Nothing he has changed: the same rows, and the same workspace read by this build as the live build read before.
   const after = await counts(), wsAfter = await read(self, owner)

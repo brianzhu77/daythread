@@ -1,4 +1,10 @@
 // B72 slowed-save replay. Usage: node b72.mjs <baseUrl> [label]. Seeds sample data in a fresh SQLite workspace.
+// How it's run (Lead 2884003e): a DEV server, with the dev menu on (its "Add sample data" banner is what seeds), on a
+// SQLite store that doesn't exist yet, sign-in off. ONLY=chromium|webkit runs one engine. From the repo root:
+//   rm -f /tmp/b72.sqlite*; DAYTHREAD_AUTH=off DAYTHREAD_STORAGE=sqlite DAYTHREAD_SQLITE_PATH=/tmp/b72.sqlite VITE_DEV_MENU=1 \
+//     node node_modules/.bin/vite dev --host 127.0.0.1 --port 3817 --strictPort &
+//   ONLY=chromium node tests/evidence/b72-checkbox/b72.mjs http://127.0.0.1:3817 outbox
+// A fresh store per engine: stop the server, remove the store, start again.
 import { chromium, webkit } from '/Users/dogrod/Developer/daythread/node_modules/playwright/index.mjs'
 const base = process.argv[2], label = process.argv[3] ?? base
 const SLOW = 1000

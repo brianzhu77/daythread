@@ -294,7 +294,7 @@ export function useCommitCell() {
         }
         return said ? { text: said, undoOperationId: r.operationId } : null
       }, newId(),
-      { inlineRefusal: /Saved elsewhere|Changed elsewhere|This row moved|make a loop/, onRefused: m => {
+      { stale: 'rebuild', inlineRefusal: /Saved elsewhere|Changed elsewhere|This row moved|make a loop/, onRefused: m => {
         refused = true
         // A loop stays a loop, so it says why and goes back, rather than "not saved" with a Retry that can't work.
         if (m === 'make a loop') { show(null); toast(loopRefusal, { timeout: 6000 }); return }
@@ -637,7 +637,7 @@ export function useMoveRows(db: Page & { database: Database }, view: View, conte
     function send() {
       show(false)
       void run(todoItems ? { type: 'edit-todos', items: todoItems, today: todayIso() } : { type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: /couldn't/.test(r.message) ? r.message : notice, undoOperationId: r.operationId }), newId(), {
-        quiet: true, inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { show(null); toast('A row changed elsewhere, so nothing moved', { timeout: 6000 }) },
+        quiet: true, stale: 'outcome', inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { show(null); toast('A row changed elsewhere, so nothing moved', { timeout: 6000 }) },
       }).then(r => { if (r) show(null); else if ([...pendingCells.values()].some(p => p.databaseId === db.id && p.retry === send)) show(true) })
     }
     send()
@@ -781,7 +781,7 @@ export function useUndoKey() {
     if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== 'z' || (e.target as HTMLElement).tagName === 'INPUT') return false
     e.preventDefault()
     const undo = latest()?.undo
-    if (undo) void run({ type: 'undo', targetOperationId: undo.operationId }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
+    if (undo) void run({ type: 'undo', targetOperationId: undo.operationId }, { text: 'Undone' }, undefined, { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
     else toast("Can't undo · edited since", { timeout: 6000 })
     return true
   }

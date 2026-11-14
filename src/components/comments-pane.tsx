@@ -49,7 +49,7 @@ const refusals = /^.*(Saved elsewhere|Changed elsewhere|That comment's gone|char
  */
 async function send(run: Run, action: Parameters<Run>[0], { operationId = newOperationId(), notice, quiet }: { operationId?: string; notice?: Parameters<Run>[1]; quiet: boolean }): Promise<Sent> {
   let refusal: string | null = null
-  const attempt = () => run(action, notice, operationId, { quiet, inlineRefusal: refusals, onRefused: message => { refusal = message } })
+  const attempt = () => run(action, notice, operationId, { quiet, stale: 'rebuild', inlineRefusal: refusals, onRefused: message => { refusal = message } })
   let receipt = await attempt()
   if (!receipt && refusal !== null && /Saved elsewhere/.test(refusal)) { refusal = null; receipt = await attempt() }
   if (receipt) return 'saved'

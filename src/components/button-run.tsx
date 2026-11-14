@@ -52,7 +52,7 @@ function useTap(onEdit: () => void) {
         const last = [...steps].reverse().find(changesStored)
         const notice = (r: { message: string; operationId: string; entityId?: string }) => ({ text: r.message, undoOperationId: r.operationId, ...(last?.kind === 'add-row' && r.entityId ? { extra: { label: 'Open', run: () => { void navigate({ href: `/pages?page=${encodeURIComponent(r.entityId!)}` }) } } } : {}) })
         let refusal: string | null = null
-        const once = () => run(action, notice, operationId, { inlineRefusal: refusals, onRefused: message => { refusal = message } })
+        const once = () => run(action, notice, operationId, { stale: 'rebuild', inlineRefusal: refusals, onRefused: message => { refusal = message } })
         let receipt = await once()
         // A tab behind the workspace is refused whatever it sends, and comes back up to date; the keys in the action then decide (§4.8).
         if (!receipt && refusal !== null && /Saved elsewhere/.test(refusal)) { refusal = null; receipt = await once() }
