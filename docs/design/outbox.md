@@ -226,12 +226,31 @@ Also in the same PR (Lead 37e856f8): `tests/evidence/dashboard/dashboard.mjs` se
 `/ finds Database by "dashboard"` step, so WebKit's "access control checks" message (a fetch started during unload,
 reported by Playwright as a page error even when caught; Roadbuster dc9541ce) no longer fails "no page errors".
 
-## 11. Open for sign-off
+## 11. Release and rollback (Lead 87eca3cf)
 
-- The live resend on "Saved elsewhere" (§5): the same row rule for live changes as for replays. Without it, a change
-  made on the phone while the desktop edits another page fails into Retry live, then succeeds as a replay after a
-  reload, which reads as inconsistent. My recommendation: yes.
-- Whether a tab that is **not durable** should get a `beforeunload` prompt while commands are pending (desktop only).
-  Lead said no prompts (37e856f8) for the durable case; this is the case where nothing is kept. My recommendation:
-  yes, since it is the only protection left there, and it never shows when storage works.
-- Discard / Apply mine anyway as the recovery actions, not dismissable while held (Jazz may shape the wording).
+- **Migration:** additive and nullable, no backfill, through the existing runner, backup first. The gate rehearses it on
+  a copy of his data, and runs the floor build 4dcde91a and the build live at the time against the migrated schema.
+- **An old tab open during the deploy** sends commands without `basis`: the server treats them exactly as today
+  (whole-revision check) and still stamps the rows they write, so nothing it does escapes the row check later. The
+  gate sends such a command from the previous build's bundle against the new server.
+- **A rollback, then forward again.** A build without the outbox writes rows but doesn't stamp their `revision`, so on
+  the way forward those writes would be invisible to the row check, and a replay could overwrite them. So the new code
+  also keeps `workspaces.rows_tracked_through` (the last revision it stamped). When it commits and finds the workspace
+  revision ahead of that, an older build wrote in between: it records `rows_untracked_until` = that revision. A replay
+  whose `baseRevision` is below `rows_untracked_until` gets the whole-revision rule (a conflict unless nothing moved):
+  held, never overwriting. The gate covers it: new → floor (write a row) → new, then replay an entry made before.
+- **A rollback while entries are stored:** the older build ignores the database (§7); a new client talking to an older
+  server sends `basis`, which the older server's schema strips, so it gets today's whole-revision check: a conflict is
+  held, never applied over newer data.
+
+## 12. Decided
+
+- **One rule for live and replayed changes** (Lead 87eca3cf): a live change refused only because the revision moved is
+  resent once at once with `basis: 'rows'`.
+- **`beforeunload` only when the tab couldn't store anything** (Lead 87eca3cf): while a command is pending that never
+  reached IndexedDB; never when storage works.
+- **Held changes block only their dependants** (Bumblebee d21888b7, Lead 87eca3cf): rows shared with the held entry,
+  which includes ids it created (a created row is in its write set). If the PR finds a dependency the entries can't
+  see, it says so here and that command falls back to blocking behind the held entry, with the notice not
+  dismissable and its count of waiting changes. Nothing ever waits silently behind a notice he can close.
+- Recovery actions: Discard, and Apply mine anyway for a conflict (Lead's "Keep mine"); wording is Jazz's (§8).
