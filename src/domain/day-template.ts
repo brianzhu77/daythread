@@ -66,9 +66,20 @@ export function templateRows(nodes: EditorNode[]): EditorNode[] {
 
 /** The page is still the template's copy as it was made: same types, words and nesting (ids aside). */
 export function isUntouchedCopy(template: Page, nodes: readonly EditorNode[]): boolean {
-  // A synced block's lines aren't this page's writing: they're the same on every page, or another's edit would make it look touched.
-  const shape = (list: readonly EditorNode[]): unknown[] => list.map(n => (isSyncedBlock(n) ? [n.type] : [n.type, inlineText(n.content).trim(), shape(n.children ?? [])]))
-  return JSON.stringify(shape(nodes)) === JSON.stringify(shape(pageFromTemplate(template, null)))
+  return shapeOf(nodes) === shapeOf(pageFromTemplate(template, null))
+}
+// A synced block's lines aren't this page's writing: they're the same on every page, or another's edit would make it look touched.
+const shape = (list: readonly EditorNode[]): unknown[] => list.map(n => (isSyncedBlock(n) ? [n.type] : [n.type, inlineText(n.content).trim(), shape(n.children ?? [])]))
+const shapeOf = (list: readonly EditorNode[]): string => JSON.stringify(shape(list))
+
+/**
+ * Whether a day page is still as a new day is made today: the day template's copy, or the built-in headings with no
+ * template. For a reader of many days: what a new day is made from is worked out once.
+ */
+export function untouchedDay(ws: Workspace): (page: Page) => boolean {
+  const template = defaultTemplate(ws, dayPagesTarget)
+  const made = shapeOf(template ? pageFromTemplate(template, null) : builtInDayNodes())
+  return page => page.type === 'daily' && shapeOf(pageNodes(page)) === made
 }
 
 // B74: dividers, toggles and code blocks are his structure too (his Day template's two dividers were dropped).

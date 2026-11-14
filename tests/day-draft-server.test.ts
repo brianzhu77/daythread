@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { harness, dayId, today, tomorrow, todo, under } from './v2-helpers.ts'
-import { withFallback } from '../src/server/model/day-draft.ts'
+import { harness, dayId, today, tomorrow, todo, under, para, text } from './v2-helpers.ts'
+import { buildDayDraftRequest, withFallback } from '../src/server/model/day-draft.ts'
 
 // B77 server side: what the app adds without the model, and what "more open" lists (Bumblebee 98e0dcb9, 959b8a91).
 test('draft server: planned-for-today is forced in; "more open" is only what the morning covers: yesterday, overdue or due', () => {
@@ -35,4 +35,21 @@ test('draft server: a planned-for-today to-do the model left out comes back as a
   let n = 0
   const { items } = withFallback(h.ws, page, [], () => `f${++n}`)
   assert.deepEqual(items.map(i => [i.taskId, i.source, i.place]), [[t.id, 'fallback', 'after']])
+})
+
+test('draft server: a smart note block on the day, or on an earlier day, is not sent, as a database view is not', () => {
+  const smart = { id: 's1', type: 'smartNote', props: { noteId: 'n1' }, children: [] }
+  const sent = (withNote: boolean) => {
+    const h = harness()
+    h.day(today)
+    h.save(dayId(today), d => [...d, para('y', text('Yesterday words')), ...(withNote ? [{ ...smart, id: 's0' }] : [])])
+    h.day(tomorrow)
+    h.save(dayId(tomorrow), d => [...d, para('a', text('Before')), ...(withNote ? [smart] : []), para('b', text('After'))])
+    return buildDayDraftRequest(h.ws, h.page(dayId(tomorrow)))
+  }
+  // The earlier page's edit time is the clock's, so two builds a minute apart still compare.
+  const anyIds = (s: string) => s.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, 'ID').replace(/last edited [^=]*/g, 'last edited ')
+  const withNote = sent(true)
+  assert.equal(anyIds(JSON.stringify(withNote.messages)), anyIds(JSON.stringify(sent(false).messages)))
+  assert.ok([...withNote.blocks.values()].every(n => n.type !== 'smartNote'))
 })

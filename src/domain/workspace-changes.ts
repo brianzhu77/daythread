@@ -1,6 +1,7 @@
 // What a command changed, as the browser needs it: the pages and tasks that differ, by id, instead of the whole
 // workspace (docs/research/database-fit.md §5: every response carried all of it, ~0.85 MB per 1,000 pages). Pure, shared
 // by the server, which makes it, and the browser, which applies it to the copy the command was sent from.
+import type { SmartNote } from './smart-note.ts'
 import { expandedWorkspace, strippedWorkspace, type SyncedRecord } from './synced.ts'
 import type { CommentThread } from './comments.ts'
 import type { Automation } from './automations.ts'
@@ -29,6 +30,7 @@ export interface WorkspaceChanges {
   deletedTasks?: Task[]
   /** Synced blocks' records, whole, when any changed. Pages travel without their lines: the browser expands them from these. */
   synced?: SyncedRecord[]
+  smartNotes?: SmartNote[]
   /** Comments, whole, when any changed. A person's notes stay small, and a tab that doesn't know them ignores this. */
   threads?: CommentThread[]
   /** To-dos' rules, whole, when they changed; null when the last went. */
@@ -61,12 +63,13 @@ const undoMarker = (ws: Workspace): WorkspaceChanges['undo'] => (ws.undo ? { ope
 export function changesBetween(before: Workspace, after: Workspace): WorkspaceChanges {
   const deleted = JSON.stringify(before.deletedTasks) === JSON.stringify(after.deletedTasks) ? {} : { deletedTasks: after.deletedTasks }
   const synced = JSON.stringify(before.synced ?? []) === JSON.stringify(after.synced ?? []) ? {} : { synced: after.synced ?? [] }
+  const smartNotes = JSON.stringify(before.smartNotes ?? []) === JSON.stringify(after.smartNotes ?? []) ? {} : { smartNotes: after.smartNotes ?? [] }
   const threads = JSON.stringify(before.threads ?? []) === JSON.stringify(after.threads ?? []) ? {} : { threads: after.threads ?? [] }
   const rules = JSON.stringify(before.todoAutomations ?? []) === JSON.stringify(after.todoAutomations ?? []) ? {} : { todoAutomations: after.todoAutomations?.length ? after.todoAutomations : null }
   const links = JSON.stringify(before.links ?? []) === JSON.stringify(after.links ?? []) ? {} : { links: after.links ?? [] }
   return {
     from: before.revision, revision: after.revision, timezone: after.timezone, ...(after.weekStart === 1 ? { weekStart: 1 as const } : {}), ...(after.todoAutomationsUnreadable ? { todoAutomationsUnreadable: true as const } : {}), undo: undoMarker(after),
-    pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced, ...threads, ...links, ...rules,
+    pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced, ...smartNotes, ...threads, ...links, ...rules,
   }
 }
 
@@ -82,13 +85,14 @@ function applyList<T extends { id: string }>(before: readonly T[], changes: List
 export function applyChanges(ws: Workspace, changes: WorkspaceChanges): Workspace | null {
   if (ws.revision !== changes.from) return null
   const pages = applyList(ws.pages, changes.pages), tasks = applyList(ws.tasks, changes.tasks)
-  const synced = changes.synced ?? ws.synced, threads = changes.threads ?? ws.threads, links = changes.links ?? ws.links, rules = changes.todoAutomations !== undefined ? changes.todoAutomations : ws.todoAutomations
+  const synced = changes.synced ?? ws.synced, smartNotes = changes.smartNotes ?? ws.smartNotes, threads = changes.threads ?? ws.threads, links = changes.links ?? ws.links, rules = changes.todoAutomations !== undefined ? changes.todoAutomations : ws.todoAutomations
   if (!pages || !tasks) return null
-  const { undo: _undo, weekStart: _weekStart, threads: _threads, links: _links, todoAutomations: _rules, todoAutomationsUnreadable: _unread, ...rest } = ws
+  const { undo: _undo, smartNotes: _smartNotes, weekStart: _weekStart, threads: _threads, links: _links, todoAutomations: _rules, todoAutomationsUnreadable: _unread, ...rest } = ws
   return expandedWorkspace({
     ...rest, revision: changes.revision, timezone: changes.timezone, ...(changes.weekStart === 1 ? { weekStart: 1 as const } : {}), ...(changes.todoAutomationsUnreadable ? { todoAutomationsUnreadable: true as const } : {}), pages, tasks,
     deletedTasks: changes.deletedTasks ?? ws.deletedTasks, receipts: {},
     ...(synced ? { synced } : {}),
+    ...(smartNotes?.length ? { smartNotes } : {}),
     ...(threads?.length ? { threads } : {}),
     ...(links?.length ? { links } : {}),
     ...(rules?.length ? { todoAutomations: rules } : {}),

@@ -12,6 +12,7 @@ import { DatabaseCellEditor } from './database-block'
 import { CsvImportHost } from './csv-import'
 import { PeekHost } from './peek'
 import { AutomationsHost } from './automation-sheet'
+import { SmartNoteSetupHost } from './smart-note-setup'
 import { ButtonEditorHost } from './button-editor'
 import { CommentsPaneHost } from './comments-pane'
 import { IconPickerHost } from './icon-picker'
@@ -105,6 +106,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <CommentsPaneHost />
         <ButtonEditorHost pageId={null} schema={null as never} />
         <AutomationsHost />
+        <SmartNoteSetupHost />
         <IconPickerHost />
         <BlockerPickerHost />
         <CoverPanelHost />

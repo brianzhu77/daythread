@@ -253,6 +253,19 @@ export const SyncedIcon = () => (
     <path d="M18 3.5V7.5h-4M6 20.5V16.5h4" />
   </Icon>
 )
+// A smart note: lines written for him, with a spark.
+export const SmartNoteIcon = () => (
+  <Icon>
+    <path d="M4 7h8M4 12h10M4 17h7" />
+    <path d="M18 3.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z" />
+  </Icon>
+)
+export const RefreshIcon = () => (
+  <Icon size={18}>
+    <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+    <path d="M20 4v4.5h-4.5" />
+  </Icon>
+)
 export const BodyIcon = () => (
   <Icon>
     <path d="M6 6.5h12M12 6.5V18.5M9.5 18.5h5" />
