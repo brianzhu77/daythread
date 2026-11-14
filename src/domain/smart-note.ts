@@ -135,7 +135,9 @@ const titleLine = ({ page, blocks }: Source): { blockId: string; text: string }[
 export function collectInput(ws: Workspace, range: SmartRange, today: LocalDate): SmartInput {
   const tasks = new Map(ws.tasks.map(t => [t.id, t]))
   // A day opened and not written on holds only what every new day holds: reading it would change the input each morning.
-  const untouched = untouchedDay(ws)
+  // A smart note placed there, and an empty line left or taken for it, aren't writing either: placing a note mustn't
+  // make its own day start being read, which showed "Notes changed" right after Save (Jazz 01ec668c, Lead c1eac402).
+  const untouched = untouchedDay(ws, n => n.type === smartNoteBlockType)
   const candidates = pagesInRange(ws, range.where)
     .filter(({ page }) => inWindow(ws, page, range.days, today) && !untouched(page))
     .sort((a, b) => { const x = recency(a.page), y = recency(b.page); return x < y ? 1 : x > y ? -1 : 0 })

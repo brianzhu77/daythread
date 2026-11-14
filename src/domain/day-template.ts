@@ -76,10 +76,19 @@ const shapeOf = (list: readonly EditorNode[]): string => JSON.stringify(shape(li
  * Whether a day page is still as a new day is made today: the day template's copy, or the built-in headings with no
  * template. For a reader of many days: what a new day is made from is worked out once.
  */
-export function untouchedDay(ws: Workspace): (page: Page) => boolean {
+export function untouchedDay(ws: Workspace, skip?: (n: EditorNode) => boolean): (page: Page) => boolean {
   const template = defaultTemplate(ws, dayPagesTarget)
-  const made = shapeOf(template ? pageFromTemplate(template, null) : builtInDayNodes())
-  return page => page.type === 'daily' && shapeOf(pageNodes(page)) === made
+  const kept = (list: readonly EditorNode[]) => (skip ? keptNodes(list, skip) : list)
+  const made = shapeOf(kept(template ? pageFromTemplate(template, null) : builtInDayNodes()))
+  return page => page.type === 'daily' && shapeOf(kept(pageNodes(page))) === made
+}
+/** The lines left once `skip` ones are taken out, and any line left with no words and nothing nested: none of them is writing. */
+function keptNodes(list: readonly EditorNode[], skip: (n: EditorNode) => boolean): EditorNode[] {
+  return list.flatMap(n => {
+    if (skip(n)) return []
+    const children = keptNodes(n.children ?? [], skip)
+    return !children.length && !inlineText(n.content).trim() && !isSyncedBlock(n) ? [] : [{ ...n, children }]
+  })
 }
 
 // B74: dividers, toggles and code blocks are his structure too (his Day template's two dividers were dropped).
