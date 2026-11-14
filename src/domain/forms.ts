@@ -28,7 +28,8 @@ export const formLimits = { questions: 100, wording: 500, description: 2_000, su
 /** What can be asked: not what's worked out or read-only, nor a Button. Files, on Only me (G7-6). */
 export function questionable(p: Pick<Property, 'type' | 'readOnly' | 'formula' | 'rollup'>): boolean {
   if (p.readOnly || p.formula !== undefined || p.rollup) return false
-  return !['formula', 'rollup', 'id', 'createdTime', 'editedTime', 'button'].includes(p.type)
+  // A Place question waits for a place editor in a form (place-contract.md §7).
+  return !['formula', 'rollup', 'id', 'createdTime', 'editedTime', 'button', 'place'].includes(p.type)
 }
 const titleQuestion = (titleId: string): FormQuestion => ({ propertyId: titleId, wording: 'Name' })
 /** A new form asks one question for each property it can, Name first (§3). */

@@ -1558,7 +1558,7 @@ function defaultWidth(property: Property): number {
     case 'number': return 90
     case 'date': return 110
     case 'select': case 'multiSelect': case 'status': return 140
-    case 'relation': case 'files': return 180
+    case 'relation': case 'files': case 'place': return 180
     case 'button':
     case 'rollup':
     case 'formula': return 120

@@ -1,5 +1,6 @@
 // CSV and TSV (docs/design/csv.md): reading and writing the text, and a database's rows as a sheet. Pure: the browser does it all, so
 // an export costs the server nothing and an import's preview sends nothing until it's confirmed.
+import { isPlaceValue, placeCsv, placeFromText } from './place.ts'
 import { cellValue, databaseRows, isDatabase, isReadOnly, propertyOf, rawOf, titleId, validDateText, valueText, viewColumns, viewRows, type Database, type DatabaseChange, type Json, type Option, type Property, type PropertyType, type RowEdit, type View, type ViewContext } from './database.ts'
 import type { Page, Workspace } from './types.ts'
 
@@ -40,6 +41,8 @@ const notRun = (text: string) => (runnable.test(text) ? `'${text}` : text)
 function cellText(db: Database, row: Page, p: Property): string {
   const value = cellValue(db, row, p.id)
   if (p.type === 'checkbox') return value === true ? 'Yes' : 'No'
+  // Name, address and coordinates, the parts it has (G8-6).
+  if (p.type === 'place') return isPlaceValue(value) ? notRun(placeCsv(value)) : ''
   const text = valueText(db, p.id, value)
   return p.type === 'number' || p.type === 'date' || p.type === 'createdTime' || p.type === 'editedTime' || p.type === 'id' ? text : notRun(text)
 }
@@ -75,6 +78,8 @@ export function pastedValue(db: Database, property: Property, line: string): Jso
   if (property.id === titleId || property.type === 'text') return line
   if (property.type === 'url' || property.type === 'email' || property.type === 'phone') return text
   if (isReadOnly(property) || property.type === 'files') return undefined
+  // Words kept as a name with no pin, as Text to Place reads them (G8-6).
+  if (property.type === 'place') return (placeFromText(text) as unknown as Json) ?? undefined
   if (property.type === 'number') { const n = Number(text.replace(/,/g, '')); return Number.isFinite(n) ? n : undefined }
   const options = propertyOf(db, property.id)?.options ?? []
   const named = (name: string) => options.find(o => o.name.toLowerCase() === name.trim().toLowerCase())?.id
