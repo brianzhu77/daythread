@@ -28,7 +28,8 @@ const wideScript = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Scri
 export function smartNoteName(prompt: string): string {
   const line = prompt.trim().split('\n')[0].replace(/\s+/g, ' ').trim()
   const end = line.search(sentenceEnd)
-  const first = (end < 0 ? line : line.slice(0, end + 1)).replace(/[.。]$/u, '').trim()
+  // A prompt that opens with its own full stop would leave nothing: then the line itself names it.
+  const first = (end < 0 ? line : line.slice(0, end + 1)).replace(/[.。]$/u, '').trim() || line
   const chars = Array.from(first)
   if (chars.length <= nameRoom) return first
   const kept = chars.slice(0, nameRoom - 1)

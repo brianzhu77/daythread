@@ -46,6 +46,10 @@ test('a name from the prompt: first sentence or line, else a cut at a word, or a
   const mixed = 'Checkout 进展 ' + zh
   assert.equal(smartNoteName(mixed), Array.from(mixed).slice(0, 59).join('') + '…')
   assert.equal(smartNoteName('Checkout 进展? Then the rest'), 'Checkout 进展?')
+  // A prompt whose first sentence is only a full stop still gets a name: its first line (Ratchet).
+  assert.equal(smartNoteName('.'), '.')
+  assert.equal(smartNoteName('。 summarize'), '。 summarize')
+  assert.equal(smartNoteName('. ' + 'x'.repeat(100)), '. ' + 'x'.repeat(57) + '…')
   for (const p of ['List every decision we made about the checkout redesign and who made each of them', zh, mixed]) assert.ok(Array.from(smartNoteName(p)).length <= 60)
 })
 
