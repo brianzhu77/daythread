@@ -153,3 +153,15 @@ export const previewLinkPage = createServerFn({ method: "POST" })
       return { applied: false as const };
     }
   });
+
+/**
+ * Place search (place-contract.md §2, D15 G8-5): behind the gate like every server function, so signed-out, bad-cookie
+ * and cross-site requests never get this far. Only the typed words go on, to the fixed upstream; logs carry the status,
+ * the time and a count, never the words.
+ */
+export const searchPlaces = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ q: z.string().min(1).max(10_000), explicit: z.boolean() }).parse(input))
+  .handler(async ({ data }) => {
+    const [{ searchPlaces: search }, { placeLimiter }, { currentOwner }] = await Promise.all([import("./place-search"), import("./place-limiter"), import("./auth/request-owner")]);
+    return search(data, { fetch, limiter: placeLimiter(), owner: currentOwner() ?? "local", log: (event) => console.info(JSON.stringify({ level: "info", ...event })) });
+  });

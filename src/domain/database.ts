@@ -4,9 +4,10 @@
 import { chartForms, chartKinds, type ChartSettings } from './chart.ts'
 import { rowTemplateTarget } from "./day-template.ts";
 import { formulaProblem, rollupProblem, worldOf } from "./formula.ts";
+import { cleanPlace, isPlaceValue, placeFromText, placeText, type PlaceValue } from "./place.ts";
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
-export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula", "files", "button"] as const;
+export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula", "files", "button", "place"] as const;
 export type PropertyType = (typeof propertyTypes)[number];
 export type NumberFormat = "plain" | "comma" | "percent" | "currency";
 export type StatusGroup = "todo" | "active" | "done";
@@ -208,7 +209,7 @@ export interface Database {
 }
 export type RawValues = Record<string, Json>;
 /** What a cell shows: the typed value, or null for empty (checkbox: false). */
-export type CellValue = string | number | string[] | DateValue | boolean | FileValue[] | null;
+export type CellValue = string | number | string[] | DateValue | boolean | FileValue[] | PlaceValue | null;
 /** One file in a Files cell (R3-11). The bytes are in the file store under its id; this travels with the row, so Undo, Trash and a moved row need nothing else. */
 export interface FileValue { id: string; name: string; size: number; type: string; thumb?: string }
 /** Whether anything here holds a file, Trash included: a Files value, or one in a page's body. */
@@ -364,6 +365,9 @@ export function readValue(property: Property, raw: unknown): CellValue {
       const files = Array.isArray(raw) ? raw.filter(isFileValue) : [];
       return files.length ? files : null;
     }
+    // Text to Place reads its words as a name with no pin; the stored words stay, so changing back restores them (G8-6).
+    case "place":
+      return isPlaceValue(raw) ? raw : typeof raw === "string" ? placeFromText(raw) : null;
     case "text":
     case "url":
     case "email":
@@ -372,6 +376,7 @@ export function readValue(property: Property, raw: unknown): CellValue {
       if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
       // A date or a tick keeps its words as Text (R3-16). The other text types are addresses, which those aren't.
       if (property.type === "text" && raw === true) return "Yes";
+      if (property.type === "text" && isPlaceValue(raw)) return placeText(raw);
       if (property.type === "text" && raw && typeof raw === "object" && !Array.isArray(raw) && validDateText((raw as DateValue).start)) { const { start, end } = raw as DateValue; return (validDateText(end) ? `${start} → ${end}` : start).replace(/T/g, " "); }
       if (Array.isArray(raw)) { const names = raw.map((id) => property.options?.find((o) => o.id === id)?.name).filter((x): x is string => Boolean(x)); return names.length ? names.join(", ") : null; }
       return null;
@@ -432,6 +437,10 @@ export function storedValue(property: Property, input: unknown): Json | undefine
       const seen = new Set<string>();
       const files = (input as FileValue[]).filter((f) => !seen.has(f.id) && seen.add(f.id)).map((f) => ({ id: f.id, name: f.name, size: f.size, type: f.type, ...(f.thumb ? { thumb: f.thumb } : {}) }));
       return files.length ? (files as unknown as Json) : undefined;
+    }
+    case "place": {
+      const place = cleanPlace(input);
+      return place ? (place as unknown as Json) : refuse();
     }
     case "relation": {
       if (!Array.isArray(input) || input.length > limits.multi) refuse();
@@ -573,6 +582,7 @@ export function opsFor(type: PropertyType): FilterOp[] {
     case "select": case "status": return ["isAnyOf", "isNoneOf", "isEmpty"]
     case "relation": case "multiSelect": return ["contains", "doesNotContain", "isEmpty"]
     case "files": return ["contains", "doesNotContain", "isEmpty", "isNotEmpty"]
+    case "place": return ["contains", "doesNotContain", "isEmpty", "isNotEmpty"]
     // Read as the type it works out to (relations.ts), so it never gets here.
     case "button":
     case "rollup":
@@ -594,6 +604,12 @@ export function conditionHolds(property: Property, condition: Condition, value: 
     case "files": {
       if (typeof want !== "string") return null;
       const has = Array.isArray(value) && (value as FileValue[]).some((f) => fold(f.name).includes(fold(want)));
+      return op === "contains" ? has : op === "doesNotContain" ? !has : null;
+    }
+    // Text in the name or the address (G8-6).
+    case "place": {
+      if (typeof want !== "string") return null;
+      const has = isPlaceValue(value) && fold(placeText(value)).includes(fold(want));
       return op === "contains" ? has : op === "doesNotContain" ? !has : null;
     }
     case "text":
@@ -632,8 +648,9 @@ export function conditionHolds(property: Property, condition: Condition, value: 
     case "date":
     case "createdTime":
     case "editedTime": {
-      const start = value && typeof value === "object" && !Array.isArray(value) ? value.start.slice(0, 10) : null;
-      const end = value && typeof value === "object" && !Array.isArray(value) ? (value.end ?? value.start).slice(0, 10) : null;
+      const date = value && typeof value === "object" && !Array.isArray(value) ? (value as DateValue) : null;
+      const start = date ? date.start.slice(0, 10) : null;
+      const end = date ? (date.end ?? date.start).slice(0, 10) : null;
       if (op === "within") {
         const range = withinRange(want, context.today, context.weekStart);
         if (!range) return null;
@@ -690,6 +707,8 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
       return 0;
     case "files":
       return collator.compare((a as FileValue[])[0]?.name ?? "", (b as FileValue[])[0]?.name ?? "");
+    case "place":
+      return collator.compare((a as PlaceValue).name, (b as PlaceValue).name);
     case "text":
     case "url":
     case "email":
@@ -853,7 +872,7 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
 
 /** The group of rows with no value. */
 export const noGroupKey = "none";
-const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup" && type !== "formula" && type !== "button";
+const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup" && type !== "formula" && type !== "button" && type !== "place";
 const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox" || type === "relation";
 /** A rollup groups by what it works out to, whatever that is, though a card can't be dragged there, so it makes no board. */
 const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "chart" ? !p.rollup && (p.formula !== undefined || (canGroup(p.type) && p.type !== "files")) : layout === "board" ? !p.rollup && p.formula === undefined && canMakeColumns(p.type) : Boolean(p.rollup) || p.formula !== undefined || canGroup(p.type));
@@ -1173,7 +1192,7 @@ function cleanCalculations(db: Database, input: unknown): Record<string, CalcKin
   return out;
 }
 
-export const typeLabels: Record<PropertyType, string> = { button: "Button", text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", files: "Files", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
+export const typeLabels: Record<PropertyType, string> = { button: "Button", text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", files: "Files", place: "Place", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
 const hasOptions = (type: PropertyType): boolean => type === "select" || type === "multiSelect" || type === "status";
 
 export function cleanName(value: unknown, what: string): string {
@@ -1227,6 +1246,7 @@ function checkLinks(ws: Workspace, databaseId: string, db: Database, property: P
   if (!source) throw new DatabaseError("Property not found");
   if (source.type === "rollup") throw new DatabaseError("A rollup can't read another rollup");
   if (source.type === "button") throw new DatabaseError("A rollup can't read a button");
+  if (source.type === "place") throw new DatabaseError("A rollup can't read a place");
   if (source.type === "formula") { const problem = rollupProblem(worldOf(ws), databaseId, property); if (problem) throw new DatabaseError(problem); }
 }
 /**
@@ -1561,6 +1581,9 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       if (type !== old.type) {
         const lost = lostOnTypeChange(ws, page.id, old, type);
         notes.push(`Changed to ${typeLabels[type]}`, ...(lost ? [`${plural(lost, "value")} show${lost === 1 ? "s" : ""} as empty`] : []));
+        // Text to Place: each one's words are its name, with no pin until he picks one (G8-6).
+        const named = type === "place" ? databaseRows(ws, page.id).filter((r) => typeof r.values?.[old.id] === "string" && placeFromText(r.values[old.id] as string)).length : 0;
+        if (named) notes.push(`${named} kept as ${named === 1 ? "a name" : "names"} without a place`);
       }
       if (change.options && hasOptions(old.type)) {
         const kept = new Set(next.options!.map((o) => o.id));
@@ -1812,8 +1835,9 @@ export function valueText(db: Database, columnId: string, value: CellValue): str
   if (property?.type === 'id') return `${property.prefix ?? ''}${value}`
   if (value === true) return 'Yes'
   if (property?.type === 'files') return (value as FileValue[]).map(f => f.name).join(', ')
+  if (isPlaceValue(value)) return placeText(value)
   if (Array.isArray(value)) return (value as string[]).map(name).filter(Boolean).join(', ')
-  if (typeof value === 'object') return value.end ? `${value.start} → ${value.end}` : value.start
+  if (typeof value === 'object') { const date = value as DateValue; return date.end ? `${date.start} → ${date.end}` : date.start }
   if (property && (property.type === 'select' || property.type === 'status')) return name(String(value))
   return String(value)
 }

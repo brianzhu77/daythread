@@ -3,6 +3,7 @@
 import { functionList, formulaFunctions, FormulaDate, FormulaPage, FormulaRich, FormulaRowError, FormulaTooLong, format, formatDate, isList, itemOf, notApplicable, pageTarget, unionType, validDateUnit, type Clock, type FormulaFunction, type RichRun, type RunContext, type Value, type ValueType } from './formula-functions.ts'
 import { FormulaSyntaxError, parseFormula, partialRefs, rewriteRefs, type FormulaNames, type FormulaNode, type PropRef } from './formula-parse.ts'
 import { cellValue, isDatabase, readValue, titleId, type CellValue, type Database, type DateValue, type Json, type Property, type FileValue } from './database.ts'
+import type { PlaceValue } from './place.ts'
 import { rollupType } from './relations.ts'
 import { withTodos } from './todos-source.ts'
 import type { Page, Workspace } from './types.ts'
@@ -591,9 +592,10 @@ export class WorkedCells {
       case 'select': case 'status': return nameOf(String(value))
       case 'multiSelect': return (value as string[]).map(nameOf)
       case 'files': return (value as FileValue[]).map(f => f.name)
+      case 'place': return (value as PlaceValue).name
       case 'relation': return (value as string[]).flatMap(id => { const row = this.sources.pages.get(id); return row ? [new FormulaPage(row)] : [] })
       case 'id': return `${p.prefix ?? ''}${String(value)}`
-      default: return typeof value === 'object' && !Array.isArray(value) ? dateFrom(value) : (value as Value)
+      default: return typeof value === 'object' && !Array.isArray(value) ? dateFrom(value as DateValue) : (value as Value)
     }
   }
   private runFormula(row: Page, db: Database, p: Property): Value {

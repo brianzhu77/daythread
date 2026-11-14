@@ -131,7 +131,7 @@ const fromDatabase = (workspace: Workspace, id: string): { title: string; databa
   const page = workspace.pages.find(p => p.id === id)
   return page && isDatabase(page) && !page.trashedAt ? { title: page.title, database: page.database } : null
 }
-const settable = (database: Database): Property[] => database.fixed ? database.properties.filter(p => todoBarColumns.has(p.id)) : database.properties.filter(p => !isReadOnly(p) && p.id !== titleId)
+const settable = (database: Database): Property[] => database.fixed ? database.properties.filter(p => todoBarColumns.has(p.id)) : database.properties.filter(p => !isReadOnly(p) && p.id !== titleId && p.type !== 'place')
 
 export function StepPage({ step, problem, canOpenMade, workspace, schema, rowsOf, databaseId, variables, onChange }: { step: ButtonStep; problem: string | null; canOpenMade: boolean; workspace: Workspace; schema: never; rowsOf?: Database; /** The row's database, or '' with no row for a formula to read. */ databaseId: string; variables: VariableTypes; onChange(next: ButtonStep): void }) {
   const said = problem && <p className="button-step-problem" role="status">{problem}</p>
