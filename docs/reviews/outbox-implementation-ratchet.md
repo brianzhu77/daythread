@@ -46,3 +46,11 @@ The lock rereads only the target entry, while `blockedBy` still runs on the tab'
 ### Remaining memory-risk bookkeeping gap
 
 With IndexedDB absent, abort Water's tick as a network error: warning appears. Successfully tick Call the bank next: warning disappears and beforeunload no longer prevents departure, while Water was never sent. Independent Chromium repro `ratchet-memory-failure.mjs` outputs `{before:1,after:0,leave:false}` and fails. `memoryUnsent` is reset by any successful memory-only command, so it must track unresolved operation IDs instead.
+
+## Recheck at bd5cd135
+
+Build and 12 focused storage/client/account tests pass. The shared-held probe now correctly sends zero while its predecessor is held.
+
+### Remaining: a resolved shared hold stays authoritative in another tab (7bb6a8af)
+
+Extend the shared-held probe: discard A's held entry in IndexedDB, wait past the visibility refresh guard, focus B, wait 1.8 seconds. B sends zero and still shows the discarded held item plus one waiting change. `ratchet-shared-release.mjs` fails (expected one send). The early local `blockedBy` check prevents rereading shared state, and reconciliation keeps rows missing from storage via `shared.find(...) ?? e`. Shared state must reconcile removals before deciding whether a local entry is blocked. Recovery-state injection represents the shared queue after another tab's Discard; no real user data is involved.
