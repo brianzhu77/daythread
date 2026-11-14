@@ -198,3 +198,14 @@ export function capture(predicted: Workspace, action: Action, operationId: strin
     return { entry: { ...base, readsBeyond: true, writes: [] }, predicted: null }
   }
 }
+
+/**
+ * After Delete account answers (B98 §7, Ratchet 241fda62): when it went through, the account's stored changes leave the
+ * device first, then its offline copy and caches; a refused deletion keeps them. True when the account is gone.
+ */
+export async function afterDeletion(ok: boolean, steps: { clearOutbox(): Promise<void>; clearOfflineData(): Promise<void> }): Promise<boolean> {
+  if (!ok) return false
+  await steps.clearOutbox()
+  await steps.clearOfflineData()
+  return true
+}
