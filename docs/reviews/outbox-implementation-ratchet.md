@@ -1,3 +1,16 @@
+# PR216 token repair recheck — pending at a6acfd48
+
+The prior timer/unrelated-command handoff defects are repaired with explicit caller tokens and one IndexedDB transaction. The caller-token paths and cell-draft recovery were read. Independent build, full typecheck, 18 focused client/replay/scheduler tests and 50 storage tests pass. Browser suites are still running; no clear yet.
+
+Two source findings remain with the author:
+
+- **Owner lock and ownership validation (23351123, 1931aa3b):** provider `handOff` mutates the queue without the owner Web Lock used by drains. It can overlap a drain awaiting a server answer after another tab chooses Keep mine. This is a source-level race; its browser server outcome has not been reproduced. Independently confirmed at the store API: `handOff(seq, otherOwner, replacement)` removes the original owner's entry and stores the other owner's replacement. `tests/ratchet-outbox-handoff.test.ts` fails at this head. Capture token owner, validate original ownership, and serialize with the drain lock.
+- **Rehearsal 5c targets the first Dashboard (4a9c313d):** it creates a fresh Dashboard ID then selects the first view having a Dashboard. An existing Dashboard in the backup sends removal to the wrong view. Use the generated ID directly. Local synthetic rehearsal results do not cover this fixture condition.
+
+Lead independently reports Worker automations **23/23 in each engine on Postgres**, including the tightened lost-answer and failing-rule checks (f486d086). This is Lead evidence, not a reviewer execution. Documentation-only b0e122f8 does not change that runtime.
+
+---
+
 # PR216 repair review — changes required at 8acbcb65
 
 The previous clear below was superseded by the Lead’s full gate finding two regressions. Independent review of the repairs found a new client handoff blocker, reported in Raft message 6804fae5.
