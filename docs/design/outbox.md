@@ -250,12 +250,15 @@ d21888b7).
 
 **Copy.** `entry.label` is a past-tense verb and the item's name in quotes, the name cut to 40 characters with "…":
 `ticked "Water the plants"`, `set Status on "Dune"`, `moved "Book 3"`, `deleted "Old notes"`,
-`added "Call mum"`. When there's no name, it falls back to `a change on "{page}"`. The reason is in plain words:
+`added "Call mum"`, `ran "Log run"` (a button, named by its label). When there's no name, it falls back to `a change on "{page}"`. The reason is in plain words:
 
 | Server answer | Banner |
 |---|---|
 | row conflict (§5.3) | `Not saved — ticked "Water the plants" was changed elsewhere · Keep mine · Discard` |
 | not found (deleted) | `Not saved — "Water the plants" was deleted elsewhere · Discard` |
+| whole-revision hold: a `readsBeyond` entry (a button, a template add, a change that fires a rule), or a base in a rollback gap (§5, §11) | `Not saved — ran "Log run" · changed since · Keep mine · Discard`. Nothing named it, so "changed elsewhere" would be untrue; "changed since" is today's wording for this. |
+| forgotten receipt (§5 step 1a: it may have been applied already) | `Not saved? — added "Call mum" may already be in · Keep mine · Discard`. The name links to where it would be, so he can look before choosing; Keep mine could make it twice, and that's his call. |
+| owner mismatch (§5 step 0) | nothing: it's another account's entry (§8.6) |
 | Cannot undo | `Can't undo — changed since · Discard` (today's words) |
 | any other refusal | `Not saved — can't do this now: ticked "Water the plants" · Discard` |
 
