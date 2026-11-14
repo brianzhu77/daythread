@@ -155,15 +155,19 @@ export function idbOutboxStore(factory: IDBFactory = indexedDB): OutboxStore {
     remove: seq => tx<void>('readwrite', s => { s.delete(seq) }),
     clearOwner: owner => tx<void>('readwrite', s => later(s, owner, 0, (_e, c) => { c.delete() })),
     handOff: (seq, owner, replacement) => tx<number | null | 'not-held'>('readwrite', (s, done) => {
-      const r = s.index('owner').getAll(IDBKeyRange.only(owner))
-      r.onsuccess = () => {
-        const queue = (r.result as OutboxEntry[]).sort((a, b) => a.seq! - b.seq!)
-        if (!originalStill(queue.find(e => e.seq === seq), owner, replacement)) { done('not-held'); return }
-        for (const w of handOffHolds(queue, seq)) s.put({ ...queue.find(e => e.seq === w)!, ...handOffHeld })
-        s.delete(seq)
-        if (!replacement) { done(null); return }
-        const { seq: _seq, ...rest } = replacement
-        const added = s.add(rest); added.onsuccess = () => done(Number(added.result))
+      // The original by its seq, whoever's it is, as the memory store sees it (Ratchet 61ef1bab); then the owner's queue.
+      const got = s.get(seq)
+      got.onsuccess = () => {
+        if (!originalStill(got.result as OutboxEntry | undefined, owner, replacement)) { done('not-held'); return }
+        const r = s.index('owner').getAll(IDBKeyRange.only(owner))
+        r.onsuccess = () => {
+          const queue = (r.result as OutboxEntry[]).sort((a, b) => a.seq! - b.seq!)
+          for (const w of handOffHolds(queue, seq)) s.put({ ...queue.find(e => e.seq === w)!, ...handOffHeld })
+          s.delete(seq)
+          if (!replacement) { done(null); return }
+          const { seq: _seq, ...rest } = replacement
+          const added = s.add(rest); added.onsuccess = () => done(Number(added.result))
+        }
       }
     }),
   }
