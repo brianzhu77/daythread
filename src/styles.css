@@ -3450,10 +3450,13 @@ textarea.form-input { resize: vertical; }
 .map-state { margin: 0; color: var(--ink-2); font-size: var(--text-ui); }
 .map-show { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); min-height: 40px; padding: 0 16px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--paper); color: var(--ink); font-weight: 500; }
 .map-line { display: flex; gap: 12px; align-items: center; margin: 8px 0 0; color: var(--ink-2); font-size: var(--text-meta); }
+.map-line .database-undated-head { padding-left: 0; }
 .map-no-place { display: grid; gap: 2px; margin-top: 4px; }
 .map-card { position: absolute; z-index: 2; width: 280px; transform: translate(-50%, calc(-100% - 14px)); padding: 6px; border: 1px solid var(--line); border-radius: var(--radius-block); background: var(--paper); box-shadow: var(--shadow-float); }
-.map-card.is-phone { left: 8px; right: 8px; bottom: 8px; width: auto; transform: none; }
-.map-card-row { display: grid; gap: 2px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--radius-row); background: none; text-align: left; color: var(--ink); }
+/* At 390: full width inside the page's 20 px gutters, 12 px above the tab capsule (60 px tall, 12 px up) (Jazz a5e373f0). */
+.map-card.is-phone { position: fixed; z-index: 19; left: 20px; right: 20px; bottom: calc(84px + env(safe-area-inset-bottom)); width: auto; transform: none; }
+.map-card-body { display: grid; justify-items: start; gap: 2px; width: 100%; min-width: 0; text-align: left; }
+.map-card-row { display: block; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--radius-row); background: none; text-align: left; color: var(--ink); }
 @media (hover: hover) { .map-card-row:hover { background: var(--fill); } }
 .map-card-title { font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .map-card-value { color: var(--ink-2); font-size: var(--text-meta); }

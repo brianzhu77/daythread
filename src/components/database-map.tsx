@@ -15,6 +15,7 @@ import { fetchMapStyle, mapRequest } from './map-boundary'
 import { PropertyCell, useWide } from './property-editors'
 import { todayIso } from './dates'
 import { zoneCities } from './zone-cities'
+import { whenQuiet } from './when-quiet'
 
 setWorkerUrl(workerUrl)
 
@@ -31,12 +32,15 @@ const loadLimitMs = 10_000
 let liveKey: string | null = null
 const liveListeners = new Set<() => void>()
 const setLive = (key: string | null) => { liveKey = key; for (const l of liveListeners) l() }
-function useLive(key: string, near: boolean): [boolean, () => void] {
-  const live = useSyncExternalStore(l => { liveListeners.add(l); return () => liveListeners.delete(l) }, () => liveKey === key, () => false)
+/** Whether this frame holds the live map; whether another one does (then, and only then, it offers "Show map"); and taking it. */
+function useLive(key: string, near: boolean): [boolean, boolean, () => void] {
+  const subscribe = (l: () => void) => { liveListeners.add(l); return () => { liveListeners.delete(l) } }
+  const live = useSyncExternalStore(subscribe, () => liveKey === key, () => false)
+  const displaced = useSyncExternalStore(subscribe, () => liveKey !== null && liveKey !== key, () => false)
   // The first map near the screen takes it; one that goes away gives it up.
   useEffect(() => { if (near && liveKey === null) setLive(key) }, [near, key])
   useEffect(() => () => { if (liveKey === key) setLive(null) }, [key])
-  return [live, () => setLive(key)]
+  return [live, displaced, () => setLive(key)]
 }
 
 function useScheme(): Scheme {
@@ -105,7 +109,7 @@ function MapFrame({ db, view, blockId, pinned, onOpen, zone }: { db: DatabasePag
   const scheme = useScheme()
   const near = useNear(frame)
   const key = `${blockId}|${view.id}`
-  const [live, takeLive] = useLive(key, near)
+  const [live, displaced, takeLive] = useLive(key, near)
   const [state, setState] = useState<MapState>('loading')
   const [attempt, setAttempt] = useState(0)
   const [selected, setSelected] = useState<{ ids: string[]; at: [number, number] } | null>(null)
@@ -121,7 +125,9 @@ function MapFrame({ db, view, blockId, pinned, onOpen, zone }: { db: DatabasePag
     let gone = false
     setState('loading')
     const timer = setTimeout(() => { if (!gone && map.current && !map.current.loaded()) { map.current.remove(); map.current = null; setState('unavailable') } }, loadLimitMs)
-    void fetchMapStyle(scheme).then(style => {
+    // The style can come now; the map is built only once the page is quiet, as its code was (when-quiet.ts).
+    let cancelQuiet = () => {}
+    void fetchMapStyle(scheme).then(style => new Promise<typeof style>(resolve => { cancelQuiet = whenQuiet(() => resolve(style)) })).then(style => {
       if (gone) return
       if (!style) { setState('unavailable'); return }
       const area = savedArea(areaKey(blockId, view.id))
@@ -156,7 +162,11 @@ function MapFrame({ db, view, blockId, pinned, onOpen, zone }: { db: DatabasePag
       instance.on('click', 'map-clusters', (e: MapLayerMouseEvent) => openCluster(instance, e, setSelected))
       instance.on('click', 'map-pins', (e: MapLayerMouseEvent) => {
         const f = e.features?.[0]
-        if (f) setSelected({ ids: [String(f.properties?.id)], at: (f.geometry as unknown as { coordinates: [number, number] }).coordinates })
+        if (!f) return
+        // Rows at one place are one pin's worth: its card lists them all (G8-9).
+        const at = (f.geometry as unknown as { coordinates: [number, number] }).coordinates
+        const here = pinsRef.current.filter(p => Math.abs(p.place.lon - at[0]) < 1e-6 && Math.abs(p.place.lat - at[1]) < 1e-6).map(p => p.row.id)
+        setSelected({ ids: here.length ? here : [String(f.properties?.id)], at })
       })
       instance.on('click', e => { if (!instance.queryRenderedFeatures(e.point, { layers: ['map-pins', 'map-clusters'] }).length) setSelected(null) })
       for (const layer of ['map-pins', 'map-clusters']) {
@@ -164,7 +174,7 @@ function MapFrame({ db, view, blockId, pinned, onOpen, zone }: { db: DatabasePag
         instance.on('mouseleave', layer, () => { instance.getCanvas().style.cursor = '' })
       }
     })
-    return () => { gone = true; clearTimeout(timer); map.current?.remove(); map.current = null; setSelected(null) }
+    return () => { gone = true; cancelQuiet(); clearTimeout(timer); map.current?.remove(); map.current = null; setSelected(null) }
   }, [live, near, scheme, attempt, blockId, view.id, zone])
 
   // New rows, a filter or a pick: the same map, its pins redrawn.
@@ -192,7 +202,8 @@ function MapFrame({ db, view, blockId, pinned, onOpen, zone }: { db: DatabasePag
     onKeyDownCapture={keep}>
     {live && state !== 'unavailable' && state !== 'nowebgl' && <div ref={canvasHolder} className="map-canvas" aria-label={`Map of ${view.name}`} />}
     {card}
-    {!live && <button type="button" className="map-show" onClick={takeLive}>Show map</button>}
+    {/* Only a frame another map has displaced offers it; one waiting to load shows nothing (Jazz a5e373f0). */}
+    {displaced && <button type="button" className="map-show" onClick={takeLive}>Show map</button>}
     {live && state === 'unavailable' && <p className="map-state">Map unavailable · <button type="button" className="app-link" onClick={() => { setState('loading'); setAttempt(n => n + 1) }}>Retry</button></p>}
     {live && state === 'nowebgl' && <p className="map-state">Map isn't available in this browser</p>}
   </div>
@@ -204,8 +215,11 @@ function PinCard({ db, view, rows, x, y, onOpen }: { db: DatabasePage; view: Vie
   const columns = viewColumns(db.database, view).slice(0, 3)
   return <div className={`map-card${wide ? '' : ' is-phone'}`} style={wide ? { left: x, top: y } : undefined} role="dialog" aria-label={rows.length > 1 ? `${rows.length} places here` : rows[0]!.row.title || 'Untitled'}>
     {rows.map(({ row }) => <button key={row.id} type="button" className="map-card-row" onClick={() => onOpen(row.id)}>
-      <span className="map-card-title">{row.title || 'Untitled'}</span>
-      {rows.length === 1 && columns.map(c => <span key={c.property.id} className="map-card-value"><PropertyCell property={c.property} value={cellValue(db.database, row, c.property.id)} row={row} /></span>)}
+      {/* A button centres its own content whatever its grid says, so the lines sit in a block of their own. */}
+      <span className="map-card-body">
+        <span className="map-card-title">{row.title || 'Untitled'}</span>
+        {rows.length === 1 && columns.map(c => <span key={c.property.id} className="map-card-value"><PropertyCell property={c.property} value={cellValue(db.database, row, c.property.id)} row={row} /></span>)}
+      </span>
     </button>)}
   </div>
 }

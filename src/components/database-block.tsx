@@ -22,6 +22,7 @@ import { quoteLimit, type CommentProperty } from '../domain/comments'
 import { RowMenu } from './row-menu'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
+import { whenQuiet } from './when-quiet'
 import { calcText, emailHref, phoneHref, urlHref } from './property-values'
 import { defaultRowTemplate } from '../domain/day-template'
 import { useTaskTick, useWorkspace } from './use-day'
@@ -940,11 +941,13 @@ function LiveMapView(props: LaidOutProps) {
   useEffect(() => {
     if (mapModule || !holder.current) return
     let live = true
-    const start = () => loadMap().then(m => { if (live) setLoaded(m) }, () => { if (live) setFailed(true) })
-    if (typeof IntersectionObserver === 'undefined') { void start(); return () => { live = false } }
-    const seen = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) { seen.disconnect(); void start() } }, { rootMargin: '300px 0px' })
+    // Near the screen, then only once the page is quiet: a line he's typing never waits on the map's code (Lead cdc31250).
+    let cancel = () => {}
+    const start = () => { cancel = whenQuiet(() => void loadMap().then(m => { if (live) setLoaded(m) }, () => { if (live) setFailed(true) })) }
+    if (typeof IntersectionObserver === 'undefined') { start(); return () => { live = false; cancel() } }
+    const seen = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) { seen.disconnect(); start() } }, { rootMargin: '300px 0px' })
     seen.observe(holder.current)
-    return () => { live = false; seen.disconnect() }
+    return () => { live = false; seen.disconnect(); cancel() }
   }, [])
   if (mapModule) return <mapModule.DatabaseMap {...props} />
   return <div className="database-map" ref={holder}>

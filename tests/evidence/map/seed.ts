@@ -19,10 +19,14 @@ await C('eats', { kind: 'addProperty', property: { id: 'nt', name: 'Notes', type
 const spots: [string, number, number][] = [['Golden Dumpling', 49.1859, -123.1338], ['Ramen Danbo', 49.2634, -123.1385], ['Stanley Park', 49.3017, -123.1417], ['Granville Island', 49.2712, -123.1340], ['Gastown', 49.2840, -123.1089], ['Kits Beach', 49.2733, -123.1550], ['Main St', 49.2620, -123.1010], ['UBC', 49.2606, -123.2460], ['Commercial Dr', 49.2700, -123.0690], ['Chinatown', 49.2797, -123.1003], ['Yaletown', 49.2755, -123.1219], ['Olympic Village', 49.2710, -123.1060]]
 let n = 0
 for (const [name, lat, lon] of spots) await run({ type: 'add-row', databaseId: 'eats', pageId: `e${++n}`, title: name, values: { pl: { name, lat, lon, ref: `osm:N${n}` }, nt: `note ${n}` }, at })
+// Two rows at one address: at the deepest zoom they open one card listing both.
+for (const [id, title] of [['twin-a', 'Twin A'], ['twin-b', 'Twin B']]) await run({ type: 'add-row', databaseId: 'eats', pageId: id, title, values: { pl: { name: 'Shared Hall', lat: 49.2500, lon: -123.1000 } }, at })
 await run({ type: 'add-row', databaseId: 'eats', pageId: 'e-words', title: 'Someday', values: { pl: { name: 'that place near work' } }, at })
 await run({ type: 'add-row', databaseId: 'eats', pageId: 'e-none', title: 'Unplaced', values: {}, at })
 await C('eats', { kind: 'addView', view: { id: 'eats-map', name: 'Map', layout: 'map', mapBy: 'pl', columns: [{ id: 'nt' }], sort: [], filter: [] } })
 await C('eats', { kind: 'moveView', viewId: 'eats-map', beforeId: w.pages.find((p: any) => p.id === 'eats').database.views[0].id })
+// A filtered map: Notes containing "note 1" leaves e1, e10, e11 and e12, all pinned, and nothing without a place.
+await C('eats', { kind: 'addView', view: { id: 'filtered', name: 'Filtered map', layout: 'map', mapBy: 'pl', columns: [], sort: [], filter: [{ by: 'nt', op: 'contains', value: 'note 1' }] } })
 // A view whose Place property has gone: "Choose a Place property".
 await C('eats', { kind: 'addProperty', property: { id: 'gone', name: 'Old place', type: 'place' } })
 await C('eats', { kind: 'addView', view: { id: 'orphan', name: 'Old map', layout: 'map', mapBy: 'gone', columns: [], sort: [], filter: [] } })
@@ -44,5 +48,8 @@ await run({ type: 'create-database', pageId: 'board', homeBlockId: null, title: 
 const widget = (id: string, source: string, view: any) => ({ id, source, view: { ...view, id: `v-${id}` } })
 await C('board', { kind: 'addDashboard', view: { id: 'dash', name: 'Maps' }, rows: [{ id: 'r1', widgets: [widget('w1', 'eats', eatsMap), widget('w2', 'many', w.pages.find((p: any) => p.id === 'many').database.views.find((v: any) => v.id === 'many-map'))] }, { id: 'r2', widgets: [widget('w3', 'eats', eatsMap)] }] })
 await C('board', { kind: 'moveView', viewId: 'dash', beforeId: w.pages.find((p: any) => p.id === 'board').database.views[0].id })
+// Plain: a database with no Place property yet, for "+ New Place property".
+await run({ type: 'create-database', pageId: 'plain', homeBlockId: null, title: 'Plain' })
+for (const [id, title] of [['p1', 'First'], ['p2', 'Second']]) await run({ type: 'add-row', databaseId: 'plain', pageId: id, title, at })
 await run({ type: 'ensure-day', date: new Date().toLocaleDateString('en-CA') })
 console.log('seeded', w.revision)

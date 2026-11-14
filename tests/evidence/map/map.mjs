@@ -56,7 +56,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const pin = await mapAt(page, -123.1417, 49.3017)
     await page.mouse.click(pin.x, pin.y); await wait(500)
     const card = page.locator('.map-card')
-    ok(`${tag} card: a tap on a pin shows its title and shown property`, await card.isVisible() && (await card.innerText()).includes('Stanley Park') && (await card.innerText()).includes('note 3'), await card.innerText().catch(() => ''))
+    const inset = await card.evaluate(el => Math.round(el.querySelector('.map-card-title').getBoundingClientRect().left - el.getBoundingClientRect().left)).catch(() => -1)
+    ok(`${tag} card: a tap on a pin shows its title and shown property, starting at its left`, await card.isVisible() && (await card.innerText()).includes('Stanley Park') && (await card.innerText()).includes('note 3') && inset >= 0 && inset <= 16, `${inset} px in`)
     await page.keyboard.press('Escape'); await wait(300)
     ok(`${tag} card: Esc closes it`, await card.count() === 0)
     await page.mouse.click(pin.x, pin.y); await wait(500)
@@ -106,6 +107,11 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 390: an inline block says "Open the map ›", with no map and nothing asked outside`, await page.getByRole('button', { name: 'Open the map ›' }).isVisible() && await page.locator('.map-canvas').count() === 0 && log.outside.length === 0)
     await page.getByRole('button', { name: 'Open the map ›' }).click(); await ready(page); await page.waitForTimeout(500)
     ok(`${tag} 390: it opens the map on its database's page, attribution collapsed`, page.url().includes('page=eats') && await page.locator('.map-canvas canvas').count() === 1 && await page.locator('.maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show)').count() === 1)
+    // The card at 390: full width inside the 20 px gutters, 12 px above the tab capsule (Jazz a5e373f0).
+    await page.locator('.map-canvas').evaluate(el => el.mapForChecks.jumpTo({ center: [-123.1417, 49.3017], zoom: 15 })); await wait(1500)
+    const pin = await mapAt(page, -123.1417, 49.3017); await page.mouse.click(pin.x, pin.y); await wait(500)
+    const geo = await page.evaluate(() => { const c = document.querySelector('.map-card')?.getBoundingClientRect(), t = document.querySelector('.tab-capsule')?.getBoundingClientRect(); return c && t ? { left: Math.round(c.left), width: Math.round(c.width), gap: Math.round(t.top - c.bottom) } : null })
+    ok(`${tag} 390: the card is full width in the gutters, clear of the tab bar`, Boolean(geo) && geo.left === 20 && geo.width === 350 && geo.gap >= 12, JSON.stringify(geo))
     await context.close()
   }
   // A dashboard at 390 stacks its widgets in a scrolling page: Map widgets are "Open the map ›", no chunk until the tap,
@@ -175,6 +181,75 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const maps = await page.locator('.database-menu button[aria-label="Map options"]').count()
     await page.keyboard.press('Escape')
     ok(`${tag} made: + Add view → Map makes another Map view, by the one Place property, drawn`, maps === before + 1 && await page.locator('.map-frame.is-ready').count() === 1 && await page.getByText('100 of 240 shown').isVisible(), `${before} → ${maps} Map views`)
+    await context.close()
+  }
+
+  // ---- Counts under a filter add up to the filtered rows, not all rows (G8-10, Bumblebee 77526ca0).
+  {
+    const { context, page } = await fresh()
+    await page.goto(`${base}/pages?page=eats`); await ready(page)
+    await page.locator('[data-database-views]').first().click()
+    await page.getByRole('menuitemradio', { name: /Filtered map/ }).click(); await ready(page); await wait(1500)
+    const pins = await page.locator('.map-canvas').evaluate(el => { const src = el.mapForChecks.getSource('map-pins'); return src._data?.features?.length ?? src.serialize().data.features.length })
+    ok(`${tag} counts under a filter: 4 pins (notes with "note 1"), no "No place", no "shown" line`, pins === 4 && await page.getByRole('button', { name: /No place/ }).count() === 0 && await page.getByText(/ of \d+ shown/).count() === 0, `${pins} pins`)
+    await context.close()
+  }
+
+  // ---- Rows at one address: at the deepest zoom, one card listing both (G8-9).
+  {
+    const { context, page } = await fresh()
+    await page.goto(`${base}/pages?page=eats`); await ready(page)
+    await page.locator('.map-canvas').evaluate(el => el.mapForChecks.jumpTo({ center: [-123.1, 49.25], zoom: 18 })); await wait(1500)
+    const at = await mapAt(page, -123.1, 49.25)
+    await page.mouse.click(at.x, at.y); await wait(1200)
+    const text = await page.locator('.map-card').innerText().catch(() => '')
+    ok(`${tag} one address: a card listing both rows there`, text.includes('Twin A') && text.includes('Twin B'), text.replace(/\s+/g, ' '))
+    await context.close()
+  }
+
+  // ---- No Place property yet: + Add view → Map → "+ New Place property" makes one and draws; a first open with no
+  // pins goes to his time zone's city (Vancouver in the seed).
+  {
+    const { context, page, log } = await fresh()
+    await page.goto(`${base}/pages?page=plain`); await page.getByText('First', { exact: true }).waitFor(); await settle(page)
+    await page.locator('[data-database-views]').first().click()
+    await page.getByRole('menuitem', { name: '+ Add view' }).click().catch(() => page.getByText('+ Add view').click())
+    await page.getByRole('menuitem', { name: 'Map', exact: true }).click()
+    await page.getByRole('menuitem', { name: '+ New Place property' }).click(); await settle(page)
+    await page.keyboard.press('Escape'); const drew = await ready(page); await wait(800)
+    const center = drew ? await page.locator('.map-canvas').evaluate(el => el.mapForChecks.getCenter()) : null
+    ok(`${tag} no Place yet: "+ New Place property" makes one and the map draws, both rows under "No place"`, drew && await page.getByRole('button', { name: 'No place · 2 ›' }).isVisible())
+    ok(`${tag} first open with no pins: his time zone's city`, Boolean(center) && Math.abs(center.lat - 49.27) < 0.05 && Math.abs(center.lng + 123.12) < 0.05, JSON.stringify(center))
+    void log
+    await context.close()
+  }
+
+  // ---- Its Place property deleted: "Choose a Place property", and Undo restores it, drawn again (G8-10).
+  {
+    const { context, page } = await fresh()
+    await page.goto(`${base}/pages?page=plain`); await page.getByText('First', { exact: true }).waitFor(); await settle(page)
+    // Its Map view, made by the check above.
+    await page.locator('[data-database-views]').first().click()
+    await page.getByRole('menuitemradio', { name: /Map/ }).first().click(); await ready(page)
+    await page.getByRole('button', { name: 'Database options' }).first().click()
+    await page.getByRole('menuitem', { name: /Properties/ }).click()
+    await page.locator('.database-property-name', { hasText: 'Place' }).first().click()
+    await page.getByRole('menuitem', { name: 'Delete property' }).click(); await page.keyboard.press('Escape'); await settle(page)
+    const gone = await page.getByRole('button', { name: 'Choose a Place property' }).isVisible()
+    await page.getByRole('button', { name: 'Undo' }).last().click(); const back = await ready(page)
+    ok(`${tag} property deleted: "Choose a Place property", and Undo draws the map again`, gone && back && await page.getByRole('button', { name: 'Choose a Place property' }).count() === 0)
+    await context.close()
+  }
+
+  // ---- Loading: the frame at full size in the style's grey, no spinner or words; no map after 10 s is "Map unavailable".
+  {
+    const { context, page } = await fresh()
+    await context.route(/tiles\.openfreemap\.org\/planet/, () => {}) // the TileJSON never answers: the map can't finish
+    await page.goto(`${base}/pages?page=eats`); await page.locator('.map-frame.is-loading').first().waitFor({ timeout: 15000 })
+    const loading = await page.locator('.map-frame').first().evaluate(el => ({ h: Math.round(el.getBoundingClientRect().height), bg: getComputedStyle(el).backgroundColor, text: el.innerText.trim() }))
+    ok(`${tag} loading: the frame at full size in positron's grey, with no spinner, words or "Show map"`, loading.h >= 400 && loading.bg === 'rgb(242, 243, 240)' && loading.text === '' && await page.getByRole('button', { name: 'Show map' }).count() === 0, JSON.stringify(loading))
+    await page.getByText('Map unavailable').waitFor({ timeout: 16000 }).catch(() => {})
+    ok(`${tag} loading: no map after 10 s reads "Map unavailable · Retry"`, await page.getByText('Map unavailable').isVisible())
     await context.close()
   }
 
