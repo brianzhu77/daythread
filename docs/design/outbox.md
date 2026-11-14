@@ -92,7 +92,7 @@ conflicts on that row is held, visibly, rather than guessed.
 ## 5. Sending and replaying
 
 **Every send, the first one included, uses the entry's recorded basis** (Ratchet 22b0e8da). There is no separate live
-path: a change sent the moment he makes it and one resent after a reload go out the same way, with `basis: 'rows'`,
+path: a change sent the moment he makes it and one resent after a reload go out the same way, through `runOutboxCommand` (§11) with `basis: 'rows'`,
 the entry's own `baseRevision` (the revision he made it against, §4), its `operationId`, `expectedOwner` and
 `ownRevisions`: the revisions produced by this queue's earlier entries since its base (kept on each later entry as
 they land). A tab never swaps in a newer revision it loaded while the entry waited its turn: if another device
@@ -177,9 +177,11 @@ Outside this class, no command is known to read a row it doesn't write; the PR a
 - **A conflict or a refusal holds that entry and only what depends on it** (Bumblebee d21888b7: stopping everything
   would leave unrelated changes unsent behind one notice, the B98 failure in a new form). Each entry records, when it
   is made, its **predicted write set**: the row ids it writes and creates in the predicted workspace (§4), from the same
-  `rowsOf`/`planWrites` the server uses (pure code, shared). A later entry **depends** on a held one when their write
-  sets share a row (it edits what the held one made or changed). Dependants are held with it, in order; every other
-  entry carries on.
+  `rowsOf`/`planWrites` the server uses (pure code, shared), and its **references**: every id its action names (every
+  string in the action's JSON, an over-approximation on purpose). A later entry **depends** on a held one when their
+  write sets share a row, **or** when it references an id in the held one's write set, created rows included (Ratchet
+  a1d968fa: create a database, then add a row to it; the add writes the new row, not the database, so write sets alone
+  would send it and turn it into a refusal). Dependants are held with it, in order; every other entry carries on.
   - A `readsBeyond` entry (§5: buttons, template adds, changes that fire a rule) depends on every earlier held entry,
     since what it reads isn't in its write set.
 - **Recovery, chosen by him** (what he sees is §8; the notice is not dismissable while anything is held, and shows how
@@ -365,6 +367,9 @@ Browser checks (`tests/evidence/outbox/`, throwaway stores, WebKit and Chromium 
 20. A new client against a server without `outbox: 1` (the floor build): no stored entry is sent, none is stored; the pending clause shows; once a server with `outbox: 1` answers, they replay.
 21. Undo pending (offline): the Undo entry is stored and not predicted; a change made after it is `readsBeyond`; after the reopen the Undo replays under the whole-revision rule.
 
+22. Rollback between a tab's load and its send: the send to `runOutboxCommand` fails on the older build without executing; the entry stays stored and shows as kept back; once the new build answers, it replays.
+23. A held database creation, then a row added to that database, then an unrelated tick: the add is held with the creation (it references the created id); the tick is applied.
+
 Unit and contract tests: the outbox state machine against a fake store (write fails, quota, two drains, owner change,
 late reply); repository contract tests for `basis: 'rows'` on SQLite and Postgres (replay, tombstone, row conflict,
 empty write set, deleted row); `planWrites` write sets for the commands in §5.
@@ -388,11 +393,14 @@ reported by Playwright as a page error even when caught; Roadbuster dc9541ce) no
   held, never overwriting. The gate covers it: new → floor (write a row) → new, then replay an entry made before.
 - **A rollback while entries are stored:** the older build ignores the database (§7). A new client still open on an
   older server must not rely on it either: that server strips every new field, `expectedOwner` included, so it could
-  neither check the account nor the rows (Ratchet 22b0e8da). So the server **advertises the outbox**: every load and
-  command reply carries `outbox: 1`. A tab whose last server answer lacks it sends **no stored entry** and stores no
-  new one; it keeps what is stored untouched until a server with `outbox: 1` answers, and runs new changes live as
-  today (not durable, so §8.4's banner and the desktop leave prompt apply). Stored changes kept back this way are not
-  silent: they show the same pending clause as offline (Bumblebee 6e4a90a0; wording §8).
+  neither check the account nor the rows (Ratchet 22b0e8da). A capability answered at load time isn't enough either:
+  the server can roll back between that answer and the next send (Ratchet a1d968fa). So **outbox sends go to their own
+  server function, `runOutboxCommand`**, never to `runCommand`. An older build doesn't have it: the request fails as an
+  unknown server function and executes nothing, on every request, whatever the tab last saw. The browser reads that
+  failure as "no outbox here": it keeps the entry stored and unsent, sends no stored entry and stores no new one until
+  `runOutboxCommand` answers again, and runs new changes through `runCommand` as today (not durable, so §8.4's banner and
+  the desktop leave prompt apply). Stored changes kept back this way are not silent: they show the same pending clause
+  as offline (Bumblebee 6e4a90a0; §8.2a). `runCommand` stays as it is for old tabs during a deploy.
 
 ## 12. Decided
 
