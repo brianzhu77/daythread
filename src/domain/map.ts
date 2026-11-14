@@ -28,3 +28,11 @@ export function mapRows<R>(rows: readonly R[], placeOf: (row: R) => unknown, cap
 
 /** "100 of 240 shown", only when some are left out. */
 export const shownLine = (m: { pinned: unknown[]; withPin: number }): string | null => (m.withPin > m.pinned.length ? `${m.pinned.length} of ${m.withPin} shown` : null)
+
+/** The Place properties a Map can be by. */
+export const placeProperties = <P extends { type: string }>(db: { properties: readonly P[] }): P[] => db.properties.filter(p => p.type === 'place')
+/** The Map's Place property as it stands: none while it's deleted or no longer a Place ("Choose a Place property"). */
+export function viewMapBy<P extends { id: string; type: string }>(db: { properties: readonly P[] }, view: { mapBy?: string }): P | null {
+  const p = view.mapBy ? db.properties.find(x => x.id === view.mapBy) : undefined
+  return p && p.type === 'place' ? p : null
+}

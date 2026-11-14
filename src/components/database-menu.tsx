@@ -7,6 +7,7 @@ import { automationProblem } from '../domain/automations'
 import { opsFor } from '../domain/database'
 import { openAutomations } from './automation-sheet'
 import { openButtonEditor } from './button-editor'
+import { placeProperties, viewMapBy } from '../domain/map'
 import { filterTree, hasFilter, limits, ruleCount, rulesIn, type FilterGroup, tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View, type Repeat } from '../domain/database.ts'
 import { chartForms, chartKinds, chartSettings, type ChartForm, type ChartKind, type ChartSettings } from '../domain/chart'
 import { firstWidgetView } from '../domain/dashboard'
@@ -591,6 +592,21 @@ function CalendarDateChoices({ db, onPick, label = 'Show calendar by' }: { db: D
   </>
 }
 
+/** A map's rows sit by a Place property: asked when one is made (G8-9), as a calendar asks for its date. */
+function MapPlaceChoices({ db, onPick }: { db: DatabasePage; onPick: (propertyId: string) => void }) {
+  const change = useChange(db)
+  const addPlace = () => {
+    const id = newId()
+    change(current => ({ kind: 'addProperty', property: { id, name: newPropertyName(current, 'Place'), type: 'place' } }))
+    onPick(id)
+  }
+  return <>
+    <p className="database-menu-quiet">Show map by</p>
+    {placeProperties(db.database).map(p => <button key={p.id} type="button" role="menuitem" onClick={() => onPick(p.id)}>{p.name}</button>)}
+    <button type="button" role="menuitem" onClick={addPlace}>+ New Place property</button>
+  </>
+}
+
 function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
   const { workspace } = useWorkspace()
   const changeView = useViewChange(db.id, view.id)
@@ -725,6 +741,8 @@ function LayoutPanel({ db, view, back, go, formOk }: { db: DatabasePage; view: V
   const changeView = useViewChange(db.id, view.id)
   const [asking, setAsking] = useState(false)
   const [askingDate, setAskingDate] = useState<'calendar' | 'timeline' | null>(null)
+  const [askingPlace, setAskingPlace] = useState(false)
+  const toMap = (mapBy: string) => { setAskingPlace(false); changeView(current => ({ layout: 'map', mapBy, ...renamedFor(current, 'map') })) }
   const toDated = (layout: 'calendar' | 'timeline', dateBy: string) => { setAskingDate(null); changeView(current => ({ layout, dateBy, ...renamedFor(current, layout) })) }
   const toBoard = (groupBy: string) => { setAsking(false); changeView(current => ({ layout: 'board', groupBy, ...renamedFor(current, 'board') })) }
   const [askingAxis, setAskingAxis] = useState(false)
@@ -734,6 +752,11 @@ function LayoutPanel({ db, view, back, go, formOk }: { db: DatabasePage; view: V
     if (layout === 'calendar' || layout === 'timeline') {
       const kept = viewDateBy(db.database, view), only = dateProperties(db.database)
       if (kept) toDated(layout, kept.id); else if (only.length === 1) toDated(layout, only[0]!.id); else setAskingDate(layout)
+      return
+    }
+    if (layout === 'map') {
+      const kept = viewMapBy(db.database, view), only = placeProperties(db.database)
+      if (kept) toMap(kept.id); else if (only.length === 1) toMap(only[0]!.id); else setAskingPlace(true)
       return
     }
     if (layout === 'chart') {
@@ -750,11 +773,12 @@ function LayoutPanel({ db, view, back, go, formOk }: { db: DatabasePage; view: V
     if (kept) toBoard(kept.id); else if (only.length === 1) toBoard(only[0]!.id); else setAsking(true)
   }
   if (asking) return <><Head title="Board" back={() => setAsking(false)} /><BoardGroupChoices db={db} onPick={toBoard} /></>
+  if (askingPlace) return <><Head title="Map" back={() => setAskingPlace(false)} /><MapPlaceChoices db={db} onPick={toMap} /></>
   if (askingAxis) return <><Head title="Chart" back={() => setAskingAxis(false)} /><ChartAxisChoices db={db} onPick={toChart} /></>
   if (askingDate) return <><Head title={layoutLabels[askingDate]} back={() => setAskingDate(null)} /><CalendarDateChoices db={db} label={`Show ${askingDate} by`} onPick={id => toDated(askingDate, id)} /></>
   return <>
     <Head title="Layout" back={back} />
-    {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline', 'chart', ...(formOk || view.layout === 'form' ? ['form' as const] : []), ...(db.database.fixed ? [] : ['feed' as const])] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline', 'chart', ...(db.database.fixed ? [] : ['map' as const]), ...(formOk || view.layout === 'form' ? ['form' as const] : []), ...(db.database.fixed ? [] : ['feed' as const])] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
     {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
     </label>}
@@ -792,6 +816,12 @@ function LayoutPanel({ db, view, back, go, formOk }: { db: DatabasePage; view: V
       <select aria-label="End" value={viewDateEnd(db.database, view)?.id ?? ''} onChange={e => { const timelineEnd = e.target.value || null; changeView(() => ({ timelineEnd })) }}>
         <option value="">Same property</option>
         {dateProperties(db.database).filter(p => p.type === 'date' && p.id !== view.dateBy).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>}
+    {view.layout === 'map' && placeProperties(db.database).length > 0 && <label className="database-menu-row">Map by
+      <select aria-label="Map by" value={viewMapBy(db.database, view)?.id ?? ''} onChange={e => { const mapBy = e.target.value; if (mapBy) changeView(() => ({ mapBy })) }}>
+        {!viewMapBy(db.database, view) && <option value="">Choose…</option>}
+        {placeProperties(db.database).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
     </label>}
     {view.layout === 'calendar' && dateProperties(db.database).length > 0 && <label className="database-menu-row">Show calendar by
@@ -1229,7 +1259,7 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   const current = shownView(db.database, blockId)
   const [actions, setActions] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const [adding, setAdding] = useState<null | 'type' | 'board' | 'calendar' | 'timeline' | 'chart'>(null)
+  const [adding, setAdding] = useState<null | 'type' | 'board' | 'calendar' | 'timeline' | 'chart' | 'map'>(null)
   const views = db.database.views
   const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
   const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' | 'calendar' | 'timeline' | 'feed' = 'table', dateBy?: string) => {
@@ -1265,7 +1295,10 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   }
   // Its questions and a Responses view come with it (forms.md §3, §4).
   const addForm = () => { const id = newId(); change({ kind: 'addView', view: { id, name: 'Form', layout: 'form', columns: [], sort: [], filter: [] } }); setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id) }
+  const addMapBy = (mapBy: string) => { const id = newId(); change({ kind: 'addView', view: { id, name: 'Map', layout: 'map', mapBy, columns: [], sort: [], filter: [] } }); setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id) }
+  const addMap = () => { const only = placeProperties(db.database); if (only.length === 1) addMapBy(only[0]!.id); else setAdding('map') }
   const addCalendar = () => { const only = dateProperties(db.database); if (only.length === 1) add(undefined, undefined, 'calendar', only[0]!.id); else setAdding('calendar') }
+  if (adding === 'map') return <><Head title="New map" back={() => setAdding('type')} /><MapPlaceChoices db={db} onPick={addMapBy} /></>
   if (adding === 'chart') return <><Head title="New chart" back={() => setAdding('type')} /><ChartAxisChoices db={db} onPick={id => addChartBy(id)} /></>
   if (adding === 'timeline') return <><Head title="New timeline" back={() => setAdding('type')} /><CalendarDateChoices db={db} label="Show timeline by" onPick={id => add(undefined, undefined, 'timeline', id)} /></>
   if (adding === 'calendar') return <><Head title="New calendar" back={() => setAdding('type')} /><CalendarDateChoices db={db} onPick={id => add(undefined, undefined, 'calendar', id)} /></>
@@ -1279,6 +1312,7 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     <button type="button" role="menuitem" onClick={addCalendar}>Calendar</button>
     <button type="button" role="menuitem" onClick={addTimeline}>Timeline</button>
     <button type="button" role="menuitem" onClick={addChart}>Chart</button>
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={addMap}>Map</button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={addForm}>Form</button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'feed')}>Feed</button>}
     {/* A dashboard only ever opens on its database's own page; a linked block has one view of its own, so none there (dashboard.md §5). */}
