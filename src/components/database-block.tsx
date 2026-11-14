@@ -10,6 +10,7 @@ import { type CSSProperties, createContext, Fragment, useContext, useEffect, use
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { flushAllEditors } from './editor-flush'
+import { useScrollEdges } from './scroll-edges'
 import { descendantsOf, parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
 import { filterTree, hasFilter, limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import { loopRefusal } from '../domain/dependencies.ts'
@@ -1040,7 +1041,9 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const [limit, setLimitState] = useState(place?.limit ?? cap)
   const setLimit = (next: number) => { setLimitState(next); blockPlaces.set(blockId, { scrollLeft: blockPlaces.get(blockId)?.scrollLeft ?? 0, limit: next }) }
   // Sideways scroll comes back after a redraw, so an edit never sends him back to Name (Jazz 8985f9e7).
-  const scroller = (el: HTMLDivElement | null) => { const left = blockPlaces.get(blockId)?.scrollLeft; if (el && left && el.scrollLeft !== left) el.scrollLeft = left }
+  // The clipped edge fades while there's more to the right, and pinned Name gets its hairline once scrolled.
+  const edges = useScrollEdges()
+  const scroller = (el: HTMLDivElement | null) => { const left = blockPlaces.get(blockId)?.scrollLeft; if (el && left && el.scrollLeft !== left) el.scrollLeft = left; edges(el) }
   const onScroll = (e: UIEvent<HTMLDivElement>) => blockPlaces.set(blockId, { limit, scrollLeft: e.currentTarget.scrollLeft })
   const open = (rowId: string, columnId: string, group?: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId, ...(group !== undefined ? { group } : {}) })
   usePendingCells()
