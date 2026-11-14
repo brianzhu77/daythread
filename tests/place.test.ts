@@ -129,5 +129,5 @@ test("Place isn't offered for Group, Rollup or a form question in step 1", async
   assert.equal(groupableProperties(h.page('eats').database!, 'table').some(p => p.id === 'pl'), false)
   assert.equal(groupableProperties(h.page('eats').database!, 'board').some(p => p.id === 'pl'), false)
   const { questionable } = await import('../src/domain/forms.ts')
-  assert.equal(questionable({ id: 'pl', name: 'Where', type: 'place' }), false)
+  assert.equal(questionable({ type: 'place' }), false)
 })

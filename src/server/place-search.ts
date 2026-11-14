@@ -109,10 +109,7 @@ async function askPhoton(q: string, deps: SearchDeps): Promise<Asked> {
       headers: { 'user-agent': userAgent, accept: 'application/json' },
       signal: controller.signal,
     })
-    if (response.status === 429) {
-      const after = Number(response.headers.get('retry-after'))
-      return { status: 'pause', ms: Math.min(3_600_000, Math.max(60_000, Number.isFinite(after) ? after * 1000 : 0)) }
-    }
+    if (response.status === 429) return { status: 'pause', ms: Math.min(3_600_000, Math.max(60_000, retryAfterMs(response.headers.get('retry-after'), (deps.now ?? Date.now)()))) }
     if (!response.ok) return { status: 'unavailable', reason: `http ${response.status}` }
     const body = await readCapped(response, searchLimits.maxBytes)
     if (body === null) return { status: 'unavailable', reason: 'oversized' }
@@ -125,6 +122,14 @@ async function askPhoton(q: string, deps: SearchDeps): Promise<Asked> {
   } finally {
     clearTimeout(timer)
   }
+}
+
+/** Retry-After in either form, seconds or an HTTP date (Ratchet a4352286); 0 when absent or unreadable. */
+export function retryAfterMs(header: string | null, now: number): number {
+  if (!header) return 0
+  if (/^\s*\d+\s*$/.test(header)) return Number(header) * 1000
+  const at = Date.parse(header)
+  return Number.isFinite(at) ? Math.max(0, at - now) : 0
 }
 
 /** The reply's text, or null past `max` bytes: it's read only that far. */
