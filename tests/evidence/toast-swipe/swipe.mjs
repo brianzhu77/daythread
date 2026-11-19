@@ -108,7 +108,9 @@ for (const engine of engines) {
     await p.locator('[data-slot="toast"] .toast__title').first().click(); await p.mouse.move(5, 400); await wait(9500)
     ok(await notice().count() === 0, `${T} a tap on its text: gone after its 8 s`)
     // tap Undo still works
-    await p.locator('[data-slot="toast"]').evaluateAll(es => es.forEach(e => e.remove())).catch(() => {})
+    // Close what's left through its ✕ (taking nodes out from under React would blank the list).
+    await p.locator('[data-slot="toast"] .toast__close-button').evaluateAll(es => es.forEach(e => e.click())).catch(() => {}); await p.mouse.move(5, 400); await wait(500)
+    ok(await p.getByRole('checkbox', { name: /Mark .* done/ }).count() > 0, `${T} open to-dos left for the last case`)
     await tick(); before = await checked()
     await p.locator('[data-slot="toast"] .toast__action').first().click(); await wait(800)
     ok(await checked() === before - 1, `${T} a tap on Undo still undoes`)
