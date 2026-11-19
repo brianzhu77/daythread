@@ -67,6 +67,16 @@ for (const engine of engines) {
     // timer waits while pressed: hold 9 s (timeout 8 s), release in place
     await tick()
     { const box = await p.locator('[data-slot="toast"] .toast__title').first().boundingBox(); await p.mouse.move(box.x + 5, box.y + 5); await p.mouse.down(); await wait(9000); const still = await notice().count(); await p.mouse.move(box.x + 300, box.y + 400); await p.mouse.up(); ok(still === 1, `${T} held 9 s, still there`) }
+    // slide off the notice sideways and let go outside it: the countdown still resumes and it leaves on time
+    await tick()
+    { const box = await p.locator('[data-slot="toast"] .toast__title').first().boundingBox(); const x = box.x + 5, y = box.y + box.height / 2
+      await p.mouse.move(x, y); await p.mouse.down(); for (let i = 1; i <= 6; i++) { await p.mouse.move(x + 60 * i, y + 30 * i); await wait(20) }
+      await p.mouse.move(x + 200, 600); await p.mouse.up(); await wait(9500) }
+    ok(await notice().count() === 0, `${T} slid off sideways and let go outside: gone after its 8 s`)
+    // a tap on its text, then nothing: it still leaves on time
+    await tick()
+    await p.locator('[data-slot="toast"] .toast__title').first().click(); await p.mouse.move(5, 400); await wait(9500)
+    ok(await notice().count() === 0, `${T} a tap on its text: gone after its 8 s`)
     // tap Undo still works
     await p.locator('[data-slot="toast"]').evaluateAll(es => es.forEach(e => e.remove())).catch(() => {})
     await tick(); before = await checked()

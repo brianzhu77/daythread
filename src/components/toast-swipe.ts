@@ -70,6 +70,9 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
       if (cancelling || !drag || e.pointerId !== drag.id) return
       const d = drag
       drag = null
+      // A press focuses the notice, and React Aria holds the countdown while focus is inside it, so one tap on its
+      // text kept it up for good. Focus a press gave it goes again; focus from the keyboard stays.
+      setTimeout(() => { if (el.contains(document.activeElement) && !el.querySelector(':focus-visible') && !el.matches(':focus-visible')) (document.activeElement as HTMLElement).blur() }, 0)
       delete el.dataset.swiping
       if (d.sideways) { swallowClick = true; setTimeout(() => { swallowClick = false }, 0) }
       if (!d.swiping) { resume(); return }
@@ -91,16 +94,18 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
     // A release after a swipe can still end in a click on the button under it; that click never counts.
     const click = (e: MouseEvent) => { if (swallowClick) { e.stopPropagation(); e.preventDefault() } }
 
+    // Move and release are watched on the window: a finger that slides off the notice before it counts as a swipe
+    // (sideways, say) still ends the press there, so the countdown always resumes.
     el.addEventListener('pointerdown', down)
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
-    el.addEventListener('pointercancel', up)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
     el.addEventListener('click', click, true)
     cleanup.current = () => {
       el.removeEventListener('pointerdown', down)
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-      el.removeEventListener('pointercancel', up)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
       el.removeEventListener('click', click, true)
       if (drag) resume()
     }
