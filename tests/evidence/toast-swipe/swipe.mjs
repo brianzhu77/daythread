@@ -59,6 +59,15 @@ for (const engine of engines) {
     }))
     await wait(450)
     ok(await notice().count() === 0, `${T} 16 px flick (~0.6 px/ms) closes`)
+    // A flick that lifts with no move in between (the iOS Simulator sends these): its release counts as the move.
+    await tick()
+    await notice().first().evaluate(el => new Promise(done => {
+      const t = el.querySelector('.toast__title'), r = t.getBoundingClientRect(), x = r.x + 5, y0 = r.y + 5
+      const ev = (type, y) => t.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 8, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, button: 0 }))
+      ev('pointerdown', y0); setTimeout(() => { ev("pointerup", y0 - 18); done() }, 16)
+    }))
+    await wait(450)
+    ok(await notice().count() === 0, `${T} 18 px flick with no move event closes`)
     // down
     await tick()
     await drag(p.locator('[data-slot="toast"] .toast__title').first(), 44)
