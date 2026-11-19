@@ -1,6 +1,12 @@
 # PR219 review — Ratchet
 
-Candidate54382405, base532d1b28. Not clear.
+Current candidate a12d9d8f, base532d1b28. Historical candidate54382405. Not clear.
+
+## Recheck a12d9d8f
+
+Original upward no-move touch flick repaired, both engines. Expanded equivalent touch sequences still fire action for12px right and12px down in16ms with no move, both engines. Tap controls pass and native CDP mouse upward sequence passes. New capture logic cancels only the allowed closing direction, rather than all displacement beyond8px. Reportb050a9e5; Lead02199650 accepts as remaining blocking repair and freezes this repair to toast-swipe.ts plus test. Later pre-existing flick gaps go to follow-up, not another date-fix hold.
+
+Picker helper independently exercised through actual imported component from a user-click harness, in both engines: min2026-12-01/value2026-11-30 causes no callback on open; earliest accepted once; below-min change rejected; blur/cancel removes input without callback.8/8 pass. This tests browser helper behaviour, not native iOS. Jazz2d7ccacb independently reports Simulator earliest-day success after this repair; reviewer did not operate Simulator.
 
 ## Confirmed touch button cancellation gap
 
