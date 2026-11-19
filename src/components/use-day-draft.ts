@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { EditorNode } from '../domain/editor-document'
 import { draftOf, draftStale, draftView, type DraftItemView } from '../domain/day-draft'
+import { plannedOn } from '../domain/workspace'
 import type { Action, LocalDate, Page, Task, Workspace } from '../domain/types'
 import { prepareDayDraft } from '../server/functions'
 import { shortLabel, todayIso } from './dates'
@@ -22,22 +23,28 @@ export interface DayDraftHook {
   /** The block "N more open ▸" sits after: the end of the planning part. */
   moreOpenAfterId: string | null
   apply(itemIds: string[], edits?: Record<string, string>): Promise<{ applied: string[]; dropped: string[] }>
-  /** Skipped for today: the skip's operation id (for `reopen`), or null when nothing was skipped. */
-  skip(itemIds: string[]): Promise<string | null>
+  /** Skipped for today: the notice's ticket for Move to and its second Undo, or null when nothing was skipped. */
+  skip(itemIds: string[]): Promise<DraftTicket | null>
   /**
-   * Move to a later day (Brian 17e7b7f2, Lead d2d043f0): each suggested to-do is planned on `date` and stays skipped
-   * here, open or just skipped alike. Lines have no day and are left as they are. Its Undo takes back only the move.
+   * Move to a later day (Brian 17e7b7f2, Lead d2d043f0): each suggested to-do on the ticket is planned on `date` and
+   * stays skipped here. Lines have no day and are left as they are. A to-do planned elsewhere since the notice was shown
+   * keeps that plan (`dropped`); 'refused' when none could move for that reason. Its Undo takes back only the move.
    */
-  snooze(itemIds: string[], date: LocalDate): Promise<boolean>
+  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[] }>
   /**
-   * The skip notice's Undo once Undo move has used the workspace's one Undo: reopens what the skip `skippedBy` left,
-   * or 'refused' when another tab or device has skipped, moved or applied it since (`Can't undo · edited since`).
+   * The skip notice's Undo once Undo move has used the workspace's one Undo: reopens what that skip left, or 'refused'
+   * when it was skipped, moved or applied since, or its to-do planned elsewhere (`Can't undo · edited since`).
    */
-  reopen(itemIds: string[], skippedBy: string): Promise<'done' | 'refused' | 'failed'>
+  reopen(ticket: DraftTicket): Promise<'done' | 'refused' | 'failed'>
   addOpen(taskId: string): Promise<boolean>
   retry(): void
 }
 export type { DraftItemView, EditorNode, Task }
+/**
+ * What a skip notice acts on (Ratchet da1ca677): the items, the skip that set them aside, and each to-do's planned day
+ * as the notice was shown. Move to and Undo are refused for what changed since, in this tab or any other.
+ */
+export interface DraftTicket { itemIds: string[]; skippedBy: string; seen: Record<string, LocalDate | null> }
 
 /**
  * This tab's ask for each day page's draft, shared by every hook on the page: in flight since `at`, answered (`done`), or
@@ -140,17 +147,30 @@ export function useDayDraft(page: Page): DayDraftHook {
     return { applied, dropped: itemIds.filter(id => !applied.includes(id)) }
   }, [latest, page.id, write])
 
-  const skip = useCallback(async (itemIds: string[]) => {
+  const skip = useCallback(async (itemIds: string[]): Promise<DraftTicket | null> => {
+    const ws = latest(), draft = ws ? draftOf(ws, page.id) : null
+    const seen: Record<string, LocalDate | null> = {}
+    for (const item of draft?.items ?? []) if (ws && item.taskId && itemIds.includes(item.id)) seen[item.id] = plannedOn(ws, item.taskId)
+    const skippedBy = newOperationId()
+    const receipt = await write({ type: 'skip-draft', pageId: page.id, itemIds }, r => ({ text: itemIds.length === 1 ? 'Skipped' : `Skipped ${itemIds.length}`, undoOperationId: r.operationId }), skippedBy, { inlineRefusal: /Nothing to skip/ })
+    return receipt ? { itemIds, skippedBy, seen } : null
+  }, [latest, page.id, write])
+
+  const snooze = useCallback(async (ticket: DraftTicket, date: LocalDate) => {
     const operationId = newOperationId()
-    const receipt = await write({ type: 'skip-draft', pageId: page.id, itemIds }, r => ({ text: itemIds.length === 1 ? 'Skipped' : `Skipped ${itemIds.length}`, undoOperationId: r.operationId }), operationId, { inlineRefusal: /Nothing to skip/ })
-    return receipt ? operationId : null
-  }, [page.id, write])
-
-  const snooze = useCallback(async (itemIds: string[], date: LocalDate) => Boolean(await write({ type: 'snooze-draft', pageId: page.id, itemIds, date, today: todayIso() }, r => ({ text: `Moved to ${shortLabel(date)}`, undoOperationId: r.operationId }), undefined, { inlineRefusal: /Nothing to move|Pick a later day/ })), [page.id, write])
-
-  const reopen = useCallback(async (itemIds: string[], skippedBy: string) => {
     let refused = false
-    const receipt = await write({ type: 'reopen-draft', pageId: page.id, itemIds, skippedBy }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo/, onRefused: () => { refused = true } })
+    const movedNow = () => ticket.itemIds.filter(id => draftOf(latest()!, page.id)?.items.some(i => i.id === id && i.until === date && i.by === operationId))
+    const receipt = await write({ type: 'snooze-draft', pageId: page.id, itemIds: ticket.itemIds, date, today: todayIso(), seen: ticket.seen }, () => {
+      const moved = movedNow().length, left = Object.keys(ticket.seen).length - moved
+      return { text: `${moved > 1 ? `Moved ${moved} to` : 'Moved to'} ${shortLabel(date)}${left > 0 ? ` · ${left} changed elsewhere` : ''}`, undoOperationId: operationId }
+    }, operationId, { inlineRefusal: /Nothing to move|Pick a later day|Changed elsewhere/, onRefused: () => { refused = true } })
+    const moved = receipt ? movedNow() : []
+    return { status: receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const, moved, dropped: ticket.itemIds.filter(id => !moved.includes(id)) }
+  }, [latest, page.id, write])
+
+  const reopen = useCallback(async (ticket: DraftTicket) => {
+    let refused = false
+    const receipt = await write({ type: 'reopen-draft', pageId: page.id, itemIds: ticket.itemIds, skippedBy: ticket.skippedBy, seen: ticket.seen }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo/, onRefused: () => { refused = true } })
     return receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const
   }, [page.id, write])
 
