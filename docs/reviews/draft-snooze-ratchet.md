@@ -1,6 +1,18 @@
-# Draft move data review — Ratchet
+# Draft move review — Ratchet
 
-Current candidate: 4fdf8a80, base 6304bd9f. Historical candidate: 1389ec6c. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
+Current integrated candidate: 50a390f8. Data candidate: 4fdf8a80, base 6304bd9f. Historical candidate: 1389ec6c. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
+
+Integrated UI not clear on50a390f8. Data clear on4fdf8a80 carries forward.
+
+## UI acceptance50a390f8
+
+Actual browser Chromium/WebKit,390/1280, independent scripts `tests/evidence/draft-snooze/ratchet-browser.mjs` and `ratchet-boundaries.mjs`. All use throwaway SQLite; second tab changes plans through actual Tasks menu.
+
+Confirmed defects:
+- At390 the three day buttons are36px tall, below Lead c432c98e's44px requirement. Both engines. Desktop32px is recorded, not independently a failure. Reported8d183260.
+- Mixed Dismiss notice (`Move3to-dos to`) overflows at390: Pick button right402px, toast right374px, viewport390px. Both engines. Row lacks wrapping. Reportede0544f3d.
+
+Passed: ordinary Another day in B, old Move in A keeps newer plan and shows refusal (4engine/width combinations); swipe from Mon never plans (4combinations); after Move/Undo move in A, ordinary replan B makes old second Undo refuse and preserves the newer plan (both engines at390). No native/Simulator evidence. Author52-case UI suite not rerun yet; awaiting layout repair to avoid duplicating full UI regression.
 
 Data review clear for 4fdf8a80 on the checked paths; UI and gestures remain unverified.
 
