@@ -473,11 +473,26 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 19b closed between being given back and built again: the edit is kept and shown held ("${text}")`, stored().pages.find(p => p.id === 'r1')?.values?.st === 'a' && /changed elsewhere/.test(text) && /Keep mine/.test(text), `answered ${answered}`)
     await context.close()
   }
-  /** After the first outbox answer, holds what `which` picks until `release()`; the page sees nothing back meanwhile. */
+  /**
+   * After the first outbox answer, holds what `which` picks until `release()`; the page sees nothing back meanwhile.
+   * The answer is fetched here and only handed to the page once `answered` is set: set from Playwright's `response`
+   * event instead, Chromium could deliver it after the page had already sent its rebuild, and that send went through
+   * unheld (19c, Lead 199831e7, 1 run in 41).
+   */
   const holdAfterAnswer = async (page, which) => {
     let answered = false, release; const gate = new Promise(r => { release = r })
-    page.on('response', r => { if (r.url().includes('/_serverFn/cedd5fc6')) answered = true })
-    await page.route('**/_serverFn/**', async route => { if (answered && which(route.request())) { await gate; await route.continue().catch(() => {}) } else await route.continue().catch(() => {}) })
+    await page.route('**/_serverFn/**', async route => {
+      const req = route.request()
+      if (answered && which(req)) { await gate; await route.continue().catch(() => {}); return }
+      if (!answered && req.url().includes('/_serverFn/cedd5fc6')) {
+        const res = await route.fetch().catch(() => null)
+        if (!res) { await route.abort().catch(() => {}); return }
+        answered = true
+        await route.fulfill({ response: res }).catch(() => {})
+        return
+      }
+      await route.continue().catch(() => {})
+    })
     return { answered: () => answered, release }
   }
   const entriesIn = p => p.evaluate(() => new Promise(resolve => { const r = indexedDB.open('daythread-outbox', 1); r.onsuccess = () => { const q = r.result.transaction('entries').objectStore('entries').getAll(); q.onsuccess = () => resolve(q.result.map(e => ({ label: e.label, state: e.state }))) }; r.onerror = () => resolve([]) }))
