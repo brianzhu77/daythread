@@ -9,7 +9,7 @@ import { draftOf, draftStale, draftView, type DraftItemView } from '../domain/da
 import { plannedOn } from '../domain/workspace'
 import type { Action, LocalDate, Page, Task, Workspace } from '../domain/types'
 import { prepareDayDraft } from '../server/functions'
-import { shortLabel, todayIso } from './dates'
+import { todayIso } from './dates'
 import { flushEditor } from './editor-flush'
 import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
@@ -30,7 +30,9 @@ export interface DayDraftHook {
    * stays skipped here. Lines have no day and are left as they are. A to-do planned elsewhere since the notice was shown
    * keeps that plan (`dropped`); 'refused' when none could move for that reason. Its Undo takes back only the move.
    */
-  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[] }>
+  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[]; operationId: string }>
+  /** Undo on `Moved to …`: takes back only the move; 'refused' when the workspace's Undo has moved on. */
+  undoMove(operationId: string): Promise<'done' | 'refused' | 'failed'>
   /**
    * The skip notice's Undo once Undo move has used the workspace's one Undo: reopens what that skip left, or 'refused'
    * when it was skipped, moved or applied since, or its to-do planned elsewhere (`Can't undo · edited since`).
@@ -152,7 +154,8 @@ export function useDayDraft(page: Page): DayDraftHook {
     const seen: Record<string, LocalDate | null> = {}
     for (const item of draft?.items ?? []) if (ws && item.taskId && itemIds.includes(item.id)) seen[item.id] = plannedOn(ws, item.taskId)
     const skippedBy = newOperationId()
-    const receipt = await write({ type: 'skip-draft', pageId: page.id, itemIds }, r => ({ text: itemIds.length === 1 ? 'Skipped' : `Skipped ${itemIds.length}`, undoOperationId: r.operationId }), skippedBy, { inlineRefusal: /Nothing to skip/ })
+    // No notice from here: the day-draft UI shows `Skipped` with its day row (day-draft.tsx).
+    const receipt = await write({ type: 'skip-draft', pageId: page.id, itemIds }, undefined, skippedBy, { inlineRefusal: /Nothing to skip/ })
     return receipt ? { itemIds, skippedBy, seen } : null
   }, [latest, page.id, write])
 
@@ -160,12 +163,10 @@ export function useDayDraft(page: Page): DayDraftHook {
     const operationId = newOperationId()
     let refused = false
     const movedNow = () => ticket.itemIds.filter(id => draftOf(latest()!, page.id)?.items.some(i => i.id === id && i.until === date && i.by === operationId))
-    const receipt = await write({ type: 'snooze-draft', pageId: page.id, itemIds: ticket.itemIds, date, today: todayIso(), skippedBy: ticket.skippedBy, seen: ticket.seen }, () => {
-      const moved = movedNow().length, left = Object.keys(ticket.seen).length - moved
-      return { text: `${moved > 1 ? `Moved ${moved} to` : 'Moved to'} ${shortLabel(date)}${left > 0 ? ` · ${left} changed elsewhere` : ''}`, undoOperationId: operationId }
-    }, operationId, { inlineRefusal: /Nothing to move|Pick a later day|Changed elsewhere/, onRefused: () => { refused = true } })
+    // The `Moved to …` notice is the day-draft UI's: its Undo brings the Skipped notice back (day-draft.tsx).
+    const receipt = await write({ type: 'snooze-draft', pageId: page.id, itemIds: ticket.itemIds, date, today: todayIso(), skippedBy: ticket.skippedBy, seen: ticket.seen }, undefined, operationId, { inlineRefusal: /Nothing to move|Pick a later day|Changed elsewhere/, onRefused: () => { refused = true } })
     const moved = receipt ? movedNow() : []
-    return { status: receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const, moved, dropped: ticket.itemIds.filter(id => !moved.includes(id)) }
+    return { status: receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const, moved, dropped: ticket.itemIds.filter(id => !moved.includes(id)), operationId }
   }, [latest, page.id, write])
 
   const reopen = useCallback(async (ticket: DraftTicket) => {
@@ -174,6 +175,14 @@ export function useDayDraft(page: Page): DayDraftHook {
     return receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const
   }, [page.id, write])
 
+  /** Undo on `Moved to …`: the workspace's one Undo, as every other notice sends it. The ticket still works afterwards. */
+  const undoMove = useCallback(async (operationId: string) => {
+    if (latest()?.undo?.operationId !== operationId) return 'refused' as const
+    let refused = false
+    const receipt = await run({ type: 'undo', targetOperationId: operationId }, undefined, undefined, { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => { refused = true } })
+    return receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const
+  }, [latest, run])
+
   const addOpen = useCallback(async (taskId: string) => Boolean(page.date && await write({ type: 'plan-task', taskId, date: page.date, today: todayIso() }, r => ({ text: 'Added', undoOperationId: r.operationId }))), [page.date, write])
 
   const retry = useCallback(() => { void prepare(false) }, [prepare])
@@ -181,5 +190,5 @@ export function useDayDraft(page: Page): DayDraftHook {
   const state: DayDraftState = offline && !view ? 'offline' : inFlight(ask) && !view?.items.length ? 'preparing'
     // A failed or lost ask here shows Retry at once (he may be looking at the page); a tab coming back asks again first.
     : !view ? (ask && ask.state !== 'done' ? 'failed' : 'none') : view.status === 'failed' ? 'failed' : 'ready'
-  return { state, items: view?.items ?? [], moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, snooze, reopen, addOpen, retry }
+  return { state, items: view?.items ?? [], moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, snooze, undoMove, reopen, addOpen, retry }
 }

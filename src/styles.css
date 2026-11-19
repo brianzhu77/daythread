@@ -1183,8 +1183,27 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 @media (max-width: 599px) { .app-toasts.toast-region--bottom { bottom:calc(84px + env(safe-area-inset-bottom)); } }
 /* Phone notices sit under the status bar and the strip, at the top of what he can see. */
 .app-toasts.toast-region--top { top:calc(16px + env(safe-area-inset-top) + var(--vv-top, 0px)); }
-/* HeroUI reveals the toast ✕ on hover only; phones have no hover, so it always shows. */
-.app-toasts .toast__close-button { opacity:1; pointer-events:auto; }
+/* #364: ✕ is the last thing on the notice's line, always shown (phones have no hover), with a 44 px target
+   and the same small icon. It sits inside the notice, so its target never reaches the Undo next to it. */
+.app-toasts .toast__close-button { position:relative; inset:auto; flex:none; align-self:flex-start; width:44px; height:44px; margin:-4px -12px -4px -2px; border:0; border-radius:var(--radius-control); background:transparent; color:var(--ink-3); opacity:1; pointer-events:auto; }
+@media (hover: hover) { .app-toasts .toast__close-button:hover { background:var(--hover-dim); color:var(--ink); } }
+/* One line on phones too (text, action, ✕ centred together), as on the laptop: HeroUI drops the action 8 px there. */
+.app-toasts .toast__action { margin-top:0; }
+/* The ✕ centres on the action's line: the action is 36 px on the laptop, 40 px on a phone. */
+@media (max-width: 639px) { .app-toasts .toast__close-button { margin-top:-2px; } }
+/* B100: a notice's second row (NoticeRow): a short grey label, then small ghost buttons (the notice's second-action
+   style), across the full width under the line. The first button's text lines up with the notice's text. */
+.app-toasts [data-slot="toast"].has-row { flex-wrap:wrap; row-gap:2px; }
+.app-toasts .toast-row { flex-basis:100%; display:flex; align-items:center; gap:2px; min-width:0; margin:0 -8px -4px 0; }
+.app-toasts .toast-row-label { flex:none; margin-right:4px; font-size:var(--text-small); color:var(--ink-2); white-space:nowrap; }
+.app-toasts .toast-row-button { flex:none; font-variant-numeric:tabular-nums; }
+/* A notice follows the finger toward its edge (toast-swipe.ts); the page never scrolls under it. `translate` is its
+   own property, so HeroUI's stacking transform is untouched. Springs back, or leaves, in 0.2 s. */
+.app-toasts [data-slot="toast"] { touch-action:none; transition:transform var(--toast-translate-duration) var(--toast-ease), height var(--toast-height-duration) var(--toast-ease), opacity var(--toast-opacity-duration) var(--toast-ease), translate .2s var(--toast-ease); }
+.app-toasts [data-slot="toast"][data-swiping="true"] { transition:transform var(--toast-translate-duration) var(--toast-ease), height var(--toast-height-duration) var(--toast-ease); user-select:none; -webkit-user-select:none; }
+/* Swiped away: it keeps going the way he pushed it, not HeroUI's own exit direction. */
+.app-toasts [data-slot="toast"][data-swiped="true"] { --toast-enter:0%; }
+@media (prefers-reduced-motion: reduce) { .app-toasts [data-slot="toast"] { transition:opacity .15s; } .app-toasts [data-slot="toast"][data-swiping="true"] { transition:none; } }
 
 /* Tags: Brian's own #words, a quieter grey but otherwise plain body text (no fill, border or underline: those mean
    labels and links). The mark is fainter so the word reads first. */
