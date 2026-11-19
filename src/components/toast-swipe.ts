@@ -18,7 +18,7 @@ const RUBBER_MAX = 12
 /** How far back a release looks to tell a flick (a single last move is too noisy on a phone). */
 const FLICK_WINDOW = 80
 
-type Drag = { id: number; x: number; y: number; dir: -1 | 1 | 0; moved: number; samples: { t: number; moved: number }[]; swiping: boolean }
+type Drag = { id: number; x: number; y: number; target: EventTarget | null; dir: -1 | 1 | 0; moved: number; samples: { t: number; moved: number }[]; swiping: boolean; sideways: boolean }
 
 /** `placement`: where the region sits. A top notice only goes up; a bottom one goes either way. */
 export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
@@ -29,23 +29,28 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
     if (!el) return
     let drag: Drag | null = null
     let swallowClick = false
+    let cancelling = false
     const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const set = (offset: number, fade: number) => { el.style.translate = offset ? `0 ${offset}px` : ''; el.style.opacity = fade < 1 ? String(fade) : '' }
     const resume = () => toast.resumeAll()
 
     const down = (e: PointerEvent) => {
       if (drag || (e.pointerType === 'mouse' && e.button !== 0) || el.dataset.exiting === 'true') return
-      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, dir: 0, moved: 0, samples: [], swiping: false }
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, target: e.target, dir: 0, moved: 0, samples: [], swiping: false, sideways: false }
       // The countdown waits while a finger is on the notice (hover already pauses it for a pointer).
       toast.pauseAll()
     }
     const move = (e: PointerEvent) => {
-      if (!drag || e.pointerId !== drag.id) return
+      if (!drag || e.pointerId !== drag.id || drag.sideways) return
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y
       if (!drag.swiping) {
         if (Math.hypot(dx, dy) < SLOP) return
-        // Sideways is not a swipe here; let the press go on as it was.
-        if (Math.abs(dx) > Math.abs(dy)) { drag = null; resume(); return }
+        // Past 8 px in any direction it's no longer a tap (Ratchet 9875ade4): the button under the finger is told the
+        // press is cancelled, as the browser does when it takes over a touch, so React Aria never calls its onPress.
+        cancelling = true
+        try { drag.target?.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: e.isPrimary })) } finally { cancelling = false }
+        // Sideways is not a swipe here: it just isn't a tap any more.
+        if (Math.abs(dx) > Math.abs(dy)) { drag.sideways = true; return }
         drag.swiping = true
         drag.dir = placement === 'top' ? -1 : dy < 0 ? -1 : 1
         el.dataset.swiping = 'true'
@@ -62,10 +67,11 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
       e.preventDefault()
     }
     const up = (e: PointerEvent) => {
-      if (!drag || e.pointerId !== drag.id) return
+      if (cancelling || !drag || e.pointerId !== drag.id) return
       const d = drag
       drag = null
       delete el.dataset.swiping
+      if (d.sideways) { swallowClick = true; setTimeout(() => { swallowClick = false }, 0) }
       if (!d.swiping) { resume(); return }
       swallowClick = true
       setTimeout(() => { swallowClick = false }, 0)
