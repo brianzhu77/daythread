@@ -33,7 +33,7 @@ test('review: reopen rejects ordinary plan-task after Undo move', () => {
  const {h, book, draft} = setup(); draft([{taskId:book}]);
  const seen={i0:plannedOn(h.ws,book)};
  const skip=h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
- const move=h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,seen});
+ const move=h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,skippedBy:skip.receipt.operationId,seen});
  h.run({type:'undo',targetOperationId:move.receipt.operationId});
  h.run({type:'plan-task',taskId:book,date:'2026-10-28',today:tomorrow});
  assert.throws(()=>h.run({type:'reopen-draft',pageId:dayId(tomorrow),itemIds:['i0'],skippedBy:skip.receipt.operationId,seen}),/Cannot undo/);
@@ -41,9 +41,9 @@ test('review: reopen rejects ordinary plan-task after Undo move', () => {
 test('review: old move notice cannot overwrite later move', () => {
  const {h, book, draft}=setup(); draft([{taskId:book}]);
  const seen={i0:plannedOn(h.ws,book)};
- h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
+ const skip=h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
  h.run({type:'plan-task',taskId:book,date:'2026-10-28',today:tomorrow});
- assert.throws(()=>h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,seen}), /changed|Nothing|Cannot/i);
+ assert.throws(()=>h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,skippedBy:skip.receipt.operationId,seen}), /changed|Nothing|Cannot/i);
 });
 
 test('review: old move ticket refuses a newer skip decision', () => {
@@ -52,5 +52,18 @@ test('review: old move ticket refuses a newer skip decision', () => {
  const skip=h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
  h.run({type:'reopen-draft',pageId:dayId(tomorrow),itemIds:['i0'],skippedBy:skip.receipt.operationId,seen});
  h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
- assert.throws(()=>h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,seen}),/changed|Nothing|Cannot/i);
+ assert.throws(()=>h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,skippedBy:skip.receipt.operationId,seen}),/changed|Nothing|Cannot/i);
+});
+
+test('review: current ticket can move, Undo, reopen without changing deadline', () => {
+ const {h,book,draft,item,view}=setup(); draft([{taskId:book}]);
+ const seen={i0:plannedOn(h.ws,book)}, due=h.ws.tasks.find(t=>t.id===book)!.deadlineOn;
+ const skip=h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
+ const move=h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,skippedBy:skip.receipt.operationId,seen});
+ assert.equal(plannedOn(h.ws,book),monday);
+ h.run({type:'undo',targetOperationId:move.receipt.operationId});
+ assert.equal(item('i0').state,'skipped');
+ h.run({type:'reopen-draft',pageId:dayId(tomorrow),itemIds:['i0'],skippedBy:skip.receipt.operationId,seen});
+ assert.equal(item('i0').state,'open'); assert.equal(view().items.length,1);
+ assert.equal(h.ws.tasks.find(t=>t.id===book)!.deadlineOn,due);
 });

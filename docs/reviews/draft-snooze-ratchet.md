@@ -1,8 +1,12 @@
 # Draft move data review — Ratchet
 
-Current candidate: dfe16cfb, base 6304bd9f. Historical candidate: 1389ec6c. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
+Current candidate: 4fdf8a80, base 6304bd9f. Historical candidate: 1389ec6c. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
 
-Not clear: the original ordinary-plan findings are repaired, but Move still does not check the skip decision identity.
+Data review clear for 4fdf8a80 on the checked paths; UI and gestures remain unverified.
+
+## Recheck 4fdf8a80
+
+Snooze now requires skippedBy and verifies the item is still skipped by that decision, unmoved, with the captured plan. Independent cases pass with both seen and skippedBy present: ordinary replan after Undo move rejects old reopen; ordinary replan after skip rejects old move; reopen/re-skip rejects old move; a current ticket completes Move/Undo/reopen and preserves deadline. Author 9 + reviewer 4 = 13/13 pass.
 
 ## Recheck dfe16cfb
 
