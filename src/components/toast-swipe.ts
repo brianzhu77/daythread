@@ -80,6 +80,10 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
         const dir: -1 | 1 = placement === 'top' ? -1 : dy < 0 ? -1 : 1
         if (Math.abs(dy) >= SLOP && Math.abs(dy) > Math.abs(dx) && dy * dir > 0) {
           d.swiping = true; d.dir = dir; d.moved = dy * dir; d.samples.push({ t: e.timeStamp, moved: d.moved })
+          // Not a tap either: the button under the press hears it cancelled before this release reaches it (the
+          // window sees the release first, in its capture phase).
+          cancelling = true
+          try { d.target?.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: e.isPrimary })) } finally { cancelling = false }
         }
       }
       // A press focuses the notice, and React Aria holds the countdown while focus is inside it, so one tap on its
@@ -112,14 +116,14 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
     // (sideways, say) still ends the press there, so the countdown always resumes.
     el.addEventListener('pointerdown', down)
     window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
+    window.addEventListener('pointerup', up, true)
+    window.addEventListener('pointercancel', up, true)
     el.addEventListener('click', click, true)
     cleanup.current = () => {
       el.removeEventListener('pointerdown', down)
       window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
+      window.removeEventListener('pointerup', up, true)
+      window.removeEventListener('pointercancel', up, true)
       el.removeEventListener('click', click, true)
       if (drag) resume()
     }

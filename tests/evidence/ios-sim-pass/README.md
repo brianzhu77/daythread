@@ -19,16 +19,21 @@ can't make a slow drag.
    `input` + `change` 28 ms later, before any picker shows. So the notice's Pick… tried to move the to-do to today
    (refused, shown as "Not moved · changed elsewhere"), and on the Tasks screen "Pick date…" planned the to-do on today
    with no calendar shown (`tasks.py` on main: FAIL, planned 2026-11-18).
-   Fix: the field starts at the earliest day it allows; iOS then opens its calendar and sends `change` only for a
-   tapped day. The Tasks screen uses the same `pickDate`.
+   Fix: the field starts one day before the earliest it allows; iOS then opens its calendar and sends `change` only for
+   a tapped day, the earliest included (Ratchet 5de80cde: preset to the earliest day itself, tapping that day sent
+   nothing). A day before `min` is never taken. The Tasks screen uses the same `pickDate`.
 2. **A fast short flick could arrive with one move or none** (18 pt at 1500 pt/s: down, then up 16 ms later). The flick
    speed needed two moves, so it didn't close. Fix: the press is the first sample, the release counts as the move when
-   none came, and a finger that stopped for 50 ms before lifting isn't a flick.
+   none came, and a finger that stopped for 50 ms before lifting isn't a flick. When the release is what makes it a
+   swipe, the button under the press is cancelled first (the window hears the release in its capture phase), so a
+   short flick from Undo or a day button fires nothing (Ratchet 9558d01c).
 3. A refusal for a day that isn't later now says `Not moved · pick a later day`, not "changed elsewhere".
 
 ## Result on fix/ios-date-pick
 
-`sim.py` 16/16 in Safari and 16/16 in the Home Screen app; `tasks.py` 3/3. Swipe up 44 pt at 60 pt/s closes; 20 pt at
+`sim.py` 19/19 in Safari and 19/19 in the Home Screen app; `tasks.py` 3/3. Added since 54382405: a 14 pt flick with no
+move event from Undo (closes, nothing undone) and from a day button (closes, nothing moved), and the earliest day from
+Pick… (Thu 19) and from the Tasks screen (today) can be picked. Swipe up 44 pt at 60 pt/s closes; 20 pt at
 40 pt/s springs back; an 18 pt flick closes; a sideways slide on a day button and a swipe from Undo fire nothing;
 Mon → `Moved to Mon, Nov 23` → Undo → Skipped → Undo; Pick… opens the calendar, picks nothing for 12 s, a tapped
 Tue 24 moves it and the calendar closes; Dismiss on a mix fits at 402 pt.
