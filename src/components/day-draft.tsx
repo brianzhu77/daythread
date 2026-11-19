@@ -42,7 +42,7 @@ export interface DayDraft {
   /** The notice's ticket for Move to and its second Undo (use-day-draft.ts), or null when nothing was skipped. */
   skip(itemIds: string[]): Promise<DraftTicket | null>
   /** Move to: the ticket's to-dos planned on `date`, kept skipped here; one planned elsewhere since stays (`dropped`). */
-  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[]; operationId: string }>
+  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[]; operationId: string; reason?: string }>
   /** Undo on `Moved to …`: takes back only the move. */
   undoMove(operationId: string): Promise<'done' | 'refused' | 'failed'>
   /** The skip notice's Undo after Undo move: reopens what that skip left, or 'refused' if it was changed since. */
@@ -127,7 +127,8 @@ function showSkipped(draft: DayDraft, ticket: DraftTicket) {
 /** `Moved to Mon, Nov 23 · Undo`. Its Undo takes back only the move and brings the Skipped notice back, same ticket. */
 async function moveTo(draft: DayDraft, ticket: DraftTicket, date: LocalDate) {
   const r = await draft.snooze(ticket, date)
-  if (r.status === 'refused') { toast('Not moved · changed elsewhere', { timeout: REFUSAL_MS }); return }
+  // A day that isn't later than this one is refused for that, not for a change elsewhere: say which.
+  if (r.status === 'refused') { toast(/later day/i.test(r.reason ?? '') ? 'Not moved · pick a later day' : 'Not moved · changed elsewhere', { timeout: REFUSAL_MS }); return }
   // 'failed': nothing was stored, and the save bar already says so.
   if (r.status !== 'done') return
   const moved = r.moved.length, left = Object.keys(ticket.seen).length - moved

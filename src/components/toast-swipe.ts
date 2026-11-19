@@ -17,6 +17,8 @@ const RUBBER_MAX = 12
 
 /** How far back a release looks to tell a flick (a single last move is too noisy on a phone). */
 const FLICK_WINDOW = 80
+/** Held still this long before lifting, it's a drag that stopped, not a flick. */
+const FLICK_STILL = 50
 
 type Drag = { id: number; x: number; y: number; target: EventTarget | null; dir: -1 | 1 | 0; moved: number; samples: { t: number; moved: number }[]; swiping: boolean; sideways: boolean }
 
@@ -36,7 +38,8 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
 
     const down = (e: PointerEvent) => {
       if (drag || (e.pointerType === 'mouse' && e.button !== 0) || el.dataset.exiting === 'true') return
-      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, target: e.target, dir: 0, moved: 0, samples: [], swiping: false, sideways: false }
+      // The press is the first sample: a short fast flick on iOS can arrive as one move, and needs a start to measure from.
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, target: e.target, dir: 0, moved: 0, samples: [{ t: e.timeStamp, moved: 0 }], swiping: false, sideways: false }
       // The countdown waits while a finger is on the notice (hover already pauses it for a pointer).
       toast.pauseAll()
     }
@@ -70,6 +73,21 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
       if (cancelling || !drag || e.pointerId !== drag.id) return
       const d = drag
       drag = null
+      // A flick fast enough can lift with no move in between (seen on the iOS Simulator): the release itself says how
+      // far it went, so it counts as the swipe's one move.
+      if (!d.swiping && !d.sideways && e.type === 'pointerup') {
+        const dx = e.clientX - d.x, dy = e.clientY - d.y
+        if (Math.hypot(dx, dy) >= SLOP) {
+          // Past 8 px in any direction it isn't a tap (Ratchet b050a9e5): the button under the press hears it cancelled
+          // before this release reaches it (the window sees the release first, in its capture phase).
+          cancelling = true
+          try { d.target?.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: e.isPrimary })) } finally { cancelling = false }
+          // Whether it also closes the notice is the swipe's own rule: toward an edge it may leave by, mostly vertical.
+          const dir: -1 | 1 = placement === 'top' ? -1 : dy < 0 ? -1 : 1
+          if (Math.abs(dy) > Math.abs(dx) && dy * dir > 0) { d.swiping = true; d.dir = dir; d.moved = dy * dir; d.samples.push({ t: e.timeStamp, moved: d.moved }) }
+          else d.sideways = true
+        }
+      }
       // A press focuses the notice, and React Aria holds the countdown while focus is inside it, so one tap on its
       // text kept it up for good. Focus a press gave it goes again; focus from the keyboard stays.
       setTimeout(() => { if (el.contains(document.activeElement) && !el.querySelector(':focus-visible') && !el.matches(':focus-visible')) (document.activeElement as HTMLElement).blur() }, 0)
@@ -79,7 +97,9 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
       swallowClick = true
       setTimeout(() => { swallowClick = false }, 0)
       const first = d.samples[0], last = d.samples[d.samples.length - 1]
-      const speed = first && last && last !== first ? (last.moved - first.moved) / Math.max(1, last.t - first.t) : 0
+      // A finger that stopped before lifting isn't flicking.
+      const still = last ? e.timeStamp - last.t > FLICK_STILL : true
+      const speed = !still && first && last && last !== first ? (last.moved - first.moved) / Math.max(1, last.t - first.t) : 0
       if (e.type === 'pointerup' && (d.moved >= DISTANCE || (d.moved >= FLICK_DISTANCE && speed >= FLICK_SPEED))) {
         el.dataset.swiped = 'true'
         if (!reduced()) set(d.dir * (el.offsetHeight + 24), 0)
@@ -98,14 +118,14 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
     // (sideways, say) still ends the press there, so the countdown always resumes.
     el.addEventListener('pointerdown', down)
     window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
+    window.addEventListener('pointerup', up, true)
+    window.addEventListener('pointercancel', up, true)
     el.addEventListener('click', click, true)
     cleanup.current = () => {
       el.removeEventListener('pointerdown', down)
       window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
+      window.removeEventListener('pointerup', up, true)
+      window.removeEventListener('pointercancel', up, true)
       el.removeEventListener('click', click, true)
       if (drag) resume()
     }

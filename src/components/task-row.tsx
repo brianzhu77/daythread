@@ -3,6 +3,7 @@ import type { LocalDate, Task } from '../domain/types'
 import { anotherDayOptions, shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
 import { RowMenu, type MenuItem } from './row-menu'
+import { pickDate } from './row-actions'
 import { useTaskTick, useWorkspace } from './use-day'
 import { TagText } from './tag-text'
 
@@ -43,22 +44,8 @@ export function anotherDayItems(task: Task, today: LocalDate, planOn: (t: Task, 
     ...anotherDayOptions(today).map(o => ({ label: `${o.label} · ${shortLabel(o.date)}`, onSelect: () => planOn(task, o.date) })),
     {
       label: 'Pick date…',
-      onSelect: () => {
-        // Native date input keeps this tappable on iPhone without a custom calendar.
-        const input = document.createElement('input')
-        input.type = 'date'
-        input.min = today
-        input.style.position = 'fixed'
-        input.style.opacity = '0'
-        document.body.append(input)
-        input.addEventListener('change', () => {
-          if (input.value) planOn(task, input.value)
-          input.remove()
-        })
-        input.addEventListener('blur', () => setTimeout(() => input.remove(), 500))
-        input.showPicker?.()
-        input.focus()
-      },
+      // The same native picker as a day row's (row-actions.tsx), which knows iOS's quirks.
+      onSelect: () => pickDate(today, date => planOn(task, date)),
     },
   ]
 }

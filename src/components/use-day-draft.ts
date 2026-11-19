@@ -30,7 +30,7 @@ export interface DayDraftHook {
    * stays skipped here. Lines have no day and are left as they are. A to-do planned elsewhere since the notice was shown
    * keeps that plan (`dropped`); 'refused' when none could move for that reason. Its Undo takes back only the move.
    */
-  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[]; operationId: string }>
+  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[]; operationId: string; /** The server's refusal, when refused. */ reason?: string }>
   /** Undo on `Moved to …`: takes back only the move; 'refused' when the workspace's Undo has moved on. */
   undoMove(operationId: string): Promise<'done' | 'refused' | 'failed'>
   /**
@@ -161,12 +161,12 @@ export function useDayDraft(page: Page): DayDraftHook {
 
   const snooze = useCallback(async (ticket: DraftTicket, date: LocalDate) => {
     const operationId = newOperationId()
-    let refused = false
+    let refused = false, reason = ''
     const movedNow = () => ticket.itemIds.filter(id => draftOf(latest()!, page.id)?.items.some(i => i.id === id && i.until === date && i.by === operationId))
     // The `Moved to …` notice is the day-draft UI's: its Undo brings the Skipped notice back (day-draft.tsx).
-    const receipt = await write({ type: 'snooze-draft', pageId: page.id, itemIds: ticket.itemIds, date, today: todayIso(), skippedBy: ticket.skippedBy, seen: ticket.seen }, undefined, operationId, { inlineRefusal: /Nothing to move|Pick a later day|Changed elsewhere/, onRefused: () => { refused = true } })
+    const receipt = await write({ type: 'snooze-draft', pageId: page.id, itemIds: ticket.itemIds, date, today: todayIso(), skippedBy: ticket.skippedBy, seen: ticket.seen }, undefined, operationId, { inlineRefusal: /Nothing to move|Pick a later day|Changed elsewhere/, onRefused: message => { refused = true; reason = message } })
     const moved = receipt ? movedNow() : []
-    return { status: receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const, moved, dropped: ticket.itemIds.filter(id => !moved.includes(id)), operationId }
+    return { status: receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const, moved, dropped: ticket.itemIds.filter(id => !moved.includes(id)), operationId, ...(refused ? { reason } : {}) }
   }, [latest, page.id, write])
 
   const reopen = useCallback(async (ticket: DraftTicket) => {

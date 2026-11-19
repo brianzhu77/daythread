@@ -81,11 +81,16 @@ export function pickDate(today: LocalDate, onPick: (date: LocalDate) => void) {
   const input = document.createElement('input')
   input.type = 'date'
   input.min = today
+  // iOS Safari fills an empty date field with today as it takes focus and sends `change` before any picker shows, so
+  // "Pick date…" took today on his phone (Jazz's Simulator pass, Nov 19). Starting one day before the earliest it
+  // allows, iOS opens its calendar on that month and sends `change` only for a day he taps, the earliest included
+  // (Ratchet 5de80cde). A day before `min` is never taken.
+  input.value = addDays(today, -1)
   input.style.position = 'fixed'
   input.style.opacity = '0'
   document.body.append(input)
   input.addEventListener('change', () => {
-    if (input.value) onPick(input.value)
+    if (input.value && input.value >= today) onPick(input.value)
     input.remove()
   })
   input.addEventListener('blur', () => setTimeout(() => input.remove(), 500))

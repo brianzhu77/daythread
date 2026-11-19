@@ -59,6 +59,36 @@ for (const engine of engines) {
     }))
     await wait(450)
     ok(await notice().count() === 0, `${T} 16 px flick (~0.6 px/ms) closes`)
+    // A flick that lifts with no move in between (the iOS Simulator sends these): its release counts as the move.
+    await tick()
+    await notice().first().evaluate(el => new Promise(done => {
+      const t = el.querySelector('.toast__title'), r = t.getBoundingClientRect(), x = r.x + 5, y0 = r.y + 5
+      const ev = (type, y) => t.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 8, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, button: 0 }))
+      ev('pointerdown', y0); setTimeout(() => { ev("pointerup", y0 - 18); done() }, 16)
+    }))
+    await wait(450)
+    ok(await notice().count() === 0, `${T} 18 px flick with no move event closes`)
+    // The same from Undo, released 12 px up still on it: it closes, and Undo doesn't fire
+    await tick(); before = await checked()
+    await notice().first().evaluate(el => new Promise(done => {
+      const t = el.querySelector('.toast__action'), r = t.getBoundingClientRect(), x = r.x + r.width / 2, y0 = r.y + r.height - 4
+      const ev = (type, y) => t.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, button: 0 }))
+      ev('pointerdown', y0); setTimeout(() => { ev('pointerup', y0 - 12); done() }, 16)
+    }))
+    await wait(700)
+    ok(await notice().count() === 0 && await checked() === before, `${T} a move-less 12 px flick from Undo closes without undoing`)
+    // Move-less releases 12 px right and 12 px down from Undo: never a tap (Ratchet b050a9e5)
+    for (const [name, mx, my] of [['right', 12, 0], ['down', 0, 12]]) {
+      await tick(); before = await checked()
+      await notice().first().evaluate((el, [mx, my]) => new Promise(done => {
+        const t = el.querySelector('.toast__action'), r = t.getBoundingClientRect(), x = r.x + 6, y0 = r.y + 6
+        const ev = (type, xx, y) => t.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 10, pointerType: 'touch', isPrimary: true, clientX: xx, clientY: y, button: 0 }))
+        ev('pointerdown', x, y0); setTimeout(() => { ev('pointerup', x + mx, y0 + my); done() }, 16)
+      }), [mx, my])
+      await wait(700)
+      ok(await checked() === before, `${T} a move-less 12 px release ${name} on Undo: nothing undone`)
+      await p.locator('[data-slot="toast"] .toast__close-button').evaluateAll(es => es.forEach(e => e.click())); await p.mouse.move(5, 400); await wait(500)
+    }
     // down
     await tick()
     await drag(p.locator('[data-slot="toast"] .toast__title').first(), 44)
@@ -78,7 +108,9 @@ for (const engine of engines) {
     await p.locator('[data-slot="toast"] .toast__title').first().click(); await p.mouse.move(5, 400); await wait(9500)
     ok(await notice().count() === 0, `${T} a tap on its text: gone after its 8 s`)
     // tap Undo still works
-    await p.locator('[data-slot="toast"]').evaluateAll(es => es.forEach(e => e.remove())).catch(() => {})
+    // Close what's left through its ✕ (taking nodes out from under React would blank the list).
+    await p.locator('[data-slot="toast"] .toast__close-button').evaluateAll(es => es.forEach(e => e.click())).catch(() => {}); await p.mouse.move(5, 400); await wait(500)
+    ok(await p.getByRole('checkbox', { name: /Mark .* done/ }).count() > 0, `${T} open to-dos left for the last case`)
     await tick(); before = await checked()
     await p.locator('[data-slot="toast"] .toast__action').first().click(); await wait(800)
     ok(await checked() === before - 1, `${T} a tap on Undo still undoes`)
