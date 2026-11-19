@@ -1483,9 +1483,10 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     }
     case "snooze-draft": {
       // Brian 17e7b7f2 (Lead d2d043f0): Move to a later day from the draft. Each suggested to-do is planned on that day,
-      // as Another day does, and stays skipped here, so one Undo takes back the move and leaves today's skip. It works
-      // on an open item (Dismiss all) and on one he skipped a moment ago (✕, then the day). A line has no day.
-      // A to-do planned elsewhere since the notice was shown (Another day in another tab) keeps that plan (Ratchet da1ca677).
+      // as Another day does, and stays skipped here, so one Undo takes back the move and leaves today's skip. It acts
+      // only on what the notice's own skip (`skippedBy`) set aside, still unmoved (✕ or Dismiss all, then the day). A line
+      // has no day. One decided again since (reopened, skipped again, moved, applied), or whose to-do was planned
+      // elsewhere since the notice was shown (Another day in another tab), is left as it is (Ratchet da1ca677, 05445be6).
       const day = page(state, action.pageId);
       if (day.type !== "daily" || !day.date || isTrashed(day)) throw new DomainError("Not a day page");
       const until = date(action.date);
@@ -1496,10 +1497,10 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const wanted = new Set(action.itemIds);
       let moved = 0, changed = 0;
       for (const item of draft.items) {
-        if (!wanted.has(item.id) || item.state === "applied" || !item.taskId) continue;
+        if (!wanted.has(item.id) || !item.taskId) continue;
         const t = state.tasks.find((x) => x.id === item.taskId);
         if (!eligibleTask(t)) continue;
-        if (!planSeen(state, t, action.seen, item.id)) { changed++; continue; }
+        if (item.state !== "skipped" || item.until || item.by !== action.skippedBy || !planSeen(state, t, action.seen, item.id)) { changed++; continue; }
         planOn(state, t, until, { from: day.date, today: action.today });
         item.state = "skipped";
         item.until = until;

@@ -160,7 +160,7 @@ export function useDayDraft(page: Page): DayDraftHook {
     const operationId = newOperationId()
     let refused = false
     const movedNow = () => ticket.itemIds.filter(id => draftOf(latest()!, page.id)?.items.some(i => i.id === id && i.until === date && i.by === operationId))
-    const receipt = await write({ type: 'snooze-draft', pageId: page.id, itemIds: ticket.itemIds, date, today: todayIso(), seen: ticket.seen }, () => {
+    const receipt = await write({ type: 'snooze-draft', pageId: page.id, itemIds: ticket.itemIds, date, today: todayIso(), skippedBy: ticket.skippedBy, seen: ticket.seen }, () => {
       const moved = movedNow().length, left = Object.keys(ticket.seen).length - moved
       return { text: `${moved > 1 ? `Moved ${moved} to` : 'Moved to'} ${shortLabel(date)}${left > 0 ? ` · ${left} changed elsewhere` : ''}`, undoOperationId: operationId }
     }, operationId, { inlineRefusal: /Nothing to move|Pick a later day|Changed elsewhere/, onRefused: () => { refused = true } })

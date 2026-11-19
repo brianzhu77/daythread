@@ -188,7 +188,7 @@ export type Action =
   | { type: "apply-draft"; pageId: string; itemIds: string[]; edits?: Record<string, string>; today?: LocalDate }
   | { type: "skip-draft"; pageId: string; itemIds: string[] }
   /** `seen`: each suggested to-do's planned day (or null) as the notice was shown; one changed since is left as it is. */
-  | { type: "snooze-draft"; pageId: string; itemIds: string[]; date: LocalDate; today?: LocalDate; seen: Record<string, LocalDate | null> }
+  | { type: "snooze-draft"; pageId: string; itemIds: string[]; date: LocalDate; today?: LocalDate; skippedBy: string; seen: Record<string, LocalDate | null> }
   | { type: "reopen-draft"; pageId: string; itemIds: string[]; skippedBy: string; seen: Record<string, LocalDate | null> }
   /** A database page with the default schema; `homeBlockId`: its `database` block in the parent page, null for a full page. */
   | { type: "create-database"; pageId: string; parentId?: string | null; homeBlockId: string | null; title: string; /** Pages' `+` → Dashboard: its first view a dashboard of one widget, a copy of its own Table (G6-1). */ dashboard?: { viewId: string; rowId: string; widgetId: string; widgetViewId: string } }
