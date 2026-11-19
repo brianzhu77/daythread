@@ -1,8 +1,14 @@
 # Draft move data review — Ratchet
 
-Candidate: 1389ec6c, base 6304bd9f. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
+Current candidate: dfe16cfb, base 6304bd9f. Historical candidate: 1389ec6c. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
 
-Not clear: ordinary task planning bypasses the stale-decision protection.
+Not clear: the original ordinary-plan findings are repaired, but Move still does not check the skip decision identity.
+
+## Recheck dfe16cfb
+
+Updated independent tests to pass the required `seen` snapshot captured before Skip. Both original reproductions now pass; author 9 pass. New independent case fails: Skip A, reopen on another tab, Skip B with the same plan date, then Move from A's old ticket. Move succeeds and overwrites the later decision because snooze-draft never receives/checks ticket.skippedBy. Reopen correctly checks that identity, but Move only checks plan date.
+
+Total focused tests: 11 pass / 1 fail. Reported 05445be6. No browser/UI check yet.
 
 ## Independently reproduced
 

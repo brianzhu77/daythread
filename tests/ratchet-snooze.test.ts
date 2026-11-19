@@ -31,15 +31,26 @@ const line = (words: string) => ({ block: para('w', text(words)) })
 
 test('review: reopen rejects ordinary plan-task after Undo move', () => {
  const {h, book, draft} = setup(); draft([{taskId:book}]);
+ const seen={i0:plannedOn(h.ws,book)};
  const skip=h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
- const move=h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow});
+ const move=h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,seen});
  h.run({type:'undo',targetOperationId:move.receipt.operationId});
  h.run({type:'plan-task',taskId:book,date:'2026-10-28',today:tomorrow});
- assert.throws(()=>h.run({type:'reopen-draft',pageId:dayId(tomorrow),itemIds:['i0'],skippedBy:skip.receipt.operationId}),/Cannot undo/);
+ assert.throws(()=>h.run({type:'reopen-draft',pageId:dayId(tomorrow),itemIds:['i0'],skippedBy:skip.receipt.operationId,seen}),/Cannot undo/);
 });
 test('review: old move notice cannot overwrite later move', () => {
  const {h, book, draft}=setup(); draft([{taskId:book}]);
+ const seen={i0:plannedOn(h.ws,book)};
  h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
  h.run({type:'plan-task',taskId:book,date:'2026-10-28',today:tomorrow});
- assert.throws(()=>h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow}), /changed|Nothing|Cannot/i);
+ assert.throws(()=>h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,seen}), /changed|Nothing|Cannot/i);
+});
+
+test('review: old move ticket refuses a newer skip decision', () => {
+ const {h, book, draft}=setup(); draft([{taskId:book}]);
+ const seen={i0:plannedOn(h.ws,book)};
+ const skip=h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
+ h.run({type:'reopen-draft',pageId:dayId(tomorrow),itemIds:['i0'],skippedBy:skip.receipt.operationId,seen});
+ h.run({type:'skip-draft',pageId:dayId(tomorrow),itemIds:['i0']});
+ assert.throws(()=>h.run({type:'snooze-draft',pageId:dayId(tomorrow),itemIds:['i0'],date:monday,today:tomorrow,seen}),/changed|Nothing|Cannot/i);
 });
