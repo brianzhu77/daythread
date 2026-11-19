@@ -8,7 +8,7 @@ import type { EditorNode } from '../domain/editor-document'
 import { draftOf, draftStale, draftView, type DraftItemView } from '../domain/day-draft'
 import type { Action, LocalDate, Page, Task, Workspace } from '../domain/types'
 import { prepareDayDraft } from '../server/functions'
-import { todayIso } from './dates'
+import { shortLabel, todayIso } from './dates'
 import { flushEditor } from './editor-flush'
 import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
@@ -22,7 +22,18 @@ export interface DayDraftHook {
   /** The block "N more open ▸" sits after: the end of the planning part. */
   moreOpenAfterId: string | null
   apply(itemIds: string[], edits?: Record<string, string>): Promise<{ applied: string[]; dropped: string[] }>
-  skip(itemIds: string[]): Promise<boolean>
+  /** Skipped for today: the skip's operation id (for `reopen`), or null when nothing was skipped. */
+  skip(itemIds: string[]): Promise<string | null>
+  /**
+   * Move to a later day (Brian 17e7b7f2, Lead d2d043f0): each suggested to-do is planned on `date` and stays skipped
+   * here, open or just skipped alike. Lines have no day and are left as they are. Its Undo takes back only the move.
+   */
+  snooze(itemIds: string[], date: LocalDate): Promise<boolean>
+  /**
+   * The skip notice's Undo once Undo move has used the workspace's one Undo: reopens what the skip `skippedBy` left,
+   * or 'refused' when another tab or device has skipped, moved or applied it since (`Can't undo · edited since`).
+   */
+  reopen(itemIds: string[], skippedBy: string): Promise<'done' | 'refused' | 'failed'>
   addOpen(taskId: string): Promise<boolean>
   retry(): void
 }
@@ -129,7 +140,19 @@ export function useDayDraft(page: Page): DayDraftHook {
     return { applied, dropped: itemIds.filter(id => !applied.includes(id)) }
   }, [latest, page.id, write])
 
-  const skip = useCallback(async (itemIds: string[]) => Boolean(await write({ type: 'skip-draft', pageId: page.id, itemIds }, r => ({ text: itemIds.length === 1 ? 'Skipped' : `Skipped ${itemIds.length}`, undoOperationId: r.operationId }), undefined, { inlineRefusal: /Nothing to skip/ })), [page.id, write])
+  const skip = useCallback(async (itemIds: string[]) => {
+    const operationId = newOperationId()
+    const receipt = await write({ type: 'skip-draft', pageId: page.id, itemIds }, r => ({ text: itemIds.length === 1 ? 'Skipped' : `Skipped ${itemIds.length}`, undoOperationId: r.operationId }), operationId, { inlineRefusal: /Nothing to skip/ })
+    return receipt ? operationId : null
+  }, [page.id, write])
+
+  const snooze = useCallback(async (itemIds: string[], date: LocalDate) => Boolean(await write({ type: 'snooze-draft', pageId: page.id, itemIds, date, today: todayIso() }, r => ({ text: `Moved to ${shortLabel(date)}`, undoOperationId: r.operationId }), undefined, { inlineRefusal: /Nothing to move|Pick a later day/ })), [page.id, write])
+
+  const reopen = useCallback(async (itemIds: string[], skippedBy: string) => {
+    let refused = false
+    const receipt = await write({ type: 'reopen-draft', pageId: page.id, itemIds, skippedBy }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo/, onRefused: () => { refused = true } })
+    return receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const
+  }, [page.id, write])
 
   const addOpen = useCallback(async (taskId: string) => Boolean(page.date && await write({ type: 'plan-task', taskId, date: page.date, today: todayIso() }, r => ({ text: 'Added', undoOperationId: r.operationId }))), [page.date, write])
 
@@ -138,5 +161,5 @@ export function useDayDraft(page: Page): DayDraftHook {
   const state: DayDraftState = offline && !view ? 'offline' : inFlight(ask) && !view?.items.length ? 'preparing'
     // A failed or lost ask here shows Retry at once (he may be looking at the page); a tab coming back asks again first.
     : !view ? (ask && ask.state !== 'done' ? 'failed' : 'none') : view.status === 'failed' ? 'failed' : 'ready'
-  return { state, items: view?.items ?? [], moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, addOpen, retry }
+  return { state, items: view?.items ?? [], moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, snooze, reopen, addOpen, retry }
 }

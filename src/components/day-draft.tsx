@@ -36,7 +36,12 @@ export interface DayDraft {
   /** "N more open" sits after this block: the end of the planning part. Optional for check-script stand-ins. */
   moreOpenAfterId?: string | null
   apply(itemIds: string[], edits?: Record<string, string>): Promise<{ applied: string[]; dropped: string[] }>
-  skip(itemIds: string[]): Promise<boolean>
+  /** The skip's operation id (for `reopen`), or null when nothing was skipped. */
+  skip(itemIds: string[]): Promise<string | null>
+  /** Move to: suggested to-dos planned on `date`, kept skipped here (use-day-draft.ts). */
+  snooze(itemIds: string[], date: LocalDate): Promise<boolean>
+  /** The skip notice's Undo after Undo move: reopens what that skip left, or 'refused' if it was changed since. */
+  reopen(itemIds: string[], skippedBy: string): Promise<'done' | 'refused' | 'failed'>
   addOpen(taskId: string): Promise<boolean>
   retry(): void
 }
@@ -66,7 +71,9 @@ export function useDayDraft(page: Page): DayDraft {
     planningEndId: mock?.planningEndId ?? null,
     moreOpenAfterId: mock?.moreOpenAfterId ?? null,
     apply: async (ids, edits) => { log({ apply: ids, edits }); edit(ids); return { applied: ids, dropped: [] } },
-    skip: async ids => { log({ skip: ids }); edit(ids); return true },
+    skip: async ids => { log({ skip: ids }); edit(ids); return 'mock-skip' },
+    snooze: async (ids, date) => { log({ snooze: ids, date }); edit(ids); return true },
+    reopen: async (ids, skippedBy) => { log({ reopen: ids, skippedBy }); return 'done' },
     addOpen: async taskId => { log({ addOpen: taskId }); if (mock) { mock.moreOpen = mock.moreOpen.filter(t => t.taskId !== taskId); bump() } return true },
     retry: () => { log({ retry: true }); if (mock) { mock.state = 'preparing'; bump() } },
   }

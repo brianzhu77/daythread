@@ -187,6 +187,8 @@ export type Action =
   | { type: "set-smart-note-result"; noteId: string; result: import("./smart-note.ts").SmartResult; spec: string }
   | { type: "apply-draft"; pageId: string; itemIds: string[]; edits?: Record<string, string>; today?: LocalDate }
   | { type: "skip-draft"; pageId: string; itemIds: string[] }
+  | { type: "snooze-draft"; pageId: string; itemIds: string[]; date: LocalDate; today?: LocalDate }
+  | { type: "reopen-draft"; pageId: string; itemIds: string[]; skippedBy: string }
   /** A database page with the default schema; `homeBlockId`: its `database` block in the parent page, null for a full page. */
   | { type: "create-database"; pageId: string; parentId?: string | null; homeBlockId: string | null; title: string; /** Pages' `+` → Dashboard: its first view a dashboard of one widget, a copy of its own Table (G6-1). */ dashboard?: { viewId: string; rowId: string; widgetId: string; widgetViewId: string } }
   | { type: "change-database"; pageId: string; change: import("./database.ts").DatabaseChange }

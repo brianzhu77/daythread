@@ -19,6 +19,10 @@ export interface DraftItem {
   block?: EditorNode
   source: 'model' | 'fallback'
   state: 'open' | 'applied' | 'skipped'
+  /** On a skipped to-do: the later day he moved it to from the draft (`snooze-draft`, Brian 17e7b7f2). */
+  until?: LocalDate
+  /** The operation that last skipped, moved or applied it: `reopen-draft` reopens only what that skip left (Ratchet f38d66a1). */
+  by?: string
 }
 /** `recipe`: how the server made it (`DRAFT_RECIPE`); absent on a draft from before it was kept. */
 export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: string[]; recipe?: number }
@@ -60,6 +64,24 @@ export function remadeItems(old: DayDraft | null, items: readonly DraftItem[]): 
 
 /** A carried to-do can still be applied: it exists, is open and wasn't set aside. A rename doesn't matter. */
 export const eligibleTask = (t: Task | undefined): t is Task => Boolean(t && t.status === 'open' && !t.paused)
+
+/**
+ * The to-dos planned for a day after `day`: a plan row on a later day page. A draft for `day` never offers one, so a
+ * to-do moved to Monday (Another day, or Move to from the draft) doesn't come back before then (Brian 17e7b7f2).
+ */
+export function plannedAfter(ws: Workspace, day: LocalDate): Set<string> {
+  const out = new Set<string>()
+  for (const p of ws.pages) {
+    if (p.type !== 'daily' || !p.date || p.date <= day || p.trashedAt) continue
+    for (const n of flatNodes(pageNodes(p))) if (isTaskRow(n) && n.props?.role === 'plan') out.add(String(n.props.taskId))
+  }
+  return out
+}
+/**
+ * Whether a draft for a day may offer this to-do: it can be applied and isn't planned for a later day. One check for
+ * what the model is shown, what its answer may keep, what a draft shows, what Apply plans and "more open" (Lead 12f0a394).
+ */
+export const offeredOn = (t: Task | undefined, later: ReadonlySet<string>): t is Task => eligibleTask(t) && !later.has(t.id)
 
 const level = (n: EditorNode) => Number(n.props?.level ?? 1)
 /**
@@ -152,19 +174,20 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
   if (!draft) return null
   const doc = pageNodes(page), ids = new Set(ws.tasks.map(t => t.id))
   const onPage = new Set(flatNodes(doc).filter(isTaskRow).map(n => String(n.props!.taskId)))
+  const later = page.date ? plannedAfter(ws, page.date) : new Set<string>()
   const task = (id: string | undefined) => ws.tasks.find(t => t.id === id)
   const items: DraftItemView[] = []
   for (const item of draft.items) {
     if (item.state !== 'open') continue
     const t = task(item.taskId)
-    if (item.taskId && (!eligibleTask(t) || onPage.has(t.id))) continue
+    if (item.taskId && (!offeredOn(t, later) || onPage.has(t.id))) continue
     const at = placeItem(doc, item, ids)
     if (!at) continue
     const block = t ? { id: `draft-row:${item.id}`, type: 'task', props: { taskId: t.id, role: 'plan', planDate: page.date ?? '' }, content: [{ type: 'text', text: t.title, styles: {} }], children: [] } : item.block!
     items.push({ id: item.id, kind: at.kind, anchorId: at.anchorId, block, ...(t ? { taskId: t.id, since: t.createdOn } : {}) })
   }
   const end = planningEndIndex(doc, ids)
-  const moreOpen = draft.moreOpen.map(task).filter(eligibleTask).filter(t => !onPage.has(t.id)).map(t => ({ taskId: t.id, title: t.title, since: t.createdOn }))
+  const moreOpen = draft.moreOpen.map(task).filter(t => offeredOn(t, later)).filter(t => !onPage.has(t.id)).map(t => ({ taskId: t.id, title: t.title, since: t.createdOn }))
   const last = moreOpenAfterIndex(doc, end)
   return { status: draftSettled(draft) ? 'ready' : draft.status, items, moreOpen, planningEndId: end > 0 ? doc[end - 1]!.id : null, moreOpenAfterId: last >= 0 ? doc[last]!.id : null }
 }
@@ -172,13 +195,16 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
 /** A draft as the server built it, checked before it is stored: ids it may use, kinds, lengths, no duplicates. */
 export function normalizeDraftItems(ws: Workspace, page: Page, items: readonly DraftItem[], allowedTasks: ReadonlySet<string>): DraftItem[] {
   const doc = pageNodes(page), range = planningRange(doc), seenTasks = new Set<string>(), seenIds = new Set<string>(), out: DraftItem[] = []
+  // Checked against the workspace as it is when the draft is stored: an answer to an older ask can't bring back a
+  // to-do moved to a later day meanwhile.
+  const later = page.date ? plannedAfter(ws, page.date) : new Set<string>()
   for (const item of items) {
     if (seenIds.has(item.id) || !item.id || item.id.length > 100) continue
     seenIds.add(item.id)
     const at = doc.findIndex(n => n.id === item.anchor)
     const outside = at >= 0 && (at < range.start || at >= range.end)
     if (item.taskId) {
-      if (!allowedTasks.has(item.taskId) || seenTasks.has(item.taskId) || !eligibleTask(ws.tasks.find(t => t.id === item.taskId))) continue
+      if (!allowedTasks.has(item.taskId) || seenTasks.has(item.taskId) || !offeredOn(ws.tasks.find(t => t.id === item.taskId), later)) continue
       seenTasks.add(item.taskId)
       // An anchor that is outside the planning part now (he moved it while the draft was made) never drops the to-do:
       // it goes to the planning end instead (Ratchet c1de8d2f).

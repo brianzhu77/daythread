@@ -6,7 +6,7 @@
 // stored (set-draft).
 import { dayEvents } from '../../domain/chip-events.ts'
 import { describeLine, flatNodes, inlineText, isTaskRow, pageNodes, smartNoteBlockType, type EditorNode } from '../../domain/editor-document.ts'
-import { eligibleTask, isDraft, planningRange, sameWords, type DraftItem } from '../../domain/day-draft.ts'
+import { isDraft, offeredOn, planningRange, plannedAfter, sameWords, type DraftItem } from '../../domain/day-draft.ts'
 import { isTemplate } from '../../domain/day-template.ts'
 import { databaseOfRow, isDatabase, localWall } from '../../domain/database.ts'
 import { isTrashed } from '../../domain/page-tree.ts'
@@ -99,10 +99,11 @@ function clipped(rows: SizedLine[]): (SizedLine | { gap: number })[] {
   return [...rows.slice(0, head), { gap: tail - head }, ...rows.slice(tail)]
 }
 
-/** The open to-dos a draft may use: open, not blank, not set aside, not already on this page. */
+/** The open to-dos a draft may use: open, not blank, not set aside, not planned for a later day, not already on this page. */
 export function draftCandidates(ws: Workspace, page: Page): Task[] {
   const onPage = new Set(flatNodes(pageNodes(page)).filter(isTaskRow).map(n => String(n.props!.taskId)))
-  return ws.tasks.filter(t => eligibleTask(t) && !isBlankTask(t) && !onPage.has(t.id))
+  const later = page.date ? plannedAfter(ws, page.date) : new Set<string>()
+  return ws.tasks.filter(t => offeredOn(t, later) && !isBlankTask(t) && !onPage.has(t.id))
 }
 
 /** `onPage`: the words of the page's lines, as `sameWords` reads them, so nothing already there is suggested. */
