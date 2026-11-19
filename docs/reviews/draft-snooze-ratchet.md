@@ -1,8 +1,15 @@
 # Draft move review — Ratchet
 
-Current integrated candidate: 50a390f8. Data candidate: 4fdf8a80, base 6304bd9f. Historical candidate: 1389ec6c. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
+CLEAR: current integrated candidate f44bcc69. Historical UI candidate: 50a390f8. Data candidate: 4fdf8a80, base 6304bd9f. Historical candidate: 1389ec6c. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
 
-Integrated UI not clear on50a390f8. Data clear on4fdf8a80 carries forward.
+Integrated UI clear on f44bcc69. Data clear on4fdf8a80 carries forward.
+
+## Final recheck f44bcc69
+
+CSS/wrapper-only repair verified. Both engines at390 measure all three buttons44px; mixed-row Pick right273px within toast right374px. Independent stale-tab Move/reopen, date-button swipe and containment scripts all pass (desktop height only recorded). Author UI60 checks independently pass15 per width per engine, including full Skip/Move/Undo/Undo, model line, mixed Dismiss, picker wait and hit-target separation from Undo/close. Typecheck and13 focused domain tests pass. Viewed stable actual screenshots at390 (single/mix) and1280 (mix); layout uses existing notice/button styling.
+
+No independent real-Postgres/Worker gate, native picker on iPhone or Simulator evidence. Lead owns release gates; no production action by reviewer.
+
 
 ## UI acceptance50a390f8
 
@@ -12,7 +19,7 @@ Confirmed defects:
 - At390 the three day buttons are36px tall, below Lead c432c98e's44px requirement. Both engines. Desktop32px is recorded, not independently a failure. Reported8d183260.
 - Mixed Dismiss notice (`Move3to-dos to`) overflows at390: Pick button right402px, toast right374px, viewport390px. Both engines. Row lacks wrapping. Reportede0544f3d.
 
-Passed: ordinary Another day in B, old Move in A keeps newer plan and shows refusal (4engine/width combinations); swipe from Mon never plans (4combinations); after Move/Undo move in A, ordinary replan B makes old second Undo refuse and preserves the newer plan (both engines at390). No native/Simulator evidence. Author52-case UI suite not rerun yet; awaiting layout repair to avoid duplicating full UI regression.
+Passed: ordinary Another day in B, old Move in A keeps newer plan and shows refusal (4engine/width combinations); swipe from Mon never plans (4combinations); after Move/Undo move in A, ordinary replan B makes old second Undo refuse and preserves the newer plan (both engines at390). No native/Simulator evidence. This historical pass preceded the final60-case UI recheck above.
 
 Data review clear for 4fdf8a80 on the checked paths; UI and gestures remain unverified.
 
