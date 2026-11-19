@@ -99,8 +99,16 @@ n = notices(); ok(n and n[0].startswith('Skipped') and not any(x.startswith('Mov
 # 6. press on Undo and slide up 44 pt: closes, Undo not fired
 nvdrag(UNDO, 0, -44, 200); time.sleep(1)
 ok(not notices() and not any('TRV' in b for b in bands()), f'swipe from Undo closes without undoing: bands {bands()}')
+# 6b. a short fast flick (no move event) from Undo and from a day button: closes, fires nothing (Ratchet 9558d01c)
+open_today(); skip('TRV')
+nvdrag(UNDO, 0, -14, 1500, press=0.0, hold=0.0); time.sleep(1)
+ok(not notices() and not any('TRV' in b for b in bands()), f'short flick from Undo closes without undoing: {notices()} bands {bands()}')
+skip('Umbrella')
+nvdrag(DAY('Mon'), 0, -14, 1500, press=0.0, hold=0.0); time.sleep(1)
+web(); moved = js("return [...document.querySelectorAll('[data-slot=toast]')].some(e=>/Moved|Not moved/.test(e.innerText))")
+ok(not notices() and not moved, f'short flick from a day button closes without moving: {notices()}')
 # 7. Mon → Moved; Undo → Skipped again; Undo → back
-skip('Umbrella'); ntap(DAY('Mon')); time.sleep(1.5)
+open_today(); skip('Umbrella'); ntap(DAY('Mon')); time.sleep(1.5)
 n = notices(); ok(n and n[0].startswith('Moved to Mon'), f'Mon: {n}'); snap('7-moved')
 ntap(UNDO); time.sleep(1.5); n = notices(); ok(n and n[0].startswith('Skipped'), f'Undo move: {n}')
 ntap(UNDO); time.sleep(1.5); ok(any('Umbrella' in b for b in bands()), f'Undo: back in suggestions {bands()}')
@@ -112,8 +120,15 @@ time.sleep(10); n = notices(); ok(any(x.startswith('Skipped') for x in n) and no
 ntap("type == 'XCUIElementTypeButton' AND label CONTAINS 'November 24'"); time.sleep(2)
 n = notices(); ok(n and n[0].startswith('Moved to Tue, Nov 24'), f'a tapped day (Tue 24) moves it: {n}')
 ctx('NATIVE_APP'); ok('XCUIElementTypeDatePicker' not in call('source')['value'], 'and the calendar closes')
+# 8b. the earliest day the calendar allows (tomorrow) can be picked (Ratchet 5de80cde)
+open_today(); skip('TRV'); ntap(DAY('another day')); time.sleep(2)
+ntap("type == 'XCUIElementTypeButton' AND label CONTAINS 'November 19' AND NOT (label CONTAINS 'Today')"); time.sleep(2)
+n = notices(); ok(n and n[0].startswith('Moved to Thu, Nov 19'), f'the earliest day (Thu 19) moves it: {n}')
 # 9. Dismiss on a mix at phone width: row under its label, inside the notice
 open_today(); clear(); nokb(); ntap("type == 'XCUIElementTypeButton' AND label == 'Dismiss'"); time.sleep(1.2)
+# A tap that missed leaves all four suggestions (the page was still settling): that's the script, so tap once more.
+# Suggestions gone with no notice would be the app's fault, and fails below.
+if not notices() and len(bands()) == 4: print('note', MODE, 'Dismiss tap missed; tapping again'); nokb(); ntap("type == 'XCUIElementTypeButton' AND label == 'Dismiss'"); time.sleep(1.2)
 n = notices(); ok(n and n[0].startswith('Skipped 4 Undo Move 3 to-dos to'), f'Dismiss on a mix: {n}'); snap('9-mix')
 web(); fit = js("const t=document.querySelector('[data-slot=toast]').getBoundingClientRect(); return [...document.querySelectorAll('.toast-row-button')].every(b=>{const r=b.getBoundingClientRect(); return r.right<=t.right+.5 && r.bottom<=t.bottom+.5})")
 ok(fit, 'mix row: every day button inside the notice')

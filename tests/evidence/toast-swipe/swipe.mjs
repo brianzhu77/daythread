@@ -68,6 +68,15 @@ for (const engine of engines) {
     }))
     await wait(450)
     ok(await notice().count() === 0, `${T} 18 px flick with no move event closes`)
+    // The same from Undo, released 12 px up still on it: it closes, and Undo doesn't fire
+    await tick(); before = await checked()
+    await notice().first().evaluate(el => new Promise(done => {
+      const t = el.querySelector('.toast__action'), r = t.getBoundingClientRect(), x = r.x + r.width / 2, y0 = r.y + r.height - 4
+      const ev = (type, y) => t.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, button: 0 }))
+      ev('pointerdown', y0); setTimeout(() => { ev('pointerup', y0 - 12); done() }, 16)
+    }))
+    await wait(700)
+    ok(await notice().count() === 0 && await checked() === before, `${T} a move-less 12 px flick from Undo closes without undoing`)
     // down
     await tick()
     await drag(p.locator('[data-slot="toast"] .toast__title').first(), 44)
