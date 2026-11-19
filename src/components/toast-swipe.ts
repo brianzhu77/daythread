@@ -77,13 +77,15 @@ export function useSwipeAway(key: string, placement: 'top' | 'bottom') {
       // far it went, so it counts as the swipe's one move.
       if (!d.swiping && !d.sideways && e.type === 'pointerup') {
         const dx = e.clientX - d.x, dy = e.clientY - d.y
-        const dir: -1 | 1 = placement === 'top' ? -1 : dy < 0 ? -1 : 1
-        if (Math.abs(dy) >= SLOP && Math.abs(dy) > Math.abs(dx) && dy * dir > 0) {
-          d.swiping = true; d.dir = dir; d.moved = dy * dir; d.samples.push({ t: e.timeStamp, moved: d.moved })
-          // Not a tap either: the button under the press hears it cancelled before this release reaches it (the
-          // window sees the release first, in its capture phase).
+        if (Math.hypot(dx, dy) >= SLOP) {
+          // Past 8 px in any direction it isn't a tap (Ratchet b050a9e5): the button under the press hears it cancelled
+          // before this release reaches it (the window sees the release first, in its capture phase).
           cancelling = true
           try { d.target?.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: e.isPrimary })) } finally { cancelling = false }
+          // Whether it also closes the notice is the swipe's own rule: toward an edge it may leave by, mostly vertical.
+          const dir: -1 | 1 = placement === 'top' ? -1 : dy < 0 ? -1 : 1
+          if (Math.abs(dy) > Math.abs(dx) && dy * dir > 0) { d.swiping = true; d.dir = dir; d.moved = dy * dir; d.samples.push({ t: e.timeStamp, moved: d.moved }) }
+          else d.sideways = true
         }
       }
       // A press focuses the notice, and React Aria holds the countdown while focus is inside it, so one tap on its
