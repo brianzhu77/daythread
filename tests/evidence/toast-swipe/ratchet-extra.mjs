@@ -12,5 +12,10 @@ await p.evaluate(()=>window.keys.forEach(k=>window.rt.close(k)));await p.waitFor
 await show('Stack A',10000);await show('Stack B',10000);let n=await notice().count();const el=notice().filter({hasText:'Stack B'}),box=await el.boundingBox();await p.mouse.move(box.x+20,box.y+20);await p.mouse.down();await p.mouse.move(box.x+20,box.y-24,{steps:8});await p.mouse.up();await p.waitForTimeout(450);check(await notice().count()===n-1,name+' swiping stacked notice removes only one');
 await p.evaluate(()=>window.keys.forEach(k=>window.rt.close(k)));await p.waitForTimeout(400);
 await show('Keyboard',10000);await notice().first().locator('.toast__action').focus();await p.keyboard.press('Enter');check(await p.evaluate(()=>window.actions)===1,name+' keyboard action still works');
+await p.evaluate(()=>window.keys.forEach(k=>window.rt.close(k)));await p.waitForTimeout(400);
+await show('Keyboard hold');await notice().first().locator('.toast__action').focus();await p.keyboard.press('Tab');await p.keyboard.press('Shift+Tab');await p.waitForTimeout(2000);check(await notice().count()===1,name+' keyboard focus keeps timer paused');
+for(let i=0;i<8;i++){if(!(await notice().first().evaluate(el=>el.contains(document.activeElement))))break;await p.keyboard.press('Tab');}
+await p.waitForTimeout(2200);check(await notice().count()===0,name+' timer resumes after keyboard leaves');
+await show('Cancelled');await notice().first().evaluate(el=>{el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:8,pointerType:'touch',clientX:10,clientY:10}));el.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:8,pointerType:'touch'}));});await p.waitForTimeout(2200);check(await notice().count()===0,name+' pointercancel restores countdown');
 await b.close();}
 process.exitCode=fails?1:0;

@@ -1,6 +1,13 @@
 # Toast swipe review — Ratchet
 
-Candidate 42163c0a (PR217), base 3dc41565. Not clear.
+CLEAR: current candidate b524a057 (PR217), base 3dc41565. Historical findings below were reproduced on42163c0a.
+
+## Recheck b524a057
+
+Both findings repaired. Independent basic browser suite12/12 passes in Chromium/WebKit at390/1280, using unchecked-row counts. Independent lifecycle suite14/14 passes: untouched expiry; outside release resumes timer; stacked swipe removes only one; keyboard action; keyboard focus retains timer; leaving by Tab restores expiry; pointercancel restores expiry. Typecheck passes. Author expanded50-case regression rerun passes25 Chromium +25 WebKit. A first WebKit run was interrupted by a Vite program reload (server log18:43:50, after adding a test seed file); the isolated no-file-edit rerun completed25/25. This interruption is not a product finding.
+
+Changes cancel the button press once8px is exceeded in any direction, watch pointer lifecycle on window, and clear pointer-induced focus while preserving keyboard focus. No source fix by reviewer.
+
 
 ## Confirmed button misfire
 
