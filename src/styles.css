@@ -1191,6 +1191,12 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .app-toasts .toast__action { margin-top:0; }
 /* The ✕ centres on the action's line: the action is 36 px on the laptop, 40 px on a phone. */
 @media (max-width: 639px) { .app-toasts .toast__close-button { margin-top:-2px; } }
+/* B100: a notice's second row (NoticeRow): a short grey label, then small ghost buttons (the notice's second-action
+   style), across the full width under the line. The first button's text lines up with the notice's text. */
+.app-toasts [data-slot="toast"].has-row { flex-wrap:wrap; row-gap:2px; }
+.app-toasts .toast-row { flex-basis:100%; display:flex; align-items:center; gap:2px; min-width:0; margin:0 -8px -4px 0; }
+.app-toasts .toast-row-label { flex:none; margin-right:4px; font-size:var(--text-small); color:var(--ink-2); white-space:nowrap; }
+.app-toasts .toast-row-button { flex:none; font-variant-numeric:tabular-nums; }
 /* A notice follows the finger toward its edge (toast-swipe.ts); the page never scrolls under it. `translate` is its
    own property, so HeroUI's stacking transform is untouched. Springs back, or leaves, in 0.2 s. */
 .app-toasts [data-slot="toast"] { touch-action:none; transition:transform var(--toast-translate-duration) var(--toast-ease), height var(--toast-height-duration) var(--toast-ease), opacity var(--toast-opacity-duration) var(--toast-ease), translate .2s var(--toast-ease); }

@@ -5,9 +5,10 @@ import { Toast, type ToastProps } from '@heroui/react'
 import { toIso, todayIso } from './dates'
 import { usePreview } from './preview'
 import { useRouterState } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { isValidElement, type ReactNode, useEffect, useRef, useState } from 'react'
 import { Navigation } from './navigation'
 import { useSwipeAway } from './toast-swipe'
+import { NoticeRow } from './notice-row'
 import { KeptDrafts } from './kept-drafts'
 import { GlobalSearch } from './search-dialog'
 import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
@@ -147,14 +148,18 @@ type QueuedNotice = ToastProps['toast']
 /** One notice: swiped away toward its edge (#364), ✕ last on the line with a 44 px target. */
 function Notice({ t, placement }: { t: QueuedNotice; placement: 'top' | 'bottom' }) {
   const swipe = useSwipeAway(t.key, placement)
+  const { description } = t.content
+  // A NoticeRow spans the notice under its line; any other description sits under the text, as before.
+  const row = isValidElement(description) && description.type === NoticeRow
   return (
-    <Toast toast={t} ref={swipe}>
+    <Toast toast={t} ref={swipe} className={row ? 'has-row' : undefined}>
       <Toast.Content>
         <Toast.Title>{t.content.title}</Toast.Title>
-        {t.content.description && <Toast.Description>{t.content.description}</Toast.Description>}
+        {description && !row && <Toast.Description>{description}</Toast.Description>}
       </Toast.Content>
       {t.content.actionProps?.children && <Toast.ActionButton {...t.content.actionProps} />}
       <Toast.CloseButton />
+      {row && description}
     </Toast>
   )
 }
