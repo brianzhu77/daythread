@@ -1,12 +1,13 @@
 import type { OutboxEntry } from './outbox'
 import type { Workspace } from '../domain/types'
 import { dueRepeats } from '../domain/repeats'
-import { Toast } from '@heroui/react'
+import { Toast, type ToastProps } from '@heroui/react'
 import { toIso, todayIso } from './dates'
 import { usePreview } from './preview'
 import { useRouterState } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Navigation } from './navigation'
+import { useSwipeAway } from './toast-swipe'
 import { KeptDrafts } from './kept-drafts'
 import { GlobalSearch } from './search-dialog'
 import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
@@ -136,17 +137,25 @@ function Toasts() {
     // The review lives on today's page now; phone notices sit at the top on every screen.
     // on Done hit the notice, or its Undo.
     <Toast.Provider placement={phone ? 'top' : 'bottom'} className="app-toasts">
-      {({ toast: t }) => (
-        <Toast toast={t}>
-          <Toast.Content>
-            <Toast.Title>{t.content.title}</Toast.Title>
-            {t.content.description && <Toast.Description>{t.content.description}</Toast.Description>}
-          </Toast.Content>
-          {t.content.actionProps?.children && <Toast.ActionButton {...t.content.actionProps} />}
-          <Toast.CloseButton />
-        </Toast>
-      )}
+      {({ toast: t }) => <Notice key={t.key} t={t} placement={phone ? 'top' : 'bottom'} />}
     </Toast.Provider>
+  )
+}
+
+type QueuedNotice = ToastProps['toast']
+
+/** One notice: swiped away toward its edge (#364), ✕ last on the line with a 44 px target. */
+function Notice({ t, placement }: { t: QueuedNotice; placement: 'top' | 'bottom' }) {
+  const swipe = useSwipeAway(t.key, placement)
+  return (
+    <Toast toast={t} ref={swipe}>
+      <Toast.Content>
+        <Toast.Title>{t.content.title}</Toast.Title>
+        {t.content.description && <Toast.Description>{t.content.description}</Toast.Description>}
+      </Toast.Content>
+      {t.content.actionProps?.children && <Toast.ActionButton {...t.content.actionProps} />}
+      <Toast.CloseButton />
+    </Toast>
   )
 }
 
