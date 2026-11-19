@@ -20,11 +20,16 @@ for (const engine of (process.env.ONLY ?? 'chromium,webkit').split(',')) {
     const open = async () => { reseed(); const p = await c.newPage(); await p.goto(base + '/'); await p.locator('.draft-band').first().waitFor({ timeout: 30000 }); await p.waitForLoadState('networkidle').catch(() => {}); await wait(800); return p }
     const texts = async p => (await p.locator('[data-slot="toast"]:not([data-exiting="true"])').allInnerTexts()).map(s => s.replace(/\s+/g, ' ').trim())
     const front = p => p.locator('[data-slot="toast"]:not([data-exiting="true"])').first()
+    // Targets (Ratchet 8d183260, e0544f3d): 44 px tall on a phone, every button inside the notice, none over Undo or ✕.
+    const targets = p => p.evaluate(() => { const box = e => e.getBoundingClientRect(), t = box(document.querySelector('[data-slot="toast"]')), u = box(document.querySelector('[data-slot="toast"] .toast__action')), x = box(document.querySelector('[data-slot="toast"] .toast__close-button')), hit = (a, c) => a.x < c.right && c.x < a.right && a.y < c.bottom && c.y < a.bottom
+      const bs = [...document.querySelectorAll('.toast-row-button')].map(box); return { min: Math.min(...bs.map(b => b.height)), inside: bs.every(b => b.x >= t.x - .5 && b.right <= t.right + .5 && b.y >= t.y - .5 && b.bottom <= t.bottom + .5), clear: !bs.some(b => hit(b, u) || hit(b, x)) } })
+    const targetsOk = async (p, what) => { const r = await targets(p); ok(r.inside && r.clear && (w >= 640 || r.min >= 44), `${T} ${what}: day buttons ${Math.round(r.min)} px tall, inside the notice, clear of Undo and ✕`) }
     const closeAll = async p => { await p.locator('[data-slot="toast"] .toast__close-button').evaluateAll(es => es.forEach(e => e.click())); await p.mouse.move(5, 500); await wait(700) }
     // 1. ✕ on a to-do → day row; Mon → planned on Monday, Moved notice; Undo move → Skipped back; Undo → suggestion back
     { const p = await open()
       await p.getByRole('button', { name: /Skip Tech Design Review/ }).click(); await wait(700)
       let t = await texts(p); ok(/^Skipped Undo Move to \S+ \S+ Mon \S+ Pick…$|^Skipped Undo Move to Mon \S+ Pick…$/.test(t[0] ?? ''), `${T} ✕ on a to-do: ${JSON.stringify(t[0])}`)
+      await targetsOk(p, '✕')
       const row = await p.locator('.toast-row').first().boundingBox(), n = await front(p).boundingBox()
       ok(row && row.x >= n.x && row.x + row.width <= n.x + n.width + 0.5, `${T} the day row sits inside the notice`)
       const mon = p.locator('.toast-row-button', { hasText: /^Mon / }); const monDate = (await mon.getAttribute('aria-label')).replace(/^Move to /, '')
@@ -47,6 +52,7 @@ for (const engine of (process.env.ONLY ?? 'chromium,webkit').split(',')) {
     { const p = await open()
       await p.getByRole('button', { name: 'Dismiss' }).click(); await wait(800)
       let t = await texts(p); ok(/^Skipped 4 Undo Move 3 to-dos to/.test(t[0] ?? ''), `${T} Dismiss on a mix: ${JSON.stringify(t[0])}`)
+      await targetsOk(p, 'Dismiss on a mix')
       await p.locator('.toast-row-button', { hasText: /^Mon / }).click(); await wait(900)
       t = await texts(p); ok(/^Moved 3 to /.test(t[0] ?? ''), `${T} → ${JSON.stringify(t[0])}`)
       await p.close() }
