@@ -1,6 +1,6 @@
 # Draft move review — Ratchet
 
-CLEAR: current integrated candidate f44bcc69. Historical UI candidate: 50a390f8. Data candidate: 4fdf8a80, base 6304bd9f. Historical candidate: 1389ec6c. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
+CLEAR: final PR218 head c6175968; integrated candidate f44bcc69. Historical UI candidate: 50a390f8. Data candidate: 4fdf8a80, base 6304bd9f. Historical candidate: 1389ec6c. Contract: Lead d2d043f0 / 0f8ade74; Brian 1a509219.
 
 Integrated UI clear on f44bcc69. Data clear on4fdf8a80 carries forward.
 
@@ -47,3 +47,7 @@ Suggested repair: bind the toast action to its intended decision and plan state;
 ## Scope
 
 Independent reading of changed domain, hook and model logic, plus targeted tests. No production/user-data writes, no model calls, no native/browser verification, no source fixes. UI and gestures await Jazz head.
+
+## Final main merge c6175968
+
+Independently compared with f44bcc69: only docs/plan/first-version-checklist.md changes (one line replaced). src tree identical ea4d84fcda076ac09824ba625722e47fac1ad238; tests tree identical 1d4889ed49ed668a2377ee9220d475cd4db5d8d7. Existing clear carries forward; no new runtime test justified.
