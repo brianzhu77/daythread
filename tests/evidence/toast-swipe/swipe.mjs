@@ -33,6 +33,16 @@ for (const engine of engines) {
     await tick(); before = await checked()
     await drag(p.locator('[data-slot="toast"] .toast__action').first(), -44)
     ok(await notice().count() === 0 && await checked() === before, `${T} swipe starting on Undo closes without undoing`)
+    // sideways 12 px from Undo and released on it: not a tap, so nothing is undone (Ratchet 9875ade4)
+    await tick(); before = await checked()
+    { const box = await p.locator('[data-slot="toast"] .toast__action').first().boundingBox(); const x = box.x + 8, y = box.y + box.height / 2
+      await p.mouse.move(x, y); await p.mouse.down(); for (let i = 1; i <= 4; i++) { await p.mouse.move(x + 3 * i, y); await wait(20) } await p.mouse.up(); await wait(600) }
+    ok(await checked() === before && await notice().count() === 1, `${T} press Undo, slide 12 px sideways, release on it: nothing undone`)
+    // down 10 px on a top notice's Undo (the rubber band) and back: not a tap either
+    { const box = await p.locator('[data-slot="toast"] .toast__action').first().boundingBox(); const x = box.x + box.width / 2, y = box.y + 6
+      await p.mouse.move(x, y); await p.mouse.down(); for (let i = 1; i <= 4; i++) { await p.mouse.move(x, y + 3 * i); await wait(20) } await p.mouse.up(); await wait(600) }
+    ok(await checked() === before, `${T} press Undo, slide 12 px down, release on it: nothing undone`)
+    await p.locator('[data-slot="toast"] .toast__close-button').first().click(); await wait(400)
     // under the threshold, slow: springs back
     await tick()
     await drag(p.locator('[data-slot="toast"] .toast__title').first(), -20, 600)
@@ -57,6 +67,16 @@ for (const engine of engines) {
     // timer waits while pressed: hold 9 s (timeout 8 s), release in place
     await tick()
     { const box = await p.locator('[data-slot="toast"] .toast__title').first().boundingBox(); await p.mouse.move(box.x + 5, box.y + 5); await p.mouse.down(); await wait(9000); const still = await notice().count(); await p.mouse.move(box.x + 300, box.y + 400); await p.mouse.up(); ok(still === 1, `${T} held 9 s, still there`) }
+    // slide off the notice sideways and let go outside it: the countdown still resumes and it leaves on time
+    await tick()
+    { const box = await p.locator('[data-slot="toast"] .toast__title').first().boundingBox(); const x = box.x + 5, y = box.y + box.height / 2
+      await p.mouse.move(x, y); await p.mouse.down(); for (let i = 1; i <= 6; i++) { await p.mouse.move(x + 60 * i, y + 30 * i); await wait(20) }
+      await p.mouse.move(x + 200, 600); await p.mouse.up(); await wait(9500) }
+    ok(await notice().count() === 0, `${T} slid off sideways and let go outside: gone after its 8 s`)
+    // a tap on its text, then nothing: it still leaves on time
+    await tick()
+    await p.locator('[data-slot="toast"] .toast__title').first().click(); await p.mouse.move(5, 400); await wait(9500)
+    ok(await notice().count() === 0, `${T} a tap on its text: gone after its 8 s`)
     // tap Undo still works
     await p.locator('[data-slot="toast"]').evaluateAll(es => es.forEach(e => e.remove())).catch(() => {})
     await tick(); before = await checked()
