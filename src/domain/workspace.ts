@@ -4,7 +4,7 @@ import { newId, withOperationIds } from './ids.ts'
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
-import { draftOf, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, remadeItems, type DayDraft } from "./day-draft.ts";
+import { draftOf, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { automationProblem, dueRules, firedRules, type Automation, type FiredRule, type RuleSource } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, usesFormulas, valueAtTap, type ButtonStep, type ButtonValue } from "./buttons.ts";
@@ -597,6 +597,10 @@ function settleAfterRowsLeft(state: Workspace, p: Page, t: Task, options: { sing
   const elsewhere = taskRows(state, t.id).some((r) => r.page.id !== p.id);
   if (!elsewhere && !t.paused) { tombstone(state, t); return; }
   if (options.single && options.wasPlan && p.type === "daily" && p.date && p.date === options.today && options.plannedBefore === p.date) { t.paused = true; t.version++; }
+}
+/** Whether a to-do is still planned as a draft notice saw it (`seen[itemId]`, null = nowhere); no entry = not known, so no. */
+function planSeen(state: Workspace, t: Task, seen: Record<string, string | null>, itemId: string): boolean {
+  return Boolean(seen && Object.prototype.hasOwnProperty.call(seen, itemId)) && seen[itemId] === plannedOn(state, t.id);
 }
 function setDraft(state: Workspace, dayPageId: string, draft: DayDraft): void {
   const p = state.pages.find((x) => x.id === draftPageId(dayPageId));
@@ -1418,7 +1422,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const items = remadeItems(old, normalizeDraftItems(state, day, action.items, allowed));
       // A to-do he already applied or skipped from the day's draft isn't offered again under "more open" (Ratchet ea6ab2bd).
       const decided = new Set(items.flatMap((i) => (i.state !== "open" && i.taskId ? [i.taskId] : [])));
-      const moreOpen = action.moreOpen.filter((id) => allowed.has(id) && !decided.has(id));
+      const later = day.date ? plannedAfter(state, day.date) : new Set<string>();
+      const moreOpen = action.moreOpen.filter((id) => allowed.has(id) && !decided.has(id) && !later.has(id));
       const draft: DayDraft = { status: action.status, items, moreOpen, ...(action.recipe ? { recipe: action.recipe } : {}) };
       const existing = state.pages.find((p) => p.id === draftPageId(day.id));
       if (existing) existing.document = JSON.stringify(draft);
@@ -1436,10 +1441,12 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       let doc = docOf(day), applied = 0;
       const after = new Map<string, string>();
       const plan: Task[] = [];
+      // A to-do moved to a later day since this draft was shown (another tab, another device) stays there.
+      const later = plannedAfter(state, day.date);
       for (const item of draft.items) {
         if (!wanted.has(item.id) || item.state !== "open") continue;
         const t = item.taskId ? state.tasks.find((x) => x.id === item.taskId) : undefined;
-        if (item.taskId && (!eligibleTask(t) || rowIdsOf(doc, t.id).size)) continue;
+        if (item.taskId && (!offeredOn(t, later) || rowIdsOf(doc, t.id).size)) continue;
         const at = placeItem(doc, { ...item, anchor: after.get(item.anchor) ?? item.anchor, place: after.has(item.anchor) ? "after" : item.place }, new Set(state.tasks.map((x) => x.id)));
         if (!at) continue;
         const words = action.edits?.[item.id]?.trim();
@@ -1454,6 +1461,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         else doc.splice(at.index, 0, row);
         after.set(item.anchor, at.kind === "fill" ? doc[at.index]!.id : row.id);
         item.state = "applied";
+        item.by = operationId;
         applied++;
       }
       if (!applied) throw new DomainError("Nothing to apply");
@@ -1468,10 +1476,60 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!draft) throw new DomainError("No draft for this day");
       const wanted = new Set(action.itemIds);
       let skipped = 0;
-      for (const item of draft.items) if (wanted.has(item.id) && item.state === "open") { item.state = "skipped"; skipped++; }
+      for (const item of draft.items) if (wanted.has(item.id) && item.state === "open") { item.state = "skipped"; item.by = operationId; skipped++; }
       if (!skipped) throw new DomainError("Nothing to skip");
       setDraft(state, day.id, draft);
       return { message: skipped === 1 ? "Skipped" : `Skipped ${skipped}`, entityId: draftPageId(day.id) };
+    }
+    case "snooze-draft": {
+      // Brian 17e7b7f2 (Lead d2d043f0): Move to a later day from the draft. Each suggested to-do is planned on that day,
+      // as Another day does, and stays skipped here, so one Undo takes back the move and leaves today's skip. It acts
+      // only on what the notice's own skip (`skippedBy`) set aside, still unmoved (✕ or Dismiss all, then the day). A line
+      // has no day. One decided again since (reopened, skipped again, moved, applied), or whose to-do was planned
+      // elsewhere since the notice was shown (Another day in another tab), is left as it is (Ratchet da1ca677, 05445be6).
+      const day = page(state, action.pageId);
+      if (day.type !== "daily" || !day.date || isTrashed(day)) throw new DomainError("Not a day page");
+      const until = date(action.date);
+      if (until <= day.date) throw new DomainError("Pick a later day");
+      if (action.today) date(action.today);
+      const draft = draftOf(state, day.id);
+      if (!draft) throw new DomainError("No draft for this day");
+      const wanted = new Set(action.itemIds);
+      let moved = 0, changed = 0;
+      for (const item of draft.items) {
+        if (!wanted.has(item.id) || !item.taskId) continue;
+        const t = state.tasks.find((x) => x.id === item.taskId);
+        if (!eligibleTask(t)) continue;
+        if (item.state !== "skipped" || item.until || item.by !== action.skippedBy || !planSeen(state, t, action.seen, item.id)) { changed++; continue; }
+        planOn(state, t, until, { from: day.date, today: action.today });
+        item.state = "skipped";
+        item.until = until;
+        item.by = operationId;
+        moved++;
+      }
+      if (!moved) throw new DomainError(changed ? "Changed elsewhere since; nothing moved" : "Nothing to move");
+      setDraft(state, day.id, draft);
+      return { message: moved === 1 ? `Moved to ${until}` : `Moved ${moved} to ${until}`, entityId: draftPageId(day.id) };
+    }
+    case "reopen-draft": {
+      // The second Undo after Undo move (Ratchet 46dd9987, f38d66a1): the workspace keeps one Undo, so a skip's own is
+      // gone by then. This puts back only what that skip left: still skipped by it, not moved, applied or skipped again,
+      // and a to-do still planned as the notice saw it, not moved by Another day elsewhere since (Ratchet da1ca677).
+      const day = page(state, action.pageId);
+      const draft = draftOf(state, day.id);
+      if (!draft) throw new DomainError("No draft for this day");
+      const wanted = new Set(action.itemIds);
+      let reopened = 0;
+      for (const item of draft.items) {
+        if (!wanted.has(item.id) || item.state !== "skipped" || item.until || item.by !== action.skippedBy) continue;
+        if (item.taskId) { const t = state.tasks.find((x) => x.id === item.taskId); if (!t || !planSeen(state, t, action.seen, item.id)) continue; }
+        item.state = "open";
+        delete item.by;
+        reopened++;
+      }
+      if (!reopened) throw new DomainError("Cannot undo after later changes; current values kept");
+      setDraft(state, day.id, draft);
+      return { message: reopened === 1 ? "Brought back" : `Brought back ${reopened}`, entityId: draftPageId(day.id) };
     }
     case "create-database": {
       const id = action.pageId;

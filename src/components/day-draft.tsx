@@ -10,8 +10,11 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { createPortal } from 'react-dom'
 import { inlineText, type EditorNode } from '../domain/editor-document'
 import type { LocalDate, Page, Workspace } from '../domain/types'
-import { shortLabel } from './dates'
-import { useDayDraft as useRealDayDraft } from './use-day-draft'
+import { Button, toast } from '@heroui/react'
+import { addDays, anotherDayOptions, shortLabel, todayIso } from './dates'
+import { NoticeRow } from './notice-row'
+import { noticeDate, pickDate } from './row-actions'
+import { useDayDraft as useRealDayDraft, type DraftTicket } from './use-day-draft'
 
 export type DraftState = 'none' | 'preparing' | 'ready' | 'failed' | 'offline'
 export type DraftItem = {
@@ -36,7 +39,14 @@ export interface DayDraft {
   /** "N more open" sits after this block: the end of the planning part. Optional for check-script stand-ins. */
   moreOpenAfterId?: string | null
   apply(itemIds: string[], edits?: Record<string, string>): Promise<{ applied: string[]; dropped: string[] }>
-  skip(itemIds: string[]): Promise<boolean>
+  /** The notice's ticket for Move to and its second Undo (use-day-draft.ts), or null when nothing was skipped. */
+  skip(itemIds: string[]): Promise<DraftTicket | null>
+  /** Move to: the ticket's to-dos planned on `date`, kept skipped here; one planned elsewhere since stays (`dropped`). */
+  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[]; operationId: string }>
+  /** Undo on `Moved to …`: takes back only the move. */
+  undoMove(operationId: string): Promise<'done' | 'refused' | 'failed'>
+  /** The skip notice's Undo after Undo move: reopens what that skip left, or 'refused' if it was changed since. */
+  reopen(ticket: DraftTicket): Promise<'done' | 'refused' | 'failed'>
   addOpen(taskId: string): Promise<boolean>
   retry(): void
 }
@@ -66,10 +76,66 @@ export function useDayDraft(page: Page): DayDraft {
     planningEndId: mock?.planningEndId ?? null,
     moreOpenAfterId: mock?.moreOpenAfterId ?? null,
     apply: async (ids, edits) => { log({ apply: ids, edits }); edit(ids); return { applied: ids, dropped: [] } },
-    skip: async ids => { log({ skip: ids }); edit(ids); return true },
+    skip: async ids => { log({ skip: ids }); edit(ids); return { itemIds: ids, skippedBy: 'mock-skip', seen: {} } },
+    snooze: async (ticket, date) => { log({ snooze: ticket.itemIds, date }); return { status: 'done', moved: ticket.itemIds, dropped: [], operationId: 'mock-move' } },
+    undoMove: async operationId => { log({ undoMove: operationId }); return 'done' },
+    reopen: async ticket => { log({ reopen: ticket.itemIds }); return 'done' },
     addOpen: async taskId => { log({ addOpen: taskId }); if (mock) { mock.moreOpen = mock.moreOpen.filter(t => t.taskId !== taskId); bump() } return true },
     retry: () => { log({ retry: true }); if (mock) { mock.state = 'preparing'; bump() } },
   }
+}
+
+// ---------- The notice after ✕ or Dismiss: Skipped, and a day to move its to-dos to (B100, Jazz 7fd3eaa9, Lead d2d043f0) ----------
+
+/** Longer than other notices (8 s): there's a choice to make in it. Swiping or ✕ closes it sooner. */
+const SKIPPED_MS = 10_000
+const NOTICE_MS = 8000
+const REFUSAL_MS = 6000
+
+async function skipAndTell(draft: DayDraft, itemIds: string[]) {
+  const ticket = await draft.skip(itemIds)
+  if (ticket) showSkipped(draft, ticket)
+}
+
+/**
+ * `Skipped · Undo`, and when there are to-dos, `Move to  Sat 11/21  Mon 11/23  Pick…` under it. A line the model wrote
+ * has no day, so a notice for lines only has no row, and on a mix the row says how many to-dos move. Undo puts back
+ * what this skip set aside (reopen: it refuses what was decided since, here or in another tab).
+ */
+function showSkipped(draft: DayDraft, ticket: DraftTicket) {
+  const day = todayIso(), n = ticket.itemIds.length, todos = Object.keys(ticket.seen).length
+  const title = n === 1 ? 'Skipped' : `Skipped ${n}`
+  const label = todos === n ? 'Move to' : todos === 1 ? 'Move the to-do to' : `Move ${todos} to-dos to`
+  // The choices "Another day" offers, less Tomorrow: a plain ✕ already brings it back tomorrow.
+  const days = anotherDayOptions(day).map(o => o.date).filter(d => d !== addDays(day, 1))
+  let key = ''
+  const move = (date: LocalDate) => { toast.close(key); void moveTo(draft, ticket, date) }
+  const options = (timeout: number) => ({
+    timeout,
+    actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.reopen(ticket).then(r => { if (r === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
+    description: todos ? (
+      <NoticeRow label={label}>
+        {days.map(d => <Button key={d} size="sm" variant="ghost" className="toast-row-button" aria-label={`${label} ${noticeDate(d)}`} onPress={() => move(d)}>{shortLabel(d)}</Button>)}
+        {/* The native picker can stay open a while: the notice waits for it instead of leaving under it. */}
+        <Button size="sm" variant="ghost" className="toast-row-button" aria-label={`${label} another day`} onPress={() => { toast.update(key, title, options(0)); pickDate(addDays(day, 1), move) }}>Pick…</Button>
+      </NoticeRow>
+    ) : undefined,
+  })
+  key = toast(title, options(SKIPPED_MS))
+}
+
+/** `Moved to Mon, Nov 23 · Undo`. Its Undo takes back only the move and brings the Skipped notice back, same ticket. */
+async function moveTo(draft: DayDraft, ticket: DraftTicket, date: LocalDate) {
+  const r = await draft.snooze(ticket, date)
+  if (r.status === 'refused') { toast('Not moved · changed elsewhere', { timeout: REFUSAL_MS }); return }
+  // 'failed': nothing was stored, and the save bar already says so.
+  if (r.status !== 'done') return
+  const moved = r.moved.length, left = Object.keys(ticket.seen).length - moved
+  const text = `${moved > 1 ? `Moved ${moved} to` : 'Moved to'} ${noticeDate(date)}${left > 0 ? ` · ${left} changed elsewhere` : ''}`
+  const key: string = toast(text, {
+    timeout: NOTICE_MS,
+    actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.undoMove(r.operationId).then(u => { if (u === 'done') showSkipped(draft, ticket); else if (u === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
+  })
 }
 
 // ---------- Held while he types (states §2 "Arrived while he's typing") ----------
@@ -245,7 +311,7 @@ export function DraftBands({ draft, workspace, groups, fills }: { draft: DayDraf
     {fills.length > 0 && <style>{fills.map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
     {groups.map(g => createPortal(<>
       {g.items.map(item => <Band key={item.id} item={item} workspace={workspace} edits={edits}
-        onApply={() => void draft.apply([item.id], editsFor([item.id]))} onSkip={() => void draft.skip([item.id])} />)}
+        onApply={() => void draft.apply([item.id], editsFor([item.id]))} onSkip={() => void skipAndTell(draft, [item.id])} />)}
       {g.more && <MoreOpen tasks={draft.moreOpen} onAdd={id => void draft.addOpen(id)} />}
     </>, g.host, g.afterId))}
   </>
@@ -258,7 +324,7 @@ export function DraftLine({ page }: { page: Page }) {
   const { shown, show } = useDraftReveal(page.id, ready && draft.items.length > 0)
   const n = draft.items.length
   const ids = draft.items.map(i => i.id)
-  const all = (fn: 'apply' | 'skip') => keepView(() => void (fn === 'apply' ? draft.apply(ids, editsFor(ids)) : draft.skip(ids)))
+  const all = (fn: 'apply' | 'skip') => keepView(() => void (fn === 'apply' ? draft.apply(ids, editsFor(ids)) : skipAndTell(draft, ids)))
   if (draft.state === 'none') return null
   if (draft.state === 'preparing') return <p className="draft-line" role="status"><span className="draft-spin" aria-hidden="true" />Preparing…</p>
   if (n > 0 && !shown) return <p className="draft-line" role="status">Suggestions ready<span className="sep"> · </span><button type="button" className="draft-primary" onClick={show}>Show</button></p>

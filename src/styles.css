@@ -1191,6 +1191,17 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .app-toasts .toast__action { margin-top:0; }
 /* The ✕ centres on the action's line: the action is 36 px on the laptop, 40 px on a phone. */
 @media (max-width: 639px) { .app-toasts .toast__close-button { margin-top:-2px; } }
+/* B100: a notice's second row (NoticeRow): a short grey label, then small ghost buttons (the notice's second-action
+   style), across the full width under the line. The first button's text lines up with the notice's text. */
+.app-toasts [data-slot="toast"].has-row { flex-wrap:wrap; row-gap:2px; }
+.app-toasts .toast-row { flex-basis:100%; display:flex; flex-wrap:wrap; align-items:center; min-width:0; margin:0 -8px -4px 0; }
+.app-toasts .toast-row-label { flex:none; margin-right:16px; font-size:var(--text-small); color:var(--ink-2); white-space:nowrap; }
+/* The ghost buttons' own 12 px padding is pulled back, so on a line of their own their text starts under the label's. */
+.app-toasts .toast-row-buttons { flex:none; display:flex; align-items:center; gap:2px; margin-left:-12px; }
+.app-toasts .toast-row-button { flex:none; font-variant-numeric:tabular-nums; }
+/* Phones: 44 px tall targets (Ratchet 8d183260) that take no more room: 8 px below sit in the notice's own padding,
+   clear of Undo and ✕ above, so the notice keeps its height. */
+@media (max-width: 639px) { .app-toasts .toast-row-button { min-height:44px; margin-block:0 -8px; } }
 /* A notice follows the finger toward its edge (toast-swipe.ts); the page never scrolls under it. `translate` is its
    own property, so HeroUI's stacking transform is untouched. Springs back, or leaves, in 0.2 s. */
 .app-toasts [data-slot="toast"] { touch-action:none; transition:transform var(--toast-translate-duration) var(--toast-ease), height var(--toast-height-duration) var(--toast-ease), opacity var(--toast-opacity-duration) var(--toast-ease), translate .2s var(--toast-ease); }

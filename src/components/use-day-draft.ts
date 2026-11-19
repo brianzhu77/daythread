@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { EditorNode } from '../domain/editor-document'
 import { draftOf, draftStale, draftView, type DraftItemView } from '../domain/day-draft'
+import { plannedOn } from '../domain/workspace'
 import type { Action, LocalDate, Page, Task, Workspace } from '../domain/types'
 import { prepareDayDraft } from '../server/functions'
 import { todayIso } from './dates'
@@ -22,11 +23,30 @@ export interface DayDraftHook {
   /** The block "N more open ▸" sits after: the end of the planning part. */
   moreOpenAfterId: string | null
   apply(itemIds: string[], edits?: Record<string, string>): Promise<{ applied: string[]; dropped: string[] }>
-  skip(itemIds: string[]): Promise<boolean>
+  /** Skipped for today: the notice's ticket for Move to and its second Undo, or null when nothing was skipped. */
+  skip(itemIds: string[]): Promise<DraftTicket | null>
+  /**
+   * Move to a later day (Brian 17e7b7f2, Lead d2d043f0): each suggested to-do on the ticket is planned on `date` and
+   * stays skipped here. Lines have no day and are left as they are. A to-do planned elsewhere since the notice was shown
+   * keeps that plan (`dropped`); 'refused' when none could move for that reason. Its Undo takes back only the move.
+   */
+  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[]; operationId: string }>
+  /** Undo on `Moved to …`: takes back only the move; 'refused' when the workspace's Undo has moved on. */
+  undoMove(operationId: string): Promise<'done' | 'refused' | 'failed'>
+  /**
+   * The skip notice's Undo once Undo move has used the workspace's one Undo: reopens what that skip left, or 'refused'
+   * when it was skipped, moved or applied since, or its to-do planned elsewhere (`Can't undo · edited since`).
+   */
+  reopen(ticket: DraftTicket): Promise<'done' | 'refused' | 'failed'>
   addOpen(taskId: string): Promise<boolean>
   retry(): void
 }
 export type { DraftItemView, EditorNode, Task }
+/**
+ * What a skip notice acts on (Ratchet da1ca677): the items, the skip that set them aside, and each to-do's planned day
+ * as the notice was shown. Move to and Undo are refused for what changed since, in this tab or any other.
+ */
+export interface DraftTicket { itemIds: string[]; skippedBy: string; seen: Record<string, LocalDate | null> }
 
 /**
  * This tab's ask for each day page's draft, shared by every hook on the page: in flight since `at`, answered (`done`), or
@@ -129,7 +149,39 @@ export function useDayDraft(page: Page): DayDraftHook {
     return { applied, dropped: itemIds.filter(id => !applied.includes(id)) }
   }, [latest, page.id, write])
 
-  const skip = useCallback(async (itemIds: string[]) => Boolean(await write({ type: 'skip-draft', pageId: page.id, itemIds }, r => ({ text: itemIds.length === 1 ? 'Skipped' : `Skipped ${itemIds.length}`, undoOperationId: r.operationId }), undefined, { inlineRefusal: /Nothing to skip/ })), [page.id, write])
+  const skip = useCallback(async (itemIds: string[]): Promise<DraftTicket | null> => {
+    const ws = latest(), draft = ws ? draftOf(ws, page.id) : null
+    const seen: Record<string, LocalDate | null> = {}
+    for (const item of draft?.items ?? []) if (ws && item.taskId && itemIds.includes(item.id)) seen[item.id] = plannedOn(ws, item.taskId)
+    const skippedBy = newOperationId()
+    // No notice from here: the day-draft UI shows `Skipped` with its day row (day-draft.tsx).
+    const receipt = await write({ type: 'skip-draft', pageId: page.id, itemIds }, undefined, skippedBy, { inlineRefusal: /Nothing to skip/ })
+    return receipt ? { itemIds, skippedBy, seen } : null
+  }, [latest, page.id, write])
+
+  const snooze = useCallback(async (ticket: DraftTicket, date: LocalDate) => {
+    const operationId = newOperationId()
+    let refused = false
+    const movedNow = () => ticket.itemIds.filter(id => draftOf(latest()!, page.id)?.items.some(i => i.id === id && i.until === date && i.by === operationId))
+    // The `Moved to …` notice is the day-draft UI's: its Undo brings the Skipped notice back (day-draft.tsx).
+    const receipt = await write({ type: 'snooze-draft', pageId: page.id, itemIds: ticket.itemIds, date, today: todayIso(), skippedBy: ticket.skippedBy, seen: ticket.seen }, undefined, operationId, { inlineRefusal: /Nothing to move|Pick a later day|Changed elsewhere/, onRefused: () => { refused = true } })
+    const moved = receipt ? movedNow() : []
+    return { status: receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const, moved, dropped: ticket.itemIds.filter(id => !moved.includes(id)), operationId }
+  }, [latest, page.id, write])
+
+  const reopen = useCallback(async (ticket: DraftTicket) => {
+    let refused = false
+    const receipt = await write({ type: 'reopen-draft', pageId: page.id, itemIds: ticket.itemIds, skippedBy: ticket.skippedBy, seen: ticket.seen }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo/, onRefused: () => { refused = true } })
+    return receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const
+  }, [page.id, write])
+
+  /** Undo on `Moved to …`: the workspace's one Undo, as every other notice sends it. The ticket still works afterwards. */
+  const undoMove = useCallback(async (operationId: string) => {
+    if (latest()?.undo?.operationId !== operationId) return 'refused' as const
+    let refused = false
+    const receipt = await run({ type: 'undo', targetOperationId: operationId }, undefined, undefined, { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => { refused = true } })
+    return receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const
+  }, [latest, run])
 
   const addOpen = useCallback(async (taskId: string) => Boolean(page.date && await write({ type: 'plan-task', taskId, date: page.date, today: todayIso() }, r => ({ text: 'Added', undoOperationId: r.operationId }))), [page.date, write])
 
@@ -138,5 +190,5 @@ export function useDayDraft(page: Page): DayDraftHook {
   const state: DayDraftState = offline && !view ? 'offline' : inFlight(ask) && !view?.items.length ? 'preparing'
     // A failed or lost ask here shows Retry at once (he may be looking at the page); a tab coming back asks again first.
     : !view ? (ask && ask.state !== 'done' ? 'failed' : 'none') : view.status === 'failed' ? 'failed' : 'ready'
-  return { state, items: view?.items ?? [], moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, addOpen, retry }
+  return { state, items: view?.items ?? [], moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, snooze, undoMove, reopen, addOpen, retry }
 }
