@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom'
 import { inlineText, type EditorNode } from '../domain/editor-document'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { shortLabel } from './dates'
-import { useDayDraft as useRealDayDraft } from './use-day-draft'
+import { useDayDraft as useRealDayDraft, type DraftTicket } from './use-day-draft'
 
 export type DraftState = 'none' | 'preparing' | 'ready' | 'failed' | 'offline'
 export type DraftItem = {
@@ -36,12 +36,12 @@ export interface DayDraft {
   /** "N more open" sits after this block: the end of the planning part. Optional for check-script stand-ins. */
   moreOpenAfterId?: string | null
   apply(itemIds: string[], edits?: Record<string, string>): Promise<{ applied: string[]; dropped: string[] }>
-  /** The skip's operation id (for `reopen`), or null when nothing was skipped. */
-  skip(itemIds: string[]): Promise<string | null>
-  /** Move to: suggested to-dos planned on `date`, kept skipped here (use-day-draft.ts). */
-  snooze(itemIds: string[], date: LocalDate): Promise<boolean>
+  /** The notice's ticket for Move to and its second Undo (use-day-draft.ts), or null when nothing was skipped. */
+  skip(itemIds: string[]): Promise<DraftTicket | null>
+  /** Move to: the ticket's to-dos planned on `date`, kept skipped here; one planned elsewhere since stays (`dropped`). */
+  snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[] }>
   /** The skip notice's Undo after Undo move: reopens what that skip left, or 'refused' if it was changed since. */
-  reopen(itemIds: string[], skippedBy: string): Promise<'done' | 'refused' | 'failed'>
+  reopen(ticket: DraftTicket): Promise<'done' | 'refused' | 'failed'>
   addOpen(taskId: string): Promise<boolean>
   retry(): void
 }
@@ -71,9 +71,9 @@ export function useDayDraft(page: Page): DayDraft {
     planningEndId: mock?.planningEndId ?? null,
     moreOpenAfterId: mock?.moreOpenAfterId ?? null,
     apply: async (ids, edits) => { log({ apply: ids, edits }); edit(ids); return { applied: ids, dropped: [] } },
-    skip: async ids => { log({ skip: ids }); edit(ids); return 'mock-skip' },
-    snooze: async (ids, date) => { log({ snooze: ids, date }); edit(ids); return true },
-    reopen: async (ids, skippedBy) => { log({ reopen: ids, skippedBy }); return 'done' },
+    skip: async ids => { log({ skip: ids }); edit(ids); return { itemIds: ids, skippedBy: 'mock-skip', seen: {} } },
+    snooze: async (ticket, date) => { log({ snooze: ticket.itemIds, date }); return { status: 'done', moved: ticket.itemIds, dropped: [] } },
+    reopen: async ticket => { log({ reopen: ticket.itemIds }); return 'done' },
     addOpen: async taskId => { log({ addOpen: taskId }); if (mock) { mock.moreOpen = mock.moreOpen.filter(t => t.taskId !== taskId); bump() } return true },
     retry: () => { log({ retry: true }); if (mock) { mock.state = 'preparing'; bump() } },
   }
