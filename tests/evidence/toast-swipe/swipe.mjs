@@ -77,6 +77,18 @@ for (const engine of engines) {
     }))
     await wait(700)
     ok(await notice().count() === 0 && await checked() === before, `${T} a move-less 12 px flick from Undo closes without undoing`)
+    // Move-less releases 12 px right and 12 px down from Undo: never a tap (Ratchet b050a9e5)
+    for (const [name, mx, my] of [['right', 12, 0], ['down', 0, 12]]) {
+      await tick(); before = await checked()
+      await notice().first().evaluate((el, [mx, my]) => new Promise(done => {
+        const t = el.querySelector('.toast__action'), r = t.getBoundingClientRect(), x = r.x + 6, y0 = r.y + 6
+        const ev = (type, xx, y) => t.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 10, pointerType: 'touch', isPrimary: true, clientX: xx, clientY: y, button: 0 }))
+        ev('pointerdown', x, y0); setTimeout(() => { ev('pointerup', x + mx, y0 + my); done() }, 16)
+      }), [mx, my])
+      await wait(700)
+      ok(await checked() === before, `${T} a move-less 12 px release ${name} on Undo: nothing undone`)
+      await p.locator('[data-slot="toast"] .toast__close-button').evaluateAll(es => es.forEach(e => e.click())); await p.mouse.move(5, 400); await wait(500)
+    }
     // down
     await tick()
     await drag(p.locator('[data-slot="toast"] .toast__title').first(), 44)
