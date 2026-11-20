@@ -137,17 +137,46 @@ test('B101: between two new drafts the line is known by where it came from, so t
   assert.deepEqual(again.shown(yesterday), ['y1'])
 })
 
-test('B101: an old draft\'s words count only within a week of it', () => {
+const wordsItem = (id: string, from?: string): DraftItem => ({ id, anchor: '', place: 'after', source: 'model', state: 'open', ...(from ? { from } : {}), block: { id: `${id}-b`, type: 'task', props: {}, content: [text('Pack the bags')], children: [] } })
+const setDraft = (h: ReturnType<typeof harness>, date: string, items: DraftItem[], recipe: number) => h.run({ type: 'set-draft', pageId: dayId(date), status: 'ready', moreOpen: [], allowedTaskIds: [], items, recipe })
+const shownOn = (h: ReturnType<typeof harness>, date: string) => draftView(h.ws, h.page(dayId(date)))!.items.map(i => i.id)
+
+test('B101: an old draft opened weeks later doesn\'t offer a line applied since from a newer one (Ratchet 5dd205a3)', () => {
   const h = harness()
-  const old = addDays(today, -9)
+  const plan = addDays(today, -12), old = addDays(today, -11)
+  planOn(h, plan)
   h.day(old)
   h.day(today)
-  h.save(dayId(today), d => under(d, 'TODO', todo('k', 'Keep me', 'plan', today)), { at: at(today, '07:00') })
-  const item = (id: string, from?: string): DraftItem => ({ id, anchor: '', place: 'after', source: 'model', state: 'open', ...(from ? { from } : {}), block: { id: `${id}-b`, type: 'task', props: {}, content: [text('Pack the bags')], children: [] } })
-  h.run({ type: 'set-draft', pageId: dayId(old), status: 'ready', moreOpen: [], allowedTaskIds: [], items: [item('o1')], recipe: 2 })
-  h.run({ type: 'apply-draft', pageId: dayId(old), itemIds: ['o1'], today: old })
-  h.run({ type: 'set-draft', pageId: dayId(today), status: 'ready', moreOpen: [], allowedTaskIds: [], items: [item('t1', 'b9')], recipe: DRAFT_RECIPE })
-  assert.deepEqual(draftView(h.ws, h.page(dayId(today)))!.items.map(i => i.id), ['t1'])
+  setDraft(h, old, [wordsItem('o1')], 2)
+  setDraft(h, today, [wordsItem('t1', 'b1')], DRAFT_RECIPE)
+  h.run({ type: 'apply-draft', pageId: dayId(today), itemIds: ['t1'], today })
+  assert.deepEqual(shownOn(h, old), [])
+  assert.throws(() => h.run({ type: 'apply-draft', pageId: dayId(old), itemIds: ['o1'], today }), /Nothing to apply/)
+  assert.equal(h.ws.tasks.filter(t => t.title === 'Pack the bags').length, 1)
+})
+
+test('B101: a decision a remake kept from an older draft still counts by its words (Ratchet 5dd205a3)', () => {
+  const h = harness()
+  planOn(h, twoDaysAgo)
+  h.day(yesterday)
+  h.day(today)
+  setDraft(h, yesterday, [wordsItem('y1')], 2)
+  h.run({ type: 'skip-draft', pageId: dayId(yesterday), itemIds: ['y1'] })
+  setDraft(h, yesterday, [], DRAFT_RECIPE)
+  setDraft(h, today, [wordsItem('t1', 'b1')], DRAFT_RECIPE)
+  assert.deepEqual(shownOn(h, today), [])
+})
+
+test('B101: the same words written again on a later page aren\'t taken for an old draft\'s line', () => {
+  const h = harness()
+  h.day(twoDaysAgo)
+  h.day(today)
+  setDraft(h, twoDaysAgo, [wordsItem('o1')], 2)
+  h.run({ type: 'apply-draft', pageId: dayId(twoDaysAgo), itemIds: ['o1'], today: twoDaysAgo })
+  // Written again yesterday, after that draft's day: a new line, offered.
+  planOn(h, yesterday)
+  setDraft(h, today, [wordsItem('t1', 'b1')], DRAFT_RECIPE)
+  assert.deepEqual(shownOn(h, today), ['t1'])
 })
 
 test('B101: what he wrote down for the day goes first, however the model ordered its answer', () => {
