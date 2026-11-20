@@ -4,7 +4,7 @@ import { newId, withOperationIds } from './ids.ts'
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
-import { decidedElsewhere, draftOf, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
+import { amongApplied, decidedElsewhere, draftOf, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { automationProblem, dueRules, firedRules, type Automation, type FiredRule, type RuleSource } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, usesFormulas, valueAtTap, type ButtonStep, type ButtonValue } from "./buttons.ts";
@@ -1439,7 +1439,6 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!draft) throw new DomainError("No draft for this day");
       const wanted = new Set(action.itemIds);
       let doc = docOf(day), applied = 0;
-      const after = new Map<string, string>();
       const plan: Task[] = [];
       // A to-do moved to a later day since this draft was shown (another tab, another device) stays there.
       const later = plannedAfter(state, day.date);
@@ -1450,8 +1449,11 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         const t = item.taskId ? state.tasks.find((x) => x.id === item.taskId) : undefined;
         if (item.taskId && (!offeredOn(t, later) || rowIdsOf(doc, t.id).size)) continue;
         if (!item.taskId && elsewhere(item)) continue;
-        const at = placeItem(doc, { ...item, anchor: after.get(item.anchor) ?? item.anchor, place: after.has(item.anchor) ? "after" : item.place }, new Set(state.tasks.map((x) => x.id)));
-        if (!at) continue;
+        const placed = placeItem(doc, item, new Set(state.tasks.map((x) => x.id)));
+        if (!placed) continue;
+        // After the rows already applied from this draft at its spot that were offered before it, in this command or an
+        // earlier one, and before those offered after it (B102): one at a time ends as Apply all does.
+        const at = amongApplied(doc, draft, item, placed);
         const words = action.edits?.[item.id]?.trim();
         let row: EditorNode;
         if (t) { row = planRow(t, day.date); plan.push(t); }
@@ -1462,7 +1464,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         // A fill keeps the slot's block id, so the other bands anchored on that slot stay right after it.
         if (at.kind === "fill") doc[at.index] = { ...row, id: doc[at.index]!.id };
         else doc.splice(at.index, 0, row);
-        after.set(item.anchor, at.kind === "fill" ? doc[at.index]!.id : row.id);
+        item.row = at.kind === "fill" ? doc[at.index]!.id : row.id;
         item.state = "applied";
         item.by = operationId;
         applied++;

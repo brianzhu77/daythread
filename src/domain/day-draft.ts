@@ -29,6 +29,8 @@ export interface DraftItem {
   since?: LocalDate
   /** The recipe that made it, on an item a remake kept from an older draft (absent: its draft's own). */
   recipe?: number
+  /** Applied: the block it became on the page, so the next one applied at its spot lands in the offered order (B102). */
+  row?: string
 }
 /** `recipe`: how the server made it (`DRAFT_RECIPE`); absent on a draft from before it was kept. */
 export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: string[]; recipe?: number }
@@ -223,6 +225,45 @@ export function placeItem(doc: readonly EditorNode[], item: DraftItem, tasks: Re
   return { kind: 'after', index: end, anchorId: end > 0 ? doc[end - 1]!.id : null }
 }
 
+/**
+ * B102 (Jazz 6d7d064e, Lead ee097068): where an item applied on its own goes among the rows already applied from the
+ * same draft at its spot, so applying one at a time ends in the order offered, as Apply all does. Those rows are the
+ * ones sitting together right where it would go: it goes after the ones offered before it and before the ones offered
+ * after it. A row he deleted, moved away or typed something before is no longer one of them, so the next row lands after
+ * the nearest earlier one still there, or at the spot itself when none is. The bands still waiting are shown the same way.
+ */
+export function amongApplied(doc: readonly EditorNode[], draft: DayDraft, item: DraftItem, at: Placement): Placement {
+  const order = draft.items.findIndex(i => i.id === item.id)
+  const byRow = new Map<string, number>(), byTask = new Map<string, number>(), byWords = new Map<string, number>()
+  draft.items.forEach((i, n) => {
+    if (i.state !== 'applied' || i.anchor !== item.anchor || i.id === item.id) return
+    // Applied before rows were kept: a to-do by its row, a line by its words.
+    if (i.row) byRow.set(i.row, n)
+    else if (i.taskId) byTask.set(i.taskId, n)
+    else if (i.block) byWords.set(sameWords(inlineText(i.block.content)), n)
+  })
+  const orderOf = (n: EditorNode): number | undefined =>
+    byRow.get(n.id) ?? (isTaskRow(n) ? byTask.get(String(n.props!.taskId)) : undefined) ?? byWords.get(sameWords(inlineText(n.content)))
+  // The group around where it would go, looking back too: a slot an earlier tap filled is that row itself, and a
+  // missing anchor's fallback already sits past the rows applied there (Ratchet 006442d8).
+  const groupStart = (from: number) => { let i = from; while (i > 0 && orderOf(doc[i - 1]!) !== undefined) i--; return i }
+  const earlierIn = (from: number) => { for (let i = groupStart(from); i < doc.length; i++) { const o = orderOf(doc[i]!); if (o === undefined) return false; if (o < order) return true } return false }
+  // An empty slot is filled only by the first of the group: with one offered before it already applied there (a line
+  // that couldn't fill it went after it), this one goes after that, as Apply all does (Ratchet 0297bd0e).
+  if (at.kind === 'fill') {
+    if (!earlierIn(at.index + 1)) return at
+    at = { kind: 'after', index: at.index + 1, anchorId: doc[at.index]!.id }
+  }
+  const start = groupStart(at.index)
+  let index = start
+  for (let i = start; i < doc.length; i++) {
+    const o = orderOf(doc[i]!)
+    if (o === undefined || o > order) break
+    index = i + 1
+  }
+  return { kind: 'after', index, anchorId: index > 0 ? doc[index - 1]!.id : null }
+}
+
 /** The bands a page shows (Jazz's hook): open items still eligible, placed against the page as it is. */
 export interface DraftItemView { id: string; kind: 'fill' | 'after'; anchorId: string | null; block: EditorNode; taskId?: string; since?: LocalDate }
 export interface DraftView {
@@ -248,8 +289,9 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
     const t = task(item.taskId)
     if (item.taskId && (!offeredOn(t, later) || onPage.has(t.id))) continue
     if (!item.taskId && elsewhere(item)) continue
-    const at = placeItem(doc, item, ids)
-    if (!at) continue
+    const placed = placeItem(doc, item, ids)
+    if (!placed) continue
+    const at = amongApplied(doc, draft, item, placed)
     const block = t ? { id: `draft-row:${item.id}`, type: 'task', props: { taskId: t.id, role: 'plan', planDate: page.date ?? '' }, content: [{ type: 'text', text: t.title, styles: {} }], children: [] } : item.block!
     items.push({ id: item.id, kind: at.kind, anchorId: at.anchorId, block, ...(t ? { taskId: t.id, since: t.createdOn } : item.since ? { since: item.since } : {}) })
   }
