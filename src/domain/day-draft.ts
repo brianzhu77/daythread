@@ -245,14 +245,17 @@ export function amongApplied(doc: readonly EditorNode[], draft: DayDraft, item: 
   })
   const orderOf = (n: EditorNode): number | undefined =>
     byRow.get(n.id) ?? (isTaskRow(n) ? byTask.get(String(n.props!.taskId)) : undefined) ?? byWords.get(sameWords(inlineText(n.content)))
-  let { index, anchorId } = at
-  for (let i = at.index; i < doc.length; i++) {
+  // The group around where it would go, looking back too: a slot an earlier tap filled is that row itself, and a
+  // missing anchor's fallback already sits past the rows applied there (Ratchet 006442d8).
+  let start = at.index
+  while (start > 0 && orderOf(doc[start - 1]!) !== undefined) start--
+  let index = start
+  for (let i = start; i < doc.length; i++) {
     const o = orderOf(doc[i]!)
     if (o === undefined || o > order) break
     index = i + 1
-    anchorId = doc[i]!.id
   }
-  return { kind: 'after', index, anchorId }
+  return { kind: 'after', index, anchorId: index > 0 ? doc[index - 1]!.id : null }
 }
 
 /** The bands a page shows (Jazz's hook): open items still eligible, placed against the page as it is. */
