@@ -122,3 +122,41 @@ test('B102: Undo of a single apply puts it back, and applying it again lands in 
   s.apply('i2')
   assert.deepEqual(s.lines(), ['Morning', 'Book the flights', 'Read the lease', 'Buy a dog bed', 'Own line', 'Reflection'])
 })
+
+/** Three new to-dos sharing an empty to-do slot (`fill`), or an anchor that is gone (Ratchet 006442d8). */
+function shared(mode: 'fill' | 'missing') {
+  const h = harness()
+  h.day(tomorrow)
+  h.save(dayId(tomorrow), () => [heading('m', 'Morning'), { id: 'slot', type: 'task', props: { taskId: 'editor-task:slot' }, content: [], children: [] }, heading('r', 'Reflection')])
+  const items: DraftItem[] = ['Alpha', 'Beta', 'Gamma'].map((w, i) => ({ id: `i${i}`, anchor: mode === 'fill' ? 'slot' : 'gone', place: mode === 'fill' ? 'fill' : 'after', source: 'model', state: 'open', block: { id: `b${i}`, type: 'task', props: {}, content: [text(w)], children: [] } }))
+  h.run({ type: 'set-draft', pageId: dayId(tomorrow), status: 'ready', moreOpen: [], allowedTaskIds: [], items })
+  const apply = (...ids: string[]) => h.run({ type: 'apply-draft', pageId: dayId(tomorrow), itemIds: ids, today })
+  const words = () => nodesOf(h.page(dayId(tomorrow))).map(n => inlineText(n.content).trim()).filter(w => ['Alpha', 'Beta', 'Gamma'].includes(w))
+  const bands = () => draftView(h.ws, h.page(dayId(tomorrow)))!.items.map(i => [i.id, i.anchorId])
+  const rowOf = (id: string) => draftOf(h.ws, dayId(tomorrow))!.items.find(i => i.id === id)!.row!
+  return { h, apply, words, bands, rowOf }
+}
+
+for (const mode of ['fill', 'missing'] as const) {
+  test(`B102: suggestions sharing ${mode === 'fill' ? 'an empty slot' : 'a missing anchor'} end in the order offered, in any order, as Apply all`, () => {
+    const all = shared(mode)
+    all.apply('i0', 'i1', 'i2')
+    assert.deepEqual(all.words(), ['Alpha', 'Beta', 'Gamma'])
+    for (const order of [['i0', 'i1', 'i2'], ['i0', 'i2', 'i1'], ['i1', 'i0', 'i2'], ['i1', 'i2', 'i0'], ['i2', 'i0', 'i1'], ['i2', 'i1', 'i0']]) {
+      const s = shared(mode)
+      for (const id of order) s.apply(id)
+      assert.deepEqual(s.words(), ['Alpha', 'Beta', 'Gamma'], order.join(' '))
+    }
+  })
+
+  test(`B102: with ${mode === 'fill' ? 'an empty slot' : 'a missing anchor'}, the bands still waiting sit where their rows will land`, () => {
+    const s = shared(mode)
+    s.apply('i2')
+    const gamma = s.rowOf('i2')
+    // Alpha and Beta, offered before Gamma, wait above its row; then Alpha applied, Beta waits between the two.
+    const above = nodesOf(s.h.page(dayId(tomorrow)))[nodesOf(s.h.page(dayId(tomorrow))).findIndex(n => n.id === gamma) - 1]!.id
+    assert.deepEqual(s.bands(), [['i0', above], ['i1', above]])
+    s.apply('i0')
+    assert.deepEqual(s.bands(), [['i1', s.rowOf('i0')]])
+  })
+}
