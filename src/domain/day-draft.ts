@@ -27,6 +27,8 @@ export interface DraftItem {
   from?: string
   /** A plan written for a day he didn't use (B101): that day, shown as the plan's age, as a carried to-do shows its own. */
   since?: LocalDate
+  /** The recipe that made it, on an item a remake kept from an older draft (absent: its draft's own). */
+  recipe?: number
 }
 /** `recipe`: how the server made it (`DRAFT_RECIPE`); absent on a draft from before it was kept. */
 export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: string[]; recipe?: number }
@@ -63,42 +65,52 @@ export const sameWords = (s: string): string => s.toLocaleLowerCase().replace(/\
  */
 export const actedOn = (ws: Workspace, p: Page): boolean => Boolean(p.editedAt) || Boolean(draftOf(ws, p.id)?.items.some(i => i.state !== 'open'))
 
-const dayNumber = (d: LocalDate): number => Date.parse(`${d}T00:00:00Z`) / 86_400_000
-/** How many days apart two drafts may be for an older draft's line to be known by its words alone (B101). */
-const WORDS_DAYS = 7
+/** The recipe that made an item: one a remake kept from an older draft says so itself (Ratchet 5dd205a3). */
+const itemRecipe = (i: DraftItem, d: DayDraft): number => i.recipe ?? recipeOf(d)
 
 /**
  * B101: a plan line can sit in two days' drafts: the day it was written for and, when he didn't use that day, the next
  * day he opens. Once he applied or skipped it in one, no other offers it. A line is known by the block it was carried
- * from; one in a draft from before that was kept is known by its words, against drafts up to a week from it, so a
- * line he writes again another week isn't taken for it. A to-do carried by its id needs none of this: it's planned.
+ * from. An item an older recipe made has no such block and is known by its words, but only against a line that could
+ * have been in its draft: one from a page dated before that draft's day (Ratchet 5dd205a3), so the same words written
+ * again on a later page aren't taken for it. A to-do carried by its id needs none of this: it's planned.
  */
 export function decidedElsewhere(ws: Workspace, dayPage: Page): (item: DraftItem) => boolean {
-  const own = draftOf(ws, dayPage.id), ownOld = own ? recipeOf(own) < FROM_RECIPE : false
-  const near = (p: Page): boolean => {
-    const day = ws.pages.find(x => x.id === p.parentId)?.date
-    return Boolean(day && dayPage.date && Math.abs(dayNumber(day) - dayNumber(dayPage.date)) <= WORDS_DAYS)
-  }
-  const from = new Set<string>(), words = new Set<string>(), oldWords = new Set<string>()
+  const own = draftOf(ws, dayPage.id)
+  type Decided = { from?: string; words: string; old: boolean; day: LocalDate | null }
+  const decided: Decided[] = []
   for (const p of ws.pages) {
     if (!isDraft(p) || p.trashedAt || p.id === draftPageId(dayPage.id)) continue
     let d: DayDraft
     try { d = JSON.parse(p.document) as DayDraft } catch { continue }
-    const old = recipeOf(d) < FROM_RECIPE, close = near(p)
+    const day = ws.pages.find(x => x.id === p.parentId)?.date ?? null
     for (const i of d.items) {
       if (i.state === 'open' || !i.block) continue
-      if (i.from) from.add(i.from)
-      const w = sameWords(inlineText(i.block.content))
-      if (!w || !close) continue
-      words.add(w)
-      if (old) oldWords.add(w)
+      decided.push({ ...(i.from ? { from: i.from } : {}), words: sameWords(inlineText(i.block.content)), old: itemRecipe(i, d) < FROM_RECIPE, day })
     }
   }
+  // The day of the page a line was carried from: a day page's date, another page's creation day; null when unknown.
+  const days = new Map<string, LocalDate | null>()
+  const sourceDay = (id: string): LocalDate | null => {
+    if (!days.has(id)) {
+      const p = ws.pages.find(x => !isDraft(x) && flatNodes(pageNodes(x)).some(n => n.id === id))
+      days.set(id, p ? (p.type === 'daily' ? p.date : p.createdAt?.slice(0, 10) ?? null) : null)
+    }
+    return days.get(id)!
+  }
+  // Could the line carried from `id` have been in a draft for `day`? Unknown counts as yes: a second copy is the worse mistake.
+  const readable = (id: string, day: LocalDate | null): boolean => { const s = sourceDay(id); return s === null || day === null || s < day }
   return item => {
     if (!item.block) return false
-    if (item.from && from.has(item.from)) return true
-    const w = sameWords(inlineText(item.block.content))
-    return Boolean(w) && (ownOld ? words : oldWords).has(w)
+    const words = sameWords(inlineText(item.block.content)), old = own ? itemRecipe(item, own) < FROM_RECIPE : true
+    return decided.some(x => {
+      if (item.from && x.from) return item.from === x.from
+      if (!words || words !== x.words) return false
+      if (old && x.old) return true
+      if (old && x.from) return readable(x.from, dayPage.date)
+      if (x.old && item.from) return readable(item.from, x.day)
+      return false
+    })
   }
 }
 
@@ -107,7 +119,8 @@ export function decidedElsewhere(ws: Workspace, dayPage: Page): (item: DraftItem
  * new suggestions follow, without a to-do or words he has already decided on.
  */
 export function remadeItems(old: DayDraft | null, items: readonly DraftItem[]): DraftItem[] {
-  const decided = old?.items.filter(i => i.state !== 'open') ?? []
+  // Each kept item says which recipe made it, so a later check knows it has no `from` (Ratchet 5dd205a3).
+  const decided = old?.items.filter(i => i.state !== 'open').map(i => (i.recipe ? i : { ...i, recipe: recipeOf(old) })) ?? []
   if (!decided.length) return [...items]
   const ids = new Set(decided.map(i => i.id)), tasks = new Set(decided.flatMap(i => (i.taskId ? [i.taskId] : [])))
   const words = new Set(decided.flatMap(i => (i.block ? [sameWords(inlineText(i.block.content))] : [])))
