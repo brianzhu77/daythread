@@ -121,7 +121,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("set-template-target"), pageId: z.string().min(1).max(200), target: z.string().min(1).max(200).nullable() }),
   z.object({ type: z.literal("delete-template"), pageId: z.string().min(1).max(200) }),
   z.object({ type: z.literal("set-draft"), pageId: id, status: z.enum(["preparing", "ready", "failed"]), moreOpen: z.array(id).max(200), allowedTaskIds: z.array(id).max(500), recipe: z.number().int().min(1).max(1000).optional(),
-    items: z.array(z.object({ id: z.string().min(1).max(100), anchor: z.string().max(200), place: z.enum(["fill", "after"]), taskId: id.optional(), source: z.enum(["model", "fallback"]), state: z.literal("open"),
+    items: z.array(z.object({ id: z.string().min(1).max(100), anchor: z.string().max(200), place: z.enum(["fill", "after"]), taskId: id.optional(), source: z.enum(["model", "fallback"]), state: z.literal("open"), from: z.string().min(1).max(200).optional(), since: day.optional(),
       block: z.object({ id: z.string().min(1).max(200), type: z.enum(["paragraph", "bulletListItem", "task"]), props: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(), content: z.array(z.unknown()).max(50), children: z.array(z.never()).max(0).optional() }).optional() })).max(50) }),
   z.object({ type: z.literal("save-smart-note"), note: smartNote }),
   z.object({ type: z.literal("set-smart-note-result"), noteId: id, result: smartResult, spec: z.string().min(1).max(100) }),

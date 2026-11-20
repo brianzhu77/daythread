@@ -23,15 +23,22 @@ export interface DraftItem {
   until?: LocalDate
   /** The operation that last skipped, moved or applied it: `reopen-draft` reopens only what that skip left (Ratchet f38d66a1). */
   by?: string
+  /** A carried line: the block it was carried from, so another day's draft holding it too doesn't offer it twice (B101). */
+  from?: string
+  /** A plan written for a day he didn't use (B101): that day, shown as the plan's age, as a carried to-do shows its own. */
+  since?: LocalDate
 }
 /** `recipe`: how the server made it (`DRAFT_RECIPE`); absent on a draft from before it was kept. */
 export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: string[]; recipe?: number }
 
 /**
  * How day drafts are made now: 2 reads every page edited in the last 7 days and puts what he wrote for the day first
- * (Brian 3d7aca46). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
+ * (Brian 3d7aca46); 3 reads a plan written for a day he didn't use as written for the day he opens, and keeps where each
+ * carried line came from (B101). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
  */
-export const DRAFT_RECIPE = 2
+export const DRAFT_RECIPE = 3
+/** The first recipe whose carried lines say where they came from (`from`); an older draft's lines are known by their words. */
+const FROM_RECIPE = 3
 const recipeOf = (d: DayDraft): number => d.recipe ?? 1
 
 /** The day's draft for good: a ready one, or a failed one he already applied or skipped something from. */
@@ -49,6 +56,51 @@ export function draftOf(ws: Workspace, dayPageId: string): DayDraft | null {
 
 /** Words compared for "the same line": case, spacing and a trailing stop don't count. */
 export const sameWords = (s: string): string => s.toLocaleLowerCase().replace(/\s+/g, ' ').replace(/[\s.。!！]+$/u, '').trim()
+
+/**
+ * Whether he acted on a day page (B101): he edited it, or applied or skipped something from its draft. A page a tab
+ * only opened, made from his template, isn't one, nor is a to-do planned onto it from another day.
+ */
+export const actedOn = (ws: Workspace, p: Page): boolean => Boolean(p.editedAt) || Boolean(draftOf(ws, p.id)?.items.some(i => i.state !== 'open'))
+
+const dayNumber = (d: LocalDate): number => Date.parse(`${d}T00:00:00Z`) / 86_400_000
+/** How many days apart two drafts may be for an older draft's line to be known by its words alone (B101). */
+const WORDS_DAYS = 7
+
+/**
+ * B101: a plan line can sit in two days' drafts: the day it was written for and, when he didn't use that day, the next
+ * day he opens. Once he applied or skipped it in one, no other offers it. A line is known by the block it was carried
+ * from; one in a draft from before that was kept is known by its words, against drafts up to a week from it, so a
+ * line he writes again another week isn't taken for it. A to-do carried by its id needs none of this: it's planned.
+ */
+export function decidedElsewhere(ws: Workspace, dayPage: Page): (item: DraftItem) => boolean {
+  const own = draftOf(ws, dayPage.id), ownOld = own ? recipeOf(own) < FROM_RECIPE : false
+  const near = (p: Page): boolean => {
+    const day = ws.pages.find(x => x.id === p.parentId)?.date
+    return Boolean(day && dayPage.date && Math.abs(dayNumber(day) - dayNumber(dayPage.date)) <= WORDS_DAYS)
+  }
+  const from = new Set<string>(), words = new Set<string>(), oldWords = new Set<string>()
+  for (const p of ws.pages) {
+    if (!isDraft(p) || p.trashedAt || p.id === draftPageId(dayPage.id)) continue
+    let d: DayDraft
+    try { d = JSON.parse(p.document) as DayDraft } catch { continue }
+    const old = recipeOf(d) < FROM_RECIPE, close = near(p)
+    for (const i of d.items) {
+      if (i.state === 'open' || !i.block) continue
+      if (i.from) from.add(i.from)
+      const w = sameWords(inlineText(i.block.content))
+      if (!w || !close) continue
+      words.add(w)
+      if (old) oldWords.add(w)
+    }
+  }
+  return item => {
+    if (!item.block) return false
+    if (item.from && from.has(item.from)) return true
+    const w = sameWords(inlineText(item.block.content))
+    return Boolean(w) && (ownOld ? words : oldWords).has(w)
+  }
+}
 
 /**
  * The items of a draft made again over `old` (Brian 3d7aca46): what he applied or skipped stays as he left it, and the
@@ -176,15 +228,17 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
   const onPage = new Set(flatNodes(doc).filter(isTaskRow).map(n => String(n.props!.taskId)))
   const later = page.date ? plannedAfter(ws, page.date) : new Set<string>()
   const task = (id: string | undefined) => ws.tasks.find(t => t.id === id)
+  const elsewhere = draft.items.some(i => i.state === 'open' && i.block) ? decidedElsewhere(ws, page) : () => false
   const items: DraftItemView[] = []
   for (const item of draft.items) {
     if (item.state !== 'open') continue
     const t = task(item.taskId)
     if (item.taskId && (!offeredOn(t, later) || onPage.has(t.id))) continue
+    if (!item.taskId && elsewhere(item)) continue
     const at = placeItem(doc, item, ids)
     if (!at) continue
     const block = t ? { id: `draft-row:${item.id}`, type: 'task', props: { taskId: t.id, role: 'plan', planDate: page.date ?? '' }, content: [{ type: 'text', text: t.title, styles: {} }], children: [] } : item.block!
-    items.push({ id: item.id, kind: at.kind, anchorId: at.anchorId, block, ...(t ? { taskId: t.id, since: t.createdOn } : {}) })
+    items.push({ id: item.id, kind: at.kind, anchorId: at.anchorId, block, ...(t ? { taskId: t.id, since: t.createdOn } : item.since ? { since: item.since } : {}) })
   }
   const end = planningEndIndex(doc, ids)
   const moreOpen = draft.moreOpen.map(task).filter(t => offeredOn(t, later)).filter(t => !onPage.has(t.id)).map(t => ({ taskId: t.id, title: t.title, since: t.createdOn }))
@@ -214,7 +268,9 @@ export function normalizeDraftItems(ws: Workspace, page: Page, items: readonly D
     } else if (item.block && ['paragraph', 'bulletListItem', 'task'].includes(item.block.type) && inlineText(item.block.content).trim() && inlineText(item.block.content).length <= 500) {
       const words = inlineText(item.block.content).trim()
       const block: EditorNode = { id: item.block.id, type: item.block.type, props: item.block.type === 'task' ? { taskId: '', role: 'plan', planDate: page.date ?? '' } : {}, content: [{ type: 'text', text: words, styles: {} }], children: [] }
-      out.push({ id: item.id, anchor: item.anchor, place: item.place, block, source: item.source, state: 'open' })
+      const from = typeof item.from === 'string' && item.from && item.from.length <= 200 ? { from: item.from } : {}
+      const since = typeof item.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.since) && page.date && item.since < page.date ? { since: item.since } : {}
+      out.push({ id: item.id, anchor: item.anchor, place: item.place, block, source: item.source, state: 'open', ...from, ...since })
     }
   }
   return out

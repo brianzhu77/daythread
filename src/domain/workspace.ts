@@ -4,7 +4,7 @@ import { newId, withOperationIds } from './ids.ts'
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
-import { draftOf, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
+import { decidedElsewhere, draftOf, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { automationProblem, dueRules, firedRules, type Automation, type FiredRule, type RuleSource } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, usesFormulas, valueAtTap, type ButtonStep, type ButtonValue } from "./buttons.ts";
@@ -1443,10 +1443,13 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const plan: Task[] = [];
       // A to-do moved to a later day since this draft was shown (another tab, another device) stays there.
       const later = plannedAfter(state, day.date);
+      // A line he already applied or skipped from another day's draft (B101) isn't placed again: not twice.
+      const elsewhere = decidedElsewhere(state, day);
       for (const item of draft.items) {
         if (!wanted.has(item.id) || item.state !== "open") continue;
         const t = item.taskId ? state.tasks.find((x) => x.id === item.taskId) : undefined;
         if (item.taskId && (!offeredOn(t, later) || rowIdsOf(doc, t.id).size)) continue;
+        if (!item.taskId && elsewhere(item)) continue;
         const at = placeItem(doc, { ...item, anchor: after.get(item.anchor) ?? item.anchor, place: after.has(item.anchor) ? "after" : item.place }, new Set(state.tasks.map((x) => x.id)));
         if (!at) continue;
         const words = action.edits?.[item.id]?.trim();
