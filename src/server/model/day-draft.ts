@@ -300,7 +300,11 @@ export function withSkippedPlan(ws: Workspace, page: Page, req: DayDraftRequest,
   const elsewhere = decidedElsewhere(ws, page), lineOf = new Map([...req.lines.values()].map(n => [sameWords(inlineText(n.content)), n.id]))
   // Already taken over by another stored draft: that one holds it now, so it isn't taken from here again (a chain of
   // skipped days carries it from the latest). Today's own draft, about to be replaced, doesn't count.
-  const taken = new Set([...takenOver(ws)].filter(r => !(draftOf(ws, page.id)?.items ?? []).some(i => i.took?.includes(r))))
+  const own = draftOf(ws, page.id)?.items ?? []
+  const taken = new Set([...takenOver(ws)].filter(r => !own.some(i => i.took?.includes(r))))
+  // Made again (Retry), an item takes over what the one before it took under the same id: a later day's draft may already
+  // point at that id, and a fresh one would orphan the pointer and offer the line on both days (Ratchet b49eef07).
+  const before = new Map(own.flatMap(i => (i.took ?? []).map(r => [r, i.id] as const)))
   const wordsOf = (i: DraftItem) => (i.block ? sameWords(inlineText(i.block.content)) : '')
   const first: DraftItem[] = [], used = new Set<DraftItem>(), byKey = new Map<string, DraftItem>()
   let carried = 0
@@ -332,6 +336,8 @@ export function withSkippedPlan(ws: Workspace, page: Page, req: DayDraftRequest,
           : { id: newId(), anchor, place, source: 'fallback', state: 'open', ...origin, block: { id: newId(), type: 'task', props: {}, content: [{ type: 'text', text: inlineText(src.block.content), styles: {} }], children: [] } }
       }
       item.took = [...(item.took ?? []), ref]
+      const prior = before.get(ref)
+      if (prior) item.id = prior
       byKey.set(key, item)
       first.push(item)
     }
