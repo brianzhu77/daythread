@@ -159,3 +159,29 @@ test('not twice: prepared, then decided on the old draft, then stored: the store
   }
   assert.equal(runs, 48)
 })
+
+test('not twice: Retry of a past failed draft after the next day took its line keeps the same item, with fresh ids (Ratchet b49eef07)', () => {
+  for (const sourceGone of [false, true]) {
+    const h = harness()
+    h.day(twoDaysAgo)
+    h.save(dayId(twoDaysAgo), d => [...d, heading('h', 'Next day'), bullet('b1', text(sourceGone ? 'Something else' : WORDS))], { at: `${twoDaysAgo}T21:00:00.000Z` })
+    h.day(yesterday)
+    h.run({ type: 'set-draft', pageId: dayId(yesterday), status: 'ready', moreOpen: [], allowedTaskIds: [], recipe: 2, items: [{ id: 'old', anchor: '', place: 'after', source: 'model', state: 'open', block: { id: 'ob', type: 'task', props: {}, content: [text(WORDS)], children: [] } }] })
+    const next = addDays(today, 1)
+    const make = (date: string, status: 'ready' | 'failed') => {
+      h.day(date)
+      const req = buildDayDraftRequest(h.ws, h.page(dayId(date)), 'UTC')
+      const items = withSkippedPlan(h.ws, h.page(dayId(date)), req, [], () => crypto.randomUUID()).items
+      h.run({ type: 'set-draft', pageId: dayId(date), status, moreOpen: [], allowedTaskIds: [], items, recipe: DRAFT_RECIPE })
+    }
+    const offers = (date: string) => draftView(h.ws, h.page(dayId(date)))!.items.filter(i => inlineText(i.block.content).trim() === WORDS).map(i => i.id)
+    make(today, 'failed')
+    make(next, 'ready')
+    make(today, 'ready') // Retry of today's, now a past day's, failed draft
+    assert.deepEqual([offers(yesterday).length, offers(today).length, offers(next).length], [0, 0, 1], sourceGone ? 'source gone' : 'source kept')
+    for (const date of [yesterday, today, next]) for (const id of draftView(h.ws, h.page(dayId(date)))!.items.map(i => i.id)) {
+      try { h.run({ type: 'apply-draft', pageId: dayId(date), itemIds: [id], today: next }) } catch { /* not offered */ }
+    }
+    assert.equal(h.ws.tasks.filter(t => t.title === WORDS).length, 1)
+  }
+})
