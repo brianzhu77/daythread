@@ -11,6 +11,8 @@ if(mode==='model-existing-todo')model.push({id:'existing-model',anchor:[...req.b
 const {items}=withSkippedPlan(h.ws,h.page(dayId(today)),req,model,newid)
 h.run({type:'set-draft',pageId:dayId(today),recipe:4,status:'ready',moreOpen:[],allowedTaskIds:[...req.tasks.values()].map(t=>t.id),items})
 h.run({type:'apply-draft',pageId:dayId(today),itemIds:items.map(i=>i.id),today})
+console.log(mode,'before old edit',draftView(h.ws,h.page(dayId(yesterday)))?.items.map(i=>i.id));
+h.save(dayId(yesterday),d=>[...d,bullet('later-edit',text('Unrelated note after handoff'))]);
 console.log(mode,'from',items[0]?.from,'old eligible',draftView(h.ws,h.page(dayId(yesterday)))?.items.map(i=>i.id))
 h.run({type:'apply-draft',pageId:dayId(yesterday),itemIds:['old'],today});console.log('tasks',h.ws.tasks.filter(t=>t.title==='Pack bags').length)
 }

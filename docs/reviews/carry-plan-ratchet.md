@@ -5,3 +5,5 @@
 Existing six author tests pass independently. No reviewer runtime fixes, servers, production writes or paid model calls. Exact scope read from Leadbf60ec67; no-skipped-draft/no-model-lines remains accepted limit. Handed back to author for repair.
 
 Third matching branch also reproduces: matching model existing task item (taskId without block) after current Apply does not suppress legacy old line; old Apply creates task2. Sent followup while original repairs ongoing.
+
+Recheck88c302dc option2 closes three original branches while the old page stays untouched. Sweep96 and carry6 pass. NOT CLEAR e2f546d2: after today applies the carried line, save an unrelated note on the old page. Old band changes from hidden to offered; Apply creates task2 in all three probe modes. linesCarriedOn dynamically returns false once old page becomes actedOn, undoing completed handoff. Needs durable distinction between acted before vs after handoff.
