@@ -38,9 +38,10 @@ export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: s
 /**
  * How day drafts are made now: 2 reads every page edited in the last 7 days and puts what he wrote for the day first
  * (Brian 3d7aca46); 3 reads a plan written for a day he didn't use as written for the day he opens, and keeps where each
- * carried line came from (B101). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
+ * carried line came from (B101); 4 carries the open to-do lines of a skipped day's draft itself, whatever the model
+ * answers (Lead bf60ec67). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
  */
-export const DRAFT_RECIPE = 3
+export const DRAFT_RECIPE = 4
 /** The first recipe whose carried lines say where they came from (`from`); an older draft's lines are known by their words. */
 const FROM_RECIPE = 3
 const recipeOf = (d: DayDraft): number => d.recipe ?? 1

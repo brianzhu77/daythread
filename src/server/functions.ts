@@ -85,7 +85,7 @@ export const prepareDayDraft = createServerFn({ method: "POST" })
     const notRemade = { ...none, remakeFailed: true };
     if (old && draftSettled(old) && !config) return notRemade;
     const run = await runDayDraft(ws, page, config, () => crypto.randomUUID(), account?.timezone);
-    console.info(JSON.stringify({ level: "info", event: "draft.prepare", operationId: data.operationId, model: Boolean(config), remade: Boolean(old && draftStale(old)), status: run.status, ...(run.error ? { error: run.error } : {}), items: run.items.length, moreOpen: run.moreOpen.length, elapsedMs: run.ms, costUsd: run.costUsd }));
+    console.info(JSON.stringify({ level: "info", event: "draft.prepare", operationId: data.operationId, model: Boolean(config), remade: Boolean(old && draftStale(old)), status: run.status, ...(run.error ? { error: run.error } : {}), items: run.items.length, returned: run.returned, kept: run.kept, drops: run.drops, carried: run.carried, moreOpen: run.moreOpen.length, elapsedMs: run.ms, costUsd: run.costUsd }));
     if (old && draftSettled(old) && run.status !== "ready") return notRemade;
     const action = { type: "set-draft" as const, pageId: page.id, status: run.status, items: run.items, moreOpen: run.moreOpen, allowedTaskIds: run.allowedTaskIds, recipe: DRAFT_RECIPE };
     return { setDraft: JSON.stringify(action), owner: currentOwner() ?? "local", modelOn: Boolean(config), remakeFailed: false };
