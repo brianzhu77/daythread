@@ -25,7 +25,7 @@ export interface DraftItem {
   by?: string
   /** A carried line: the block it was carried from, so another day's draft holding it too doesn't offer it twice (B101). */
   from?: string
-  /** A plan written for a day he didn't use (B101): that day, shown as the plan's age, as a carried to-do shows its own. */
+  /** A plan written for a day he didn't use (B101): the day he wrote it, shown as its age, as a carried to-do shows its own. */
   since?: LocalDate
   /** The recipe that made it, on an item a remake kept from an older draft (absent: its draft's own). */
   recipe?: number

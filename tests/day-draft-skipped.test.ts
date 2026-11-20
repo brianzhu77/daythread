@@ -34,12 +34,12 @@ test('B101: yesterday only opened (its page made from the template, nothing done
   const req = buildDayDraftRequest(h.ws, h.page(dayId(today)), 'UTC')
   assert.match(system(req), /"tomorrow" on the Tuesday 2026-10-20 page means 2026-10-22: the user didn't use 2026-10-21, so what that page plans for the next day, or for one of those days, is still to do and is for 2026-10-22\. On an older page it means a day that has passed\./)
   assert.match(sent(req), /== Day page Tuesday 2026-10-20, last edited 2026-10-20 21:00; the last day the user used before today, so its plan for the next day is for 2026-10-22 ==/)
-  // Carried as to-dos in his words, each knowing the line it came from and the day it was written for.
+  // Carried as to-dos in his words, each knowing the line it came from and the day he wrote it (Jazz 4fac5807).
   const items = carry(req, 'Pack the bags', 'Call the bank')
-  assert.deepEqual(items.map(i => [i.block?.type, inlineText(i.block!.content), i.from, i.since]), [['task', 'Pack the bags', 'b1', yesterday], ['task', 'Call the bank', 'b2', yesterday]])
+  assert.deepEqual(items.map(i => [i.block?.type, inlineText(i.block!.content), i.from, i.since]), [['task', 'Pack the bags', 'b1', twoDaysAgo], ['task', 'Call the bank', 'b2', twoDaysAgo]])
   // Stored and shown with that age.
   h.run({ type: 'set-draft', pageId: dayId(today), status: 'ready', moreOpen: [], allowedTaskIds: [], items, recipe: DRAFT_RECIPE })
-  assert.deepEqual(draftView(h.ws, h.page(dayId(today)))!.items.map(i => i.since), [yesterday, yesterday])
+  assert.deepEqual(draftView(h.ws, h.page(dayId(today)))!.items.map(i => i.since), [twoDaysAgo, twoDaysAgo])
 })
 
 test('B101: no page at all for the skipped days, and more than a week of them: the last page he used is still sent and read so', () => {
@@ -50,7 +50,7 @@ test('B101: no page at all for the skipped days, and more than a week of them: t
   const req = buildDayDraftRequest(h.ws, h.page(dayId(today)), 'UTC')
   assert.ok(lineId(req, 'Pack the bags'), 'the plan page is sent however old')
   assert.match(system(req), new RegExp(`"tomorrow" on the \\w+ ${long} page means ${today}: the user didn't use the days from ${addDays(long, 1)} to ${yesterday}`))
-  assert.deepEqual(carry(req, 'Pack the bags').map(i => i.since), [addDays(long, 1)])
+  assert.deepEqual(carry(req, 'Pack the bags').map(i => i.since), [long])
   // A page he used in between, older than a week and before the plan page, isn't the plan page.
   const g = harness()
   planOn(g, addDays(today, -12))
@@ -72,7 +72,7 @@ test('B101: a day he did use is the plan page, whether he edited it or only appl
   assert.equal(planPage(h.ws, today)?.id, dayId(yesterday))
   const req = buildDayDraftRequest(h.ws, h.page(dayId(today)), 'UTC')
   assert.match(system(req), /"tomorrow" on the Wednesday 2026-10-21 page means 2026-10-22; on an older page it means a day that has passed/)
-  assert.equal(req.planFor, undefined)
+  assert.equal(req.planDay, undefined)
   assert.doesNotMatch(sent(req), /the last day the user used/)
   // Edited: the same.
   const g = harness()
@@ -88,7 +88,7 @@ test('B101: a normal day reads as before, and a carried line has no age', () => 
   planOn(h, yesterday)
   h.day(today)
   const req = buildDayDraftRequest(h.ws, h.page(dayId(today)), 'UTC')
-  assert.equal(req.planFor, undefined)
+  assert.equal(req.planDay, undefined)
   assert.match(system(req), /"tomorrow" on the Wednesday 2026-10-21 page means 2026-10-22; on an older page it means a day that has passed\./)
   assert.deepEqual(carry(req, 'Pack the bags').map(i => [i.from, i.since]), [['b1', undefined]])
 })
