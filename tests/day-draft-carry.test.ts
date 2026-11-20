@@ -74,14 +74,15 @@ test('carry: with no model answer at all the draft still holds both lines first'
   assert.equal(s.h.ws.tasks.filter(t => t.title === 'Pack the bags').length, 1)
 })
 
-test('carry: not twice: applied today, the skipped day\'s old draft stops offering it, with or without where it came from', () => {
-  for (const [recipe, withFrom] of [[DRAFT_RECIPE, true], [2, false]] as const) {
+test('carry: once today\'s draft is stored, the skipped day\'s draft hands its to-do lines on; its plain line stays (Lead 312046f4)', () => {
+  for (const [recipe, withFrom] of [[DRAFT_RECIPE, true], [3, true], [2, false]] as const) {
     const s = skippedDay(recipe, withFrom)
     const { items } = s.carry([])
     assert.equal(items[0]!.from, 'b1', 'the line of his it reads as, when the old draft didn\'t keep it')
-    s.h.run({ type: 'set-draft', pageId: dayId(today), status: 'ready', items, moreOpen: [], allowedTaskIds: [], recipe: DRAFT_RECIPE })
-    s.h.run({ type: 'apply-draft', pageId: dayId(today), itemIds: [items[0]!.id], today })
-    assert.deepEqual(draftView(s.h.ws, s.h.page(dayId(yesterday)))!.items.map(i => i.id), ['y2', 'y3'], `recipe ${recipe}`)
+    assert.deepEqual(draftView(s.h.ws, s.h.page(dayId(yesterday)))!.items.map(i => i.id), ['y1', 'y2', 'y3'], 'not before it is stored')
+    s.h.run({ type: 'set-draft', pageId: dayId(today), status: 'failed', items, moreOpen: [], allowedTaskIds: [], recipe: DRAFT_RECIPE })
+    assert.deepEqual(draftView(s.h.ws, s.h.page(dayId(yesterday)))!.items.map(i => i.id), ['y3'], `recipe ${recipe}`)
+    assert.throws(() => s.h.run({ type: 'apply-draft', pageId: dayId(yesterday), itemIds: ['y1'], today }), /Nothing to apply/)
   }
 })
 

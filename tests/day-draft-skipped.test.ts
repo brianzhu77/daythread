@@ -93,7 +93,10 @@ test('B101: a normal day reads as before, and a carried line has no age', () => 
   assert.deepEqual(carry(req, 'Pack the bags').map(i => [i.from, i.since]), [['b1', undefined]])
 })
 
-/** Yesterday's draft (made before B101 unless `recipe`) and today's both offer the plan line "Pack the bags". */
+/**
+ * Yesterday's draft (made before B101 unless `recipe`) and today's (recipe 3, as live before the carry: from recipe 4 the
+ * old draft hands its to-do lines on instead, tests/day-draft-carry.test.ts) both offer the plan line "Pack the bags".
+ */
 function twoDrafts(recipe: { yesterday?: number; today?: number; todayFrom?: string } = {}) {
   const h = harness()
   planOn(h, twoDaysAgo)
@@ -101,7 +104,7 @@ function twoDrafts(recipe: { yesterday?: number; today?: number; todayFrom?: str
   h.day(today)
   const item = (id: string, from?: string): DraftItem => ({ id, anchor: '', place: 'after', source: 'model', state: 'open', ...(from ? { from } : {}), block: { id: `${id}-b`, type: 'task', props: {}, content: [text('Pack the bags')], children: [] } })
   h.run({ type: 'set-draft', pageId: dayId(yesterday), status: 'ready', moreOpen: [], allowedTaskIds: [], items: [item('y1', recipe.yesterday ? 'b1' : undefined)], ...(recipe.yesterday ? { recipe: recipe.yesterday } : { recipe: 2 }) })
-  h.run({ type: 'set-draft', pageId: dayId(today), status: 'ready', moreOpen: [], allowedTaskIds: [], items: [item('t1', recipe.todayFrom ?? 'b1')], recipe: recipe.today ?? DRAFT_RECIPE })
+  h.run({ type: 'set-draft', pageId: dayId(today), status: 'ready', moreOpen: [], allowedTaskIds: [], items: [item('t1', recipe.todayFrom ?? 'b1')], recipe: recipe.today ?? 3 })
   const shown = (date: string) => draftView(h.ws, h.page(dayId(date)))!.items.map(i => i.id)
   const tasks = () => h.ws.tasks.filter(t => t.title === 'Pack the bags').length
   return { h, shown, tasks }
