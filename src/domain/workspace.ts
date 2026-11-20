@@ -4,7 +4,7 @@ import { newId, withOperationIds } from './ids.ts'
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
-import { amongApplied, decidedElsewhere, draftOf, isTodoLine, linesCarriedOn, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
+import { amongApplied, decidedElsewhere, draftOf, takenOver, tookRef, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { automationProblem, dueRules, firedRules, type Automation, type FiredRule, type RuleSource } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, usesFormulas, valueAtTap, type ButtonStep, type ButtonValue } from "./buttons.ts";
@@ -1444,14 +1444,14 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const later = plannedAfter(state, day.date);
       // A line he already applied or skipped from another day's draft (B101) isn't placed again: not twice.
       const elsewhere = decidedElsewhere(state, day);
-      // A to-do line a later draft carried on from this day he never acted on is offered there only (Lead 312046f4).
-      const handedOn = linesCarriedOn(state, day);
+      // A to-do line a later draft took over from this day is offered there only (Lead fec51f3c).
+      const taken = takenOver(state);
       for (const item of draft.items) {
         if (!wanted.has(item.id) || item.state !== "open") continue;
         const t = item.taskId ? state.tasks.find((x) => x.id === item.taskId) : undefined;
         if (item.taskId && (!offeredOn(t, later) || rowIdsOf(doc, t.id).size)) continue;
         if (!item.taskId && elsewhere(item)) continue;
-        if (handedOn && isTodoLine(item)) continue;
+        if (taken.has(tookRef(day.id, item.id))) continue;
         const placed = placeItem(doc, item, new Set(state.tasks.map((x) => x.id)));
         if (!placed) continue;
         // After the rows already applied from this draft at its spot that were offered before it, in this command or an

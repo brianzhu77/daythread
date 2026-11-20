@@ -14,7 +14,7 @@ type How = 'line_todo' | 'line' | 'new_todo' | 'existing' | 'app'
 type Tap = ['new' | 'old', 'apply' | 'skip']
 const TAPS: Tap[][] = [[['new', 'apply'], ['old', 'apply']], [['new', 'skip'], ['old', 'apply']], [['old', 'apply'], ['new', 'apply']], [['old', 'apply'], ['new', 'skip']]]
 
-function scene(how: How, oldRecipe: number, sourceGone: boolean, taps: Tap[]) {
+function scene(how: How, oldRecipe: number, sourceGone: boolean, taps: Tap[], editOld = false) {
   const h = harness()
   h.day(twoDaysAgo)
   h.save(dayId(twoDaysAgo), d => [...d, heading('h', 'Next day'), bullet('b1', text(sourceGone ? 'Something else' : WORDS))], { at: `${twoDaysAgo}T21:00:00.000Z` })
@@ -34,6 +34,8 @@ function scene(how: How, oldRecipe: number, sourceGone: boolean, taps: Tap[]) {
   const newId = () => `n${++n}`
   const { items } = withSkippedPlan(h.ws, h.page(dayId(today)), req, itemsFromModel(req, answer, newId), newId)
   h.run({ type: 'set-draft', pageId: dayId(today), status: 'ready', moreOpen: [], allowedTaskIds: [...req.tasks.values()].map(t => t.id), items, recipe: DRAFT_RECIPE })
+  // An unrelated note on the old page after the handoff (Ratchet e2f546d2) changes nothing.
+  if (editOld) h.save(dayId(yesterday), d => [...d, bullet('later', text('Later note'))], { at: `${today}T10:00:00.000Z` })
   const existing = h.ws.tasks.find(t => t.title === WORDS)?.id
   /** The draft's offered item for the line: its words, or the existing to-do. */
   const offered = (date: string) => draftView(h.ws, h.page(dayId(date)))!.items.find(i => (existing && i.taskId === existing) || inlineText(i.block.content).trim() === WORDS)
@@ -56,13 +58,13 @@ test('not twice: every way the line sits in the new draft × old draft recipe 2,
   let runs = 0
   for (const how of ['line_todo', 'line', 'new_todo', 'existing', 'app'] as How[]) {
     for (const oldRecipe of [2, 3, 4]) {
-      for (const sourceGone of [false, true]) {
+      for (const sourceGone of [false, true]) for (const editOld of [false, true]) {
         // A line the model points at must still be there to point at.
         if (sourceGone && (how === 'line_todo' || how === 'line')) continue
         for (const taps of TAPS) {
           runs++
-          const r = scene(how, oldRecipe, sourceGone, taps)
-          const label = `${how} recipe ${oldRecipe}${sourceGone ? ' source gone' : ''}: ${r.log.join(', ')}`
+          const r = scene(how, oldRecipe, sourceGone, taps, editOld)
+          const label = `${how} recipe ${oldRecipe}${sourceGone ? ' source gone' : ''}${editOld ? ' old page edited after' : ''}: ${r.log.join(', ')}`
           assert.ok(r.tasks <= 1, `${label}: ${r.tasks} to-dos`)
           // The new draft holds it, whatever the model answered.
           assert.ok(r.heldAtFirst, `${label}: today's draft lost it`)
@@ -72,7 +74,7 @@ test('not twice: every way the line sits in the new draft × old draft recipe 2,
       }
     }
   }
-  assert.equal(runs, 96)
+  assert.equal(runs, 192)
 })
 
 test('not twice: an acted day with the carried line left open keeps offering it there; the next day doesn\'t carry it again (Bumblebee 70a4915b)', () => {
@@ -90,4 +92,47 @@ test('not twice: an acted day with the carried line left open keeps offering it 
   assert.deepEqual(withSkippedPlan(h.ws, h.page(dayId(today)), req, [], () => 'x'), { items: [], carried: 0 })
   h.run({ type: 'set-draft', pageId: dayId(today), status: 'failed', moreOpen: [], allowedTaskIds: [], items: [], recipe: DRAFT_RECIPE })
   assert.deepEqual(draftView(h.ws, h.page(dayId(yesterday)))!.items.map(i => i.id), ['y1'], 'still offered on the day he used')
+})
+
+/** Two days ago the plan; yesterday and today he never acted on; "Pack the bags" sits open in yesterday's draft. */
+function chain() {
+  const h = harness()
+  h.day(twoDaysAgo)
+  h.save(dayId(twoDaysAgo), d => [...d, heading('h', 'Next day'), bullet('b1', text(WORDS))], { at: `${twoDaysAgo}T21:00:00.000Z` })
+  h.day(yesterday)
+  h.run({ type: 'set-draft', pageId: dayId(yesterday), status: 'ready', moreOpen: [], allowedTaskIds: [], recipe: 2, items: [{ id: 'old', anchor: '', place: 'after', source: 'model', state: 'open', block: { id: 'ob', type: 'task', props: {}, content: [text(WORDS)], children: [] } }] })
+  const make = (date: string, status: 'ready' | 'failed', keep: (i: DraftItem) => boolean = () => true) => {
+    h.day(date)
+    const req = buildDayDraftRequest(h.ws, h.page(dayId(date)), 'UTC')
+    let n = 0
+    const items = withSkippedPlan(h.ws, h.page(dayId(date)), req, [], () => `${date}-${++n}`).items.filter(keep)
+    h.run({ type: 'set-draft', pageId: dayId(date), status, moreOpen: [], allowedTaskIds: [], items, recipe: DRAFT_RECIPE })
+  }
+  const offers = (date: string) => draftView(h.ws, h.page(dayId(date)))!.items.filter(i => inlineText(i.block.content).trim() === WORDS).map(i => i.id)
+  const tasks = () => h.ws.tasks.filter(t => t.title === WORDS).length
+  return { h, make, offers, tasks }
+}
+
+test('not twice: a stored draft that doesn\'t hold the line takes nothing over; the old draft keeps offering it (Lead 7969b862)', () => {
+  const c = chain()
+  c.make(today, 'ready', () => false)
+  assert.deepEqual([c.offers(yesterday), c.offers(today)], [['old'], []])
+  c.h.run({ type: 'apply-draft', pageId: dayId(yesterday), itemIds: ['old'], today })
+  assert.equal(c.tasks(), 1)
+})
+
+test('not twice: Retry of a failed successor keeps the line, and an unused successor hands it on again (Ratchet a39c9657)', () => {
+  const c = chain()
+  c.make(today, 'failed')
+  assert.deepEqual([c.offers(yesterday), c.offers(today)], [[], [`${today}-1`]])
+  // Retry with a model answer carrying none: the line is carried again, not lost behind today's own old pointer.
+  c.make(today, 'ready')
+  assert.deepEqual([c.offers(yesterday), c.offers(today)], [[], [`${today}-1`]])
+  // Today left unused; tomorrow's draft takes it from today's, and neither earlier draft offers it.
+  const next = addDays(today, 1)
+  c.make(next, 'ready')
+  assert.deepEqual([c.offers(yesterday), c.offers(today), c.offers(next)], [[], [], [`${next}-1`]])
+  for (const [date, id] of [[yesterday, 'old'], [today, `${today}-1`]] as const) assert.throws(() => c.h.run({ type: 'apply-draft', pageId: dayId(date), itemIds: [id], today: next }), /Nothing to apply/)
+  c.h.run({ type: 'apply-draft', pageId: dayId(next), itemIds: [`${next}-1`], today: next })
+  assert.equal(c.tasks(), 1)
 })

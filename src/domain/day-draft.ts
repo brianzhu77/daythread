@@ -29,6 +29,8 @@ export interface DraftItem {
   since?: LocalDate
   /** The recipe that made it, on an item a remake kept from an older draft (absent: its draft's own). */
   recipe?: number
+  /** The skipped days' items it took over (`tookRef`), which are then offered here only (Lead fec51f3c). */
+  took?: string[]
   /** Applied: the block it became on the page, so the next one applied at its spot lands in the offered order (B102). */
   row?: string
 }
@@ -42,8 +44,6 @@ export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: s
  * answers (Lead bf60ec67). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
  */
 export const DRAFT_RECIPE = 4
-/** The first recipe that carries a skipped day's open to-do lines itself (`withSkippedPlan`). */
-const CARRY_RECIPE = 4
 /** The first recipe whose carried lines say where they came from (`from`); an older draft's lines are known by their words. */
 const FROM_RECIPE = 3
 const recipeOf = (d: DayDraft): number => d.recipe ?? 1
@@ -71,23 +71,23 @@ export const sameWords = (s: string): string => s.toLocaleLowerCase().replace(/\
 export const actedOn = (ws: Workspace, p: Page): boolean => Boolean(p.editedAt) || Boolean(draftOf(ws, p.id)?.items.some(i => i.state !== 'open'))
 
 /**
- * Lead 312046f4 (option 2): a day he never acted on hands its to-do lines on to the next draft that carried them, and
- * then stops offering them, so one line is never offered in two drafts and nothing has to match it. That draft is a
- * stored one (ready, or failed with what the app carried) made by a recipe that carries, for a later day, with no day
- * he acted on in between (Ratchet f03b7b89: not a page alone, nor a draft still preparing). Its plain lines stay.
+ * Lead 312046f4 / fec51f3c: a skipped day's to-do line carried into a later draft is handed on there, once, as a stored
+ * fact: the carrying item names the old one (`took`, "<day page id> <item id>"). An old item a stored draft (ready, or
+ * failed with what the app carried) names is never offered or applied again, however the old page changes later
+ * (Ratchet e2f546d2). One the carry left out has no pointer and stays offered.
  */
-export function linesCarriedOn(ws: Workspace, dayPage: Page): boolean {
-  if (dayPage.type !== 'daily' || !dayPage.date || actedOn(ws, dayPage)) return false
-  const later = ws.pages.filter(p => p.type === 'daily' && p.date !== null && p.date > dayPage.date! && !p.trashedAt).sort((a, b) => (a.date! < b.date! ? -1 : 1))
-  for (const p of later) {
-    const d = draftOf(ws, p.id)
-    if (d && (d.status === 'ready' || d.status === 'failed') && recipeOf(d) >= CARRY_RECIPE) return true
-    if (actedOn(ws, p)) return false
+export const tookRef = (dayPageId: string, itemId: string): string => `${dayPageId} ${itemId}`
+export function takenOver(ws: Workspace): Set<string> {
+  const out = new Set<string>()
+  for (const p of ws.pages) {
+    if (!isDraft(p) || p.trashedAt) continue
+    let d: DayDraft
+    try { d = JSON.parse(p.document) as DayDraft } catch { continue }
+    if (d.status !== 'ready' && d.status !== 'failed') continue
+    for (const i of d.items) for (const r of i.took ?? []) out.add(r)
   }
-  return false
+  return out
 }
-/** A to-do line (not a carried to-do, nor a plain line). */
-export const isTodoLine = (i: DraftItem): boolean => !i.taskId && i.block?.type === 'task'
 
 /** The recipe that made an item: one a remake kept from an older draft says so itself (Ratchet 5dd205a3). */
 const itemRecipe = (i: DraftItem, d: DayDraft): number => i.recipe ?? recipeOf(d)
@@ -305,14 +305,14 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
   const later = page.date ? plannedAfter(ws, page.date) : new Set<string>()
   const task = (id: string | undefined) => ws.tasks.find(t => t.id === id)
   const elsewhere = draft.items.some(i => i.state === 'open' && i.block) ? decidedElsewhere(ws, page) : () => false
-  const handedOn = draft.items.some(i => i.state === 'open' && isTodoLine(i)) && linesCarriedOn(ws, page)
+  const taken = takenOver(ws)
   const items: DraftItemView[] = []
   for (const item of draft.items) {
     if (item.state !== 'open') continue
     const t = task(item.taskId)
     if (item.taskId && (!offeredOn(t, later) || onPage.has(t.id))) continue
     if (!item.taskId && elsewhere(item)) continue
-    if (handedOn && isTodoLine(item)) continue
+    if (taken.has(tookRef(page.id, item.id))) continue
     const placed = placeItem(doc, item, ids)
     if (!placed) continue
     const at = amongApplied(doc, draft, item, placed)
@@ -331,6 +331,16 @@ export function normalizeDraftItems(ws: Workspace, page: Page, items: readonly D
   // Checked against the workspace as it is when the draft is stored: an answer to an older ask can't bring back a
   // to-do moved to a later day meanwhile.
   const later = page.date ? plannedAfter(ws, page.date) : new Set<string>()
+  // A pointer must name an item in an earlier day's draft (Lead 7969b862): it hides that item there.
+  const took = (item: DraftItem): { took?: string[] } => {
+    const refs = (Array.isArray(item.took) ? item.took : []).filter(r => {
+      if (typeof r !== 'string' || r.length > 300) return false
+      const [dayId, itemId] = r.split(' ')
+      const day = ws.pages.find(x => x.id === dayId && x.type === 'daily' && x.date !== null && page.date !== null && x.date < page.date)
+      return Boolean(day && draftOf(ws, day.id)?.items.some(o => o.id === itemId))
+    }).slice(0, 10)
+    return refs.length ? { took: refs } : {}
+  }
   for (const item of items) {
     if (seenIds.has(item.id) || !item.id || item.id.length > 100) continue
     seenIds.add(item.id)
@@ -341,7 +351,7 @@ export function normalizeDraftItems(ws: Workspace, page: Page, items: readonly D
       seenTasks.add(item.taskId)
       // An anchor that is outside the planning part now (he moved it while the draft was made) never drops the to-do:
       // it goes to the planning end instead (Ratchet c1de8d2f).
-      out.push({ id: item.id, anchor: outside ? '' : item.anchor, place: outside ? 'after' : item.place, taskId: item.taskId, source: item.source, state: 'open' })
+      out.push({ id: item.id, anchor: outside ? '' : item.anchor, place: outside ? 'after' : item.place, taskId: item.taskId, source: item.source, state: 'open', ...took(item) })
     } else if (outside) {
       continue
     } else if (item.block && ['paragraph', 'bulletListItem', 'task'].includes(item.block.type) && inlineText(item.block.content).trim() && inlineText(item.block.content).length <= 500) {
@@ -349,7 +359,7 @@ export function normalizeDraftItems(ws: Workspace, page: Page, items: readonly D
       const block: EditorNode = { id: item.block.id, type: item.block.type, props: item.block.type === 'task' ? { taskId: '', role: 'plan', planDate: page.date ?? '' } : {}, content: [{ type: 'text', text: words, styles: {} }], children: [] }
       const from = typeof item.from === 'string' && item.from && item.from.length <= 200 ? { from: item.from } : {}
       const since = typeof item.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.since) && page.date && item.since < page.date ? { since: item.since } : {}
-      out.push({ id: item.id, anchor: item.anchor, place: item.place, block, source: item.source, state: 'open', ...from, ...since })
+      out.push({ id: item.id, anchor: item.anchor, place: item.place, block, source: item.source, state: 'open', ...from, ...since, ...took(item) })
     }
   }
   return out
