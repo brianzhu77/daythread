@@ -14,7 +14,7 @@ type How = 'line_todo' | 'line' | 'new_todo' | 'existing' | 'app'
 type Tap = ['new' | 'old', 'apply' | 'skip']
 const TAPS: Tap[][] = [[['new', 'apply'], ['old', 'apply']], [['new', 'skip'], ['old', 'apply']], [['old', 'apply'], ['new', 'apply']], [['old', 'apply'], ['new', 'skip']]]
 
-function scene(how: How, oldRecipe: number, sourceGone: boolean, taps: Tap[], editOld = false) {
+function scene(how: How, oldRecipe: number, sourceGone: boolean, taps: Tap[], editOld = false, raceOld?: 'apply' | 'skip') {
   const h = harness()
   h.day(twoDaysAgo)
   h.save(dayId(twoDaysAgo), d => [...d, heading('h', 'Next day'), bullet('b1', text(sourceGone ? 'Something else' : WORDS))], { at: `${twoDaysAgo}T21:00:00.000Z` })
@@ -33,6 +33,8 @@ function scene(how: How, oldRecipe: number, sourceGone: boolean, taps: Tap[], ed
   let n = 0
   const newId = () => `n${++n}`
   const { items } = withSkippedPlan(h.ws, h.page(dayId(today)), req, itemsFromModel(req, answer, newId), newId)
+  // The race (Ratchet 62b1a000): today's draft prepared, then he decides the line on the old draft, then it is stored.
+  if (raceOld) h.run(raceOld === 'apply' ? { type: 'apply-draft', pageId: dayId(yesterday), itemIds: ['old'], today } : { type: 'skip-draft', pageId: dayId(yesterday), itemIds: ['old'] })
   h.run({ type: 'set-draft', pageId: dayId(today), status: 'ready', moreOpen: [], allowedTaskIds: [...req.tasks.values()].map(t => t.id), items, recipe: DRAFT_RECIPE })
   // An unrelated note on the old page after the handoff (Ratchet e2f546d2) changes nothing.
   if (editOld) h.save(dayId(yesterday), d => [...d, bullet('later', text('Later note'))], { at: `${today}T10:00:00.000Z` })
@@ -135,4 +137,25 @@ test('not twice: Retry of a failed successor keeps the line, and an unused succe
   for (const [date, id] of [[yesterday, 'old'], [today, `${today}-1`]] as const) assert.throws(() => c.h.run({ type: 'apply-draft', pageId: dayId(date), itemIds: [id], today: next }), /Nothing to apply/)
   c.h.run({ type: 'apply-draft', pageId: dayId(next), itemIds: [`${next}-1`], today: next })
   assert.equal(c.tasks(), 1)
+})
+
+test('not twice: prepared, then decided on the old draft, then stored: the stored draft brings no copy (Ratchet 62b1a000)', () => {
+  let runs = 0
+  for (const how of ['line_todo', 'line', 'new_todo', 'existing', 'app'] as How[]) {
+    for (const oldRecipe of [2, 3, 4]) {
+      for (const sourceGone of [false, true]) {
+        if (sourceGone && (how === 'line_todo' || how === 'line')) continue
+        for (const raceOld of ['apply', 'skip'] as const) {
+          runs++
+          const r = scene(how, oldRecipe, sourceGone, [['new', 'apply'], ['old', 'apply']], false, raceOld)
+          const label = `${how} recipe ${oldRecipe}${sourceGone ? ' source gone' : ''} old ${raceOld} before store: ${r.log.join(', ')}`
+          // With an open to-do of the same words, Apply on the old draft's new-to-do line makes a copy on main too, with no
+          // carry involved (Lead 554436d1: its own row, no worse than main here); the stored draft adds none.
+          assert.ok(r.tasks <= (how === 'existing' && raceOld === 'apply' ? 2 : 1), `${label}: ${r.tasks} to-dos`)
+          assert.equal(r.heldAtFirst, false, `${label}: the stored draft offers it again`)
+        }
+      }
+    }
+  }
+  assert.equal(runs, 48)
 })

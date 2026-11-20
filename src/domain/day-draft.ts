@@ -341,7 +341,15 @@ export function normalizeDraftItems(ws: Workspace, page: Page, items: readonly D
     }).slice(0, 10)
     return refs.length ? { took: refs } : {}
   }
+  // A line he applied or skipped in the old draft while this one was being made is decided there: an answer made before
+  // that doesn't bring a fresh copy here (Ratchet 62b1a000).
+  const decidedSince = (item: DraftItem): boolean => (Array.isArray(item.took) ? item.took : []).some(r => {
+    const [dayId, itemId] = String(r).split(' ')
+    const old = draftOf(ws, dayId ?? '')?.items.find(o => o.id === itemId)
+    return Boolean(old && old.state !== 'open')
+  })
   for (const item of items) {
+    if (decidedSince(item)) continue
     if (seenIds.has(item.id) || !item.id || item.id.length > 100) continue
     seenIds.add(item.id)
     const at = doc.findIndex(n => n.id === item.anchor)
