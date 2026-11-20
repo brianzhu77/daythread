@@ -160,3 +160,19 @@ for (const mode of ['fill', 'missing'] as const) {
     assert.deepEqual(s.bands(), [['i1', s.rowOf('i0')]])
   })
 }
+
+test('B102: a line that can\'t fill the slot, offered before a to-do that can: Apply all and every tap order read line, to-do (Ratchet 0297bd0e)', () => {
+  const run = (taps: string[][]) => {
+    const h = harness()
+    h.day(tomorrow)
+    h.save(dayId(tomorrow), () => [heading('m', 'Morning'), { id: 'slot', type: 'task', props: { taskId: 'editor-task:slot' }, content: [], children: [] }, heading('r', 'Reflection')])
+    const items: DraftItem[] = [
+      { id: 'i0', anchor: 'slot', place: 'fill', source: 'model', state: 'open', block: { id: 'b0', type: 'bulletListItem', props: {}, content: [text('Alpha')], children: [] } },
+      { id: 'i1', anchor: 'slot', place: 'fill', source: 'model', state: 'open', block: { id: 'b1', type: 'task', props: {}, content: [text('Beta')], children: [] } },
+    ]
+    h.run({ type: 'set-draft', pageId: dayId(tomorrow), status: 'ready', moreOpen: [], allowedTaskIds: [], items })
+    for (const ids of taps) h.run({ type: 'apply-draft', pageId: dayId(tomorrow), itemIds: ids, today })
+    return nodesOf(h.page(dayId(tomorrow))).map(n => inlineText(n.content).trim()).filter(w => w === 'Alpha' || w === 'Beta')
+  }
+  for (const taps of [[['i0', 'i1']], [['i0'], ['i1']], [['i1'], ['i0']]]) assert.deepEqual(run(taps), ['Alpha', 'Beta'], JSON.stringify(taps))
+})

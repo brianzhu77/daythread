@@ -233,7 +233,6 @@ export function placeItem(doc: readonly EditorNode[], item: DraftItem, tasks: Re
  * the nearest earlier one still there, or at the spot itself when none is. The bands still waiting are shown the same way.
  */
 export function amongApplied(doc: readonly EditorNode[], draft: DayDraft, item: DraftItem, at: Placement): Placement {
-  if (at.kind !== 'after') return at
   const order = draft.items.findIndex(i => i.id === item.id)
   const byRow = new Map<string, number>(), byTask = new Map<string, number>(), byWords = new Map<string, number>()
   draft.items.forEach((i, n) => {
@@ -247,8 +246,15 @@ export function amongApplied(doc: readonly EditorNode[], draft: DayDraft, item: 
     byRow.get(n.id) ?? (isTaskRow(n) ? byTask.get(String(n.props!.taskId)) : undefined) ?? byWords.get(sameWords(inlineText(n.content)))
   // The group around where it would go, looking back too: a slot an earlier tap filled is that row itself, and a
   // missing anchor's fallback already sits past the rows applied there (Ratchet 006442d8).
-  let start = at.index
-  while (start > 0 && orderOf(doc[start - 1]!) !== undefined) start--
+  const groupStart = (from: number) => { let i = from; while (i > 0 && orderOf(doc[i - 1]!) !== undefined) i--; return i }
+  const earlierIn = (from: number) => { for (let i = groupStart(from); i < doc.length; i++) { const o = orderOf(doc[i]!); if (o === undefined) return false; if (o < order) return true } return false }
+  // An empty slot is filled only by the first of the group: with one offered before it already applied there (a line
+  // that couldn't fill it went after it), this one goes after that, as Apply all does (Ratchet 0297bd0e).
+  if (at.kind === 'fill') {
+    if (!earlierIn(at.index + 1)) return at
+    at = { kind: 'after', index: at.index + 1, anchorId: doc[at.index]!.id }
+  }
+  const start = groupStart(at.index)
   let index = start
   for (let i = start; i < doc.length; i++) {
     const o = orderOf(doc[i]!)
