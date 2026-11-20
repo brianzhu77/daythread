@@ -23,15 +23,24 @@ export interface DraftItem {
   until?: LocalDate
   /** The operation that last skipped, moved or applied it: `reopen-draft` reopens only what that skip left (Ratchet f38d66a1). */
   by?: string
+  /** A carried line: the block it was carried from, so another day's draft holding it too doesn't offer it twice (B101). */
+  from?: string
+  /** A plan written for a day he didn't use (B101): the day he wrote it, shown as its age, as a carried to-do shows its own. */
+  since?: LocalDate
+  /** The recipe that made it, on an item a remake kept from an older draft (absent: its draft's own). */
+  recipe?: number
 }
 /** `recipe`: how the server made it (`DRAFT_RECIPE`); absent on a draft from before it was kept. */
 export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: string[]; recipe?: number }
 
 /**
  * How day drafts are made now: 2 reads every page edited in the last 7 days and puts what he wrote for the day first
- * (Brian 3d7aca46). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
+ * (Brian 3d7aca46); 3 reads a plan written for a day he didn't use as written for the day he opens, and keeps where each
+ * carried line came from (B101). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
  */
-export const DRAFT_RECIPE = 2
+export const DRAFT_RECIPE = 3
+/** The first recipe whose carried lines say where they came from (`from`); an older draft's lines are known by their words. */
+const FROM_RECIPE = 3
 const recipeOf = (d: DayDraft): number => d.recipe ?? 1
 
 /** The day's draft for good: a ready one, or a failed one he already applied or skipped something from. */
@@ -51,11 +60,67 @@ export function draftOf(ws: Workspace, dayPageId: string): DayDraft | null {
 export const sameWords = (s: string): string => s.toLocaleLowerCase().replace(/\s+/g, ' ').replace(/[\s.。!！]+$/u, '').trim()
 
 /**
+ * Whether he acted on a day page (B101): he edited it, or applied or skipped something from its draft. A page a tab
+ * only opened, made from his template, isn't one, nor is a to-do planned onto it from another day.
+ */
+export const actedOn = (ws: Workspace, p: Page): boolean => Boolean(p.editedAt) || Boolean(draftOf(ws, p.id)?.items.some(i => i.state !== 'open'))
+
+/** The recipe that made an item: one a remake kept from an older draft says so itself (Ratchet 5dd205a3). */
+const itemRecipe = (i: DraftItem, d: DayDraft): number => i.recipe ?? recipeOf(d)
+
+/**
+ * B101: a plan line can sit in two days' drafts: the day it was written for and, when he didn't use that day, the next
+ * day he opens. Once he applied or skipped it in one, no other offers it. A line is known by the block it was carried
+ * from. An item an older recipe made has no such block and is known by its words, but only against a line that could
+ * have been in its draft: one from a page dated before that draft's day (Ratchet 5dd205a3), so the same words written
+ * again on a later page aren't taken for it. A to-do carried by its id needs none of this: it's planned.
+ */
+export function decidedElsewhere(ws: Workspace, dayPage: Page): (item: DraftItem) => boolean {
+  const own = draftOf(ws, dayPage.id)
+  type Decided = { from?: string; words: string; old: boolean; day: LocalDate | null }
+  const decided: Decided[] = []
+  for (const p of ws.pages) {
+    if (!isDraft(p) || p.trashedAt || p.id === draftPageId(dayPage.id)) continue
+    let d: DayDraft
+    try { d = JSON.parse(p.document) as DayDraft } catch { continue }
+    const day = ws.pages.find(x => x.id === p.parentId)?.date ?? null
+    for (const i of d.items) {
+      if (i.state === 'open' || !i.block) continue
+      decided.push({ ...(i.from ? { from: i.from } : {}), words: sameWords(inlineText(i.block.content)), old: itemRecipe(i, d) < FROM_RECIPE, day })
+    }
+  }
+  // The day of the page a line was carried from: a day page's date, another page's creation day; null when unknown.
+  const days = new Map<string, LocalDate | null>()
+  const sourceDay = (id: string): LocalDate | null => {
+    if (!days.has(id)) {
+      const p = ws.pages.find(x => !isDraft(x) && flatNodes(pageNodes(x)).some(n => n.id === id))
+      days.set(id, p ? (p.type === 'daily' ? p.date : p.createdAt?.slice(0, 10) ?? null) : null)
+    }
+    return days.get(id)!
+  }
+  // Could the line carried from `id` have been in a draft for `day`? Unknown counts as yes: a second copy is the worse mistake.
+  const readable = (id: string, day: LocalDate | null): boolean => { const s = sourceDay(id); return s === null || day === null || s < day }
+  return item => {
+    if (!item.block) return false
+    const words = sameWords(inlineText(item.block.content)), old = own ? itemRecipe(item, own) < FROM_RECIPE : true
+    return decided.some(x => {
+      if (item.from && x.from) return item.from === x.from
+      if (!words || words !== x.words) return false
+      if (old && x.old) return true
+      if (old && x.from) return readable(x.from, dayPage.date)
+      if (x.old && item.from) return readable(item.from, x.day)
+      return false
+    })
+  }
+}
+
+/**
  * The items of a draft made again over `old` (Brian 3d7aca46): what he applied or skipped stays as he left it, and the
  * new suggestions follow, without a to-do or words he has already decided on.
  */
 export function remadeItems(old: DayDraft | null, items: readonly DraftItem[]): DraftItem[] {
-  const decided = old?.items.filter(i => i.state !== 'open') ?? []
+  // Each kept item says which recipe made it, so a later check knows it has no `from` (Ratchet 5dd205a3).
+  const decided = old?.items.filter(i => i.state !== 'open').map(i => (i.recipe ? i : { ...i, recipe: recipeOf(old) })) ?? []
   if (!decided.length) return [...items]
   const ids = new Set(decided.map(i => i.id)), tasks = new Set(decided.flatMap(i => (i.taskId ? [i.taskId] : [])))
   const words = new Set(decided.flatMap(i => (i.block ? [sameWords(inlineText(i.block.content))] : [])))
@@ -176,15 +241,17 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
   const onPage = new Set(flatNodes(doc).filter(isTaskRow).map(n => String(n.props!.taskId)))
   const later = page.date ? plannedAfter(ws, page.date) : new Set<string>()
   const task = (id: string | undefined) => ws.tasks.find(t => t.id === id)
+  const elsewhere = draft.items.some(i => i.state === 'open' && i.block) ? decidedElsewhere(ws, page) : () => false
   const items: DraftItemView[] = []
   for (const item of draft.items) {
     if (item.state !== 'open') continue
     const t = task(item.taskId)
     if (item.taskId && (!offeredOn(t, later) || onPage.has(t.id))) continue
+    if (!item.taskId && elsewhere(item)) continue
     const at = placeItem(doc, item, ids)
     if (!at) continue
     const block = t ? { id: `draft-row:${item.id}`, type: 'task', props: { taskId: t.id, role: 'plan', planDate: page.date ?? '' }, content: [{ type: 'text', text: t.title, styles: {} }], children: [] } : item.block!
-    items.push({ id: item.id, kind: at.kind, anchorId: at.anchorId, block, ...(t ? { taskId: t.id, since: t.createdOn } : {}) })
+    items.push({ id: item.id, kind: at.kind, anchorId: at.anchorId, block, ...(t ? { taskId: t.id, since: t.createdOn } : item.since ? { since: item.since } : {}) })
   }
   const end = planningEndIndex(doc, ids)
   const moreOpen = draft.moreOpen.map(task).filter(t => offeredOn(t, later)).filter(t => !onPage.has(t.id)).map(t => ({ taskId: t.id, title: t.title, since: t.createdOn }))
@@ -214,7 +281,9 @@ export function normalizeDraftItems(ws: Workspace, page: Page, items: readonly D
     } else if (item.block && ['paragraph', 'bulletListItem', 'task'].includes(item.block.type) && inlineText(item.block.content).trim() && inlineText(item.block.content).length <= 500) {
       const words = inlineText(item.block.content).trim()
       const block: EditorNode = { id: item.block.id, type: item.block.type, props: item.block.type === 'task' ? { taskId: '', role: 'plan', planDate: page.date ?? '' } : {}, content: [{ type: 'text', text: words, styles: {} }], children: [] }
-      out.push({ id: item.id, anchor: item.anchor, place: item.place, block, source: item.source, state: 'open' })
+      const from = typeof item.from === 'string' && item.from && item.from.length <= 200 ? { from: item.from } : {}
+      const since = typeof item.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.since) && page.date && item.since < page.date ? { since: item.since } : {}
+      out.push({ id: item.id, anchor: item.anchor, place: item.place, block, source: item.source, state: 'open', ...from, ...since })
     }
   }
   return out
