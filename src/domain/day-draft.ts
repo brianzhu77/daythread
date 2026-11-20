@@ -42,6 +42,8 @@ export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: s
  * answers (Lead bf60ec67). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
  */
 export const DRAFT_RECIPE = 4
+/** The first recipe that carries a skipped day's open to-do lines itself (`withSkippedPlan`). */
+const CARRY_RECIPE = 4
 /** The first recipe whose carried lines say where they came from (`from`); an older draft's lines are known by their words. */
 const FROM_RECIPE = 3
 const recipeOf = (d: DayDraft): number => d.recipe ?? 1
@@ -67,6 +69,25 @@ export const sameWords = (s: string): string => s.toLocaleLowerCase().replace(/\
  * only opened, made from his template, isn't one, nor is a to-do planned onto it from another day.
  */
 export const actedOn = (ws: Workspace, p: Page): boolean => Boolean(p.editedAt) || Boolean(draftOf(ws, p.id)?.items.some(i => i.state !== 'open'))
+
+/**
+ * Lead 312046f4 (option 2): a day he never acted on hands its to-do lines on to the next draft that carried them, and
+ * then stops offering them, so one line is never offered in two drafts and nothing has to match it. That draft is a
+ * stored one (ready, or failed with what the app carried) made by a recipe that carries, for a later day, with no day
+ * he acted on in between (Ratchet f03b7b89: not a page alone, nor a draft still preparing). Its plain lines stay.
+ */
+export function linesCarriedOn(ws: Workspace, dayPage: Page): boolean {
+  if (dayPage.type !== 'daily' || !dayPage.date || actedOn(ws, dayPage)) return false
+  const later = ws.pages.filter(p => p.type === 'daily' && p.date !== null && p.date > dayPage.date! && !p.trashedAt).sort((a, b) => (a.date! < b.date! ? -1 : 1))
+  for (const p of later) {
+    const d = draftOf(ws, p.id)
+    if (d && (d.status === 'ready' || d.status === 'failed') && recipeOf(d) >= CARRY_RECIPE) return true
+    if (actedOn(ws, p)) return false
+  }
+  return false
+}
+/** A to-do line (not a carried to-do, nor a plain line). */
+export const isTodoLine = (i: DraftItem): boolean => !i.taskId && i.block?.type === 'task'
 
 /** The recipe that made an item: one a remake kept from an older draft says so itself (Ratchet 5dd205a3). */
 const itemRecipe = (i: DraftItem, d: DayDraft): number => i.recipe ?? recipeOf(d)
@@ -284,12 +305,14 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
   const later = page.date ? plannedAfter(ws, page.date) : new Set<string>()
   const task = (id: string | undefined) => ws.tasks.find(t => t.id === id)
   const elsewhere = draft.items.some(i => i.state === 'open' && i.block) ? decidedElsewhere(ws, page) : () => false
+  const handedOn = draft.items.some(i => i.state === 'open' && isTodoLine(i)) && linesCarriedOn(ws, page)
   const items: DraftItemView[] = []
   for (const item of draft.items) {
     if (item.state !== 'open') continue
     const t = task(item.taskId)
     if (item.taskId && (!offeredOn(t, later) || onPage.has(t.id))) continue
     if (!item.taskId && elsewhere(item)) continue
+    if (handedOn && isTodoLine(item)) continue
     const placed = placeItem(doc, item, ids)
     if (!placed) continue
     const at = amongApplied(doc, draft, item, placed)
