@@ -49,10 +49,10 @@ test('carry: the model carries one line: that one stays its item, the other is a
   const { items, carried } = s.carry(mine)
   assert.equal(carried, 1)
   assert.deepEqual(items.map(i => inlineText(i.block?.content)), ['Pack the bags', 'Call the bank'])
-  assert.equal(items[1], mine[0], 'the model\'s own item, where it put it')
+  assert.deepEqual(items[1], { ...mine[0], took: [`${dayId(yesterday)} y2`] }, 'the model\'s own item, where it put it, taking over the old one')
   // Both: nothing added.
   const both = s.model({ lineId: s.lineId('Pack the bags') }, { lineId: s.lineId('Call the bank') })
-  assert.deepEqual(s.carry(both), { items: both, carried: 0 })
+  assert.deepEqual(s.carry(both), { items: both.map((i, n) => ({ ...i, took: [`${dayId(yesterday)} y${n + 1}`] })), carried: 0 })
   // Carried as a plain line by the model: it becomes the to-do, still where the model put it.
   const plain = s.model({ kind: 'line', lineId: s.lineId('Pack the bags') })
   const fixed = s.carry(plain).items

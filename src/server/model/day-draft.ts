@@ -6,7 +6,7 @@
 // stored (set-draft).
 import { dayEvents } from '../../domain/chip-events.ts'
 import { describeLine, flatNodes, inlineText, isTaskRow, pageNodes, smartNoteBlockType, type EditorNode } from '../../domain/editor-document.ts'
-import { actedOn, decidedElsewhere, draftOf, isDraft, offeredOn, planningRange, plannedAfter, sameWords, type DraftItem } from '../../domain/day-draft.ts'
+import { actedOn, decidedElsewhere, draftOf, isDraft, takenOver, tookRef, offeredOn, planningRange, plannedAfter, sameWords, type DraftItem } from '../../domain/day-draft.ts'
 import { isTemplate } from '../../domain/day-template.ts'
 import { databaseOfRow, isDatabase, localWall } from '../../domain/database.ts'
 import { isTrashed } from '../../domain/page-tree.ts'
@@ -298,34 +298,45 @@ export function withSkippedPlan(ws: Workspace, page: Page, req: DayDraftRequest,
   const skipped = ws.pages.filter(p => p.type === 'daily' && p.date !== null && p.date > plan.date! && p.date < day && !isTrashed(p) && !actedOn(ws, p))
     .sort((a, b) => (a.date! < b.date! ? -1 : 1))
   const elsewhere = decidedElsewhere(ws, page), lineOf = new Map([...req.lines.values()].map(n => [sameWords(inlineText(n.content)), n.id]))
+  // Already taken over by another stored draft: that one holds it now, so it isn't taken from here again (a chain of
+  // skipped days carries it from the latest). Today's own draft, about to be replaced, doesn't count.
+  const taken = new Set([...takenOver(ws)].filter(r => !(draftOf(ws, page.id)?.items ?? []).some(i => i.took?.includes(r))))
   const wordsOf = (i: DraftItem) => (i.block ? sameWords(inlineText(i.block.content)) : '')
-  const first: DraftItem[] = [], taken = new Set<DraftItem>(), seen = new Set<string>()
+  const first: DraftItem[] = [], used = new Set<DraftItem>(), byKey = new Map<string, DraftItem>()
   let carried = 0
   for (const p of skipped) {
     for (const src of draftOf(ws, p.id)?.items ?? []) {
-      if (src.state !== 'open' || src.block?.type !== 'task') continue
+      const ref = tookRef(p.id, src.id)
+      if (src.state !== 'open' || src.block?.type !== 'task' || taken.has(ref)) continue
       const words = wordsOf(src)
       // Where it came from: kept by the draft (recipe 3 on), else the line of his it reads as, among the lines sent.
       const from = src.from ?? lineOf.get(words), key = from ?? `words:${words}`
-      if (!words || seen.has(key) || req.onPage.has(words)) continue
-      seen.add(key)
+      if (!words || req.onPage.has(words)) continue
+      // The same line in two skipped days' drafts: one item here takes over both.
+      const held = byKey.get(key)
+      if (held) { held.took = [...(held.took ?? []), ref]; continue }
       const origin = { ...(from ? { from } : {}), since: src.since ?? plan.date! }
       if (elsewhere({ ...src, ...origin })) continue
       const task = [...req.tasks.values()].find(t => sameWords(t.title) === words)
-      const model = items.find(i => !taken.has(i) && ((from && i.from === from) || (i.block && wordsOf(i) === words) || (task && i.taskId === task.id)))
+      const model = items.find(i => !used.has(i) && ((from && i.from === from) || (i.block && wordsOf(i) === words) || (task && i.taskId === task.id)))
+      let item: DraftItem
       if (model) {
-        taken.add(model)
+        used.add(model)
         // The model's own item, where it put it; a plain line it made of a to-do line becomes the to-do.
-        first.push(model.block && model.block.type !== 'task' ? { ...model, ...origin, block: { ...model.block, type: 'task' } } : model)
-        continue
+        item = model.block && model.block.type !== 'task' ? { ...model, ...origin, block: { ...model.block, type: 'task' } } : { ...model }
+      } else {
+        carried++
+        const anchor = items[0]?.anchor ?? '', place = 'after' as const
+        item = task
+          ? { id: newId(), anchor, place, taskId: task.id, source: 'fallback', state: 'open' }
+          : { id: newId(), anchor, place, source: 'fallback', state: 'open', ...origin, block: { id: newId(), type: 'task', props: {}, content: [{ type: 'text', text: inlineText(src.block.content), styles: {} }], children: [] } }
       }
-      carried++
-      const anchor = items[0]?.anchor ?? '', place = 'after' as const
-      if (task && !items.some(i => i.taskId === task.id)) first.push({ id: newId(), anchor, place, taskId: task.id, source: 'fallback', state: 'open' })
-      else if (!task) first.push({ id: newId(), anchor, place, source: 'fallback', state: 'open', ...origin, block: { id: newId(), type: 'task', props: {}, content: [{ type: 'text', text: inlineText(src.block.content), styles: {} }], children: [] } })
+      item.took = [...(item.took ?? []), ref]
+      byKey.set(key, item)
+      first.push(item)
     }
   }
-  return { items: [...first, ...items.filter(i => !taken.has(i))], carried }
+  return { items: [...first, ...items.filter(i => !used.has(i))], carried }
 }
 
 /**
