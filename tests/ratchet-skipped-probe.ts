@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict'
 import {harness,dayId,text} from './v2-helpers.ts'
 import {draftView} from '../src/domain/day-draft.ts'
 const item=(id:string,from?:string)=>({id,anchor:'',place:'after' as const,source:'model' as const,state:'open' as const,...(from?{from}:{}),block:{id:id+'block',type:'task',props:{},content:[text('Pack bags')],children:[]}})
@@ -8,6 +9,7 @@ set(old,[item('old')],2)
 if(remake){h.run({type:'skip-draft',pageId:dayId(old),itemIds:['old']});set(old,[],3)}
 set(now,[item('new','source-line')],3)
 if(!remake)h.run({type:'apply-draft',pageId:dayId(now),itemIds:['new'],today:now})
-console.log(remake?'remade-decided-old':'long-gap-old',draftView(h.ws,h.page(dayId(remake?now:old)))?.items.map(i=>i.id))
-if(!remake){h.run({type:'apply-draft',pageId:dayId(old),itemIds:['old'],today:now});console.log('duplicate tasks',h.ws.tasks.filter(t=>t.title==='Pack bags').length)}
+assert.deepEqual(draftView(h.ws,h.page(dayId(remake?now:old)))?.items.map(i=>i.id),[])
+if(!remake){assert.throws(()=>h.run({type:'apply-draft',pageId:dayId(old),itemIds:['old'],today:now}),/Nothing to apply/);assert.equal(h.ws.tasks.filter(t=>t.title==='Pack bags').length,1)}
+console.log('PASS',remake?'remade-decided-old':'long-gap-old')
 }
