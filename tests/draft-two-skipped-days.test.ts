@@ -166,9 +166,12 @@ for (const middle of ['page', 'draft'] as Middle[]) {
         twiceRuns++
         assert.equal(other.length, 2, `${label}: ${LINES[1]} offered on ${other.join(', ') || 'no day'}`)
         const [here, there] = other as [string, string]
+        const stale = s.plan(there).find(i => i.words === LINES[1])!.id
         s.h.run({ type: 'apply-draft', pageId: dayId(here), itemIds: [s.plan(here).find(i => i.words === LINES[1])!.id], today })
         const left = s.plan(there).find(i => i.words === LINES[1])
         assert.equal(left, undefined, `${label}: ${there} still offers ${LINES[1]} after ${here} applied it`)
+        // Not only hidden: an Apply on the other draft's item (a stale tab) refuses (Ratchet 094d5ce0).
+        assert.throws(() => s.h.run({ type: 'apply-draft', pageId: dayId(there), itemIds: [stale], today }), /Nothing to apply/, label)
         assert.equal(s.tasks(LINES[1]), 1, label)
       }
       if (anew) anewRuns++
