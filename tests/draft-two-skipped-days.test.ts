@@ -69,8 +69,8 @@ const store = (s: ReturnType<typeof scene>, items: DraftItem[]) =>
 
 const ANSWERS: Answer[] = ['none', 'one', 'both', 'plain', 'new_todo']
 const expectedCarried: Record<Answer, number> = { none: 2, one: 1, both: 0, plain: 1, new_todo: 1 }
-// B105 (logged, open): a to-do the model wrote anew in the same words stays the model's item, with no source line or age.
-const origin = (answer: Answer, n: 0 | 1) => (answer === 'new_todo' && n === 0 ? [undefined, undefined] : [`b${n + 1}`, threeDaysAgo])
+// A to-do the model wrote anew in the same words is his line, with its source and age (B106; B105's age label).
+const origin = (_answer: Answer, n: 0 | 1) => [`b${n + 1}`, threeDaysAgo]
 
 for (const middle of ['page', 'draft'] as Middle[]) {
 
@@ -128,8 +128,8 @@ for (const middle of ['page', 'draft'] as Middle[]) {
     for (const a of sources) for (const b of sources) if (a !== b) for (const x of ['apply', 'skip'] as const) orders.push([[a, x], [b, 'apply']])
     const dateOf = (w: Tap[0]) => (w === 'new' ? today : w === 'middle' ? yesterday : twoDaysAgo)
     let runs = 0
-    // Counted so a change in either known case shows here: [re-decided anew, other line offered by two drafts].
-    let anewRuns = 0, twiceRuns = 0
+    // Counted so a change in the known case shows here: the other line offered by two drafts.
+    let twiceRuns = 0
     for (const answer of ANSWERS) for (const taps of orders) for (const before of [false, true]) {
       runs++
       const s = scene(middle)
@@ -151,11 +151,9 @@ for (const middle of ['page', 'draft'] as Middle[]) {
       const holding = [twoDaysAgo, yesterday, today].filter(d => s.plan(d).some(i => i.words === LINES[0]))
       assert.ok(s.tasks(LINES[0]) <= 1, `${label}: ${s.tasks(LINES[0])} to-dos`)
       // Decided by exactly one draft and offered by none after, or (no tap reached the draft holding it) still offered by one.
-      // Known: skipped on an earlier draft before today's is made, that day becomes a used one, and a to-do the model writes
-      // anew in the same words (B104/B105's kind of item) is still offered today, so a second decision is possible. It never
-      // makes a second to-do (asserted above).
-      const anew = early && log[0] === `${head![0]} skip` && answer === 'new_todo'
-      const ok = anew ? decided >= 1 && holding.every(d => d === today) : decided === 1 ? holding.length === 0 : decided === 0 && holding.length === 1
+      // A to-do the model writes anew in the same words is his line too (B106), so skipped on an earlier draft before
+      // today's is made, it isn't offered today either.
+      const ok = decided === 1 ? holding.length === 0 : decided === 0 && holding.length === 1
       assert.ok(ok, `${label}: decided ${decided}, offered on ${holding.join(', ') || 'no day'}`)
       // The other line, untouched by these taps, is offered by exactly one draft. After an early tap the earlier day is a
       // used one: its draft keeps its other open line (B103's case) and the model may suggest that line again from the
@@ -174,9 +172,8 @@ for (const middle of ['page', 'draft'] as Middle[]) {
         assert.throws(() => s.h.run({ type: 'apply-draft', pageId: dayId(there), itemIds: [stale], today }), /Nothing to apply/, label)
         assert.equal(s.tasks(LINES[1]), 1, label)
       }
-      if (anew) anewRuns++
     }
     assert.equal(runs, ANSWERS.length * orders.length * 2)
-    assert.deepEqual([anewRuns, twiceRuns], middle === 'page' ? [1, 4] : [2, 8])
+    assert.equal(twiceRuns, middle === 'page' ? 4 : 8)
   })
 }
