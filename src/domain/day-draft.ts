@@ -41,11 +41,14 @@ export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: s
  * How day drafts are made now: 2 reads every page edited in the last 7 days and puts what he wrote for the day first
  * (Brian 3d7aca46); 3 reads a plan written for a day he didn't use as written for the day he opens, and keeps where each
  * carried line came from (B101); 4 carries the open to-do lines of a skipped day's draft itself, whatever the model
- * answers (Lead bf60ec67). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
+ * answers (Lead bf60ec67); 5 gives a to-do or line the model typed anew, word for word a line it was sent, that line as
+ * where it came from (B106). Raising it makes today's draft once more, where today's page is opened; past days keep theirs.
  */
-export const DRAFT_RECIPE = 4
+export const DRAFT_RECIPE = 5
 /** The first recipe whose carried lines say where they came from (`from`); an older draft's lines are known by their words. */
 const FROM_RECIPE = 3
+/** The first recipe whose to-dos and lines typed anew as a line it was sent say which (B106); before it they're known by their words. */
+const TYPED_FROM_RECIPE = 5
 const recipeOf = (d: DayDraft): number => d.recipe ?? 1
 
 /** The day's draft for good: a ready one, or a failed one he already applied or skipped something from. */
@@ -97,11 +100,32 @@ const itemRecipe = (i: DraftItem, d: DayDraft): number => i.recipe ?? recipeOf(d
  * day he opens. Once he applied or skipped it in one, no other offers it. A line is known by the block it was carried
  * from. An item an older recipe made has no such block and is known by its words, but only against a line that could
  * have been in its draft: one from a page dated before that draft's day (Ratchet 5dd205a3), so the same words written
- * again on a later page aren't taken for it. A to-do carried by its id needs none of this: it's planned.
+ * again on a later page aren't taken for it. A to-do carried by its id needs none of this: it's planned. The row an
+ * applied item became on its page (B102) is that line too, while it still reads the item's words (B106): carried from
+ * there, or typed anew as it, the decided line would come back.
  */
 export function decidedElsewhere(ws: Workspace, dayPage: Page): (item: DraftItem) => boolean {
-  const own = draftOf(ws, dayPage.id)
-  type Decided = { from?: string; words: string; old: boolean; day: LocalDate | null }
+  const own = draftOf(ws, dayPage.id), match = decidedMatch(ws, dayPage)
+  return item => match(item, own ? itemRecipe(item, own) < FROM_RECIPE : true)
+}
+
+/**
+ * B106: of the lines sent to the model, those an item carried from would be decided elsewhere, for an item a draft made
+ * now holds (it says where it came from). A to-do or line the model typed anew as one of them takes an unsettled one.
+ */
+export function settledLines(ws: Workspace, dayPage: Page, lines: Iterable<EditorNode>): Set<string> {
+  const match = decidedMatch(ws, dayPage), out = new Set<string>()
+  for (const n of lines) if (match({ id: '', anchor: '', place: 'after', source: 'model', state: 'open', from: n.id, block: n }, false)) out.add(n.id)
+  return out
+}
+
+/**
+ * `old`: the item was made by a recipe before `FROM_RECIPE`, so it doesn't say where it came from and is known by its
+ * words. A decided item is known by its words too when it has no `from` and a recipe before `TYPED_FROM_RECIPE` made it:
+ * 3 and 4 kept no source for what the model typed anew (B106).
+ */
+function decidedMatch(ws: Workspace, dayPage: Page): (item: DraftItem, old: boolean) => boolean {
+  type Decided = { from?: string; row?: string; words: string; old: boolean; day: LocalDate | null }
   const decided: Decided[] = []
   for (const p of ws.pages) {
     if (!isDraft(p) || p.trashedAt || p.id === draftPageId(dayPage.id)) continue
@@ -110,7 +134,7 @@ export function decidedElsewhere(ws: Workspace, dayPage: Page): (item: DraftItem
     const day = ws.pages.find(x => x.id === p.parentId)?.date ?? null
     for (const i of d.items) {
       if (i.state === 'open' || !i.block) continue
-      decided.push({ ...(i.from ? { from: i.from } : {}), words: sameWords(inlineText(i.block.content)), old: itemRecipe(i, d) < FROM_RECIPE, day })
+      decided.push({ ...(i.from ? { from: i.from } : {}), ...(i.row ? { row: i.row } : {}), words: sameWords(inlineText(i.block.content)), old: !i.from && itemRecipe(i, d) < TYPED_FROM_RECIPE, day })
     }
   }
   // The day of the page a line was carried from: a day page's date, another page's creation day; null when unknown.
@@ -124,10 +148,11 @@ export function decidedElsewhere(ws: Workspace, dayPage: Page): (item: DraftItem
   }
   // Could the line carried from `id` have been in a draft for `day`? Unknown counts as yes: a second copy is the worse mistake.
   const readable = (id: string, day: LocalDate | null): boolean => { const s = sourceDay(id); return s === null || day === null || s < day }
-  return item => {
+  return (item, old) => {
     if (!item.block) return false
-    const words = sameWords(inlineText(item.block.content)), old = own ? itemRecipe(item, own) < FROM_RECIPE : true
+    const words = sameWords(inlineText(item.block.content))
     return decided.some(x => {
+      if (item.from && item.from === x.row && words === x.words) return true
       if (item.from && x.from) return item.from === x.from
       if (!words || words !== x.words) return false
       if (old && x.old) return true
