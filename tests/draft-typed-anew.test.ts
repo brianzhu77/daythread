@@ -245,3 +245,28 @@ test('B106: an item an older recipe (3-4) typed anew and he crossed out has no s
   make(h, tomorrow, () => [{ kind: 'new_todo', text: 'Ring the plumber' }])
   assert.deepEqual(offering(h, tomorrow, 'Ring the plumber').map(i => i.from), ['again'])
 })
+
+test('B106 limit (Ratchet db90ee8b, Lead cc47c3a3): a recipe 3-4 item with no source, applied or crossed out, holds back same-words lines on pages dated before its day, whenever written', () => {
+  // Contract: a line he applied or crossed out isn't offered again when the model types it word for word, and the same
+  // words written again later are offered when the earlier decision has a source (every recipe 5 item that matched a sent
+  // line). Limit: for an item recipe 3 or 4 made with no source, applied or crossed out, a same-words line on a page dated
+  // before that item's day counts as decided, whenever it was written: no line has a creation time. A typed suggestion
+  // that matches no sent line still has no source under recipe 5; that's outside B106.
+  for (const act of ['skip', 'apply'] as const) {
+    const h = harness()
+    h.day(yesterday)
+    h.save(dayId(yesterday), d => [...d, heading('h', 'Next day'), bullet('original', text('Ring the plumber'))], { at: at(yesterday, '21:00') })
+    h.day(today)
+    h.run({ type: 'set-draft', pageId: dayId(today), status: 'ready', moreOpen: [], allowedTaskIds: [], recipe: 4, items: [
+      { id: 'r1', anchor: '', place: 'after', source: 'model', state: 'open', block: { id: 'rb1', type: 'task', props: {}, content: [text('Ring the plumber')], children: [] } },
+    ] })
+    h.run(act === 'skip' ? { type: 'skip-draft', pageId: dayId(today), itemIds: ['r1'] } : { type: 'apply-draft', pageId: dayId(today), itemIds: ['r1'], today })
+    // Written again after the decision, on the older page.
+    h.save(dayId(yesterday), d => [...d, bullet('again', text('Ring the plumber'))], { at: at(today, '20:00') })
+    const { req } = make(h, tomorrow, () => [{ kind: 'new_line', text: 'Ring the plumber' }])
+    const same = [...req.lines].filter(([, n]) => n.type !== 'task' && words({ block: n }) === 'Ring the plumber')
+    assert.deepEqual(same.map(([id, n]) => [n.id, req.settled.has(id)]), [['original', true], ['again', true]], act)
+    // Not offered as a line; applied, his own to-do (still open) may be offered as itself.
+    assert.deepEqual(offering(h, tomorrow, 'Ring the plumber').filter(i => !i.taskId), [], act)
+  }
+})
