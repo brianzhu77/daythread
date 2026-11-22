@@ -8,8 +8,16 @@ export const PRESSABLE = [
   ...['button', 'link', 'tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'switch', 'checkbox'].map(r => `[role=${r}]`),
 ].join(', ')
 
-/** Never marked: things that lift or are drawn on (they have their own feedback), and anything opting out. */
-const LEFT_ALONE = '[data-no-press], [draggable=true], .drag-handle, [data-drag-handle], .maplibregl-canvas, .database-map-canvas'
+/**
+ * Never marked: the handles themselves (grips, a column edge: they have the Lift Rule), the map (it's drawn on), and
+ * anything opting out. Not everything inside a draggable ancestor: BlockNote makes the block under the mouse draggable,
+ * and a control in it still gets the press; a row that can be pressed or dragged shows the press, cleared at once on
+ * dragstart or a move past 8 px (Lead cb75a132, Jazz 41ad161d).
+ */
+const LEFT_ALONE = [
+  '[data-no-press]', '.drag-handle', '[data-drag-handle]', '.editor-handle', '.editor-touch-handle', '.database-row-handle',
+  '.database-list-handle', '.database-pane-handle', '.database-lane-grip', '.database-column-edge', '.map-canvas', '.maplibregl-canvas',
+].join(', ')
 
 /**
  * A pressed control's look (§1.2): `box` (a checkbox or radio: a halo around it, Jazz 28eea1ab), `icon` (no words: a

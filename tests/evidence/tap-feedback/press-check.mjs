@@ -101,6 +101,17 @@ for (const engine of ['chromium', 'webkit']) {
       const shown = d.getAttribute('data-press') !== null; d.remove(); return shown
     })
     ok(`${engine} editable text isn't pressed`, !editable)
+    // A control inside a draggable block (BlockNote marks the block under the mouse draggable) still gets the press;
+    // a grip doesn't (Lead cb75a132, Jazz 41ad161d).
+    const inBlock = await page.evaluate(() => {
+      const block = Object.assign(document.createElement('div'), { draggable: true }), b = document.createElement('button'), grip = document.createElement('button')
+      b.textContent = '+ New'; grip.className = 'database-row-handle'; grip.textContent = '⋮⋮'; block.append(b, grip); document.body.append(block)
+      const down = el => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 11, pointerType: 'mouse' }))
+      down(b); const pressed = b.getAttribute('data-press') !== null
+      window.dispatchEvent(new Event('blur')); down(grip); const gripPressed = grip.getAttribute('data-press') !== null
+      window.dispatchEvent(new Event('blur')); block.remove(); return { pressed, gripPressed }
+    })
+    ok(`${engine} a control in a draggable block is pressed, a grip isn't`, inBlock.pressed && !inBlock.gripPressed, JSON.stringify(inBlock))
     // Window blur clears a held key press.
     const blurred = await page.evaluate(() => {
       const el = document.querySelector('button.side-label-add'); el.focus()
