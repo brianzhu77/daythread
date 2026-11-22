@@ -34,10 +34,12 @@ press with `data-press`. CSS keys every family's pressed look on `[data-press]` 
   anything that lifts (they have the Lift Rule), the map canvas, `:disabled` / `aria-disabled=true`, and anything
   marked `data-no-press`.
 - Start: `pointerdown` (capture, passive) on the closest pressable. Shows in the same frame: **no transition in**.
-- End: `pointerup`, `pointercancel` (the browser took the touch for a scroll), the pointer moving more than 8 px, a
-  `scroll` or `dragstart`. Fades out over 120 ms (`--dur-fast`).
-- **Minimum visible time 100 ms.** A quick tap (finger down 40 ms) still shows the press for 100 ms from its start.
-- Keyboard: Space or Enter on a focused pressable shows the press until keyup (Enter: 100 ms).
+- End on lift: `pointerup`. Fades out over 120 ms (`--dur-fast`). **Minimum visible time 100 ms** for a lift: a quick
+  tap (finger down 40 ms) still shows the press for 100 ms from its start.
+- End at once, no minimum (Ratchet 7551ecee): `pointercancel` (the browser took the touch for a scroll), the pointer
+  moving more than 8 px, `scroll`, `dragstart`, `blur` of the control, window `blur`, `visibilitychange`.
+- Keyboard: only the keys that activate that control show a press: Space and Enter on a button, summary or menu item;
+  Enter on a link (Space scrolls); Space on a checkbox or switch. Shown until keyup (Enter: 100 ms).
 - Reduced motion: same looks, no fade (they are colour only; nothing moves or scales).
 
 **1.2 The looks.** Step Rule: pressed is one step past hover on the same scale, never a new hue. Pressed differs from
@@ -64,8 +66,14 @@ and 1280 mouse. Lead turns it into the standing repo check.
 
 ## 2. The day draft's four buttons (release 1)
 
-Rule for all four: **the line he pressed shows its result as soon as the change is stored on the device**, never
-before (Ratchet 68b12ff8 §1). Storing is local and takes milliseconds; the server answer is not waited for.
+Rule for all four: **the line he pressed shows its result in the first frame after the change is stored on the
+device**, never before (Ratchet 68b12ff8 §1). Storing is local and takes milliseconds; the server answer is not waited
+for.
+
+**If the device can't store it** (storage unavailable or the write fails; today `run` then sends it live), the row
+shows it's working instead: ✓ ✕ are replaced by the small draft spinner (`draft-spin`) in the same spot, text
+unchanged, until the server answers. Accepted: the decided look below. Failed: the row comes back with
+`Not applied · try again` under it (Deadline Red, Meta size). Nothing claims done before it is stored somewhere.
 
 **2.1 ✓ Apply one suggestion.**
 1. Press: Icon button look, row tint (1.3).
@@ -73,9 +81,15 @@ before (Ratchet 68b12ff8 §1). Storing is local and takes milliseconds; the serv
    dashed bullet / dashed underline become the solid box, bullet or plain line, ✓ and ✕ go away. Its text stops being
    editable. Nothing moves. The usual `Applied · Undo` notice appears now, not after the server.
 3. Server accepts: the band is replaced by the real line in the same spot. It looks identical, so nothing flickers.
-4. Server refuses (decided elsewhere, no longer open): the band goes back to its draft look with ✓ ✕ if it's still
-   offered, or leaves if it isn't, and **a Meta-size line in Deadline Red sits under it for 4 s**: `Not applied · changed
+4. Server refuses (decided elsewhere, no longer open): the band goes back to its draft look with ✓ ✕ (and his edited
+   text) if it's still offered, and **a Meta-size line in Deadline Red sits under it for 4 s**: `Not applied · changed
    elsewhere`. The Applied notice is closed. Never a silent roll back (Lead 5d9ce740).
+   - If it's no longer offered, the red line still shows **in the row's slot**: the slot keeps one line's height
+     with only the red line in it for 4 s, then closes. The note belongs to the draft's host, not the row, so it
+     isn't removed with the row (Ratchet 7551ecee).
+   - A refusal found later (after a reload, or a change stored offline) is not this note's job: it is the outbox's
+     existing refused state, which stays until he dismisses it and keeps its way back. The 4 s note is for the live
+     page only.
 5. Network fails: the change is still stored and will be sent; the row keeps its applied look and the existing
    outbox banner says it's waiting. No "Not saved", nothing that invites a second press (Ratchet §4).
 
@@ -93,6 +107,12 @@ before (Ratchet 68b12ff8 §1). Storing is local and takes milliseconds; the serv
 
 **2.4 Dismiss.** As Apply all with the 2.2 look on each row, all held then closed together; `Skipped 4 · Undo`.
 
+**2.4a Undo before the server answers.** The notice's Undo shown at once undoes **that same stored decision**
+(same operation id), never a new, unrelated change. If the decision hasn't been sent yet, it may simply be withdrawn
+from the outbox; if it has, the undo is ordered after it. Either way the end state is: the suggestion offered again,
+applied zero times. Acceptance case (Ratchet): ✓, Undo at once, the server's answer to the ✓ lost, reopen the page:
+the suggestion is offered, nothing was applied, and nothing comes back later.
+
 **2.5 Second press.** A decided row has no ✓ ✕ left, so it can't be pressed twice. Other rows stay live: ✓ then ✓ on
 two rows a second apart both work (Ratchet §2: never lock the whole card). Apply all / Dismiss only act on rows not
 yet decided. A double click on Apply all in one frame acts once.
@@ -101,7 +121,9 @@ yet decided. A double click on Apply all in one frame acts once.
 leaving the page and coming back, a reload, or going offline and back all show it the same (Ratchet §3).
 
 **2.7 Delay checks.** Judge every state with the server answer held 1 s and 3 s (Lead), and with a refusal. At 3 s the
-row must already look applied or skipped from the first frame after the press.
+row must already look applied or skipped from the first frame after the device store. Named case (Bumblebee
+a12fc0ff), his own Nov 22 sequence: four suggestions; ✓ row 1, ✓ row 3 1 s later, Dismiss 1 s after that, server held
+3 s. Expected: rows 1 and 3 stay applied, rows 2 and 4 skip, the notice says `Skipped 2`, nothing is refused.
 
 ## 3. Ticks (check, not rebuild)
 
