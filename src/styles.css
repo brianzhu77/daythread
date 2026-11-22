@@ -115,6 +115,10 @@
   --line-strong: var(--gray-7);
   --fill-hover: var(--gray-3);
   --hover-dim: rgba(0, 0, 0, .06);
+  /* Tap feedback §1.2: a press is one step past hover, laid over whatever the control is: gray-4 / gray-5 on paper. */
+  --press-veil: rgba(0, 0, 0, .09);
+  --press-veil-strong: rgba(0, 0, 0, .12);
+  --press-lift: rgba(255, 255, 255, .2);
   --warn-line: #f0d6bd;
   --red-line: #efc9c4;
   --drop-line: #3484ed;
@@ -176,6 +180,8 @@
     --scrim: rgba(0, 0, 0, .55);
     --scrim-on-paper: color-mix(in srgb, black 55%, var(--paper));
     --hover-dim: rgba(255, 255, 255, .08);
+    --press-veil: rgba(255, 255, 255, .09);
+    --press-veil-strong: rgba(255, 255, 255, .13);
     --drop-line: var(--blue-9);
     --shadow-float: 0 2px 6px rgba(0, 0, 0, .35), 0 10px 30px rgba(0, 0, 0, .5);
     --shadow-row: 0 1px 2px rgba(0, 0, 0, .4);
@@ -268,6 +274,26 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
   outline: 2px solid var(--app-accent);
   outline-offset: 2px;
 }
+/* ---------- Press (tap feedback §1, press.ts) ----------
+   press.ts marks the control under a finger, mouse or key with data-press=<family> and data-press-tone. The look is a
+   veil over the control's own colour, so one rule fits a row, a blue button and a checked box alike. It shows in the
+   same frame (no transition in) and fades out over --dur-fast once lifted (data-press-out). A press is a passing state
+   laid over every other look, hover rules included, so these few declarations are !important. */
+@property --press-a { syntax: '<number>'; inherits: false; initial-value: 0; }
+[data-press] { --press-a: 1; --press-c: var(--press-veil); transition: none; }
+[data-press=icon] { --press-c: var(--press-veil-strong); }
+[data-press][data-press-tone=lift] { --press-c: var(--press-lift); }
+[data-press]:not([data-press-via]), [data-press][data-press-via=image] { background-image: linear-gradient(var(--press-now), var(--press-now)) !important; }
+[data-press][data-press-via=shadow] { box-shadow: inset 0 0 0 100vmax var(--press-now) !important; }
+[data-press][data-press-via=filter] { filter: brightness(calc(1 - .08 * var(--press-a))) !important; }
+[data-press] { --press-now: color-mix(in srgb, var(--press-c) calc(var(--press-a) * 100%), transparent); }
+/* Words with no room around them get a pill behind them, drawn outside the box so nothing moves. */
+[data-press=text]:not([data-press-via=shadow]) { border-radius: 6px; box-shadow: 0 0 0 4px var(--press-now) !important; }
+[data-press][data-press-out] { --press-a: 0; transition: --press-a var(--dur-fast) ease !important; }
+/* A small button's row tints too (§1.3): a fingertip covers a 40 px button. */
+[data-press-row]:not([data-press-out]) { background-color: var(--gray-2) !important; }
+@media (prefers-reduced-motion: reduce) { [data-press][data-press-out] { transition: none !important; } }
+
 /* A menu's ring follows the last input, not the browser's guess (Jazz 540b35ea). Opened by a click or tap, a menu focuses
    its first item for the keyboard but draws no ring until a key is pressed; once a key is, WebKit still may not count the
    script's focus as visible, so the ring is drawn on plain focus. */
