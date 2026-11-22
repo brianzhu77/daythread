@@ -28,14 +28,16 @@
 //        of its box by at least DELTA in a colour channel), so a change nobody could see doesn't pass. With the mouse,
 //        "different" is against the hover look, not the rest look.
 //      - clears: 300 ms after the press is cancelled it looks as it did before. A press that sticks is a FAIL.
-//      - quick tap: a press released in the same instant is still showing 50 ms later (the spec's
-//        100 ms minimum) and gone 400 ms later.
 //   3. Presses each disabled control the same way: nothing visible may change in it.
 //   4. Coverage. Every control kind in REQUIRED must have been pressed in the runs that name it; one that wasn't is
 //      MISSING, never a pass. A control that couldn't be reached (off screen after scrolling, or under something else)
 //      is UNREACHED, and also fails the check: add a path or a fixture so it can be pressed.
 //
-// Not covered: keyboard presses (Space/Enter), which need real key events that would also run the action; a real
+// Not covered: a press that is let go on the control. Letting go is a click to the app (some controls track the
+// pointer themselves, so even a made-up pointerup opened a column's menu), so the 100 ms minimum and the fade are
+// checked on a few safe controls by tests/evidence/tap-feedback/press-check.mjs: they are one module's timing, the same
+// for every control, while the look checked here differs per control. Also not covered: keyboard presses
+// (Space/Enter), which need real key events that would also run the action; a real
 // iPhone; whether the result of the action shows (the spec's §2); and controls that only exist in a mode the check
 // doesn't enter (a table's bulk bar while rows are selected, a menu inside a menu, the editor's slash menu).
 // Editable text, drag handles and anything marked data-no-press are not pressed; the kinds skipped are printed, so
@@ -55,17 +57,21 @@ if (shots) mkdirSync(shots, { recursive: true })
 
 const PRESSABLE = 'button, a[href], summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [role=option], [role=switch], [role=checkbox], input[type=checkbox], input[type=radio], label:has(input[type=checkbox])'
 // Only the handle itself is excused (Jazz 41ad161d): a row that can be pressed and dragged, or a button inside a draggable block, shows its press.
-const SKIPPED = '[data-no-press], .drag-handle, .bn-drag-handle, [data-drag-handle]'
+// The app's handles are named here as the press layer names them (src/components/press.ts LEFT_ALONE): keep the two lists the same.
+const SKIPPED = '[data-no-press], .drag-handle, .bn-drag-handle, [data-drag-handle], .editor-handle, .editor-touch-handle, .database-row-handle, .database-list-handle, .database-pane-handle, .database-lane-grip, .database-column-edge'
 const PROPS = ['background-color', 'background-image', 'color', 'opacity', 'transform', 'scale', 'translate', 'box-shadow', 'border-top-color', 'outline-style', 'outline-color', 'filter', 'text-decoration-color', 'fill', 'stroke']
 const DELTA = 6, CHANGED_SHARE = 0.04, CHANGED_MIN = 24, PAD = 6
 const SHOWS_BY_MS = 60, CLEARS_BY_MS = 300, SAME_KIND = 3
 // Controls that open something without saying so (no aria-haspopup). Only ones whose opening saves nothing.
 const OPENS = '.tab-search, button.side-row, button.round-add, button.page-more'
-const RUNS = [
+const ALL_RUNS = [
   { name: 'chromium 390 touch', engine: chromium, width: 390, height: 844, touch: true, press: 'touch' },
   { name: 'chromium 1280 mouse', engine: chromium, width: 1280, height: 860, touch: false, press: 'pointer', pointerType: 'mouse' },
   { name: 'webkit 390 touch', engine: webkit, width: 390, height: 844, touch: true, press: 'pointer', pointerType: 'touch' },
-].filter(r => !flag('run') || r.name.includes(flag('run')))
+]
+const RUNS = ALL_RUNS.filter(r => !flag('run') || r.name.includes(flag('run')))
+// A filter that matches nothing would press nothing and pass (Ratchet 5d5fc6c7).
+if (!RUNS.length) { console.error(`--run=${flag('run')} matches no run. Runs: ${ALL_RUNS.map(r => r.name).join(', ')}`); process.exit(2) }
 // Something to click before a path is listed, where a control only appears after a press that changes nothing stored.
 // The selector must match that one control only: Apply all shares Show's class, and a setup step that pressed it would apply the draft.
 const SETUP = [{ path: '/', click: 'button.draft-primary:text-is("Show")', why: 'Show reveals the day draft\'s suggestions' }]
@@ -122,12 +128,13 @@ function signature([id, props]) {
   const el = document.querySelector(`[data-press-check="${id}"]`)
   if (!el) return null
   const take = (e, pseudo) => { const s = getComputedStyle(e, pseudo); return props.map(p => s.getPropertyValue(p)).join('|') }
-  const parts = [take(el), take(el, '::before'), take(el, '::after')]
+  const name = e => `${e.tagName.toLowerCase()}${e.classList[0] ? '.' + e.classList[0] : ''}`
+  const parts = [['itself', take(el)], ['itself::before', take(el, '::before')], ['itself::after', take(el, '::after')]]
   let n = 0
-  for (const c of el.querySelectorAll('*')) { if (n++ > 25) break; parts.push(take(c)) }
+  for (const c of el.querySelectorAll('*')) { if (n++ > 25) break; parts.push([`inside ${name(c)}`, take(c)]) }
   // a small button tints the row it sits in (spec §1.3), so three levels up count too
-  for (let p = el.parentElement, k = 0; p && k < 3 && p !== document.body; p = p.parentElement, k++) parts.push(take(p), take(p, '::before'), take(p, '::after'))
-  return parts.join('#')
+  for (let p = el.parentElement, k = 0; p && k < 3 && p !== document.body; p = p.parentElement, k++) parts.push([`around ${name(p)}`, take(p)], [`around ${name(p)}::before`, take(p, '::before')], [`around ${name(p)}::after`, take(p, '::after')])
+  return JSON.stringify(parts)
 }
 
 /** In the page: where to press a control, and whether that point is really on it. */
@@ -185,6 +192,12 @@ async function pixelDiff([a, b, delta]) {
   return { changed, total: p.width * p.height, most }
 }
 
+/** What differs between two looks, for a failure's line: "itself: background-image; around div.row: background-color". */
+const differs = (a, b) => {
+  const [x, y] = [JSON.parse(a), JSON.parse(b)]
+  if (x.length !== y.length) return 'its contents changed'
+  return x.flatMap(([label, value], i) => { const [u, v] = [value.split('|'), y[i][1].split('|')]; const props = PROPS.filter((_, n) => u[n] !== v[n]); return props.length ? [`${label}: ${props.join(', ')}`] : [] }).slice(0, 4).join('; ')
+}
 const results = []
 const changes = [] // commands the check itself sent: there should be none
 const lines = []
@@ -270,19 +283,7 @@ for (const run of RUNS) {
     let why = ''
     if (held === before) why = 'nothing changes while pressed'
     else if (!seen) why = `the change can't be seen (${px.changed} of ${px.total} px, needs ${need})`
-    else if (after !== null && after !== before) why = `still looks pressed ${CLEARS_BY_MS} ms after the press ended`
-    if (!why) {
-      // a quick tap: down and up in the same instant, the up sent to the document so no control takes it as a click
-      await page.evaluate(pointer, [c.id, 'pointerdown', t.x, t.y, false, run.pointerType ?? 'touch'])
-      await page.evaluate(pointer, [c.id, 'pointerup', t.x, t.y, true, run.pointerType ?? 'touch'])
-      await wait(50)
-      const quick = await look(c.id)
-      await wait(350)
-      const settled = await look(c.id)
-      if (quick !== null && quick === before) why = 'a quick tap shows nothing 50 ms later (minimum 100 ms)'
-      else if (settled !== null && settled !== before) why = 'still looks pressed 400 ms after a quick tap'
-      await escape()
-    }
+    else if (after !== null && after !== before) why = `still looks pressed ${CLEARS_BY_MS} ms after the press ended (${differs(before, after)})`
     if (why && shots) for (const [name, b64] of [['before', before2], ['pressed', during]]) writeFileSync(`${shots}/${run.name.replace(/ /g, '-')}-${c.id}-${name}.png`, Buffer.from(b64, 'base64'))
     return { ...row, result: why ? 'FAIL' : 'PASS', why }
   }
