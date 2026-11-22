@@ -107,11 +107,13 @@ unchanged, until the server answers. Accepted: the decided look below. Failed: t
 
 **2.4 Dismiss.** As Apply all with the 2.2 look on each row, all held then closed together; `Skipped 4 · Undo`.
 
-**2.4a Undo before the server answers.** The notice's Undo shown at once undoes **that same stored decision**
-(same operation id), never a new, unrelated change. If the decision hasn't been sent yet, it may simply be withdrawn
-from the outbox; if it has, the undo is ordered after it. Either way the end state is: the suggestion offered again,
-applied zero times. Acceptance case (Ratchet): ✓, Undo at once, the server's answer to the ✓ lost, reopen the page:
-the suggestion is offered, nothing was applied, and nothing comes back later.
+**2.4a Undo before the server answers.** The notice's Undo shown at once is tied to **that same stored decision**:
+it is its own change with its own operation id, which names the decision it undoes (`targetOperationId`, as Undo does
+today) and is sent after it, in order. Outbox entries stay as they are; whether a decision not yet sent may be
+withdrawn instead is the outbox's call (send lock, later changes that depend on it), not this spec's (Ratchet 949f1c75).
+What he must see: the suggestion offered again and no new line in his page, and it doesn't come back later. Acceptance
+case: ✓, Undo at once, the server's answer to the ✓ lost, reopen the page: no added line, the suggestion is offered,
+and it stays that way. (The server may have run the Apply and then the Undo; that's fine.)
 
 **2.5 Second press.** A decided row has no ✓ ✕ left, so it can't be pressed twice. Other rows stay live: ✓ then ✓ on
 two rows a second apart both work (Ratchet §2: never lock the whole card). Apply all / Dismiss only act on rows not
