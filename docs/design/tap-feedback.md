@@ -30,7 +30,7 @@ press with `data-press`. CSS keys every family's pressed look on `[data-press]` 
 
 - Pressable: `button`, `a[href]`, `summary`, `[role=button|link|tab|menuitem|menuitemcheckbox|menuitemradio|option|switch|checkbox]`,
   `label` wrapping a checkbox.
-- Not pressable (rule must not touch): editable text (`isContentEditable`, inputs, textareas), drag handles and
+- Not pressable (rule must not touch): editable text (`isContentEditable`, text-like inputs, textareas; checkboxes and radios stay pressable), native `select` (the OS draws its own), drag handles and
   anything that lifts (they have the Lift Rule), the map canvas, `:disabled` / `aria-disabled=true`, and anything
   marked `data-no-press`.
 - Start: `pointerdown` (capture, passive) on the closest pressable. Shows in the same frame: **no transition in**.
