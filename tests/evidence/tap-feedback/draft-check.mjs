@@ -166,6 +166,30 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
       await context.close()
     }
 
+    // 4d. The same for ✕, Dismiss, and a ✕ decided offline and held when sent later (Ratchet 85c5939a): a skip is his,
+    //     not the app's, so it's said in place and the banner keeps its way back.
+    for (const how of ['✕', 'Dismiss', '✕ offline']) {
+      reseed(); const { context, page } = await fresh()
+      if (how === '✕ offline') await page.route(OUTBOX, r => r.abort())
+      const elsewhere = async () => {
+        const { day, draft } = draftNow(), last = draft.items[3]
+        const repo = new SqliteWorkspaceRepository(storePath, undefined, { allowMissingLegacy: true }), w = await repo.load()
+        await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action: { type: 'skip-draft', pageId: day.id, itemIds: [last.id] } })
+      }
+      if (how !== '✕ offline') await elsewhere()
+      if (how === 'Dismiss') await press(page, page.locator('.draft-line button', { hasText: 'Dismiss' }))
+      else await press(page, skip(page, 'Renew the passport'))
+      if (how === '✕ offline') { await wait(400); await elsewhere(); await page.unroute(OUTBOX) }
+      let n = []
+      for (let i = 0; i < 60 && !(n = await notes(page)).length; i++) await wait(250)
+      await wait(700)
+      const notice = await toastText(page), banner = await page.locator('body').textContent()
+      ok(`${tag} 4d ${how} held: said in place, back to offered`, n.includes('Not skipped · changed elsewhere') && /Renew:open/.test(await bands(page)), `${n.join(' / ')} · ${await bands(page)}`)
+      ok(`${tag} 4d ${how} held: no Skipped notice, the banner keeps its way back`, !/Skipped/.test(notice) && /Keep mine/.test(banner) && /Discard/.test(banner), notice)
+      ok(`${tag} 4d ${how} held: nothing skipped here`, states() === 'ooos', states())
+      await context.close()
+    }
+
     // 5. Second presses: a decided band has no ✓ ✕; Apply all twice in one frame sends one apply, for the rest only.
     {
       reseed(); const { context, page } = await fresh()

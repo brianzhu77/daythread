@@ -188,8 +188,12 @@ export function idbOutboxStore(factory: IDBFactory = indexedDB): OutboxStore {
   }
 }
 
-/** Writes the app makes by itself, not he (Lead b19f29b0): opening a day, the day draft, repeats, a smart note's answer. */
-export const appWrites: ReadonlySet<string> = new Set(['ensure-day', 'set-draft', 'skip-draft', 'run-repeats', 'set-smart-note-result'])
+/**
+ * Writes the app makes by itself, not he (Lead b19f29b0): opening a day, the day draft, repeats, a smart note's answer.
+ * Not `skip-draft`: only his ✕ and Dismiss send it, so when the server holds it he must hear it, in place and in the
+ * banner, like any change of his (Ratchet 85c5939a); an app write that's held is dropped without a word.
+ */
+export const appWrites: ReadonlySet<string> = new Set(['ensure-day', 'set-draft', 'run-repeats', 'set-smart-note-result'])
 
 /** Every string an action names: the ids it may depend on, over-approximated on purpose (§6). */
 export function referencedIds(action: Action): string[] {
