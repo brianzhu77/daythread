@@ -243,6 +243,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const entries = useRef<OutboxEntry[]>([])
   /** Entries shown as made: stored before this load, or left after a send that didn't land. */
   const kept = useRef(new Set<number>())
+  /** EXPERIMENT: changes made just now in this tab, drawn as soon as they're stored (not ticks: they have their own mark). */
+  const drawAhead = useRef(new Set<number>())
+  const drawn = (seq: number | undefined) => seq !== undefined && (kept.current.has(seq) || drawAhead.current.has(seq))
   const durable = useRef(true), legacy = useRef(false), inFlight = useRef(new Set<number>())
   // A browser with no IndexedDB at all keeps nothing on the device (Ratchet 5ca37837).
   if (store.current === null && transport.runOutbox && durable.current) durable.current = false
@@ -266,7 +269,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     let ws = wsRef.current
     if (!ws) return null
     for (const e of entries.current) {
-      if (e.state !== 'pending' || e.action.type === 'undo' || (shown && !kept.current.has(e.seq!))) continue
+      if (e.state !== 'pending' || e.action.type === 'undo' || (shown && !drawn(e.seq))) continue
       try { ws = applyCommand(ws, { operationId: e.operationId, expectedRevision: ws.revision, action: e.action }).workspace } catch { /* the server will say */ }
     }
     return ws
@@ -283,7 +286,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   /** The server's workspace; what's shown has his pending changes on top, so a tick never shows unticked first (Jazz §8.1). */
   const adopt = useCallback((ws: Workspace) => {
     wsRef.current = ws
-    setWorkspace(entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!)) ? predicted(true) ?? ws : ws)
+    setWorkspace(entries.current.some(e => e.state === 'pending' && drawn(e.seq)) ? predicted(true) ?? ws : ws)
   }, [predicted])
   const showOutbox = useCallback(() => {
     if (!entries.current.length && store.current && outboxHint.get()) void store.current.all().then(left => { if (!left.length) outboxHint.clear() }).catch(() => undefined)
@@ -292,7 +295,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     const { held, waiting, pending } = outboxCounts(entries.current.filter(e => !handedBack.current.has(e.seq!)))
     const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
     setOutbox({ pending, held, waiting, durable: durable.current, keptBack: legacy.current && pending > 0, offline: away && pending > 0, atRisk: !durable.current && (slowUnsent.current || memoryUnsent.current.size > 0 || (away && commandsPending())) })
-    if (entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
+    if (entries.current.some(e => e.state === 'pending' && drawn(e.seq))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
   // After a send that didn't land, try again on its own: 2 s, 5 s, 15 s, then every 30 s, without waiting for `online`,
   // which a dead connection never fires (Jazz 8887e299).
@@ -575,6 +578,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           stored = adding.then(async seq => {
             outboxHint.set()
             ownJobs.current.add(seq)
+            if (full.action.type !== 'task-status') drawAhead.current.add(seq)
             const kept = { ...full, seq }
             options.onStored?.()
             // A drain in another tab may have read it into this tab's list already.
