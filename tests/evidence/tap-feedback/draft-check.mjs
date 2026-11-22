@@ -52,13 +52,18 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
   // 1. ✓ with the answer held 3 s: applied in place at once, notice now; then the real line in the same spot.
   {
     reseed(); const { context, page, errors } = await fresh(); await hold(page, 3000)
+    const nextTop = async () => (await page.locator('[data-draft-item]', { hasText: 'Email the landlord' }).boundingBox()).y
+    const topBefore = await nextTop()
     await press(page, apply(page, 'Renew the passport'))
     await wait(100)
-    const early = await bands(page), notice = await toastText(page)
+    const early = await bands(page), notice = await toastText(page), topDecided = await nextTop()
     ok(`${tag} 1 ✓: applied at once, no ✓ ✕ left`, /^Renew:applied Email:open Book:open Send:open$/.test(early) && !(await apply(page, 'Renew the passport').count()), early)
-    ok(`${tag} 1 ✓: Applied · Undo shows before the server answers`, /Applied/.test(notice), notice)
+    ok(`${tag} 1 ✓: Applied · Undo shows before the server answers`, /Applied/.test(notice) && states() === 'oooo', `${notice} · store ${states()}`)
     await wait(4500)
     const late = await bands(page), lines = await page.locator('.editor-task-title').allTextContents()
+    const topAnswered = await nextTop()
+    // Nothing below moves when the decided band becomes the real line (Jazz 93fbd48f: a row under his next press).
+    ok(`${tag} 1 ✓: nothing below moves, decided or answered`, Math.abs(topAnswered - topDecided) <= 1, `next band at ${topBefore} → ${topDecided} → ${topAnswered}`)
     ok(`${tag} 1 ✓: answered, the band is the real line`, !/Renew/.test(late) && lines.includes('Renew the passport') && states() === 'aooo', `${late} · store ${states()}`)
     ok(`${tag} 1 no page errors`, !errors.length, errors.join('; '))
     await context.close()
@@ -114,6 +119,50 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
       ok(`${tag} 4 refused: no Applied notice left`, !/Applied/.test(notice), notice)
       await wait(4300)
       ok(`${tag} 4 refused: the note goes after 4 s`, !(await notes(page)).length && states() === 'sooo', `${(await notes(page)).join(' / ')} · ${states()}`)
+      await context.close()
+    }
+
+    // 4b. The draft changed elsewhere (another item skipped there), then ✓ here: the server holds it. Said on its line,
+    //     the Applied notice closes, and the banner keeps Keep mine / Discard (Ratchet 0fd0406e).
+    {
+      reseed(); const { context, page } = await fresh()
+      const { day, draft } = draftNow(), last = draft.items[3]
+      const repo = new SqliteWorkspaceRepository(storePath, undefined, { allowMissingLegacy: true }), w = await repo.load()
+      await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action: { type: 'skip-draft', pageId: day.id, itemIds: [last.id] } })
+      await press(page, apply(page, 'Renew the passport'))
+      let n = []
+      for (let i = 0; i < 20 && !(n = await notes(page)).length; i++) await wait(150)
+      await wait(700)
+      const notice = await toastText(page), banner = await page.locator('body').textContent()
+      ok(`${tag} 4b held: said where he pressed, back to offered`, n.includes('Not applied · changed elsewhere') && /Renew:open/.test(await bands(page)), `${n.join(' / ')} · ${await bands(page)}`)
+      ok(`${tag} 4b held: no Applied notice left`, !/Applied/.test(notice), notice)
+      ok(`${tag} 4b held: the banner keeps its way back`, /Keep mine/.test(banner) && /Discard/.test(banner))
+      ok(`${tag} 4b held: nothing applied`, states() === 'ooos', states())
+      await wait(4500)
+      ok(`${tag} 4b held: still said after 4 s, while it's held`, (await notes(page)).includes('Not applied · changed elsewhere'), (await notes(page)).join(' / '))
+      await page.getByRole('button', { name: 'Discard' }).first().click(); await wait(800)
+      ok(`${tag} 4b held: Discard in the banner ends it`, !(await notes(page)).length && /Renew:open/.test(await bands(page)), `${(await notes(page)).join(' / ')} · ${await bands(page)}`)
+      await context.close()
+    }
+
+    // 4c. Decided offline, held only when the outbox sends it later, on this page (Ratchet 34690a2c): said in place, its
+    //     own Applied notice closes; a newer decision's notice stays.
+    {
+      reseed(); const { context, page } = await fresh()
+      await page.route(OUTBOX, r => r.abort())
+      await press(page, apply(page, 'Renew the passport')); await wait(400)
+      const { day, draft } = draftNow(), last = draft.items[3]
+      const repo = new SqliteWorkspaceRepository(storePath, undefined, { allowMissingLegacy: true }), w = await repo.load()
+      await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action: { type: 'skip-draft', pageId: day.id, itemIds: [last.id] } })
+      await press(page, skip(page, 'Book the dentist')); await wait(300)
+      const before = await bands(page)
+      await page.unroute(OUTBOX)
+      let n = []
+      for (let i = 0; i < 60 && !(n = await notes(page)).length; i++) await wait(250)
+      await wait(700)
+      const notice = await toastText(page)
+      ok(`${tag} 4c held later: said in place`, n.includes('Not applied · changed elsewhere') && /Renew:open/.test(await bands(page)), `${before} → ${await bands(page)} · ${n.join(' / ')}`)
+      ok(`${tag} 4c held later: its Applied notice closed, the newer Skipped stays`, !/Applied/.test(notice) && /Skipped/.test(notice), notice)
       await context.close()
     }
 

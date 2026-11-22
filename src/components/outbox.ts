@@ -36,9 +36,12 @@ export function predictedWrites(before: Workspace, after: Workspace): string[] {
 /** Tap feedback §2.6: a day draft decision stored and not answered yet. `undone`: an Undo of it (or a skip's reopen) is stored after it. */
 export interface DraftDecision { operationId: string; type: 'apply-draft' | 'skip-draft'; pageId: string; itemIds: string[]; undone: boolean }
 
-/** The draft decisions among `entries` still on their way, so a band shows what he decided from the stored change itself. */
-export function draftDecisions(entries: readonly OutboxEntry[]): DraftDecision[] {
-  const live = entries.filter(e => e.state === 'pending')
+/**
+ * The draft decisions among `entries` still on their way (`pending`), so a band shows what he decided from the stored
+ * change itself; or (`held`) those the server held, which the band says in place until he picks Keep mine or Discard.
+ */
+export function draftDecisions(entries: readonly OutboxEntry[], state: OutboxEntry['state'] = 'pending'): DraftDecision[] {
+  const live = entries.filter(e => e.state === state)
   const undoing = new Set(live.flatMap(e => e.action.type === 'undo' ? [e.action.targetOperationId] : e.action.type === 'reopen-draft' ? [e.action.skippedBy] : []))
   return live.flatMap(e => e.action.type === 'apply-draft' || e.action.type === 'skip-draft'
     ? [{ operationId: e.operationId, type: e.action.type, pageId: e.action.pageId, itemIds: e.action.itemIds, undone: undoing.has(e.operationId) }]

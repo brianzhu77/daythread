@@ -58,7 +58,8 @@ export function familyOf(el: Element, style: Pick<CSSStyleDeclaration, 'paddingL
   if (el.matches('[role=checkbox], [role=switch]')) return 'icon'
   if (!(el.textContent ?? '').trim()) return 'icon'
   const room = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
-  if (room < 6 && style.display.startsWith('inline') && !el.matches('[role=tab], [role=menuitem], [role=option]')) return 'text'
+  // Words in a line of text (the draft's Apply all and Dismiss are flex buttons there): blue words stay blue (Jazz 93fbd48f).
+  if (room < 6 && (style.display.startsWith('inline') || el.matches('.draft-line button, .app-link')) && !el.matches('[role=tab], [role=menuitem], [role=option]')) return 'text'
   return 'row'
 }
 

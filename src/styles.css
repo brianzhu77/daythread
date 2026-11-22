@@ -1842,7 +1842,13 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .draft-acts button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 /* Tap feedback §2: a decided band shows its result once the change is stored on the device. Nothing moves. */
 /* Applied: the line it will become, in place: Ink, solid box / bullet, plain line, no ✓ ✕. */
-.draft-band.is-applied { color: var(--ink); }
+.draft-band.is-applied { color: var(--ink); padding-right: 0; }
+/* The real line has no age label and no room for ✓ ✕: the band matches it, so nothing moves when the answer swaps them (Jazz 93fbd48f). */
+.draft-band.is-applied .draft-since { display: none; }
+/* The real line is a to-do row (32 px, 44 px with hover) in a block with 3 px above and below, and no margin above
+   it: the decided band takes the same room. */
+.draft-band.is-applied { margin-top: 0; min-height: 38px; }
+@media (hover: hover) { .draft-band.is-applied { min-height: 50px; } }
 .draft-band.is-applied .draft-box { border-style: solid; border-color: var(--check); }
 .draft-band.is-bullet.is-applied::before { border-style: solid; border-color: currentColor; background: currentColor; width: 6px; height: 6px; margin-top: -3px; left: 20px; }
 .draft-band.is-line.is-applied .draft-text { text-decoration: none; }

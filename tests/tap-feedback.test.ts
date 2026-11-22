@@ -41,3 +41,9 @@ test('tap feedback: a press dims a light or coloured fill, lifts a dark one, and
   assert.equal(toneOf('rgb(32, 32, 32)'), 'lift')
   assert.equal(fillLuminance('transparent'), null)
 })
+
+test('tap feedback: a held decision is listed as held, not as decided (said in place until Keep mine or Discard)', () => {
+  const entries = [entry('a1', { type: 'apply-draft', pageId: 'p', itemIds: ['i1'] }, 'held'), entry('s1', { type: 'skip-draft', pageId: 'p', itemIds: ['i2'] })]
+  assert.deepEqual(draftDecisions(entries, 'held').map(d => [d.operationId, d.itemIds]), [['a1', ['i1']]])
+  assert.deepEqual(draftDecisions(entries).map(d => d.operationId), ['s1'])
+})

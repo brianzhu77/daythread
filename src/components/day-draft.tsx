@@ -46,6 +46,8 @@ export interface DayDraft {
   moreOpenAfterId?: string | null
   /** Tap feedback §2: decided on this device and not answered yet (from the stored change), by item. */
   decided: Record<string, 'apply' | 'skip'>
+  /** Held by the server (the draft changed since): said on the band until Keep mine or Discard in the banner. */
+  held: Record<string, { kind: 'apply' | 'skip'; operationId: string }>
   apply(itemIds: string[], edits?: Record<string, string>, hooks?: DecisionHooks): Promise<DecisionOutcome & { applied: string[]; dropped: string[] }>
   /** The notice's ticket for Move to and its second Undo (use-day-draft.ts), or null when nothing was skipped. */
   skip(itemIds: string[], hooks?: DecisionHooks<DraftTicket>): Promise<DraftTicket | null>
@@ -75,23 +77,28 @@ const log = (entry: unknown) => { const w = window as MockWindow; (w.__daythread
 export function useDayDraft(page: Page): DayDraft {
   useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => version, () => 0)
   const real = useRealDayDraft(page)
+  // A decision the server held, now or after a send from the outbox: its own notice closes (newer ones stay), and the
+  // band stops showing it as decided (Ratchet 34690a2c).
+  const heldKey = Object.values(real.held).map(h => h.operationId).sort().join(',')
+  useEffect(() => { if (heldKey) settleHeld(real.held) }, [heldKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const mock = mockOf(page.id)
   // The real draft (use-day-draft.ts) unless a check script set a stand-in for this page.
   if (!mock) {
     const items: DraftItem[] = real.items.map(i => ({ id: i.id, kind: i.kind, anchorId: i.anchorId ?? real.planningEndId ?? '', block: i.block, ...(i.since ? { since: i.since } : {}) }))
-    return { ...real, pageId: page.id, items, bands: bandsOf(page.id, items, real.decided) }
+    return { ...real, pageId: page.id, items, bands: bandsOf(page.id, items, real.decided, real.held) }
   }
   const edit = (ids: string[]) => { if (mock) { mock.items = mock.items.filter(i => !ids.includes(i.id)); bump() } }
   return {
     state: mock?.state ?? 'none',
     items: mock?.items ?? [],
     pageId: page.id,
-    bands: bandsOf(page.id, mock?.items ?? [], {}),
+    bands: bandsOf(page.id, mock?.items ?? [], {}, {}),
+    held: {},
     moreOpen: mock?.moreOpen ?? [],
     planningEndId: mock?.planningEndId ?? null,
     moreOpenAfterId: mock?.moreOpenAfterId ?? null,
     decided: {},
-    apply: async (ids, edits, hooks) => { log({ apply: ids, edits }); hooks?.onStored?.('mock-apply'); edit(ids); return { applied: ids, dropped: [], operationId: 'mock-apply', stored: true, landed: true, refused: false, failed: false } },
+    apply: async (ids, edits, hooks) => { log({ apply: ids, edits }); hooks?.onStored?.('mock-apply'); edit(ids); return { applied: ids, dropped: [], operationId: 'mock-apply', stored: true, landed: true, refused: false, held: false, failed: false } },
     skip: async (ids, hooks) => { log({ skip: ids }); const ticket = { itemIds: ids, skippedBy: 'mock-skip', seen: {} }; hooks?.onStored?.(ticket); edit(ids); return ticket },
     undoApply: async operationId => { log({ undoApply: operationId }); return 'done' },
     snooze: async (ticket, date) => { log({ snooze: ticket.itemIds, date }); return { status: 'done', moved: ticket.itemIds, dropped: [], operationId: 'mock-move' } },
@@ -134,6 +141,7 @@ function showSkipped(draft: DayDraft, ticket: DraftTicket): string {
     ) : undefined,
   })
   key = toast(title, options(SKIPPED_MS))
+  noticeOf.set(ticket.skippedBy, key)
   return key
 }
 
@@ -170,6 +178,18 @@ const local = new Map<string, Local>()
 type Note = { text: string; item: DraftItem; pageId: string; until: number }
 const notes = new Map<string, Note>()
 let appliedNotice: string | null = null
+/** Each decision's own notice, by its operation, so a held one closes its own and no newer one. */
+const noticeOf = new Map<string, string>()
+/** Every item a band has shown, so a held one whose band is no longer offered can still say so in its place. */
+const known = new Map<string, DraftItem>()
+function settleHeld(held: DayDraft['held']) {
+  for (const [id, h] of Object.entries(held)) {
+    const key = noticeOf.get(h.operationId)
+    if (key) { toast.close(key); noticeOf.delete(h.operationId); if (appliedNotice === key) appliedNotice = null }
+    local.delete(id); notes.delete(id)
+  }
+  bump()
+}
 const later = (ms: number) => { setTimeout(bump, ms) }
 /** His Undo of a skip: the band reopens now, from the stored reopen, not after its hold. */
 const forget = (ids: string[]) => { for (const id of ids) local.delete(id); bump() }
@@ -187,9 +207,12 @@ function lookOf(id: string, decided: DayDraft['decided'], now: number): BandLook
 
 /** The page order bands were last shown in, so one kept through its hold stays in its place. */
 const lastOrder = new Map<string, string[]>()
-function bandsOf(pageId: string, items: DraftItem[], decided: DayDraft['decided']): ShownBand[] {
+function bandsOf(pageId: string, items: DraftItem[], decided: DayDraft['decided'], held: DayDraft['held']): ShownBand[] {
   const now = Date.now(), out: ShownBand[] = [], seen = new Set<string>()
-  const noteOf = (id: string) => { const n = notes.get(id); return n && n.until > now ? n.text : undefined }
+  for (const item of items) known.set(item.id, item)
+  // Held: said for as long as it's held, not 4 s (Jazz 93fbd48f); a refusal's note lasts 4 s.
+  const heldNote = (id: string) => held[id] && (held[id].kind === 'apply' ? 'Not applied · changed elsewhere' : 'Not skipped · changed elsewhere')
+  const noteOf = (id: string) => { const n = notes.get(id); return heldNote(id) || (n && n.until > now ? n.text : undefined) }
   for (const item of items) {
     seen.add(item.id)
     const look = lookOf(item.id, decided, now), note = noteOf(item.id)
@@ -201,11 +224,13 @@ function bandsOf(pageId: string, items: DraftItem[], decided: DayDraft['decided'
     const look = lookOf(id, decided, now)
     if (look === 'skipped' || look === 'closing') { seen.add(id); out.push({ item: l.item, look }) }
   }
-  for (const [id, n] of notes) if (n.pageId === pageId && !seen.has(id) && n.until > now) out.push({ item: n.item, look: 'gone', note: n.text })
+  for (const [id, n] of notes) if (n.pageId === pageId && !seen.has(id) && n.until > now) { seen.add(id); out.push({ item: n.item, look: 'gone', note: n.text }) }
+  for (const id of Object.keys(held)) { const item = known.get(id); if (item && !seen.has(id)) out.push({ item, look: 'gone', note: heldNote(id) }) }
   const order = lastOrder.get(pageId) ?? [], at = (id: string) => { const i = order.indexOf(id); return i < 0 ? Infinity : i }
   const sorted = out.map((b, i) => ({ b, i })).sort((x, y) => (at(x.b.item.id) - at(y.b.item.id)) || x.i - y.i).map(x => x.b)
   // New items keep the order the draft gives them, after those already shown.
-  lastOrder.set(pageId, [...order.filter(id => sorted.some(b => b.item.id === id)), ...sorted.map(b => b.item.id).filter(id => !order.includes(id))])
+  // Kept whole, so a band that leaves for a moment (drawn as made from a kept change, then held) comes back in its place.
+  lastOrder.set(pageId, [...order, ...sorted.map(b => b.item.id).filter(id => !order.includes(id))])
   return sorted
 }
 
@@ -227,6 +252,7 @@ function showApplied(draft: DayDraft, n: number, operationId: string): string {
     actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.undoApply(operationId).then(u => { if (u === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
   })
   appliedNotice = key
+  noticeOf.set(operationId, key)
   return key
 }
 
@@ -256,7 +282,11 @@ async function applyAndTell(draft: DayDraft, pageId: string, wanted: string[]) {
   const r = await draft.apply(ids, editsFor(ids), { onStored: operationId => { mark.stored(); key = showApplied(draft, ids.length, operationId) } })
   mark.done()
   for (const item of items) if (local.get(item.id)?.kind === 'apply') local.delete(item.id)
-  // Refused (decided elsewhere, no longer open): said on its own line, where he pressed (§2.1.4). Never a silent roll back.
+  // Refused (decided elsewhere, no longer open): said on its own line for 4 s, where he pressed, and its notice closes
+  // (§2.1.4). Held (the draft changed since): its note comes from the held change itself and stays until Keep mine or
+  // Discard in the banner (Ratchet 0fd0406e, Jazz 93fbd48f). Never a silent roll back. Kept for later for lack of
+  // network is neither: it keeps its look, and the banner says it's waiting.
+  if (r.held && key) toast.close(key)
   const back = r.refused ? items : r.landed ? items.filter(i => r.dropped.includes(i.id)) : []
   if (back.length) {
     noteFor(back, pageId, 'Not applied · changed elsewhere')
@@ -274,13 +304,15 @@ async function skipAndTell(draft: DayDraft, pageId: string, wanted: string[]) {
   if (!ids.length) return
   const items = draft.items.filter(i => ids.includes(i.id))
   const mark = begin('skip', items, pageId)
-  let key: string | null = null, refused = false
+  let key: string | null = null, refused = false, held = false
   const ticket = await draft.skip(ids, {
     onStored: t => { mark.stored(); if (appliedNotice) toast.close(appliedNotice); key = showSkipped(draft, t) },
     onRefused: () => { refused = true },
+    onHeld: () => { held = true },
   })
   mark.done()
   if (ticket) { if (key === null) { mark.stored(); showSkipped(draft, ticket) } }
+  else if (held) { for (const item of items) local.delete(item.id); if (key) toast.close(key) }
   else if (refused || key === null) {
     // Stored and then refused, or never stored and not sent: the band comes back, saying why. Stored and kept for later
     // (offline) keeps its skipped look, and the outbox's banner says it's waiting.

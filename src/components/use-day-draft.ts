@@ -27,6 +27,8 @@ export interface DayDraftHook {
    * once and keeps it across a reload. Read from the outbox, never from component memory (§2.6).
    */
   decided: Record<string, 'apply' | 'skip'>
+  /** Decisions the server held (the draft changed since), by item, with their operation: said in place until Keep mine or Discard. */
+  held: Record<string, { kind: 'apply' | 'skip'; operationId: string }>
   /**
    * `onStored`: the change is kept on this device (the first frame its band may look decided, §2). Resolves once the
    * server has answered: what it applied, what was no longer open, `refused` when nothing was ("Nothing to apply"), and
@@ -54,8 +56,8 @@ export interface DayDraftHook {
   retry(): void
 }
 export type { DraftItemView, EditorNode, Task }
-export interface DecisionHooks<T = string> { onStored?: (stored: T) => void; /** The server said nothing was left to decide (decided elsewhere). */ onRefused?: () => void }
-export interface DecisionOutcome { operationId: string; stored: boolean; landed: boolean; refused: boolean; failed: boolean }
+export interface DecisionHooks<T = string> { onStored?: (stored: T) => void; /** The server said nothing was left to decide (decided elsewhere). */ onRefused?: () => void; /** The server held it (the draft changed since): the banner keeps Keep mine / Discard. */ onHeld?: () => void }
+export interface DecisionOutcome { operationId: string; stored: boolean; landed: boolean; refused: boolean; /** Held by the server, not refused outright: still in the outbox for Keep mine / Discard. */ held: boolean; failed: boolean }
 /**
  * What a skip notice acts on (Ratchet da1ca677): the items, the skip that set them aside, and each to-do's planned day
  * as the notice was shown. Move to and Undo are refused for what changed since, in this tab or any other.
@@ -91,6 +93,11 @@ export function useDayDraft(page: Page): DayDraftHook {
     for (const d of outbox.decisions) if (d.pageId === page.id && !d.undone) for (const id of d.itemIds) out[id] = d.type === 'apply-draft' ? 'apply' : 'skip'
     return out
   }, [outbox.decisions, page.id])
+  const held = useMemo(() => {
+    const out: DayDraftHook['held'] = {}
+    for (const d of outbox.heldDecisions) if (d.pageId === page.id) for (const id of d.itemIds) out[id] = { kind: d.type === 'apply-draft' ? 'apply' : 'skip', operationId: d.operationId }
+    return out
+  }, [outbox.heldDecisions, page.id])
   const ask = useSyncExternalStore(subscribeAsks, () => asks.get(page.id), () => undefined)
   const view = useMemo(() => (workspace && page.type === 'daily' ? draftView(workspace, page) : null), [workspace, page])
 
@@ -158,14 +165,14 @@ export function useDayDraft(page: Page): DayDraftHook {
   const apply = useCallback(async (itemIds: string[], edits?: Record<string, string>, hooks?: DecisionHooks) => {
     const open = new Set(itemIds.filter(id => draftOf(latest()!, page.id)?.items.some(i => i.id === id && i.state === 'open')))
     const operationId = newOperationId()
-    let stored = false, refused = false
+    let stored = false, refused = false, held = false
     // No notice from here: the day-draft UI shows `Applied · Undo` as soon as the change is stored (tap feedback §2.1).
     const receipt = await write({ type: 'apply-draft', pageId: page.id, itemIds, ...(edits ? { edits } : {}), today: todayIso() }, undefined, operationId, {
-      inlineRefusal: /Nothing to apply/, onRefused: () => { refused = true }, onStored: () => { stored = true; hooks?.onStored?.(operationId) },
+      inlineRefusal: /Nothing to apply/, onRefused: () => { refused = true }, onHeld: () => { held = true }, onStored: () => { stored = true; hooks?.onStored?.(operationId) },
     })
     const after = receipt ? draftOf(latest()!, page.id) : null
     const applied = itemIds.filter(id => open.has(id) && after?.items.some(i => i.id === id && i.state === 'applied'))
-    return { applied, dropped: itemIds.filter(id => !applied.includes(id)), operationId, stored, landed: Boolean(receipt), refused, failed: !receipt && !refused && !stored }
+    return { applied, dropped: itemIds.filter(id => !applied.includes(id)), operationId, stored, landed: Boolean(receipt), refused, held, failed: !receipt && !refused && !held && !stored }
   }, [latest, page.id, write])
 
   const undoApply = useCallback(async (operationId: string) => {
@@ -184,7 +191,7 @@ export function useDayDraft(page: Page): DayDraftHook {
     const skippedBy = newOperationId()
     // No notice from here: the day-draft UI shows `Skipped` with its day row (day-draft.tsx).
     const ticket: DraftTicket = { itemIds, skippedBy, seen }
-    const receipt = await write({ type: 'skip-draft', pageId: page.id, itemIds }, undefined, skippedBy, { inlineRefusal: /Nothing to skip/, onRefused: () => hooks?.onRefused?.(), onStored: () => hooks?.onStored?.(ticket) })
+    const receipt = await write({ type: 'skip-draft', pageId: page.id, itemIds }, undefined, skippedBy, { inlineRefusal: /Nothing to skip/, onRefused: () => hooks?.onRefused?.(), onHeld: () => hooks?.onHeld?.(), onStored: () => hooks?.onStored?.(ticket) })
     return receipt ? ticket : null
   }, [latest, page.id, write])
 
@@ -219,5 +226,5 @@ export function useDayDraft(page: Page): DayDraftHook {
   const state: DayDraftState = offline && !view ? 'offline' : inFlight(ask) && !view?.items.length ? 'preparing'
     // A failed or lost ask here shows Retry at once (he may be looking at the page); a tab coming back asks again first.
     : !view ? (ask && ask.state !== 'done' ? 'failed' : 'none') : view.status === 'failed' ? 'failed' : 'ready'
-  return { state, items: view?.items ?? [], decided, moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, undoApply, snooze, undoMove, reopen, addOpen, retry }
+  return { state, items: view?.items ?? [], decided, held, moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, undoApply, snooze, undoMove, reopen, addOpen, retry }
 }
