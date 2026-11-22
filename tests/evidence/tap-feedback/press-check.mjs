@@ -60,6 +60,25 @@ for (const engine of ['chromium', 'webkit']) {
     await context.close()
   }
 
+  // His to-do box (Jazz 28eea1ab): a 6 px halo around the native box, and its row tinted; the press is moved off, so nothing ticks.
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 860 }, timezoneId: 'America/Vancouver' })
+    const page = await context.newPage()
+    await page.goto(`${base}/`, { waitUntil: 'networkidle' }); await wait(800)
+    const box = page.locator('.editor-task input[type=checkbox]').first()
+    const b = await box.boundingBox()
+    if (!b) ok(`${engine} to-do box on the page`, false, 'none: seed the store with tests/evidence/tap-feedback/seed.ts')
+    else {
+      const before = await box.isChecked()
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down()
+      const look = await box.evaluate(e => ({ press: e.getAttribute('data-press'), outline: getComputedStyle(e).outlineWidth, row: e.closest('.editor-task')?.getAttribute('data-press-row') }))
+      await page.mouse.move(b.x + 200, b.y + 200); await page.mouse.up(); await wait(300)
+      ok(`${engine} to-do box: halo and row tint while pressed`, look.press === 'box' && look.outline === '6px' && look.row === 'on', JSON.stringify(look))
+      ok(`${engine} to-do box: a press moved off doesn't tick it`, (await box.isChecked()) === before)
+    }
+    await context.close()
+  }
+
   // Keys: Space and Enter press a button; Enter presses a link, Space doesn't (it scrolls).
   {
     const context = await browser.newContext({ viewport: { width: 1280, height: 860 } })

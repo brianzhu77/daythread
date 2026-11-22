@@ -14,7 +14,8 @@ import { Button, toast } from '@heroui/react'
 import { addDays, anotherDayOptions, shortLabel, todayIso } from './dates'
 import { NoticeRow } from './notice-row'
 import { noticeDate, pickDate } from './row-actions'
-import { useDayDraft as useRealDayDraft, type DraftTicket } from './use-day-draft'
+import { useDayDraft as useRealDayDraft, type DecisionHooks, type DecisionOutcome, type DraftTicket } from './use-day-draft'
+import { HOLD_MS as TICK_HOLD_MS } from './task-ticks'
 
 export type DraftState = 'none' | 'preparing' | 'ready' | 'failed' | 'offline'
 export type DraftItem = {
@@ -29,18 +30,27 @@ export type DraftItem = {
   since?: LocalDate
 }
 export type OpenTask = { taskId: string; title: string; since: LocalDate }
+/** `gone`: only a refusal's note is left in the item's place (§2.1.4). */
+export type ShownBand = { item: DraftItem; look: BandLook | 'gone'; note?: string }
 export interface DayDraft {
   state: DraftState
   /** Pending and still eligible, in page order. */
   items: DraftItem[]
+  pageId: string
+  /** What the page shows for the draft, in page order: each item's look (tap feedback §2), a skipped one through its hold, a refusal's note. */
+  bands: ShownBand[]
   moreOpen: OpenTask[]
   /** Where a band whose anchor is gone goes: under the planning heading, after his planned rows. */
   planningEndId: string | null
   /** "N more open" sits after this block: the end of the planning part. Optional for check-script stand-ins. */
   moreOpenAfterId?: string | null
-  apply(itemIds: string[], edits?: Record<string, string>): Promise<{ applied: string[]; dropped: string[] }>
+  /** Tap feedback §2: decided on this device and not answered yet (from the stored change), by item. */
+  decided: Record<string, 'apply' | 'skip'>
+  apply(itemIds: string[], edits?: Record<string, string>, hooks?: DecisionHooks): Promise<DecisionOutcome & { applied: string[]; dropped: string[] }>
   /** The notice's ticket for Move to and its second Undo (use-day-draft.ts), or null when nothing was skipped. */
-  skip(itemIds: string[]): Promise<DraftTicket | null>
+  skip(itemIds: string[], hooks?: DecisionHooks<DraftTicket>): Promise<DraftTicket | null>
+  /** The Applied notice's Undo, before or after the apply has landed (§2.4a). */
+  undoApply(operationId: string): Promise<'done' | 'refused' | 'failed'>
   /** Move to: the ticket's to-dos planned on `date`, kept skipped here; one planned elsewhere since stays (`dropped`). */
   snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[]; operationId: string; reason?: string }>
   /** Undo on `Moved to …`: takes back only the move. */
@@ -67,16 +77,23 @@ export function useDayDraft(page: Page): DayDraft {
   const real = useRealDayDraft(page)
   const mock = mockOf(page.id)
   // The real draft (use-day-draft.ts) unless a check script set a stand-in for this page.
-  if (!mock) return { ...real, items: real.items.map(i => ({ id: i.id, kind: i.kind, anchorId: i.anchorId ?? real.planningEndId ?? '', block: i.block, ...(i.since ? { since: i.since } : {}) })) }
+  if (!mock) {
+    const items: DraftItem[] = real.items.map(i => ({ id: i.id, kind: i.kind, anchorId: i.anchorId ?? real.planningEndId ?? '', block: i.block, ...(i.since ? { since: i.since } : {}) }))
+    return { ...real, pageId: page.id, items, bands: bandsOf(page.id, items, real.decided) }
+  }
   const edit = (ids: string[]) => { if (mock) { mock.items = mock.items.filter(i => !ids.includes(i.id)); bump() } }
   return {
     state: mock?.state ?? 'none',
     items: mock?.items ?? [],
+    pageId: page.id,
+    bands: bandsOf(page.id, mock?.items ?? [], {}),
     moreOpen: mock?.moreOpen ?? [],
     planningEndId: mock?.planningEndId ?? null,
     moreOpenAfterId: mock?.moreOpenAfterId ?? null,
-    apply: async (ids, edits) => { log({ apply: ids, edits }); edit(ids); return { applied: ids, dropped: [] } },
-    skip: async ids => { log({ skip: ids }); edit(ids); return { itemIds: ids, skippedBy: 'mock-skip', seen: {} } },
+    decided: {},
+    apply: async (ids, edits, hooks) => { log({ apply: ids, edits }); hooks?.onStored?.('mock-apply'); edit(ids); return { applied: ids, dropped: [], operationId: 'mock-apply', stored: true, landed: true, refused: false, failed: false } },
+    skip: async (ids, hooks) => { log({ skip: ids }); const ticket = { itemIds: ids, skippedBy: 'mock-skip', seen: {} }; hooks?.onStored?.(ticket); edit(ids); return ticket },
+    undoApply: async operationId => { log({ undoApply: operationId }); return 'done' },
     snooze: async (ticket, date) => { log({ snooze: ticket.itemIds, date }); return { status: 'done', moved: ticket.itemIds, dropped: [], operationId: 'mock-move' } },
     undoMove: async operationId => { log({ undoMove: operationId }); return 'done' },
     reopen: async ticket => { log({ reopen: ticket.itemIds }); return 'done' },
@@ -92,17 +109,12 @@ const SKIPPED_MS = 10_000
 const NOTICE_MS = 8000
 const REFUSAL_MS = 6000
 
-async function skipAndTell(draft: DayDraft, itemIds: string[]) {
-  const ticket = await draft.skip(itemIds)
-  if (ticket) showSkipped(draft, ticket)
-}
-
 /**
  * `Skipped · Undo`, and when there are to-dos, `Move to  Sat 11/21  Mon 11/23  Pick…` under it. A line the model wrote
  * has no day, so a notice for lines only has no row, and on a mix the row says how many to-dos move. Undo puts back
  * what this skip set aside (reopen: it refuses what was decided since, here or in another tab).
  */
-function showSkipped(draft: DayDraft, ticket: DraftTicket) {
+function showSkipped(draft: DayDraft, ticket: DraftTicket): string {
   const day = todayIso(), n = ticket.itemIds.length, todos = Object.keys(ticket.seen).length
   const title = n === 1 ? 'Skipped' : `Skipped ${n}`
   const label = todos === n ? 'Move to' : todos === 1 ? 'Move the to-do to' : `Move ${todos} to-dos to`
@@ -112,7 +124,7 @@ function showSkipped(draft: DayDraft, ticket: DraftTicket) {
   const move = (date: LocalDate) => { toast.close(key); void moveTo(draft, ticket, date) }
   const options = (timeout: number) => ({
     timeout,
-    actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.reopen(ticket).then(r => { if (r === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
+    actionProps: { children: 'Undo', onPress: () => { toast.close(key); forget(ticket.itemIds); void draft.reopen(ticket).then(r => { if (r === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
     description: todos ? (
       <NoticeRow label={label}>
         {days.map(d => <Button key={d} size="sm" variant="ghost" className="toast-row-button" aria-label={`${label} ${noticeDate(d)}`} onPress={() => move(d)}>{shortLabel(d)}</Button>)}
@@ -122,6 +134,7 @@ function showSkipped(draft: DayDraft, ticket: DraftTicket) {
     ) : undefined,
   })
   key = toast(title, options(SKIPPED_MS))
+  return key
 }
 
 /** `Moved to Mon, Nov 23 · Undo`. Its Undo takes back only the move and brings the Skipped notice back, same ticket. */
@@ -137,6 +150,145 @@ async function moveTo(draft: DayDraft, ticket: DraftTicket, date: LocalDate) {
     timeout: NOTICE_MS,
     actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.undoMove(r.operationId).then(u => { if (u === 'done') showSkipped(draft, ticket); else if (u === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
   })
+}
+
+// ---------- Tap feedback §2: what he decided shows at once (docs/design/tap-feedback.md, Jazz 59fc33b8) ----------
+//
+// The decided look comes from the change stored on the device (`draft.decided`, read from the outbox), so a reload or
+// a spell offline shows it the same (§2.6). What's kept here is only timing: when a skip was stored (its 1 s hold, then
+// it closes), a decision still waiting to be stored (a working spinner if that takes long), and a refusal's 4 s note.
+
+export type BandLook = 'open' | 'applied' | 'skipped' | 'closing' | 'working'
+/** The tick's hold: a skipped band stays in place this long, so the next one doesn't slide under his finger. */
+const SKIP_HOLD_MS = TICK_HOLD_MS
+const CLOSE_MS = 150
+const NOTE_MS = 4000
+/** Not stored on the device by then (no store here, or his typing is being saved first): the band shows it's working. */
+const WORKING_AFTER_MS = 200
+type Local = { kind: 'apply' | 'skip'; item: DraftItem; pageId: string; working: boolean; storedAt?: number }
+const local = new Map<string, Local>()
+type Note = { text: string; item: DraftItem; pageId: string; until: number }
+const notes = new Map<string, Note>()
+let appliedNotice: string | null = null
+const later = (ms: number) => { setTimeout(bump, ms) }
+/** His Undo of a skip: the band reopens now, from the stored reopen, not after its hold. */
+const forget = (ids: string[]) => { for (const id of ids) local.delete(id); bump() }
+
+function lookOf(id: string, decided: DayDraft['decided'], now: number): BandLook | null {
+  const l = local.get(id)
+  if (l?.working) return 'working'
+  if (decided[id] === 'apply') return 'applied'
+  // A skip stored before this page was shown (a reload) has had its hold: it's closed.
+  const skippedAt = l?.kind === 'skip' && l.storedAt !== undefined ? l.storedAt : decided[id] === 'skip' ? 0 : undefined
+  if (skippedAt === undefined) return 'open'
+  const age = now - skippedAt
+  return age < SKIP_HOLD_MS ? 'skipped' : age < SKIP_HOLD_MS + CLOSE_MS ? 'closing' : null
+}
+
+/** The page order bands were last shown in, so one kept through its hold stays in its place. */
+const lastOrder = new Map<string, string[]>()
+function bandsOf(pageId: string, items: DraftItem[], decided: DayDraft['decided']): ShownBand[] {
+  const now = Date.now(), out: ShownBand[] = [], seen = new Set<string>()
+  const noteOf = (id: string) => { const n = notes.get(id); return n && n.until > now ? n.text : undefined }
+  for (const item of items) {
+    seen.add(item.id)
+    const look = lookOf(item.id, decided, now), note = noteOf(item.id)
+    if (look || note) out.push({ item, look: look ?? 'gone', ...(note ? { note } : {}) })
+  }
+  // Skipped and already answered by the server: kept in place until its hold is over.
+  for (const [id, l] of local) {
+    if (l.pageId !== pageId || seen.has(id) || l.kind !== 'skip') continue
+    const look = lookOf(id, decided, now)
+    if (look === 'skipped' || look === 'closing') { seen.add(id); out.push({ item: l.item, look }) }
+  }
+  for (const [id, n] of notes) if (n.pageId === pageId && !seen.has(id) && n.until > now) out.push({ item: n.item, look: 'gone', note: n.text })
+  const order = lastOrder.get(pageId) ?? [], at = (id: string) => { const i = order.indexOf(id); return i < 0 ? Infinity : i }
+  const sorted = out.map((b, i) => ({ b, i })).sort((x, y) => (at(x.b.item.id) - at(y.b.item.id)) || x.i - y.i).map(x => x.b)
+  // New items keep the order the draft gives them, after those already shown.
+  lastOrder.set(pageId, [...order.filter(id => sorted.some(b => b.item.id === id)), ...sorted.map(b => b.item.id).filter(id => !order.includes(id))])
+  return sorted
+}
+
+/** Still his to decide: offered, nothing stored or on its way for it (§2.5: Apply all and Dismiss act only on these). */
+const undecided = (draft: DayDraft, ids: string[]) => ids.filter(id => draft.items.some(i => i.id === id) && !draft.decided[id] && !local.has(id))
+
+function noteFor(items: DraftItem[], pageId: string, text: string) {
+  const until = Date.now() + NOTE_MS
+  for (const item of items) notes.set(item.id, { text, item, pageId, until })
+  later(NOTE_MS + 20)
+  bump()
+}
+
+/** `Applied · Undo` (§2.1.2): shown once the change is stored. A newer decision retires it: the workspace has one Undo. */
+function showApplied(draft: DayDraft, n: number, operationId: string): string {
+  if (appliedNotice) toast.close(appliedNotice)
+  const key: string = toast(n === 1 ? 'Applied' : `Applied ${n}`, {
+    timeout: NOTICE_MS,
+    actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.undoApply(operationId).then(u => { if (u === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
+  })
+  appliedNotice = key
+  return key
+}
+
+/** Marks `items` as decided in this tab; past WORKING_AFTER_MS without being stored, they show they're working. */
+function begin(kind: Local['kind'], items: DraftItem[], pageId: string): { stored: () => void; done: () => void } {
+  for (const item of items) { local.set(item.id, { kind, item, pageId, working: false }); notes.delete(item.id) }
+  const timer = setTimeout(() => { for (const item of items) { const l = local.get(item.id); if (l && l.storedAt === undefined) l.working = true } bump() }, WORKING_AFTER_MS)
+  return {
+    stored: () => {
+      clearTimeout(timer)
+      const at = Date.now()
+      for (const item of items) { const l = local.get(item.id); if (l) { l.working = false; l.storedAt = at } }
+      if (kind === 'skip') { later(SKIP_HOLD_MS); later(SKIP_HOLD_MS + CLOSE_MS + 20); setTimeout(() => { for (const item of items) if (local.get(item.id)?.storedAt === at) local.delete(item.id); bump() }, SKIP_HOLD_MS + CLOSE_MS + 40) }
+      bump()
+    },
+    done: () => { clearTimeout(timer) },
+  }
+}
+
+/** ✓ on one band, or Apply all (§2.1, §2.3). */
+async function applyAndTell(draft: DayDraft, pageId: string, wanted: string[]) {
+  const ids = undecided(draft, wanted)
+  if (!ids.length) return
+  const items = draft.items.filter(i => ids.includes(i.id))
+  const mark = begin('apply', items, pageId)
+  let key: string | null = null
+  const r = await draft.apply(ids, editsFor(ids), { onStored: operationId => { mark.stored(); key = showApplied(draft, ids.length, operationId) } })
+  mark.done()
+  for (const item of items) if (local.get(item.id)?.kind === 'apply') local.delete(item.id)
+  // Refused (decided elsewhere, no longer open): said on its own line, where he pressed (§2.1.4). Never a silent roll back.
+  const back = r.refused ? items : r.landed ? items.filter(i => r.dropped.includes(i.id)) : []
+  if (back.length) {
+    noteFor(back, pageId, 'Not applied · changed elsewhere')
+    if (key) toast.close(key)
+    if (r.applied.length) showApplied(draft, r.applied.length, r.operationId)
+  } else if (r.failed) noteFor(items, pageId, 'Not applied · try again')
+  // Not stored here (no store on this device): it went as before, and its notice comes with the answer.
+  else if (!r.stored && r.landed) showApplied(draft, r.applied.length, r.operationId)
+  bump()
+}
+
+/** ✕ on one band, or Dismiss (§2.2, §2.4). */
+async function skipAndTell(draft: DayDraft, pageId: string, wanted: string[]) {
+  const ids = undecided(draft, wanted)
+  if (!ids.length) return
+  const items = draft.items.filter(i => ids.includes(i.id))
+  const mark = begin('skip', items, pageId)
+  let key: string | null = null, refused = false
+  const ticket = await draft.skip(ids, {
+    onStored: t => { mark.stored(); if (appliedNotice) toast.close(appliedNotice); key = showSkipped(draft, t) },
+    onRefused: () => { refused = true },
+  })
+  mark.done()
+  if (ticket) { if (key === null) { mark.stored(); showSkipped(draft, ticket) } }
+  else if (refused || key === null) {
+    // Stored and then refused, or never stored and not sent: the band comes back, saying why. Stored and kept for later
+    // (offline) keeps its skipped look, and the outbox's banner says it's waiting.
+    for (const item of items) local.delete(item.id)
+    if (key) toast.close(key)
+    noteFor(items, pageId, refused ? 'Not skipped · changed elsewhere' : 'Not skipped · try again')
+  }
+  bump()
 }
 
 // ---------- Held while he types (states §2 "Arrived while he's typing") ----------
@@ -238,10 +390,10 @@ export function useBandHosts() {
 }
 
 /** Groups items by anchor, in order, and adds the "more open" row's anchor. */
-export function bandGroups(draft: DayDraft, shown: boolean, host: (id: string) => HTMLElement): (BandGroup & { items: DraftItem[]; more: boolean })[] {
+export function bandGroups(draft: DayDraft, shown: boolean, host: (id: string) => HTMLElement): (BandGroup & { items: ShownBand[]; more: boolean })[] {
   if (!shown || (draft.state !== 'ready' && draft.state !== 'failed' && draft.state !== 'offline')) return []
-  const groups = new Map<string, DraftItem[]>()
-  for (const item of draft.items) groups.set(item.anchorId, [...(groups.get(item.anchorId) ?? []), item])
+  const groups = new Map<string, ShownBand[]>()
+  for (const band of draft.bands) groups.set(band.item.anchorId, [...(groups.get(band.item.anchorId) ?? []), band])
   const out = [...groups].map(([afterId, items]) => ({ afterId, host: host(afterId), items, more: false }))
   const end = draft.moreOpenAfterId ?? draft.planningEndId ?? ''
   if (draft.moreOpen.length) {
@@ -253,7 +405,7 @@ export function bandGroups(draft: DayDraft, shown: boolean, host: (id: string) =
 }
 
 /** Fill anchors: the empty template rows a band takes the place of, hidden while it shows. */
-export const fillAnchors = (draft: DayDraft, shown: boolean) => shown ? draft.items.filter(i => i.kind === 'fill').map(i => i.anchorId) : []
+export const fillAnchors = (draft: DayDraft, shown: boolean) => shown ? draft.bands.filter(b => b.item.kind === 'fill').map(b => b.item.anchorId) : []
 
 const CheckIcon = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" /></svg>
 const CrossIcon = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
@@ -265,28 +417,37 @@ function carriedTask(item: DraftItem, workspace: Workspace) {
   return typeof taskId === 'string' ? workspace.tasks.find(t => t.id === taskId) : undefined
 }
 
-function Band({ item, workspace, edits, onApply, onSkip }: { item: DraftItem; workspace: Workspace; edits: Map<string, string>; onApply: () => void; onSkip: () => void }) {
+function Band({ band, workspace, edits, onApply, onSkip }: { band: ShownBand; workspace: Workspace; edits: Map<string, string>; onApply: () => void; onSkip: () => void }) {
+  const { item, look, note } = band
+  const noteLine = note && <p className="draft-note" role="status">{note}</p>
+  // Only a refusal's note is left where the band was (§2.1.4): one line's height, then it closes.
+  if (look === 'gone') return <div className="draft-band-slot" data-draft-item={item.id}>{noteLine}</div>
   const task = carriedTask(item, workspace)
-  const text = task ? task.title : inlineText(item.block.content)
+  const text = task ? task.title : (edits.get(item.id) || inlineText(item.block.content))
   const kind = item.block.type === 'task' ? 'task' : item.block.type === 'bulletListItem' ? 'bullet' : 'line'
-  return (
-    <div className={`draft-band is-${kind}`} data-draft-item={item.id}>
+  const decided = look !== 'open'
+  return (<>
+    <div className={`draft-band is-${kind}${decided ? ` is-${look}` : ''}`} data-draft-item={item.id} {...(decided ? { 'data-decided': look } : {})}>
       {kind === 'task' && <span className="draft-box" aria-hidden="true" />}
       <span className="draft-main">
-        {task
+        {task || decided
           // Read-only (Lead, Ratchet, Bumblebee 22:12Z): applying plans the task as it is; he renames it on his own row.
+          // Decided: his words are what was stored, so they stop being editable (§2.1.2).
           ? <span className="draft-text is-readonly">{text}</span>
           : <span className="draft-text" contentEditable suppressContentEditableWarning spellCheck={false}
             onInput={e => edits.set(item.id, (e.currentTarget.textContent ?? '').trim())}
             onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); onApply() } }}>{text}</span>}
         {item.since && <span className="draft-since">{shortLabel(item.since)}</span>}
       </span>
-      <span className="draft-acts">
+      {look === 'open' && <span className="draft-acts">
         <button type="button" aria-label={`Apply ${text}`} title="Apply" onClick={onApply}><CheckIcon /></button>
         <button type="button" aria-label={`Skip ${text}`} title="Skip" onClick={onSkip}><CrossIcon /></button>
-      </span>
+      </span>}
+      {/* Not stored on this device yet: working, in the place of ✓ ✕ (§2, store failure). */}
+      {look === 'working' && <span className="draft-acts is-working" role="status" aria-label="Saving"><span className="draft-spin" aria-hidden="true" /></span>}
     </div>
-  )
+    {noteLine}
+  </>)
 }
 
 function MoreOpen({ tasks, onAdd }: { tasks: OpenTask[]; onAdd: (taskId: string) => void }) {
@@ -311,8 +472,8 @@ export function DraftBands({ draft, workspace, groups, fills }: { draft: DayDraf
   return <>
     {fills.length > 0 && <style>{fills.map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
     {groups.map(g => createPortal(<>
-      {g.items.map(item => <Band key={item.id} item={item} workspace={workspace} edits={edits}
-        onApply={() => void draft.apply([item.id], editsFor([item.id]))} onSkip={() => void skipAndTell(draft, [item.id])} />)}
+      {g.items.map(band => <Band key={band.item.id} band={band} workspace={workspace} edits={edits}
+        onApply={() => void applyAndTell(draft, draft.pageId, [band.item.id])} onSkip={() => void skipAndTell(draft, draft.pageId, [band.item.id])} />)}
       {g.more && <MoreOpen tasks={draft.moreOpen} onAdd={id => void draft.addOpen(id)} />}
     </>, g.host, g.afterId))}
   </>
@@ -323,9 +484,10 @@ export function DraftLine({ page }: { page: Page }) {
   const draft = useDayDraft(page)
   const ready = draft.state === 'ready' || draft.state === 'failed' || draft.state === 'offline'
   const { shown, show } = useDraftReveal(page.id, ready && draft.items.length > 0)
-  const n = draft.items.length
-  const ids = draft.items.map(i => i.id)
-  const all = (fn: 'apply' | 'skip') => keepView(() => void (fn === 'apply' ? draft.apply(ids, editsFor(ids)) : skipAndTell(draft, ids)))
+  // Only what's still his to decide: a band decided, or on its way, isn't counted or decided again (§2.3, §2.5).
+  const ids = undecided(draft, draft.items.map(i => i.id))
+  const n = ids.length
+  const all = (fn: 'apply' | 'skip') => keepView(() => void (fn === 'apply' ? applyAndTell(draft, page.id, ids) : skipAndTell(draft, page.id, ids)))
   if (draft.state === 'none') return null
   if (draft.state === 'preparing') return <p className="draft-line" role="status"><span className="draft-spin" aria-hidden="true" />Preparing…</p>
   if (n > 0 && !shown) return <p className="draft-line" role="status">Suggestions ready<span className="sep"> · </span><button type="button" className="draft-primary" onClick={show}>Show</button></p>

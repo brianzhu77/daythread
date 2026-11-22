@@ -12,11 +12,12 @@ export const PRESSABLE = [
 const LEFT_ALONE = '[data-no-press], [draggable=true], .drag-handle, [data-drag-handle], .maplibregl-canvas, .database-map-canvas'
 
 /**
- * A pressed control's look (§1.2): `icon` (no words: a stronger fill, the whole button), `text` (words with no room
+ * A pressed control's look (§1.2): `box` (a checkbox or radio: a halo around it, Jazz 28eea1ab), `icon` (no words: a
+ * stronger fill, the whole button), `text` (words with no room
  * around them, such as Apply all or a grey link: a pill behind the words) or `row` (everything else). Its tone says
  * which way the press moves its own colour: `dim` darker, `lift` lighter, or the theme's way when it has no fill of its own.
  */
-export type PressFamily = 'icon' | 'text' | 'row'
+export type PressFamily = 'box' | 'icon' | 'text' | 'row'
 export type PressTone = 'dim' | 'lift' | 'theme'
 
 const MIN_MS = 100
@@ -52,7 +53,9 @@ export function toneOf(backgroundColor: string): PressTone {
 }
 
 export function familyOf(el: Element, style: Pick<CSSStyleDeclaration, 'paddingLeft' | 'paddingRight' | 'display'>): PressFamily {
-  if (el.matches('input[type=checkbox], input[type=radio], [role=checkbox], [role=switch]')) return 'icon'
+  // A native box ignores a background (the editor's to-do box keeps appearance: auto), so it gets a halo instead.
+  if (el.matches('input[type=checkbox], input[type=radio]')) return 'box'
+  if (el.matches('[role=checkbox], [role=switch]')) return 'icon'
   if (!(el.textContent ?? '').trim()) return 'icon'
   const room = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
   if (room < 6 && style.display.startsWith('inline') && !el.matches('[role=tab], [role=menuitem], [role=option]')) return 'text'
@@ -60,7 +63,7 @@ export function familyOf(el: Element, style: Pick<CSSStyleDeclaration, 'paddingL
 }
 
 /** The row a small control sits in (§1.3): its row takes a tint too, so the press shows beside the finger. */
-const ROW = '.draft-band, .draft-more-item, [role=treeitem], .tree-row, .task-row, .card-row, .database-row, .database-list-row'
+const ROW = '.draft-band, .draft-more-item, .editor-task, [role=treeitem], .tree-row, .task-row, .card-row, .database-row, .database-list-row'
 
 interface Press { el: HTMLElement; row: HTMLElement | null; at: number; x: number; y: number; pointer: number | null; key: string | null; timer?: ReturnType<typeof setTimeout> }
 
@@ -99,8 +102,8 @@ export function installPress(doc: Document = document): () => void {
     const style = win.getComputedStyle(el), family = familyOf(el, style), tone = toneOf(style.backgroundColor)
     // The veil is a background image; a control already drawn with one (a checked box's tick) takes it as an inset
     // shadow instead, and one with both as a filter.
-    const via = style.backgroundImage === 'none' ? null : style.boxShadow === 'none' ? 'shadow' : 'filter'
-    const row = family === 'icon' ? el.parentElement?.closest<HTMLElement>(ROW) ?? null : null
+    const via = family === 'box' || style.backgroundImage === 'none' ? null : style.boxShadow === 'none' ? 'shadow' : 'filter'
+    const row = family === 'icon' || family === 'box' ? el.parentElement?.closest<HTMLElement>(ROW) ?? null : null
     el.setAttribute('data-press', family)
     el.setAttribute('data-press-tone', tone)
     if (via) el.setAttribute('data-press-via', via)

@@ -698,7 +698,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // B27: new rows (the workspace changed) redraw the widget; a document change already does.
   const rowsKey = JSON.stringify([rowsAnchor.current, rows])
   useEffect(() => { const view = editor.prosemirrorView; if (view) refreshEventRows(view) }, [rowsKey, editor])
-  const bandsKey = groups.map(g => `${g.afterId}:${g.items.map(i => i.id).join(',')}:${g.more}`).join('|')
+  const bandsKey = groups.map(g => `${g.afterId}:${g.items.map(b => b.item.id).join(',')}:${g.more}`).join('|')
   useEffect(() => { const view = editor.prosemirrorView; if (view) refreshDraftBands(view) }, [bandsKey, editor])
   const dirty = useRef(initial.current.recovered)
   const sending = useRef(false)
