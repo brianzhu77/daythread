@@ -37,8 +37,9 @@
 //
 // Not covered: keyboard presses (Space/Enter), which need real key events that would also run the action; a real
 // iPhone; whether the result of the action shows (the spec's §2); and controls that only exist in a mode the check
-// doesn't enter (a table's bulk bar while rows are selected, a menu inside a menu, the editor's slash menu). Editable text, drag handles and anything marked
-// data-no-press are listed as skipped, not pressed.
+// doesn't enter (a table's bulk bar while rows are selected, a menu inside a menu, the editor's slash menu).
+// Editable text, drag handles and anything marked data-no-press are not pressed; the kinds skipped are printed, so
+// nothing is excused out of sight.
 // Exit code 1 on any FAIL, MISSING, UNREACHED or CHANGED.
 import { chromium, webkit } from 'playwright'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -53,7 +54,8 @@ const shots = flag('shots')
 if (shots) mkdirSync(shots, { recursive: true })
 
 const PRESSABLE = 'button, a[href], summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [role=option], [role=switch], [role=checkbox], input[type=checkbox], input[type=radio], label:has(input[type=checkbox])'
-const SKIPPED = '[data-no-press], [draggable=true], .bn-drag-handle, [data-drag-handle]'
+// Only the handle itself is excused (Jazz 41ad161d): a row that can be pressed and dragged, or a button inside a draggable block, shows its press.
+const SKIPPED = '[data-no-press], .drag-handle, .bn-drag-handle, [data-drag-handle]'
 const PROPS = ['background-color', 'background-image', 'color', 'opacity', 'transform', 'scale', 'translate', 'box-shadow', 'border-top-color', 'outline-style', 'outline-color', 'filter', 'text-decoration-color', 'fill', 'stroke']
 const DELTA = 6, CHANGED_SHARE = 0.04, CHANGED_MIN = 24, PAD = 6
 const SHOWS_BY_MS = 60, CLEARS_BY_MS = 300, SAME_KIND = 3
@@ -352,6 +354,8 @@ for (const run of RUNS) {
   const mine = results.filter(r => r.run === run.name), count = what => mine.filter(r => r.result === what).length
   say(`${run.name}: ${count('PASS')} pass, ${count('FAIL')} fail, ${count('UNREACHED')} unreached, ${count('ok')} disabled and quiet, ${count('same kind')} same kind as one pressed, ${count('skipped') + count('editable')} skipped, ${count('gone') + count('hidden')} not on screen`)
 }
+const excused = [...new Set(results.filter(r => r.result === 'skipped').map(r => `${r.tag}${r.cls ? '.' + r.cls : ''}`))]
+if (excused.length) say(`skipped as drag handles or data-no-press: ${excused.join(', ')}`)
 if (flag('json')) writeFileSync(flag('json'), JSON.stringify(results, null, 1))
 if (changes.length) say(`CHANGED the check itself sent ${changes.length} change${changes.length === 1 ? '' : 's'} to the server (first on ${changes[0]}): fix the check, and use a fresh copy`)
 const bad = lines.filter(l => /^(FAIL|MISSING|UNREACHED|CHANGED)/.test(l)).length
