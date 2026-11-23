@@ -81,7 +81,10 @@ let lastLift: { el: HTMLElement; at: number } | null = null
 /** The control a press just ended on, whose click is what's running now; null once it's older than `withinMs` or gone. */
 export function justPressed(withinMs = 500): HTMLElement | null {
   const l = lastLift
-  return l && l.el.isConnected && performance.now() - l.at <= withinMs ? l.el : null
+  if (!l || !l.el.isConnected || performance.now() - l.at > withinMs) return null
+  // A menu closes as its item is chosen: the button that opened it is the place he pressed that stays on screen.
+  const menu = l.el.closest('[role=menu]')
+  return menu?.parentElement?.querySelector<HTMLElement>(':scope > [aria-haspopup=menu], :scope > * > [aria-haspopup=menu]') ?? l.el
 }
 
 const WORKING_SLOW_MS = 300
