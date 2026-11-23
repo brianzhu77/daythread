@@ -1899,7 +1899,8 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .draft-skips { opacity: .8; white-space: nowrap; }
 .draft-another { font: inherit; font-size: var(--text-meta); color: var(--ink-2); background: none; border: 0; border-radius: 4px; padding: 0; min-height: 0; cursor: pointer; white-space: nowrap; position: relative; }
 .draft-another:disabled { cursor: default; }
-.draft-another .draft-chev { margin-left: 3px; font-size: 10px; }
+/* The size of "N more open ▸"'s, right after the words (Jazz 2cb3d6c2: at 10 px it read as a dot). */
+.draft-another .draft-chev { margin-left: .2em; font-size: var(--text-small); line-height: 1; }
 .draft-another[aria-expanded="true"] .draft-chev { transform: rotate(90deg); }
 .draft-another:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-radius: 4px; }
 @media (hover: hover) { .draft-another:not(:disabled):hover { color: var(--ink); } }
@@ -1910,11 +1911,13 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
   .draft-band.has-skips .draft-box { margin-top: 5px; }
   .draft-band.has-skips .draft-acts { top: -1px; transform: none; }
   .draft-band.has-skips .draft-meta { display: block; margin: 2px 0 0; line-height: 18px; }
-  /* A long date list wraps like text, between its days; the age stays whole. */
-  .draft-band.has-skips .m-seg { display: inline; white-space: normal; }
+  /* Line 2 wraps between the age and the days, never inside either; the days break only when they can't fit a line
+     of their own (Jazz 2cb3d6c2). */
+  .draft-band.has-skips .m-seg { display: inline-block; max-width: 100%; white-space: normal; vertical-align: top; }
   .draft-band.has-skips .m-seg.draft-since { white-space: nowrap; }
-  .draft-band.has-skips .draft-skips { white-space: normal; }
   .draft-band.has-skips .m-dot { white-space: pre-wrap; }
+  /* Line 2 is only the days on a phone: with his titles wrapping, the age pushed each labelled band to ~120 px. */
+  .draft-band.has-skips .m-age { display: none; }
   .draft-band.has-skips .m-seg.is-another { display: block; margin-top: 6px; }
   .draft-band.has-skips .m-seg.is-another .m-dot { display: none; }
   /* A 44 px tall target inside the band (13 px band padding below), ending short of ✓ (the column stops 8 px short). */
@@ -1934,6 +1937,13 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .draft-days.is-held .draft-days-label { opacity: .5; }
 .draft-moved { color: var(--ink-2); }
 .draft-band.is-closing + .draft-days { display: none; }
+/* A band with the label can be taller than the hold's usual cap: it keeps its height until it closes. */
+.draft-band.has-skips.is-skipped { max-height: 320px; }
+/* Laptop: the label beside the title; when a long title pushes it under, it starts at the title's edge (Jazz 2cb3d6c2). */
+@media (min-width: 600px) {
+  .draft-band.has-skips .draft-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+  .draft-band.has-skips .draft-meta { margin-left: 0; }
+}
 
 
 /* ---------- Database property editors and cell contents (databases design §6.3) ---------- */

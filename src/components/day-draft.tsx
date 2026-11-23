@@ -141,7 +141,7 @@ function showSkipped(draft: DayDraft, ticket: DraftTicket): string {
       <NoticeRow label={label}>
         {days.map(d => <Button key={d} size="sm" variant="ghost" className="toast-row-button" aria-label={`${label} ${noticeDate(d)}`} onPress={() => move(d)}>{shortLabel(d)}</Button>)}
         {/* The native picker can stay open a while: the notice waits for it instead of leaving under it. */}
-        <Button size="sm" variant="ghost" className="toast-row-button" aria-label={`${label} another day`} onPress={() => { toast.update(key, title, options(0)); pickDate(addDays(day, 1), move) }}>Pick…</Button>
+        <Button size="sm" variant="ghost" className="toast-row-button" aria-label={`${label} another day`} onPress={e => { toast.update(key, title, options(0)); pickDate(addDays(day, 1), move, { at: e.target as Element }) }}>Pick…</Button>
       </NoticeRow>
     ) : undefined,
   })
@@ -179,7 +179,7 @@ const NOTE_MS = 4000
 /** Not stored on the device by then (no store here, or his typing is being saved first): the band shows it's working. */
 const WORKING_AFTER_MS = 200
 /** `until`: a skip by the row's Another day (#377), with the day it moves to; the band says so through its hold. */
-type Local = { kind: 'apply' | 'skip'; item: DraftItem; pageId: string; working: boolean; storedAt?: number; until?: LocalDate }
+type Local = { kind: 'apply' | 'skip'; item: DraftItem; pageId: string; working: boolean; storedAt?: number; until?: LocalDate; height?: number }
 const local = new Map<string, Local>()
 type Note = { text: string; item: DraftItem; pageId: string; until: number }
 const notes = new Map<string, Note>()
@@ -265,7 +265,8 @@ function showApplied(draft: DayDraft, n: number, operationId: string): string {
 
 /** Marks `items` as decided in this tab; past WORKING_AFTER_MS without being stored, they show they're working. */
 function begin(kind: Local['kind'], items: DraftItem[], pageId: string, until?: LocalDate): { stored: () => void; done: () => void } {
-  for (const item of items) { local.set(item.id, { kind, item, pageId, working: false, ...(until ? { until } : {}) }); notes.delete(item.id) }
+  const heightOf = (id: string) => document.querySelector<HTMLElement>(`.draft-band[data-draft-item="${CSS.escape(id)}"]`)?.getBoundingClientRect().height
+  for (const item of items) { local.set(item.id, { kind, item, pageId, working: false, ...(until ? { until, height: heightOf(item.id) } : {}) }); notes.delete(item.id) }
   if (choices && items.some(i => i.id === choices!.itemId) && !until) closeChoices()
   const timer = setTimeout(() => { for (const item of items) { const l = local.get(item.id); if (l && l.storedAt === undefined) l.working = true } bump() }, WORKING_AFTER_MS)
   return {
@@ -442,7 +443,7 @@ function DayChoices({ draft, item, on, title, until }: { draft: DayDraft; item: 
         onClick={e => {
           if (until) return
           const self = e.currentTarget
-          pickDate(addDays(todayIso() > on ? todayIso() : on, 1), d => (d > on ? pick(d) : undefined), () => { if (self.isConnected && (!document.activeElement || document.activeElement === document.body)) self.focus({ preventScroll: true }) })
+          pickDate(addDays(todayIso() > on ? todayIso() : on, 1), d => (d > on ? pick(d) : undefined), { at: self, onCancel: () => { if (self.isConnected && (!document.activeElement || document.activeElement === document.body)) self.focus({ preventScroll: true }) } })
         }}>Pick…</button>
     </div>
   )
@@ -594,18 +595,23 @@ function Band({ band, workspace, edits, draft, on, onApply, onSkip }: { band: Sh
     // From the keyboard (Enter, Space): focus goes to the first day.
     if (e.detail === 0) requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-draft-choices="${CSS.escape(item.id)}"] button`)?.focus())
   }
+  // Each part is unbreakable, and a line breaks between parts (after a dot), so the age and the days wrap whole (Jazz
+  // 2cb3d6c2). Picked a day: line 2 says where it went, and Another day stays, faded, so the band keeps its height.
   const meta = skips && (
     <span className="draft-meta">
-      {item.since && <span className="m-seg draft-since">{shortLabel(item.since)}</span>}
-      {until ? <span className="m-seg"><span className="m-dot"> · </span><span className="draft-moved">moved to {shortLabel(until)}</span></span> : <>
-        <span className="m-seg"><span className="m-dot"> · </span><span className="draft-skips" title={skips.full}><span aria-hidden="true">{skips.text}</span><span className="sr-only">{skips.full}</span></span></span>
-        <span className="m-seg is-another"><span className="m-dot"> · </span><button type="button" className="draft-another" aria-expanded={open} disabled={decided} onClick={toggle}
-          onKeyDown={e => { if (e.key === 'Escape' && open) { e.preventDefault(); closeChoices() } }}>Another day<span className="draft-chev" aria-hidden="true">▸</span></button></span>
-      </>}
+      {/* Not on a phone (Lead f056fda9): his titles wrap there, and the age made each labelled band ~120 px. */}
+      {item.since && <span className="m-age"><span className="m-seg draft-since">{shortLabel(item.since)}</span><span className="m-dot"> · </span></span>}
+      {until
+        ? <span className="m-seg draft-moved">moved to {shortLabel(until)}</span>
+        : <span className="m-seg draft-skips" title={skips.full}><span aria-hidden="true">{skips.text}</span><span className="sr-only">{skips.full}</span></span>}
+      <span className="m-seg is-another"><span className="m-dot"> · </span><button type="button" className="draft-another" aria-expanded={open} disabled={decided} onClick={toggle}
+        onKeyDown={e => { if (e.key === 'Escape' && open) { e.preventDefault(); closeChoices() } }}>Another day<span className="draft-chev" aria-hidden="true">▸</span></button></span>
     </span>
   )
+  // Through the hold after a day is picked the band keeps the height it had, so nothing below moves under his finger.
+  const keepHeight = until && (look === 'skipped' || look === 'working') ? local.get(item.id)?.height : undefined
   return (<>
-    <div className={`draft-band is-${kind}${decided ? ` is-${look}` : ''}${skips ? ' has-skips' : ''}`} data-draft-item={item.id} {...(decided ? { 'data-decided': look } : {})}>
+    <div className={`draft-band is-${kind}${decided ? ` is-${look}` : ''}${skips ? ' has-skips' : ''}`} data-draft-item={item.id} {...(decided ? { 'data-decided': look } : {})} {...(keepHeight ? { style: { minHeight: keepHeight } } : {})}>
       {kind === 'task' && <span className="draft-box" aria-hidden="true" />}
       <span className="draft-main">
         {task || decided
