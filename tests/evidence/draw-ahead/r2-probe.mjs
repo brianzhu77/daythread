@@ -110,6 +110,12 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
           await wait(400)
           const slow = await page.evaluate(() => document.querySelector('[data-working]')?.getAttribute('data-working') ?? null)
           await page.locator('[data-working]').first().click({ force: true, timeout: 500 }).catch(() => {})
+          // Ratchet dc250ee5: only a second press is stopped; Tab still moves on from the working control.
+          await page.locator('[data-working]').first().focus().catch(() => {})
+          const focusedBefore = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))
+          await page.keyboard.press('Enter'); await page.keyboard.press('Tab')
+          const focusedAfter = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.tagName)
+          ok(`${tag} 4 waits: Tab moves on from the working control, Enter doesn't press it again`, focusedBefore === 'New page' && focusedAfter !== 'New page', `${focusedBefore} → ${focusedAfter}`)
           ok(`${tag} 4 waits: working mark, then the spinner after 300 ms`, (marked !== null || slow !== null) && slow === 'slow', `at once ${marked}, at 400 ms ${slow}`)
           await wait(3500)
           const after = (await repo().load()).pages.filter(p => p.type !== 'daily').length
@@ -181,6 +187,26 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
       const named = seen.filter(t => /^Name not saved · changed elsewhere/.test(t)), body = await page.locator('body').textContent()
       ok(`${tag} 7 after a reload: the named notice, once`, named.length === 1, seen.join(' / '))
       ok(`${tag} 7 after a reload: the banner keeps his change`, /Keep mine/.test(body) && /Discard/.test(body))
+      await context.close()
+    }
+
+    // 9. Lead 88aeff42: a change that waits and then is held is named too. A subpage made under a page deleted elsewhere
+    //    (at 1280, from the sidebar's +): no page, the working mark gone, `Page not created · changed elsewhere` once.
+    if (width >= 1280) {
+      const { context, page } = await fresh()
+      await elsewhere({ type: 'rename-page', pageId: PAGE, title: 'Trip (phone)' })
+      await elsewhere({ type: 'delete-page', pageId: PAGE, at: new Date().toISOString() })
+      const seen = []
+      await page.exposeFunction('__toastSeen', t => seen.push(t))
+      await page.evaluate(() => new MutationObserver(() => { for (const e of document.querySelectorAll('[data-slot="toast"]')) if (!e.dataset.seen) { e.dataset.seen = '1'; window.__toastSeen(e.textContent.replace(/\s+/g, ' ').trim()) } }).observe(document.body, { childList: true, subtree: true }))
+      await page.locator('a', { hasText: 'Trip notes' }).first().hover().catch(() => {})
+      await page.getByRole('button', { name: /New subpage in Trip notes/ }).first().click({ force: true })
+      for (let i = 0; i < 60 && !seen.some(t => /not created/.test(t)); i++) await wait(100)
+      await wait(1500)
+      const named = seen.filter(t => /not (saved|created)/.test(t)), body = await page.locator('body').textContent()
+      ok(`${tag} 9 a waiting create held: named once, with the banner's reason`, named.length === 1 && /^Page not created · (can\u2019t do this now|page was deleted elsewhere)/.test(named[0]), named.join(' / ') || 'none')
+      ok(`${tag} 9 a waiting create held: no page made, the working mark gone`, (await repo().load()).pages.filter(p => p.parentId === PAGE).length === 0 && !(await page.locator('[data-working]').count()))
+      ok(`${tag} 9 a waiting create held: the banner keeps its way back`, /Discard/.test(body), body.match(/Not saved[^·]{0,80}/)?.[0] ?? 'no banner text')
       await context.close()
     }
 

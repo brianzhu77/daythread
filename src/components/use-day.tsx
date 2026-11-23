@@ -266,7 +266,12 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const drawn = (seq: number | undefined) => seq !== undefined && (kept.current.has(seq) || drawAhead.current.has(seq))
   /** Callers that say in place a drawn change the server held (RunOptions.onTakenBack), by operation id, until it leaves the queue. */
   const takenBackBy = useRef(new Map<string, (entry: OutboxEntry) => boolean>())
-  /** Drawn changes already said to be taken back, by owner and operation: once each, whichever path found it (Ratchet b527e8d8). */
+  /**
+   * What a caller in this tab says itself when its change is held, by operation, while its run is out: it
+   * rebuilds a stale one (`stale`), or says a refusal in place (`inlineRefusal`). Those aren't said again.
+   */
+  const callerSays = useRef(new Map<string, { stale: boolean; inline?: RegExp }>())
+  /** Changes already said to be not saved, by owner and operation: once each, whichever path found it (Ratchet b527e8d8). */
   const announced = useRef(new Set<string>())
   const durable = useRef(true), legacy = useRef(false), inFlight = useRef(new Set<number>())
   // A browser with no IndexedDB at all keeps nothing on the device (Ratchet 5ca37837).
@@ -321,19 +326,23 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     if (entries.current.some(e => e.state === 'pending' && drawn(e.seq))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
   /**
-   * The owner's queue as the store has it now (a drain's read, another tab's, a hand-off). A drawn change of his that went
-   * from pending to held goes back on screen and is said in the same render (Ratchet b527e8d8 §1, §2): named, once per
-   * operation, by its caller in place if it said it would, else by a notice. A change already held when this tab first
-   * saw it, and the app's own writes, aren't said again.
+   * The owner's queue as the store has it now (a drain's read, another tab's, a hand-off). A change of his that went from
+   * pending to held is said in the same render (Ratchet b527e8d8 §1, §2): a drawn one goes back on screen, and one that
+   * waited clears its working mark (Lead 88aeff42: every waiting type too). Named, once per operation, by its caller in
+   * place if it said it would, else by a notice. Not said: a change already held when this tab first saw it, the app's
+   * own writes, a type with its own mark (a tick, a cell, the draft), one its caller rebuilds or refuses in place.
    */
   const takeQueue = useCallback((next: OutboxEntry[]) => {
     const before = new Map(entries.current.map(e => [e.seq, e]))
     entries.current = next
-    const back = next.filter(e => e.state === 'held' && !e.app && before.get(e.seq)?.state === 'pending' && drawn(e.seq) && !announced.current.has(`${e.owner}:${e.operationId}`))
+    const says = (e: OutboxEntry) => { const c = callerSays.current.get(e.operationId); return Boolean(c && ((c.stale && e.held?.stale) || c.inline?.test(e.held?.message ?? e.held?.reason ?? ''))) }
+    const back = next.filter(e => e.state === 'held' && !e.app && before.get(e.seq)?.state === 'pending' && (drawn(e.seq) || drawRule[e.action.type] !== 'own')
+      && !says(e) && !announced.current.has(`${e.owner}:${e.operationId}`))
     const live = new Set(next.map(e => e.seq))
     for (const seq of drawAhead.current) if (!live.has(seq)) drawAhead.current.delete(seq)
     const ops = new Set(next.map(e => e.operationId))
     for (const op of takenBackBy.current.keys()) if (!ops.has(op)) takenBackBy.current.delete(op)
+    for (const op of callerSays.current.keys()) if (!ops.has(op)) callerSays.current.delete(op)
     if (!back.length) return
     showOutbox()
     for (const e of back) {
@@ -633,6 +642,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
             if (drawsAhead(full.action)) drawAhead.current.add(seq)
             // Its caller's own word, kept as long as the change is in the queue (it may be held on a later send).
             if (options.onTakenBack) takenBackBy.current.set(operationId, options.onTakenBack)
+            if (options.stale || options.inlineRefusal) callerSays.current.set(operationId, { stale: Boolean(options.stale), ...(options.inlineRefusal ? { inline: options.inlineRefusal } : {}) })
             const kept = { ...full, seq }
             options.onStored?.()
             // A drain in another tab may have read it into this tab's list already.
@@ -749,7 +759,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         }
       })
       queue.current = job.catch(() => undefined)
-      void job.finally(() => { commandsOut--; endWorking?.() }).catch(() => undefined)
+      // A caller rebuilds or refuses in place only while its run is out; after that a later hold is said like any other.
+      void job.finally(() => { commandsOut--; endWorking?.(); callerSays.current.delete(operationId) }).catch(() => undefined)
       return job
     },
     [transport, adopt, push, refresh, retireStaleUndo, predicted, sendOwn, showOutbox, handOff],

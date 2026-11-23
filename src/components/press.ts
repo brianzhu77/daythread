@@ -89,8 +89,12 @@ export function justPressed(withinMs = 500): HTMLElement | null {
 
 const WORKING_SLOW_MS = 300
 const working = new Map<HTMLElement, number>()
-/** Presses on a working control go nowhere: its change is already on its way (§4.2: no second press). */
+/**
+ * Presses on a working control go nowhere: its change is already on its way (§4.2: no second press). Only what would
+ * press it again: Tab, Shift+Tab and Esc still move on from it (Ratchet dc250ee5).
+ */
 const swallow = (e: Event) => {
+  if (e instanceof KeyboardEvent && e.key !== 'Enter' && e.key !== ' ') return
   for (const el of working.keys()) if (e.target instanceof Node && el.contains(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); return }
 }
 /**

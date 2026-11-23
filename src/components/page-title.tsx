@@ -2,6 +2,7 @@ import { pageScopeOf } from './editor-scope'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Page } from '../domain/types'
 import { useWorkspace } from './use-day'
+import { takenBackText } from './draw-ahead'
 
 /** An empty title stays empty in the data and reads "Untitled" everywhere it's shown (Jazz f69dd341). */
 export function displayPageTitle(page: Pick<Page, 'title'>): string {
@@ -28,18 +29,18 @@ export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: bo
   const before = useRef(page.title)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const saved = useRef(page.title)
-  /** Why his typed name isn't saved, while it's kept in the field; null when nothing is kept. */
+  /** The line under a typed name that isn't saved (`Name not saved · <reason>`), while it's kept in the field; null when nothing is kept. */
   const [notSaved, setNotSaved] = useState<string | null>(null)
   const keeping = useRef(false)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   /** False when the field is gone: the generic notice says it instead. */
-  const keep = (reason: string): boolean => {
+  const keep = (line: string): boolean => {
     if (!mounted.current || !el.current?.isConnected) return false
     keeping.current = true
     // Not what the server has: Enter sends it again.
     saved.current = '\u0000'
-    setNotSaved(reason)
+    setNotSaved(line)
     return true
   }
   const save = () => {
@@ -48,8 +49,9 @@ export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: bo
     if (title === saved.current) return
     saved.current = title
     void run({ type: 'rename-page', pageId: page.id, title }, undefined, undefined, {
-      onTakenBack: () => keep('changed elsewhere'),
-      onFailure: message => keep(/changed|conflict|stale/i.test(message) ? 'changed elsewhere' : 'try again'),
+      // The same words as the notice and the banner: the real reason, and never "not saved" when it may be (Jazz b0351898).
+      onTakenBack: entry => keep(takenBackText(entry)),
+      onFailure: message => keep(`Name not saved · ${/changed|conflict|stale/i.test(message) ? 'changed elsewhere' : 'try again'}`),
     }).then(r => { if (r && saved.current === title) { keeping.current = false; setNotSaved(null) } })
   }
   // The text isn't a React child: when a save updated `page.title`, React rewrote the text node he was typing in and the
@@ -83,6 +85,6 @@ export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: bo
         if (el.current) el.current.textContent = before.current; save(); el.current?.blur()
       }
     }} />
-    {notSaved && <p className="title-not-saved" role="status">Name not saved · {notSaved}</p>}
+    {notSaved && <p className="title-not-saved" role="status">{notSaved}</p>}
   </>
 }
