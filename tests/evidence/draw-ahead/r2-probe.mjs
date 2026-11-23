@@ -183,6 +183,33 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
       ok(`${tag} 7 after a reload: the banner keeps his change`, /Keep mine/.test(body) && /Discard/.test(body))
       await context.close()
     }
+
+    // 8. Two tabs (one device, one stored queue). Tab A renames while sends fail; tab B opens and has it too. Renamed
+    //    elsewhere, then the network is back: each tab that drew it says it once (A in its field, B by the notice), and
+    //    no tab says it twice.
+    {
+      const { context, page: a } = await fresh()
+      await context.route(OUTBOX, r => r.abort())
+      await rename(a, 'Trip to Porto'); await wait(1500)
+      const b = await context.newPage()
+      await b.goto(`${base}/pages?page=${PAGE}`); await b.locator('[aria-label="Page title"]').waitFor({ timeout: 30000 }); await wait(800)
+      await elsewhere({ type: 'rename-page', pageId: PAGE, title: 'Trip (phone)' })
+      const seen = { a: [], b: [] }
+      for (const [k, p] of [['a', a], ['b', b]]) {
+        await p.exposeFunction('__toastSeen', t => seen[k].push(t))
+        await p.evaluate(() => new MutationObserver(() => { for (const e of document.querySelectorAll('[data-slot="toast"]')) if (!e.dataset.seen) { e.dataset.seen = '1'; window.__toastSeen(e.textContent.replace(/\s+/g, ' ').trim()) } }).observe(document.body, { childList: true, subtree: true }))
+      }
+      await context.unroute(OUTBOX)
+      // Each tab sends on a return to it; bring both back once.
+      for (const p of [b, a]) { await p.bringToFront(); await p.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))) }
+      let line = ''
+      for (let i = 0; i < 200 && !((line = await a.locator('.title-not-saved').textContent().catch(() => '') ?? '') && seen.b.some(t => /not saved/.test(t))); i++) await wait(100)
+      await wait(2000)
+      const aNotices = seen.a.filter(t => /not saved/.test(t)), bNotices = seen.b.filter(t => /not saved/.test(t))
+      ok(`${tag} 8 two tabs: A keeps his name with its line, no notice on top`, line === 'Name not saved · changed elsewhere' && aNotices.length === 0, `${JSON.stringify(line)} · A notices ${aNotices.join(' / ')}`)
+      ok(`${tag} 8 two tabs: B says it once`, bNotices.length === 1 && /^Name not saved · changed elsewhere/.test(bNotices[0]), bNotices.join(' / ') || 'none')
+      await context.close()
+    }
   }
   await browser.close()
 }
