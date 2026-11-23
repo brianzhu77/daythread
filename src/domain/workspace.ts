@@ -1519,6 +1519,29 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       setDraft(state, day.id, draft);
       return { message: moved === 1 ? `Moved to ${until}` : `Moved ${moved} to ${until}`, entityId: draftPageId(day.id) };
     }
+    case "move-draft": {
+      // #377 (Brian b1bb8ae5): Another day on a suggested to-do's own row. Skipped here and planned on that day, as the
+      // notice's Move to leaves it, in one write, so one Undo takes back both. Tagged as the row's (Bumblebee 64150ca9).
+      // Refused, not half done, when the suggestion isn't offered any more: decided, or the to-do planned elsewhere since.
+      const day = page(state, action.pageId);
+      if (day.type !== "daily" || !day.date || isTrashed(day)) throw new DomainError("Not a day page");
+      const until = date(action.date);
+      if (until <= day.date) throw new DomainError("Pick a later day");
+      if (action.today) date(action.today);
+      const draft = draftOf(state, day.id);
+      if (!draft) throw new DomainError("No draft for this day");
+      const item = draft.items.find((i) => i.id === action.itemId);
+      if (!item?.taskId) throw new DomainError("Nothing to move");
+      const t = state.tasks.find((x) => x.id === item.taskId);
+      if (item.state !== "open" || !offeredOn(t, plannedAfter(state, day.date)) || rowIdsOf(docOf(day), t.id).size) throw new DomainError("Changed elsewhere since; nothing moved");
+      planOn(state, t, until, { from: day.date, today: action.today });
+      item.state = "skipped";
+      item.until = until;
+      item.via = "row";
+      item.by = operationId;
+      setDraft(state, day.id, draft);
+      return { message: `Moved to ${until}`, entityId: draftPageId(day.id) };
+    }
     case "reopen-draft": {
       // The second Undo after Undo move (Ratchet 46dd9987, f38d66a1): the workspace keeps one Undo, so a skip's own is
       // gone by then. This puts back only what that skip left: still skipped by it, not moved, applied or skipped again,

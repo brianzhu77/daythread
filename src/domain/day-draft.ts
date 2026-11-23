@@ -21,6 +21,8 @@ export interface DraftItem {
   state: 'open' | 'applied' | 'skipped'
   /** On a skipped to-do: the later day he moved it to from the draft (`snooze-draft`, Brian 17e7b7f2). */
   until?: LocalDate
+  /** Moved by the row's own Another day (`move-draft`, #377); absent: by the notice's Move to (Bumblebee 64150ca9). */
+  via?: 'row'
   /** The operation that last skipped, moved or applied it: `reopen-draft` reopens only what that skip left (Ratchet f38d66a1). */
   by?: string
   /** A carried line: the block it was carried from, so another day's draft holding it too doesn't offer it twice (B101). */
@@ -311,8 +313,52 @@ export function amongApplied(doc: readonly EditorNode[], draft: DayDraft, item: 
   return { kind: 'after', index, anchorId: index > 0 ? doc[index - 1]!.id : null }
 }
 
+/**
+ * #377 (Brian b1bb8ae5, Lead 937ccf73): for each carried to-do, the days before `day` he skipped it from that day's draft,
+ * by ✕ or Dismiss, oldest first. A day is its draft's own day, never the device's. A skip he undid is no longer stored,
+ * so it isn't one. The list starts again after he took the to-do on a day (applied from a draft, or any plan row of it on
+ * an earlier day page) or moved it from a draft. Only carried to-dos have one: a line the model wrote has no `taskId`.
+ * It reads every stored draft and, when one holds a skip, every earlier day page's plan rows: no window, as a reset ends
+ * the list and drafts exist only from B77 on.
+ */
+export function skippedDays(ws: Workspace, day: LocalDate): Map<string, LocalDate[]> {
+  const days = new Map<string, LocalDate>()
+  for (const p of ws.pages) if (p.type === 'daily' && p.date && p.date < day && !p.trashedAt) days.set(p.id, p.date)
+  const skips = new Map<string, Set<LocalDate>>(), took = new Map<string, LocalDate>()
+  const tookOn = (taskId: string, d: LocalDate) => { if ((took.get(taskId) ?? '') < d) took.set(taskId, d) }
+  for (const p of ws.pages) {
+    if (!isDraft(p) || p.trashedAt) continue
+    const on = days.get(p.parentId ?? '')
+    if (!on) continue
+    let d: DayDraft
+    try { d = JSON.parse(p.document) as DayDraft } catch { continue }
+    for (const i of d.items) {
+      if (!i.taskId) continue
+      if (i.state === 'applied' || i.until) tookOn(i.taskId, on)
+      else if (i.state === 'skipped') { const s = skips.get(i.taskId) ?? new Set<LocalDate>(); s.add(on); skips.set(i.taskId, s) }
+    }
+  }
+  if (!skips.size) return new Map()
+  for (const p of ws.pages) {
+    const on = days.get(p.id)
+    if (!on) continue
+    for (const n of flatNodes(pageNodes(p))) if (isTaskRow(n) && n.props?.role === 'plan' && skips.has(String(n.props.taskId))) tookOn(String(n.props.taskId), on)
+  }
+  const out = new Map<string, LocalDate[]>()
+  for (const [taskId, s] of skips) {
+    const since = took.get(taskId) ?? ''
+    const list = [...s].filter(d => d > since).sort()
+    if (list.length) out.set(taskId, list)
+  }
+  return out
+}
+
 /** The bands a page shows (Jazz's hook): open items still eligible, placed against the page as it is. */
-export interface DraftItemView { id: string; kind: 'fill' | 'after'; anchorId: string | null; block: EditorNode; taskId?: string; since?: LocalDate }
+export interface DraftItemView {
+  id: string; kind: 'fill' | 'after'; anchorId: string | null; block: EditorNode; taskId?: string; since?: LocalDate
+  /** A carried to-do skipped on earlier days: those days, oldest first (#377). */
+  skipped?: LocalDate[]
+}
 export interface DraftView {
   status: DraftStatus
   items: DraftItemView[]
@@ -331,6 +377,7 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
   const task = (id: string | undefined) => ws.tasks.find(t => t.id === id)
   const elsewhere = draft.items.some(i => i.state === 'open' && i.block) ? decidedElsewhere(ws, page) : () => false
   const taken = takenOver(ws)
+  const skipped = page.date && draft.items.some(i => i.state === 'open' && i.taskId) ? skippedDays(ws, page.date) : new Map<string, LocalDate[]>()
   const items: DraftItemView[] = []
   for (const item of draft.items) {
     if (item.state !== 'open') continue
@@ -342,7 +389,8 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
     if (!placed) continue
     const at = amongApplied(doc, draft, item, placed)
     const block = t ? { id: `draft-row:${item.id}`, type: 'task', props: { taskId: t.id, role: 'plan', planDate: page.date ?? '' }, content: [{ type: 'text', text: t.title, styles: {} }], children: [] } : item.block!
-    items.push({ id: item.id, kind: at.kind, anchorId: at.anchorId, block, ...(t ? { taskId: t.id, since: t.createdOn } : item.since ? { since: item.since } : {}) })
+    const days = t && skipped.get(t.id)
+    items.push({ id: item.id, kind: at.kind, anchorId: at.anchorId, block, ...(t ? { taskId: t.id, since: t.createdOn } : item.since ? { since: item.since } : {}), ...(days ? { skipped: days } : {}) })
   }
   const end = planningEndIndex(doc, ids)
   const moreOpen = draft.moreOpen.map(task).filter(t => offeredOn(t, later)).filter(t => !onPage.has(t.id)).map(t => ({ taskId: t.id, title: t.title, since: t.createdOn }))
