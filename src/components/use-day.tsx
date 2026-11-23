@@ -9,7 +9,8 @@ import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand, runOutboxCommand } from '../server/functions'
 import { appWrites, capture, draftDecisions, drainQueue, idbOutboxStore, outboxCounts, schedule, type DraftDecision, type DrainResult, type OutboxEntry, type OutboxStore, type SendAnswer } from './outbox'
 import { isNetworkFailure } from './offline-copy'
-import { drawsAhead, takenBackText } from './draw-ahead'
+import { drawRule, drawsAhead, takenBackText } from './draw-ahead'
+import { justPressed, markWorking } from './press'
 import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
@@ -606,12 +607,19 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const run = useCallback(
     (source: ActionSource, notice?: NoticeArg, operationId = newOperationId(), options: RunOptions = {}) => {
       commandsOut++
+      // §4.2: a change that isn't drawn before the answer shows on the control he pressed that it's working, and takes no second press.
+      const pressed = justPressed()
+      let endWorking: (() => void) | null = null
+      const working = (action: Action | null | undefined, drawnNow: boolean) => {
+        if (pressed && action && !endWorking && drawRule[action.type] !== 'own' && !drawnNow) endWorking = markWorking(pressed)
+      }
       // B98: built and stored now, against the predicted workspace, unless it's page text (the editor keeps its own drafts) or there's no outbox here.
       const owner = knownOwner, base = wsRef.current
       let stored: Promise<OutboxEntry | null> = Promise.resolve(null), built: Action | null | undefined, storeFailed = false, superseded = false
       if (store.current && durable.current && !legacy.current && owner && base) {
         const ahead = predicted() ?? base
         built = typeof source === 'function' ? source(ahead) : source
+        working(built, Boolean(built && drawsAhead(built)))
         if (built && built.type !== 'save-editor') {
           const { entry } = capture(ahead, built, operationId, entries.current.some(e => e.action.type === 'undo'))
           const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending', ...(appWrites.has(built.type) ? { app: true } : {}) }
@@ -642,6 +650,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         if (options.replaces && !entry && !storeFailed && !built) void options.replaces.done()
         const action = built !== undefined ? built : typeof source === 'function' ? source(current) : source
         if (!action) return null
+        // Not stored (no device storage): nothing is drawn ahead, so it waits like the rest.
+        working(action, Boolean(entry && drawsAhead(action)))
         if (!options.quiet) setSaveState('saving')
         // §8.4: where nothing could be stored, say so only if it's still on its way after a second.
         const risk = !entry && !durable.current ? setTimeout(() => { slowUnsent.current = true; showOutbox() }, 1000) : undefined
@@ -737,7 +747,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       })
       queue.current = job.catch(() => undefined)
       if (options.onTakenBack) takenBackBy.current.set(operationId, options.onTakenBack)
-      void job.finally(() => { commandsOut--; takenBackBy.current.delete(operationId) }).catch(() => undefined)
+      void job.finally(() => { commandsOut--; takenBackBy.current.delete(operationId); endWorking?.() }).catch(() => undefined)
       return job
     },
     [transport, adopt, push, refresh, retireStaleUndo, predicted, sendOwn, showOutbox, handOff],

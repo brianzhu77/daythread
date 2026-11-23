@@ -10,7 +10,8 @@ const ahead = Object.entries(drawRule).filter(([, r]) => r === 'ahead').map(([t]
 
 test('every drawn-ahead type has its own noun, never the plain fallback (Jazz 5869fde3)', () => {
   for (const type of ahead) {
-    const text = takenBackText({ action: { type } as Action, held: { reason: 'changed-since' } })
+    const action = (type === 'change-database' ? { type, change: { kind: 'updateView' } } : { type }) as unknown as Action
+    const text = takenBackText({ action, held: { reason: 'changed-since' } })
     assert.match(text, /^\S.* not saved · changed elsewhere$/, type)
     assert.doesNotMatch(text, /^Not saved/, type)
   }
@@ -38,4 +39,13 @@ test('a database change that adds a column, view or automation waits; an edit of
     assert.equal(drawsAhead(change(kind)), false, kind)
   for (const kind of ['updateProperty', 'removeProperty', 'moveProperty', 'updateView', 'removeView', 'moveView', 'updateWidget', 'setDashboardFilter'])
     assert.equal(drawsAhead(change(kind)), true, kind)
+})
+
+test('a database change is named by what it touches', () => {
+  const text = (kind: string) => takenBackText({ action: { type: 'change-database', pageId: 'db', change: { kind } } as unknown as Action, held: { reason: 'conflict' } })
+  assert.equal(text('updateProperty'), 'Property not saved · changed elsewhere')
+  assert.equal(text('moveView'), 'View not saved · changed elsewhere')
+  assert.equal(text('updateWidget'), 'Widget not saved · changed elsewhere')
+  assert.equal(text('setDashboardFilter'), 'Filter not saved · changed elsewhere')
+  assert.equal(text('setAutomationActive'), 'Automation not saved · changed elsewhere')
 })

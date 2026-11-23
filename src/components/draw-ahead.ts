@@ -13,7 +13,7 @@ import type { OutboxEntry } from './outbox'
  */
 export type DrawRule = 'ahead' | 'wait' | 'own'
 
-export const drawRule: Record<Action['type'], DrawRule> = {
+export const drawRule = {
   'rename-page': 'ahead', 'rename-task': 'ahead', 'set-page-icon': 'ahead', 'set-page-cover': 'ahead', 'move-page': 'ahead',
   'delete-page': 'ahead', 'delete-pages': 'ahead', 'set-template-target': 'ahead', 'delete-template': 'ahead',
   'plan-task': 'ahead', 'plan-tasks': 'ahead', 'not-today': 'ahead', 'remove-task-row': 'ahead', 'set-task-dates': 'ahead',
@@ -29,7 +29,7 @@ export const drawRule: Record<Action['type'], DrawRule> = {
   'task-status': 'own', 'set-values': 'own', 'set-values-many': 'own', 'save-editor': 'own', 'apply-draft': 'own',
   'skip-draft': 'own', 'snooze-draft': 'own', 'reopen-draft': 'own', 'ensure-day': 'own', 'set-draft': 'own',
   'run-repeats': 'own', 'set-smart-note-result': 'own', undo: 'own',
-}
+} as const satisfies Record<Action['type'], DrawRule>
 
 type AheadType = { [K in Action['type']]: (typeof drawRule)[K] extends 'ahead' ? K : never }[Action['type']]
 
@@ -68,6 +68,19 @@ export function drawsAhead(action: Action): boolean {
 
 /** The notice for a drawn-ahead change the server held: named, never silent (Lead 5d9ce740, f00eb610). */
 export function takenBackText(entry: Pick<OutboxEntry, 'action' | 'held'>): string {
-  const noun = (aheadNoun as Record<string, string | undefined>)[entry.action.type]
+  const a = entry.action
+  const noun = a.type === 'change-database' ? changeNoun((a.change as { kind: string }).kind) : (aheadNoun as Record<string, string | undefined>)[a.type]
   return `${noun ? `${noun} not saved` : 'Not saved'} · changed elsewhere`
+}
+
+/** A database change by what it touches (Jazz 0a65952a: Property, View, …). */
+function changeNoun(kind: string): string {
+  if (/Property$/.test(kind)) return 'Property'
+  if (/Automation/.test(kind)) return 'Automation'
+  if (/Widget$/.test(kind)) return 'Widget'
+  if (kind === 'setDashboardFilter') return 'Filter'
+  if (kind === 'setRepeat') return 'Repeat'
+  if (kind === 'setDefaultTemplate') return 'Template'
+  if (/View$/.test(kind)) return 'View'
+  return aheadNoun['change-database']
 }

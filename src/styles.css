@@ -297,6 +297,14 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 /* A small button's row tints too (§1.3): a fingertip covers a 40 px button. */
 [data-press-row]:not([data-press-out]) { background-color: var(--gray-2) !important; }
 @media (prefers-reduced-motion: reduce) { [data-press][data-press-out] { transition: none !important; } }
+/* §4.2 (release 2): a control whose change waits for the server. press.ts markWorking: reduced in place, a spinner after
+   300 ms over its middle (its label keeps its width), no second press. */
+/* §4.1: a page name the server held or refused, kept in the field: one red Meta line under it until saved or given up. */
+.title-not-saved { margin: -4px 0 8px; font-size: var(--text-meta); color: var(--red); }
+[data-working] { opacity: .55; cursor: progress; }
+[data-working=slow] { position: relative; }
+[data-working=slow]::after { content: ''; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -8px 0 0 -8px; border: 2px solid var(--line); border-top-color: var(--ink-2); border-radius: 50%; animation: draft-spin .8s linear infinite; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { [data-working=slow]::after { animation: none; } }
 
 /* A menu's ring follows the last input, not the browser's guess (Jazz 540b35ea). Opened by a click or tap, a menu focuses
    its first item for the keyboard but draws no ring until a key is pressed; once a key is, WebKit still may not count the

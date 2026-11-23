@@ -77,6 +77,43 @@ const ROW = '.draft-band, .draft-more-item, .editor-task, [role=treeitem], .tree
 interface Press { el: HTMLElement; row: HTMLElement | null; at: number; x: number; y: number; pointer: number | null; key: string | null; timer?: ReturnType<typeof setTimeout> }
 
 /** Installs the press layer on `doc`; returns its removal. Safe to call once per document. */
+let lastLift: { el: HTMLElement; at: number } | null = null
+/** The control a press just ended on, whose click is what's running now; null once it's older than `withinMs` or gone. */
+export function justPressed(withinMs = 500): HTMLElement | null {
+  const l = lastLift
+  return l && l.el.isConnected && performance.now() - l.at <= withinMs ? l.el : null
+}
+
+const WORKING_SLOW_MS = 300
+const working = new Map<HTMLElement, number>()
+/** Presses on a working control go nowhere: its change is already on its way (§4.2: no second press). */
+const swallow = (e: Event) => {
+  for (const el of working.keys()) if (e.target instanceof Node && el.contains(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); return }
+}
+/**
+ * Tap feedback §4.2 (release 2): the control whose change waits for the server, as it waits: reduced in place, a spinner
+ * after 300 ms, its label's width held, and no second press. Returns the call that ends it.
+ */
+export function markWorking(el: HTMLElement): () => void {
+  const doc = el.ownerDocument
+  if (!working.size) for (const t of ['click', 'pointerdown', 'keydown']) doc.addEventListener(t, swallow, true)
+  working.set(el, (working.get(el) ?? 0) + 1)
+  el.setAttribute('data-working', '')
+  el.setAttribute('aria-busy', 'true')
+  const slow = setTimeout(() => { if (working.has(el)) el.setAttribute('data-working', 'slow') }, WORKING_SLOW_MS)
+  let ended = false
+  return () => {
+    if (ended) return
+    ended = true
+    clearTimeout(slow)
+    const left = (working.get(el) ?? 1) - 1
+    if (left > 0) { working.set(el, left); return }
+    working.delete(el)
+    el.removeAttribute('data-working'); el.removeAttribute('aria-busy')
+    if (!working.size) for (const t of ['click', 'pointerdown', 'keydown']) doc.removeEventListener(t, swallow, true)
+  }
+}
+
 export function installPress(doc: Document = document): () => void {
   const win = doc.defaultView!
   const reduced = win.matchMedia?.('(prefers-reduced-motion: reduce)')
@@ -99,6 +136,7 @@ export function installPress(doc: Document = document): () => void {
     if (!p) return
     current = null
     if (!lift) return unmark(p, false)
+    lastLift = { el: p.el, at: performance.now() }
     const left = MIN_MS - (performance.now() - p.at)
     if (left > 0) p.timer = setTimeout(() => unmark(p, true), left)
     else unmark(p, true)
@@ -118,6 +156,8 @@ export function installPress(doc: Document = document): () => void {
     if (via) el.setAttribute('data-press-via', via)
     row?.setAttribute('data-press-row', 'on')
     current = { el, row, at: performance.now(), ...from }
+    // Enter clicks on its key down, before any lift.
+    if (from.key) lastLift = { el, at: current.at }
     owner.set(el, current)
     if (row) owner.set(row, current)
   }
