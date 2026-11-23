@@ -105,7 +105,11 @@ export function pickDate(today: LocalDate, onPick: (date: LocalDate) => void, op
     if (input.value && input.value >= today) { picked = true; onPick(input.value) }
     input.remove()
   })
-  input.addEventListener('keydown', e => { if (e.key === 'Escape') { by = 'key'; input.blur() } })
+  // Chrome's own calendar takes the Esc keydown to close itself and the input only hears the keyup: without it, focus
+  // stayed on the hidden input until a second Esc (B112). Whichever reaches it first cancels; blurred, it misses the other.
+  const escape = (e: KeyboardEvent) => { if (e.key === 'Escape') { by = 'key'; input.blur() } }
+  input.addEventListener('keydown', escape)
+  input.addEventListener('keyup', escape)
   input.addEventListener('blur', () => { document.removeEventListener('pointerdown', away, true); setTimeout(() => { input.remove(); if (!picked) onCancel?.(by) }, 500) })
   input.showPicker?.()
   input.focus()

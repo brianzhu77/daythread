@@ -1,7 +1,8 @@
 // #377 (Jazz sketch v4, Lead 028d4a5e, Ratchet e60932f5): a carried to-do skipped before says on which days and offers
 // Another day on its row. Each case reseeds a throwaway store (tests/evidence/skipped-days/seed.ts), never his data.
-// Usage: node tests/evidence/skipped-days/row-check.mjs <base-url> <store-path> [chromium|webkit]
-//   Chromium at 390 with touch (his phone's shape); WebKit at 1280 with a mouse and the keyboard.
+// Usage: node tests/evidence/skipped-days/row-check.mjs <base-url> <store-path> [chromium|webkit|chromium-1280]
+//   Chromium at 390 with touch (his phone's shape); WebKit and Chromium at 1280 with a mouse and the keyboard (Chromium's
+//   date input hears only the keyup of the Esc that closes its calendar, B112).
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
 import { DatabaseSync } from 'node:sqlite'
@@ -9,7 +10,7 @@ import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository
 import { draftOf } from '../../../src/domain/day-draft.ts'
 import { plannedOn } from '../../../src/domain/workspace.ts'
 const [base, storePath, only] = process.argv.slice(2), results = []
-if (!base || !storePath) { console.error('Usage: node tests/evidence/skipped-days/row-check.mjs <base-url> <store-path> [chromium|webkit]'); process.exit(2) }
+if (!base || !storePath) { console.error('Usage: node tests/evidence/skipped-days/row-check.mjs <base-url> <store-path> [chromium|webkit|chromium-1280]'); process.exit(2) }
 const ok = (name, pass, detail = '') => { results.push(pass); console.log(`${pass ? 'PASS' : 'FAIL'} ${name}${detail ? ` · ${detail}` : ''}`) }
 const wait = ms => new Promise(r => setTimeout(r, ms))
 const reseed = () => execSync(`node --no-warnings tests/evidence/skipped-days/seed.ts ${storePath}`, { stdio: 'ignore' })
@@ -26,9 +27,9 @@ const md = iso => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`
 const KATHY = 'Kathy homework app', TRV = 'Renew TRV', LONG = 'Set up the Kathy homework app on the iPad and share it with her teacher', LENNY = 'Lenny’s vet booking'
 const itemOf = title => { const ws = stored(), page = ws.pages.find(p => p.type === 'daily' && p.date === day(0)), t = ws.tasks.find(x => x.title === title); return { ws, page, t, item: draftOf(ws, page.id).items.find(i => i.taskId === t.id) } }
 
-for (const engine of only ? [only] : ['chromium', 'webkit']) {
-  const browser = await pw[engine].launch()
-  const phone = engine === 'chromium', tag = `${engine} ${phone ? '390' : '1280'}`
+for (const run of only ? [only] : ['chromium', 'webkit', 'chromium-1280']) {
+  const [engine, width] = run.split('-'), browser = await pw[engine].launch()
+  const phone = engine === 'chromium' && width !== '1280', tag = `${engine} ${phone ? '390' : '1280'}`
   const fresh = async () => {
     const context = await browser.newContext({ ...(phone ? { viewport: { width: 390, height: 844 }, hasTouch: true } : { viewport: { width: 1280, height: 900 } }), timezoneId: zone, serviceWorkers: 'block' })
     const page = await context.newPage(), errors = []
