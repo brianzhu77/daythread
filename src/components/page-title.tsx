@@ -1,7 +1,8 @@
 import { pageScopeOf } from './editor-scope'
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Page } from '../domain/types'
 import { useWorkspace } from './use-day'
+import { takenBackText } from './draw-ahead'
 
 /** An empty title stays empty in the data and reads "Untitled" everywhere it's shown (Jazz f69dd341). */
 export function displayPageTitle(page: Pick<Page, 'title'>): string {
@@ -17,6 +18,10 @@ export function focusAtEnd(el: HTMLElement) {
 /**
  * The large title is the field (Jazz f69dd341): click to edit, "Untitled" placeholder, Enter goes to the first
  * body line, Esc puts back the title from before editing, saves on pause like the body.
+ *
+ * Release 2 (tap feedback §4.1, Lead 242d438f): the new name shows everywhere as soon as it's stored. If the server
+ * holds or refuses it, his typed name stays in the field, editable, with `Name not saved · <reason>` under it: Enter
+ * tries again, Esc gives up and shows the saved name. His words are never replaced by the old one without his say.
  */
 export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: boolean }) {
   const { run } = useWorkspace()
@@ -24,24 +29,43 @@ export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: bo
   const before = useRef(page.title)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const saved = useRef(page.title)
+  /** The line under a typed name that isn't saved (`Name not saved · <reason>`), while it's kept in the field; null when nothing is kept. */
+  const [notSaved, setNotSaved] = useState<string | null>(null)
+  const keeping = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  /** False when the field is gone: the generic notice says it instead. */
+  const keep = (line: string): boolean => {
+    if (!mounted.current || !el.current?.isConnected) return false
+    keeping.current = true
+    // Not what the server has: Enter sends it again.
+    saved.current = '\u0000'
+    setNotSaved(line)
+    return true
+  }
   const save = () => {
     clearTimeout(timer.current)
     const title = (el.current?.textContent ?? '').replace(/\s+/g, ' ').trim()
     if (title === saved.current) return
     saved.current = title
-    void run({ type: 'rename-page', pageId: page.id, title })
+    void run({ type: 'rename-page', pageId: page.id, title }, undefined, undefined, {
+      // The same words as the notice and the banner: the real reason, and never "not saved" when it may be (Jazz b0351898).
+      onTakenBack: entry => keep(takenBackText(entry)),
+      onFailure: message => keep(`Name not saved · ${/changed|conflict|stale/i.test(message) ? 'changed elsewhere' : 'try again'}`),
+    }).then(r => { if (r && saved.current === title) { keeping.current = false; setNotSaved(null) } })
   }
   // The text isn't a React child: when a save updated `page.title`, React rewrote the text node he was typing in and the
   // caret jumped to the start ("Sl", a pause, "ow" read "owSl"; live, both engines). It's set once here, and the effect
   // below follows outside changes.
   useLayoutEffect(() => { if (el.current) el.current.textContent = page.title }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    // Only follow outside changes while Brian isn't typing here.
+    // Only follow outside changes while Brian isn't typing here, and never over a name of his that wasn't saved.
+    if (keeping.current) { if (el.current?.textContent === page.title) { keeping.current = false; saved.current = page.title; setNotSaved(null) } return }
     if (el.current && document.activeElement !== el.current && el.current.textContent !== page.title) { el.current.textContent = page.title; saved.current = page.title }
   }, [page.title])
   useEffect(() => { if (autoFocus && el.current) focusAtEnd(el.current) }, [autoFocus])
   useEffect(() => () => clearTimeout(timer.current), [])
-  return <h1 ref={el} className="large-title page-title-field" contentEditable="plaintext-only" suppressContentEditableWarning
+  return <><h1 ref={el} className="large-title page-title-field" contentEditable="plaintext-only" suppressContentEditableWarning
     role="textbox" aria-label="Page title" data-placeholder="Untitled" spellCheck
     onFocus={() => { before.current = el.current?.textContent ?? '' }}
     onInput={() => { clearTimeout(timer.current); timer.current = setTimeout(save, 600) }}
@@ -55,7 +79,12 @@ export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: bo
         const editable = scope.querySelector<HTMLElement>('.bn-editor')
         if (first && editable) { editable.focus(); const r = document.createRange(); r.setStart(first, 0); r.collapse(true); const s = window.getSelection(); s?.removeAllRanges(); s?.addRange(r) }
       } else if (e.key === 'Escape') {
-        e.preventDefault(); if (el.current) el.current.textContent = before.current; save(); el.current?.blur()
+        e.preventDefault()
+        // Giving up a name that wasn't saved shows the saved one; nothing is sent.
+        if (keeping.current) { keeping.current = false; setNotSaved(null); if (el.current) el.current.textContent = page.title; saved.current = page.title; el.current?.blur(); return }
+        if (el.current) el.current.textContent = before.current; save(); el.current?.blur()
       }
     }} />
+    {notSaved && <p className="title-not-saved" role="status">{notSaved}</p>}
+  </>
 }

@@ -68,7 +68,8 @@ export interface OutboxEntry {
   state: 'pending' | 'held'
   /** A write the app makes by itself (§6, Jazz 8887e299): not counted, never held; dropped silently when replay finds it unneeded. */
   app?: boolean
-  held?: { reason: HeldReason; message?: string }
+  /** `stale`: held only because the workspace moved on (SendAnswer); a caller that rebuilds such a change says nothing is lost. */
+  held?: { reason: HeldReason; message?: string; stale?: true }
 }
 
 export interface OutboxStore {
@@ -309,7 +310,7 @@ export async function drainQueue(store: OutboxStore, owner: string, send: (entry
       case 'held':
         // The app's own write, no longer needed or allowed (the day was made elsewhere): dropped, unsaid.
         if (next.app) await store.remove(seq)
-        else await store.update(seq, { state: 'held', held: { reason: answer.reason, ...(answer.message ? { message: answer.message } : {}) } })
+        else await store.update(seq, { state: 'held', held: { reason: answer.reason, ...(answer.message ? { message: answer.message } : {}), ...(answer.stale ? { stale: true as const } : {}) } })
         break
       default: return { answers, stop: { seq, answer }, queue }
     }

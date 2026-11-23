@@ -222,6 +222,11 @@ function setPendingCell(key: string, cell: PendingCell | null) {
   pendingCellVersion++
   for (const l of pendingCellListeners) l()
 }
+/** Databases whose "N changes not saved" line is on screen now, by id (release 2: a cell's own word, so no notice on top). */
+const shownUnsaved = new Map<string, number>()
+function useShownUnsaved(databaseId: string) {
+  useEffect(() => { shownUnsaved.set(databaseId, (shownUnsaved.get(databaseId) ?? 0) + 1); return () => { const n = (shownUnsaved.get(databaseId) ?? 1) - 1; if (n > 0) shownUnsaved.set(databaseId, n); else shownUnsaved.delete(databaseId) } }, [databaseId])
+}
 export function usePendingCells() {
   return useSyncExternalStore(l => { pendingCellListeners.add(l); return () => pendingCellListeners.delete(l) }, () => pendingCellVersion, () => 0)
 }
@@ -245,7 +250,10 @@ export function useCommitCell() {
       if ('refused' in change) { toast(change.refused, { timeout: 6000 }); return }
       const pendingTodo = (failed: boolean): PendingCell => ({ databaseId: db.id, rowId: row.id, columnId, raw, failed, retry: () => { setPendingCell(key, null); commit(db, row, columnId, raw, notice, onSaved) }, discard: () => { setPendingCell(key, null); onSaved?.() } })
       setPendingCell(key, pendingTodo(false))
-      void run(change.action, r => ({ text: notice ?? change.notice, undoOperationId: r.operationId }), newId(), { quiet: true }).then(r => {
+      // Release 2: held after it was drawn, the cell says it where he typed (`not saved · Retry`), with his value, and the
+      // generic notice stays quiet (Jazz f92b65df). Not on screen: the notice says it.
+      const onTakenBack = () => { setPendingCell(key, pendingTodo(true)); return shownUnsaved.has(db.id) }
+      void run(change.action, r => ({ text: notice ?? change.notice, undoOperationId: r.operationId }), newId(), { quiet: true, onTakenBack }).then(r => {
         setPendingCell(key, r ? null : pendingTodo(true))
         if (!r) return
         // New words change lines on their pages: a tab open on one should read that as this browser, not another device.
@@ -797,6 +805,7 @@ export function useUndoKey() {
 /** Under any view: a filter that matches nothing, and changes that weren't saved (design §13). */
 export function ViewNotes({ db, view, changeView, empty }: { db: Page; view: View; changeView: ChangeView; empty: boolean }) {
   usePendingCells()
+  useShownUnsaved(db.id)
   const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   return <>
     {empty && hasFilter(view.widgetFilter?.own ?? view) && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [], filterGroups: [] }), view.filterGroups?.length ? 'Filter cleared' : undefined)}>Clear filter</button></p>}
@@ -1661,6 +1670,7 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
   const empty = properties.filter(p => isEmptyValue(cellValue(db.database, row, p.id)) && p.type !== 'checkbox' && p.type !== 'status' && !openThreads.some(t => t.property!.propertyId === p.id))
   const fold = !unfolded && empty.length > 4
   usePendingCells()
+  useShownUnsaved(db.id)
   const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   const shown = fold ? properties.filter(p => !empty.includes(p)) : properties
   const addProperty = () => void run({ type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id: newId(), name: uniqueName(db.database), type: 'text' } } }, r => ({ text: r.message, undoOperationId: r.operationId }))

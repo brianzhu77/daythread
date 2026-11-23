@@ -9,6 +9,8 @@ import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand, runOutboxCommand } from '../server/functions'
 import { appWrites, capture, draftDecisions, drainQueue, idbOutboxStore, outboxCounts, schedule, type DraftDecision, type DrainResult, type OutboxEntry, type OutboxStore, type SendAnswer } from './outbox'
 import { isNetworkFailure } from './offline-copy'
+import { drawRule, drawsAhead, takenBackText } from './draw-ahead'
+import { justPressed, markWorking } from './press'
 import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
@@ -192,6 +194,12 @@ type RunOptions = {
   /** The server held the change (a conflict, changed since): kept for Keep mine / Discard in the banner; its caller may say so in place (tap feedback §2.1.4). */
   onHeld?: (message: string) => void
   onLater?: (landed: boolean) => void
+  /**
+   * Release 2 (#374): this caller says it in place when its change, drawn before the answer, is held, and returns true
+   * if it did (it's still on screen): then no generic notice. Called in the render that takes the change back, also
+   * after the run returned (kept for later, then held on a later send). After a reload the generic notice says it.
+   */
+  onTakenBack?: (entry: OutboxEntry) => boolean
 }
 
 export type ActionSource = Action | ((workspace: Workspace) => Action | null)
@@ -253,6 +261,20 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const entries = useRef<OutboxEntry[]>([])
   /** Entries shown as made: stored before this load, or left after a send that didn't land. */
   const kept = useRef(new Set<number>())
+  /** Release 2 (#374): his changes from this tab drawn as soon as they're stored, by seq (draw-ahead.ts); pruned as they leave. */
+  const drawAhead = useRef(new Set<number>())
+  const drawn = (seq: number | undefined) => seq !== undefined && (kept.current.has(seq) || drawAhead.current.has(seq))
+  /** Callers that say in place a drawn change the server held (RunOptions.onTakenBack), by operation id, until it leaves the queue. */
+  const takenBackBy = useRef(new Map<string, (entry: OutboxEntry) => boolean>())
+  /**
+   * What a caller in this tab says itself when its change is held, by operation, while its run is out: it
+   * rebuilds a stale one (`stale`), or says a refusal in place (`inlineRefusal`). Those aren't said again.
+   */
+  const callerSays = useRef(new Map<string, { stale: boolean; inline?: RegExp }>())
+  /** The working mark of a waiting change, by operation, so a hold ends it at once (markWorking's end). */
+  const workingBy = useRef(new Map<string, () => void>())
+  /** Changes already said to be not saved, by owner and operation: once each, whichever path found it (Ratchet b527e8d8). */
+  const announced = useRef(new Set<string>())
   const durable = useRef(true), legacy = useRef(false), inFlight = useRef(new Set<number>())
   // A browser with no IndexedDB at all keeps nothing on the device (Ratchet 5ca37837).
   if (store.current === null && transport.runOutbox && durable.current) durable.current = false
@@ -276,7 +298,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     let ws = wsRef.current
     if (!ws) return null
     for (const e of entries.current) {
-      if (e.state !== 'pending' || e.action.type === 'undo' || (shown && !kept.current.has(e.seq!))) continue
+      if (e.state !== 'pending' || e.action.type === 'undo' || (shown && !drawn(e.seq))) continue
       try { ws = applyCommand(ws, { operationId: e.operationId, expectedRevision: ws.revision, action: e.action }).workspace } catch { /* the server will say */ }
     }
     return ws
@@ -293,7 +315,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   /** The server's workspace; what's shown has his pending changes on top, so a tick never shows unticked first (Jazz §8.1). */
   const adopt = useCallback((ws: Workspace) => {
     wsRef.current = ws
-    setWorkspace(entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!)) ? predicted(true) ?? ws : ws)
+    setWorkspace(entries.current.some(e => e.state === 'pending' && drawn(e.seq)) ? predicted(true) ?? ws : ws)
   }, [predicted])
   const showOutbox = useCallback(() => {
     if (!entries.current.length && store.current && outboxHint.get()) void store.current.all().then(left => { if (!left.length) outboxHint.clear() }).catch(() => undefined)
@@ -303,8 +325,37 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     const { held, waiting, pending } = outboxCounts(shown)
     const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
     setOutbox({ pending, held, waiting, durable: durable.current, keptBack: legacy.current && pending > 0, offline: away && pending > 0, atRisk: !durable.current && (slowUnsent.current || memoryUnsent.current.size > 0 || (away && commandsPending())), decisions: draftDecisions(shown), heldDecisions: draftDecisions(shown, 'held') })
-    if (entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
+    if (entries.current.some(e => e.state === 'pending' && drawn(e.seq))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
+  /**
+   * The owner's queue as the store has it now (a drain's read, another tab's, a hand-off). A change of his that went from
+   * pending to held is said in the same render (Ratchet b527e8d8 §1, §2): a drawn one goes back on screen, and one that
+   * waited clears its working mark (Lead 88aeff42: every waiting type too). Named, once per operation, by its caller in
+   * place if it said it would, else by a notice. Not said: a change already held when this tab first saw it, the app's
+   * own writes, a type with its own mark (a tick, a cell, the draft), one its caller rebuilds or refuses in place.
+   */
+  const takeQueue = useCallback((next: OutboxEntry[]) => {
+    const before = new Map(entries.current.map(e => [e.seq, e]))
+    entries.current = next
+    const says = (e: OutboxEntry) => { const c = callerSays.current.get(e.operationId); return Boolean(c && ((c.stale && e.held?.stale) || c.inline?.test(e.held?.message ?? e.held?.reason ?? ''))) }
+    // A type with its own mark says it itself, kept or not (Ratchet 5444a11c).
+    const back = next.filter(e => e.state === 'held' && !e.app && before.get(e.seq)?.state === 'pending' && drawRule[e.action.type] !== 'own'
+      && !says(e) && !announced.current.has(`${e.owner}:${e.operationId}`))
+    const live = new Set(next.map(e => e.seq))
+    for (const seq of drawAhead.current) if (!live.has(seq)) drawAhead.current.delete(seq)
+    const ops = new Set(next.map(e => e.operationId))
+    for (const op of takenBackBy.current.keys()) if (!ops.has(op)) takenBackBy.current.delete(op)
+    for (const op of callerSays.current.keys()) if (!ops.has(op)) callerSays.current.delete(op)
+    if (!back.length) return
+    showOutbox()
+    for (const e of back) {
+      announced.current.add(`${e.owner}:${e.operationId}`)
+      // Its control stops working in the same render, not when later commands are done (Ratchet a07a377f).
+      workingBy.current.get(e.operationId)?.()
+      // The caller says it if it's still on screen; otherwise (it closed, or this is a reload) the notice does.
+      if (!takenBackBy.current.get(e.operationId)?.(e)) toast(takenBackText(e), { timeout: 6000 })
+    }
+  }, [showOutbox]) // eslint-disable-line react-hooks/exhaustive-deps
   // After a send that didn't land, try again on its own: 2 s, 5 s, 15 s, then every 30 s, without waiting for `online`,
   // which a dead connection never fires (Jazz 8887e299).
   const retryStep = useRef(0), retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -342,7 +393,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         if (answer.status === 'applied') adopt(answer.workspace)
         return answer
       } finally { inFlight.current.delete(entry.seq!) }
-    }, queue => { entries.current = queue })
+    }, takeQueue)
     try {
       // One tab sends an owner's changes at a time; without Web Locks two may send one, and its receipt answers the second (§7).
       const result = typeof navigator !== 'undefined' && navigator.locks ? await navigator.locks.request(`daythread-outbox:${owner}`, work) : await work()
@@ -355,7 +406,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       else if (stop?.status === 'missing') legacy.current = true
       return result
     } finally { showOutbox() }
-  }, [transport, adopt, showOutbox, retryLater, settleLater])
+  }, [transport, adopt, showOutbox, retryLater, settleLater, takeQueue])
 
   /** A change of his, stored in this tab: drained with the rest, and its own answer made what `transport.run` would have returned, or an `OutboxStop`. */
   const sendOwn = useCallback(async (entry: OutboxEntry, stale?: RunOptions['stale']): Promise<{ workspace: Workspace; receipt: Receipt }> => {
@@ -412,10 +463,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       const work = () => s.handOff(seq, owner, replacement)
       const at = typeof navigator !== 'undefined' && navigator.locks ? await navigator.locks.request(`daythread-outbox:${owner}`, work) : await work()
       handedBack.current.delete(seq)
-      if (owner === knownOwner) { entries.current = (await s.all()).filter(e => e.owner === owner); settleLater(entries.current) }
+      if (owner === knownOwner) { takeQueue((await s.all()).filter(e => e.owner === owner)); settleLater(entries.current) }
       return at
     } finally { showOutbox() }
-  }, [showOutbox, settleLater])
+  }, [showOutbox, settleLater, takeQueue])
 
   /** Once the owner is known (the first load, or the offline copy's), this owner's stored changes join the tab, before they're shown. */
   const takeStored = useCallback(async (owner: string | null) => {
@@ -516,7 +567,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         if (store.current && knownOwner) {
           // Another tab may have sent, held or discarded changes meanwhile: take the stored queue as it is, then send.
           const owner = knownOwner
-          entries.current = (await store.current.all().catch(() => entries.current)).filter(e => e.owner === owner)
+          takeQueue((await store.current.all().catch(() => entries.current)).filter(e => e.owner === owner))
           showOutbox()
         }
         if (entries.current.some(e => e.state === 'pending')) { netAway.current = false; void drainRef.current?.() }
@@ -571,12 +622,19 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const run = useCallback(
     (source: ActionSource, notice?: NoticeArg, operationId = newOperationId(), options: RunOptions = {}) => {
       commandsOut++
+      // §4.2: a change that isn't drawn before the answer shows on the control he pressed that it's working, and takes no second press.
+      const pressed = justPressed()
+      let endWorking: (() => void) | null = null
+      const working = (action: Action | null | undefined, drawnNow: boolean) => {
+        if (pressed && action && !endWorking && drawRule[action.type] !== 'own' && !drawnNow) { endWorking = markWorking(pressed); workingBy.current.set(operationId, endWorking) }
+      }
       // B98: built and stored now, against the predicted workspace, unless it's page text (the editor keeps its own drafts) or there's no outbox here.
       const owner = knownOwner, base = wsRef.current
       let stored: Promise<OutboxEntry | null> = Promise.resolve(null), built: Action | null | undefined, storeFailed = false, superseded = false
       if (store.current && durable.current && !legacy.current && owner && base) {
         const ahead = predicted() ?? base
         built = typeof source === 'function' ? source(ahead) : source
+        working(built, Boolean(built && drawsAhead(built)))
         if (built && built.type !== 'save-editor') {
           const { entry } = capture(ahead, built, operationId, entries.current.some(e => e.action.type === 'undo'))
           const full: OutboxEntry = { ...entry, owner, baseRevision: base.revision, ownRevisions: [], createdAt: Date.now(), state: 'pending', ...(appWrites.has(built.type) ? { app: true } : {}) }
@@ -586,6 +644,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           stored = adding.then(async seq => {
             outboxHint.set()
             ownJobs.current.add(seq)
+            if (drawsAhead(full.action)) drawAhead.current.add(seq)
+            // Its caller's own word, kept as long as the change is in the queue (it may be held on a later send).
+            if (options.onTakenBack) takenBackBy.current.set(operationId, options.onTakenBack)
+            if (options.stale || options.inlineRefusal) callerSays.current.set(operationId, { stale: Boolean(options.stale), ...(options.inlineRefusal ? { inline: options.inlineRefusal } : {}) })
             const kept = { ...full, seq }
             options.onStored?.()
             // A drain in another tab may have read it into this tab's list already.
@@ -606,6 +668,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         if (options.replaces && !entry && !storeFailed && !built) void options.replaces.done()
         const action = built !== undefined ? built : typeof source === 'function' ? source(current) : source
         if (!action) return null
+        // Not stored (no device storage): nothing is drawn ahead, so it waits like the rest.
+        working(action, Boolean(entry && drawsAhead(action)))
         if (!options.quiet) setSaveState('saving')
         // §8.4: where nothing could be stored, say so only if it's still on its way after a second.
         const risk = !entry && !durable.current ? setTimeout(() => { slowUnsent.current = true; showOutbox() }, 1000) : undefined
@@ -700,7 +764,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         }
       })
       queue.current = job.catch(() => undefined)
-      void job.finally(() => { commandsOut-- }).catch(() => undefined)
+      // A caller rebuilds or refuses in place only while its run is out; after that a later hold is said like any other.
+      void job.finally(() => { commandsOut--; endWorking?.(); workingBy.current.delete(operationId); callerSays.current.delete(operationId) }).catch(() => undefined)
       return job
     },
     [transport, adopt, push, refresh, retireStaleUndo, predicted, sendOwn, showOutbox, handOff],

@@ -134,6 +134,25 @@ function Toasts() {
     update(); media.addEventListener('change', update)
     return () => media.removeEventListener('change', update)
   }, [])
+  // Release 2 (Jazz ea7e3ef4): on the phone, notices sit at the top like the banners, and a held change brings both at
+  // once. Notices go under any banner on screen, never over its Keep mine / Discard.
+  useEffect(() => {
+    if (!phone) return
+    const root = document.documentElement
+    let frame = 0
+    const measure = () => {
+      frame = 0
+      let below = 0
+      for (const b of document.querySelectorAll<HTMLElement>('.banner')) { const r = b.getBoundingClientRect(); if (r.height && r.bottom > 0) below = Math.max(below, r.bottom) }
+      root.style.setProperty('--toast-below', `${Math.round(below)}px`)
+    }
+    const soon = () => { if (!frame) frame = requestAnimationFrame(measure) }
+    const watch = new MutationObserver(soon)
+    watch.observe(document.body, { childList: true, subtree: true })
+    window.addEventListener('scroll', soon, true); window.addEventListener('resize', soon)
+    measure()
+    return () => { watch.disconnect(); window.removeEventListener('scroll', soon, true); window.removeEventListener('resize', soon); cancelAnimationFrame(frame); root.style.removeProperty('--toast-below') }
+  }, [phone])
   return (
     // The review lives on today's page now; phone notices sit at the top on every screen.
     // on Done hit the notice, or its Undo.
