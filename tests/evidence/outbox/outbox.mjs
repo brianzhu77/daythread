@@ -477,13 +477,15 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
    * After the first outbox answer, holds what `which` picks until `release()`; the page sees nothing back meanwhile.
    * The answer is fetched here and only handed to the page once `answered` is set: set from Playwright's `response`
    * event instead, Chromium could deliver it after the page had already sent its rebuild, and that send went through
-   * unheld (19c, Lead 199831e7, 1 run in 41).
+   * unheld (19c, Lead 199831e7, 1 run in 41). `abortHeld`: ends the requests it holds. Closing the page with one still
+   * held lets it through to the server, since Playwright continues a paused request when interception goes away: 19c
+   * alone failed 10 in 25 that way (r1 b), and 0 in 25 when the held request was aborted first (Lead 16d372a1).
    */
   const holdAfterAnswer = async (page, which) => {
-    let answered = false, release; const gate = new Promise(r => { release = r })
+    let answered = false, release; const gate = new Promise(r => { release = r }), paused = []
     await page.route('**/_serverFn/**', async route => {
       const req = route.request()
-      if (answered && which(req)) { await gate; await route.continue().catch(() => {}); return }
+      if (answered && which(req)) { paused.push(route); await gate; await route.continue().catch(() => {}); return }
       if (!answered && req.url().includes('/_serverFn/cedd5fc6')) {
         const res = await route.fetch().catch(() => null)
         if (!res) { await route.abort().catch(() => {}); return }
@@ -493,7 +495,7 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
       }
       await route.continue().catch(() => {})
     })
-    return { answered: () => answered, release }
+    return { answered: () => answered, release, abortHeld: async () => { for (const r of paused.splice(0)) await r.abort().catch(() => {}) } }
   }
   const entriesIn = p => p.evaluate(() => new Promise(resolve => { const r = indexedDB.open('daythread-outbox', 1); r.onsuccess = () => { const q = r.result.transaction('entries').objectStore('entries').getAll(); q.onsuccess = () => resolve(q.result.map(e => ({ label: e.label, state: e.state }))) }; r.onerror = () => resolve([]) }))
   // 19c. The rebuild can't be stored (the device's storage fails) and can't be sent either: the original stays, and the
@@ -509,6 +511,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await stage(page)
     for (let i = 0; i < 40 && !held.answered(); i++) await wait(100)
     await wait(1500)
+    // The tab goes with its rebuild still unsent: never let the held request through as it closes.
+    await held.abortHeld()
     await page.close({ runBeforeUnload: false })
     const again = await context.newPage(); await again.goto(`${base}/pages?page=runs`); await again.locator('.banner.save-failed').waitFor({ timeout: 10000 }).catch(() => {}); await settle(again)
     const text = (await again.locator('.banner.save-failed').innerText().catch(() => '')).replace(/\s+/g, ' ').trim()
