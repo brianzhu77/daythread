@@ -1862,6 +1862,8 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .draft-acts.is-working { opacity: 1; width: 64px; justify-content: center; }
 .draft-acts.is-working .draft-spin { margin: 0; }
 /* A refusal, said where he pressed (§2.1.4): Meta size, Deadline Red, under the band or alone in its place. */
+/* B109: a held Apply all or Dismiss, said once under the draft line (Jazz e28c328e). */
+.draft-held { margin: -8px 0 10px; font-size: var(--text-meta); color: var(--red); }
 .draft-note { margin: -2px 0 4px; padding-left: var(--draft-pad, 14px); font-size: var(--text-meta); color: var(--red); }
 .draft-band-slot { min-height: 32px; display: flex; align-items: center; }
 .draft-band-slot .draft-note { margin: 0; }

@@ -43,6 +43,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     return `${words}:${e.classList.contains('draft-band-slot') ? 'note' : e.getAttribute('data-decided') ?? 'open'}`
   }).join(' '))
   const notes = page => page.evaluate(() => [...document.querySelectorAll('.draft-note')].map(e => e.textContent.trim()))
+  /** B109: a held Apply all or Dismiss, said once under the draft line. */
+  const heldLine = page => page.evaluate(() => [...document.querySelectorAll('.draft-held')].map(e => e.textContent.trim()).join(' / '))
   const toastText = page => page.evaluate(() => [...document.querySelectorAll('.app-toasts .toast__title, .app-toasts [data-slot=toast-title], [data-slot=toast] [data-slot=title]')].map(e => e.textContent.trim()).join(' / ') || [...document.querySelectorAll('.app-toasts li, [data-slot=toast]')].map(e => e.textContent.trim()).join(' / '))
   const apply = (page, words) => page.locator(`button[aria-label="Apply ${words}"]`)
   const skip = (page, words) => page.locator(`button[aria-label="Skip ${words}"]`)
@@ -167,8 +169,10 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     }
 
     // 4d. The same for ✕, Dismiss, and a ✕ decided offline and held when sent later (Ratchet 85c5939a): a skip is his,
-    //     not the app's, so it's said in place and the banner keeps its way back.
-    for (const how of ['✕', 'Dismiss', '✕ offline']) {
+    //     not the app's, so it's said in place and the banner keeps its way back. A held Dismiss or Apply all is one
+    //     decision: said once under the draft line, no note on its rows, until Discard (B109, Jazz e28c328e).
+    for (const how of ['✕', 'Dismiss', 'Apply all', '✕ offline']) {
+      const batch = how === 'Dismiss' || how === 'Apply all'
       reseed(); const { context, page } = await fresh()
       if (how === '✕ offline') await page.route(OUTBOX, r => r.abort())
       const elsewhere = async () => {
@@ -177,16 +181,28 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
         await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action: { type: 'skip-draft', pageId: day.id, itemIds: [last.id] } })
       }
       if (how !== '✕ offline') await elsewhere()
-      if (how === 'Dismiss') await press(page, page.locator('.draft-line button', { hasText: 'Dismiss' }))
+      if (batch) await press(page, page.locator('.draft-line button', { hasText: how }))
       else await press(page, skip(page, 'Renew the passport'))
       if (how === '✕ offline') { await wait(400); await elsewhere(); await page.unroute(OUTBOX) }
-      let n = []
-      for (let i = 0; i < 60 && !(n = await notes(page)).length; i++) await wait(250)
+      let n = [], line = ''
+      for (let i = 0; i < 60 && !(n = await notes(page)).length && !(line = await heldLine(page)); i++) await wait(250)
       await wait(700)
+      n = await notes(page); line = await heldLine(page)
       const notice = await toastText(page), banner = await page.locator('body').textContent()
-      ok(`${tag} 4d ${how} held: said in place, back to offered`, n.includes('Not skipped · changed elsewhere') && /Renew:open/.test(await bands(page)), `${n.join(' / ')} · ${await bands(page)}`)
-      ok(`${tag} 4d ${how} held: no Skipped notice, the banner keeps its way back`, !/Skipped/.test(notice) && /Keep mine/.test(banner) && /Discard/.test(banner), notice)
-      ok(`${tag} 4d ${how} held: nothing skipped here`, states() === 'ooos', states())
+      if (batch) {
+        const word = how === 'Dismiss' ? 'Not dismissed · changed elsewhere' : 'Not applied · changed elsewhere'
+        ok(`${tag} 4d ${how} held: said once under the draft line, no row notes, rows offered`, line === word && !n.length && /Renew:open/.test(await bands(page)), `${JSON.stringify(line)} · notes ${n.length} · ${await bands(page)}`)
+        const box = await page.evaluate(() => { const l = document.querySelector('.draft-line'), h = document.querySelector('.draft-held'); if (!l || !h) return null; const a = l.getBoundingClientRect(), b = h.getBoundingClientRect(); return { gap: b.top - a.bottom, left: b.left - a.left } })
+        ok(`${tag} 4d ${how} held: the line sits right under the draft line`, box && box.gap >= -1 && box.gap <= 4 && Math.abs(box.left) <= 4, JSON.stringify(box))
+      } else ok(`${tag} 4d ${how} held: said in place, back to offered`, n.includes('Not skipped · changed elsewhere') && !line && /Renew:open/.test(await bands(page)), `${n.join(' / ')} · ${JSON.stringify(line)} · ${await bands(page)}`)
+      ok(`${tag} 4d ${how} held: no Skipped or Applied notice, the banner keeps its way back`, !/Skipped|Applied/.test(notice) && /Keep mine/.test(banner) && /Discard/.test(banner), notice)
+      ok(`${tag} 4d ${how} held: nothing decided here`, states() === 'ooos', states())
+      if (batch) {
+        await wait(4500)
+        ok(`${tag} 4d ${how} held: still said after 4 s, while it's held`, (await heldLine(page)) !== '', await heldLine(page))
+        await page.getByRole('button', { name: 'Discard' }).first().click(); await wait(800)
+        ok(`${tag} 4d ${how} held: Discard in the banner ends it`, !(await heldLine(page)) && !(await notes(page)).length && /Renew:open/.test(await bands(page)), `${await heldLine(page)} · ${await bands(page)}`)
+      }
       await context.close()
     }
 
