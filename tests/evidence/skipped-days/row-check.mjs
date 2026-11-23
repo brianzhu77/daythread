@@ -94,10 +94,13 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
       if (how === 'day') { await press(page, another(page, title)); await wait(150) }
       const top = async () => (await band(page, next).boundingBox()).y
       const before = await top(), seen = []
+      // Times are measured from just before the tap, so each sample's real age is known: the hold starts once the move is
+      // stored (after the tap) and lasts 1 s, so a sample under 1000 ms from here is always inside it (Ratchet 43392ad3).
+      const t0 = Date.now()
       await press(page, how === 'day' ? choices(page).locator('button').first() : page.locator(`button[aria-label="Skip ${title}"]`))
-      let t = 0
-      for (const at of [60, 300, 600, 900]) { await wait(at - t); t = at; seen.push(Math.round((await top()) - before)) }
-      ok(`${tag} 8 ${how} on ${title.slice(0, 20)}: the next band holds still through the hold`, seen.every(d => Math.abs(d) <= 0.5), `moved ${seen.join(', ')} px at 60/300/600/900 ms`)
+      for (const at of [60, 300, 600, 900]) { await wait(Math.max(0, at - (Date.now() - t0))); const d = Math.round((await top()) - before); seen.push({ ms: Date.now() - t0, d }) }
+      const inHold = seen.filter(x => x.ms < 1000)
+      ok(`${tag} 8 ${how} on ${title.slice(0, 20)}: the next band holds still through the hold`, inHold.length >= 3 && inHold.every(x => Math.abs(x.d) <= 0.5), `moved ${seen.map(x => `${x.d} px at ${x.ms} ms`).join(', ')}${seen.length > inHold.length ? ' (after 1000 ms: the hold may be over, not judged)' : ''}`)
       await context.close()
     }
   }
@@ -113,6 +116,21 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
       const d = await band(page, LONG).evaluate(b => Math.round(b.querySelector('.draft-meta').getBoundingClientRect().left - b.querySelector('.draft-text').getBoundingClientRect().left))
       ok(`${tag} 9 a label under a long title starts at the title's edge`, d === 0, `${d} px`)
     }
+    await context.close()
+  }
+
+  // 10. Pick… cancelled by a tap elsewhere on a phone: nothing stored, choices open, and no band button keeps focus, which
+  // on iOS brings up the editor's toolbar (Jazz 5b6ce414).
+  if (phone) {
+    reseed(); const { context, page } = await fresh()
+    await press(page, another(page, KATHY)); await wait(150)
+    const rev = stored().revision
+    await press(page, choices(page).locator('button', { hasText: 'Pick…' })); await wait(300)
+    // A tap on the draft line's words: not a control, nothing to store.
+    const line = await page.locator('.draft-line').boundingBox()
+    await page.touchscreen.tap(line.x + 8, line.y + line.height / 2); await wait(900)
+    const focus = await page.evaluate(() => document.activeElement?.closest('.draft-host') ? document.activeElement.textContent : '')
+    ok(`${tag} 10 Pick… cancelled by a tap away: nothing stored, choices open, no band button focused`, stored().revision === rev && await choices(page).count() === 1 && !focus, `rev ${rev} → ${stored().revision}, focused "${focus}"`)
     await context.close()
   }
 
@@ -179,7 +197,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await page.keyboard.press('Enter'); await wait(200)
     const rev = stored().revision
     await choices(page).locator('button', { hasText: 'Pick…' }).focus(); await page.keyboard.press('Enter'); await wait(300); await page.keyboard.press('Escape'); await wait(900)
-    ok(`${tag} 7 Pick… cancelled: nothing stored, choices still open`, stored().revision === rev && await choices(page).count() === 1, `rev ${rev} → ${stored().revision}`)
+    const onPick = await page.evaluate(() => document.activeElement?.textContent === 'Pick…')
+    ok(`${tag} 7 Pick… cancelled: nothing stored, choices still open, focus back on Pick… (keyboard)`, stored().revision === rev && await choices(page).count() === 1 && onPick, `rev ${rev} → ${stored().revision}, on Pick… ${onPick}`)
     await choices(page).locator('button').first().focus(); await page.keyboard.press('Enter'); await wait(1500)
     const focus = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.className ?? '')
     ok(`${tag} 7 after the hold, focus on the next suggestion's ✓`, /^Apply /.test(focus) && !focus.includes('Kathy homework app'), focus)

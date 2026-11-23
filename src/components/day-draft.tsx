@@ -438,12 +438,14 @@ function DayChoices({ draft, item, on, title, until }: { draft: DayDraft; item: 
     <div className={`draft-days${until ? ' is-held' : ''}`} role="group" aria-label={`Move ${title} to`} data-draft-choices={item.id} onKeyDown={onKeyDown}>
       <span className="draft-days-label">Move to</span>
       {days.map(d => <button key={d} type="button" className={until === d ? 'is-chosen' : undefined} aria-label={`Move ${title} to ${noticeDate(d)}`} aria-disabled={until ? true : undefined} onClick={() => pick(d)}>{shortLabel(d)}</button>)}
-      {/* The native picker: cancelling it stores nothing, and the choices stay open with focus back on Pick… */}
+      {/* The native picker: cancelling it stores nothing and the choices stay open. Focus goes back to Pick… only for a
+          keyboard cancel, never on touch: on a phone a focused band button brings up the editor's toolbar (Jazz 5b6ce414). */}
       <button type="button" className={until && !days.includes(until) ? 'is-chosen' : undefined} aria-label={`Move ${title} to another day`} aria-disabled={until ? true : undefined}
         onClick={e => {
           if (until) return
-          const self = e.currentTarget
-          pickDate(addDays(todayIso() > on ? todayIso() : on, 1), d => (d > on ? pick(d) : undefined), { at: self, onCancel: () => { if (self.isConnected && (!document.activeElement || document.activeElement === document.body)) self.focus({ preventScroll: true }) } })
+          const self = e.currentTarget, fromKeys = e.detail === 0
+          const keyboard = (by: 'key' | 'pointer' | 'other') => by === 'key' || (by === 'other' && fromKeys)
+          pickDate(addDays(todayIso() > on ? todayIso() : on, 1), d => (d > on ? pick(d) : undefined), { at: self, onCancel: by => { if (keyboard(by) && self.isConnected && (!document.activeElement || document.activeElement === document.body)) self.focus({ preventScroll: true }) } })
         }}>Pick…</button>
     </div>
   )
