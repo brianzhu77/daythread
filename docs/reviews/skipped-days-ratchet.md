@@ -1,3 +1,5 @@
+> Lead 9bad7b3b accepts the independently documented Chromium keyboard limit as a separate follow-up. Gate started on exact e88c4590; reviewer ff96fab0 CLEAR and Jazz d0318b91 CLEAR. Own services stopped; no gate/release execution by reviewer.
+
 # Focus delta — e88c4590 CLEAR with existing keyboard gap disclosed
 
 Delivered ff96fab0. Delta source review and typecheck pass. Independent Chromium/WebKit touch cancel: no write, choices remain open, no band control focused. WebKit keyboard Esc: no write, choices open, focus returns to Pick. Jazz d0318b91 separately clears Home Screen native cancel.
