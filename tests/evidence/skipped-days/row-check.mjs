@@ -52,6 +52,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     ok(`${tag} 1 labels`, kathy === `skipped ${md(day(-8))}, ${wd(day(-2))}, ${wd(day(-1))}` && trv === `skipped ${wd(day(-1))}` && long === 'skipped 5 times', `${kathy} | ${trv} | ${long}`)
     const full = await band(page, LONG).locator('.draft-skips .sr-only').textContent()
     ok(`${tag} 1 the full list is in the accessible text`, (full.match(/,/g) ?? []).length === 4, full)
+    const ageShown = await band(page, KATHY).locator('.m-age').isVisible(), lennyAge = await band(page, LENNY).locator('.draft-since').isVisible()
+    ok(`${tag} 1 the age: ${phone ? 'hidden on a labelled row (Lead f056fda9), kept on others' : 'kept'}`, ageShown === !phone && lennyAge, `labelled ${ageShown}, plain ${lennyAge}`)
     ok(`${tag} 1 no label or Another day on a never-skipped to-do or a line`, await band(page, LENNY).locator('.draft-meta').count() === 0 && await page.locator('.draft-band.is-line .draft-meta').count() === 0)
     if (!phone) {
       const h = async t => Math.round((await band(page, t).boundingBox()).height)
@@ -81,6 +83,36 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     const g = await geometry(KATHY)
     ok(`${tag} 2 choices open: ✓ ✕ still on the title's first line, clear of Another day`, Math.abs(g.dCheck) <= 1.5 && Math.abs(g.dCross) <= 1.5 && !g.hitsCheck && !g.hitsCross && g.gap >= 7.5, JSON.stringify(g))
     ok(`${tag} 2 Move to and its choices on one line`, Math.max(...mids) - Math.min(...mids) < 8, mids.map(Math.round).join(' '))
+    await context.close()
+  }
+
+  // 8. Nothing below moves during the hold (Jazz 2cb3d6c2, Ratchet d6d28a51): after a day pick, the band keeps its
+  // height until it closes with its choices; after a plain ✕ on a tall band (long title and label) too.
+  {
+    for (const [title, next, how] of [[KATHY, TRV, 'day'], [LONG, LENNY, 'day'], [LONG, LENNY, '✕']]) {
+      reseed(); const { context, page } = await fresh()
+      if (how === 'day') { await press(page, another(page, title)); await wait(150) }
+      const top = async () => (await band(page, next).boundingBox()).y
+      const before = await top(), seen = []
+      await press(page, how === 'day' ? choices(page).locator('button').first() : page.locator(`button[aria-label="Skip ${title}"]`))
+      let t = 0
+      for (const at of [60, 300, 600, 900]) { await wait(at - t); t = at; seen.push(Math.round((await top()) - before)) }
+      ok(`${tag} 8 ${how} on ${title.slice(0, 20)}: the next band holds still through the hold`, seen.every(d => Math.abs(d) <= 0.5), `moved ${seen.join(', ')} px at 60/300/600/900 ms`)
+      await context.close()
+    }
+  }
+
+  // 9. Label layout (Jazz 2cb3d6c2): at 390 line 2 breaks between the age and the days, never leaving a day alone; at
+  // 1280 a label pushed under a long title starts at the title's edge.
+  {
+    reseed(); const { context, page } = await fresh()
+    if (phone) {
+      const g = await band(page, KATHY).evaluate(b => ({ lines: b.querySelector('.draft-skips').getClientRects().length, h: Math.round(b.querySelector('.draft-skips').getBoundingClientRect().height) }))
+      ok(`${tag} 9 the days stay on one line of their own`, g.lines === 1 && g.h <= 20, JSON.stringify(g))
+    } else {
+      const d = await band(page, LONG).evaluate(b => Math.round(b.querySelector('.draft-meta').getBoundingClientRect().left - b.querySelector('.draft-text').getBoundingClientRect().left))
+      ok(`${tag} 9 a label under a long title starts at the title's edge`, d === 0, `${d} px`)
+    }
     await context.close()
   }
 
