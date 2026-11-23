@@ -129,6 +129,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("skip-draft"), pageId: id, itemIds: z.array(z.string().min(1).max(100)).min(1).max(50) }),
   z.object({ type: z.literal("snooze-draft"), pageId: id, itemIds: z.array(z.string().min(1).max(100)).min(1).max(50), date: day, today: day.optional(), skippedBy: id, seen: z.record(z.string().max(100), day.nullable()) }),
   z.object({ type: z.literal("reopen-draft"), pageId: id, itemIds: z.array(z.string().min(1).max(100)).min(1).max(50), skippedBy: id, seen: z.record(z.string().max(100), day.nullable()) }),
+  z.object({ type: z.literal("move-draft"), pageId: id, itemId: z.string().min(1).max(100), date: day, today: day.optional() }),
   z.object({ type: z.literal("create-database"), pageId: id, parentId: id.nullable().optional(), homeBlockId: id.nullable(), title, dashboard: z.object({ viewId: id, rowId: id, widgetId: id, widgetViewId: id }).optional() }),
   z.object({ type: z.literal("change-database"), pageId: id, change }),
   z.object({ type: z.literal("move-row"), pageId: id, databaseId: id, at }),

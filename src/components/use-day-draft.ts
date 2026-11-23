@@ -28,7 +28,7 @@ export interface DayDraftHook {
    */
   decided: Record<string, 'apply' | 'skip'>
   /** Decisions the server held (the draft changed since), by item, with their operation: said in place until Keep mine or Discard. */
-  held: Record<string, { kind: 'apply' | 'skip'; operationId: string; /** One decision on several items (Apply all, Dismiss): said once, under the draft line (B109). */ batch: boolean }>
+  held: Record<string, { kind: 'apply' | 'skip' | 'move'; operationId: string; /** One decision on several items (Apply all, Dismiss): said once, under the draft line (B109). */ batch: boolean }>
   /**
    * `onStored`: the change is kept on this device (the first frame its band may look decided, §2). Resolves once the
    * server has answered: what it applied, what was no longer open, `refused` when nothing was ("Nothing to apply"), and
@@ -47,6 +47,11 @@ export interface DayDraftHook {
   snooze(ticket: DraftTicket, date: LocalDate): Promise<{ status: 'done' | 'refused' | 'failed'; moved: string[]; dropped: string[]; operationId: string; /** The server's refusal, when refused. */ reason?: string }>
   /** Undo on `Moved to …`: takes back only the move; 'refused' when the workspace's Undo has moved on. */
   undoMove(operationId: string): Promise<'done' | 'refused' | 'failed'>
+  /**
+   * #377: the row's Another day on a carried to-do: skipped here and planned on `date` in one write (`move-draft`), so
+   * its Undo (`undoApply`, which works before it has landed too) takes back both. `refused` with the server's reason.
+   */
+  move(itemId: string, date: LocalDate, hooks?: DecisionHooks): Promise<DecisionOutcome & { reason?: string }>
   /**
    * The skip notice's Undo once Undo move has used the workspace's one Undo: reopens what that skip left, or 'refused'
    * when it was skipped, moved or applied since, or its to-do planned elsewhere (`Can't undo · edited since`).
@@ -95,7 +100,7 @@ export function useDayDraft(page: Page): DayDraftHook {
   }, [outbox.decisions, page.id])
   const held = useMemo(() => {
     const out: DayDraftHook['held'] = {}
-    for (const d of outbox.heldDecisions) if (d.pageId === page.id) for (const id of d.itemIds) out[id] = { kind: d.type === 'apply-draft' ? 'apply' : 'skip', operationId: d.operationId, batch: d.itemIds.length > 1 }
+    for (const d of outbox.heldDecisions) if (d.pageId === page.id) for (const id of d.itemIds) out[id] = { kind: d.type === 'apply-draft' ? 'apply' : d.type === 'move-draft' ? 'move' : 'skip', operationId: d.operationId, batch: d.itemIds.length > 1 }
     return out
   }, [outbox.heldDecisions, page.id])
   const ask = useSyncExternalStore(subscribeAsks, () => asks.get(page.id), () => undefined)
@@ -219,6 +224,16 @@ export function useDayDraft(page: Page): DayDraftHook {
     return receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const
   }, [latest, run])
 
+  const move = useCallback(async (itemId: string, date: LocalDate, hooks?: DecisionHooks) => {
+    const operationId = newOperationId()
+    let stored = false, refused = false, held = false, reason = ''
+    const receipt = await write({ type: 'move-draft', pageId: page.id, itemId, date, today: todayIso() }, undefined, operationId, {
+      inlineRefusal: /Nothing to move|Pick a later day|Changed elsewhere/, onRefused: message => { refused = true; reason = message; hooks?.onRefused?.() },
+      onHeld: () => { held = true; hooks?.onHeld?.() }, onStored: () => { stored = true; hooks?.onStored?.(operationId) },
+    })
+    return { operationId, stored, landed: Boolean(receipt), refused, held, failed: !receipt && !refused && !held && !stored, ...(refused ? { reason } : {}) }
+  }, [page.id, write])
+
   const addOpen = useCallback(async (taskId: string) => Boolean(page.date && await write({ type: 'plan-task', taskId, date: page.date, today: todayIso() }, r => ({ text: 'Added', undoOperationId: r.operationId }))), [page.date, write])
 
   const retry = useCallback(() => { void prepare(false) }, [prepare])
@@ -226,5 +241,5 @@ export function useDayDraft(page: Page): DayDraftHook {
   const state: DayDraftState = offline && !view ? 'offline' : inFlight(ask) && !view?.items.length ? 'preparing'
     // A failed or lost ask here shows Retry at once (he may be looking at the page); a tab coming back asks again first.
     : !view ? (ask && ask.state !== 'done' ? 'failed' : 'none') : view.status === 'failed' ? 'failed' : 'ready'
-  return { state, items: view?.items ?? [], decided, held, moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, undoApply, snooze, undoMove, reopen, addOpen, retry }
+  return { state, items: view?.items ?? [], decided, held, moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, undoApply, snooze, undoMove, move, reopen, addOpen, retry }
 }

@@ -27,7 +27,7 @@ export const drawRule = {
   'apply-link-preview': 'wait', 'unsync-block': 'wait', 'delete-synced-place': 'wait',
 
   'task-status': 'own', 'set-values': 'own', 'set-values-many': 'own', 'save-editor': 'own', 'apply-draft': 'own',
-  'skip-draft': 'own', 'snooze-draft': 'own', 'reopen-draft': 'own', 'ensure-day': 'own', 'set-draft': 'own',
+  'skip-draft': 'own', 'snooze-draft': 'own', 'move-draft': 'own', 'reopen-draft': 'own', 'ensure-day': 'own', 'set-draft': 'own',
   'run-repeats': 'own', 'set-smart-note-result': 'own', undo: 'own',
 } as const satisfies Record<Action['type'], DrawRule>
 

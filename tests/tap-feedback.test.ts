@@ -47,3 +47,13 @@ test('tap feedback: a held decision is listed as held, not as decided (said in p
   assert.deepEqual(draftDecisions(entries, 'held').map(d => [d.operationId, d.itemIds]), [['a1', ['i1']]])
   assert.deepEqual(draftDecisions(entries).map(d => d.operationId), ['s1'])
 })
+
+test('tap feedback: the row’s Another day is decided from the moment it’s stored; its Undo undoes it; held says so', () => {
+  const got = draftDecisions([
+    entry('m1', { type: 'move-draft', pageId: 'p', itemId: 'i5', date: '2026-11-30' }),
+    entry('m2', { type: 'move-draft', pageId: 'p', itemId: 'i6', date: '2026-11-30' }),
+    entry('u2', { type: 'undo', targetOperationId: 'm2' }),
+  ])
+  assert.deepEqual(got.map(d => [d.operationId, d.type, d.itemIds, d.undone]), [['m1', 'move-draft', ['i5'], false], ['m2', 'move-draft', ['i6'], true]])
+  assert.deepEqual(draftDecisions([entry('m3', { type: 'move-draft', pageId: 'p', itemId: 'i7', date: '2026-11-30' }, 'held')], 'held').map(d => d.itemIds), [['i7']])
+})
