@@ -7,7 +7,10 @@ const [port, store, repo] = process.argv.slice(2); if (!port || !store || !repo)
 const require = createRequire(repo + '/'), pw = require('@playwright/test')
 const { SqliteWorkspaceRepository } = await import(repo + '/src/server/sqlite-repository.ts')
 const base = `http://127.0.0.1:${port}`, wait = ms => new Promise(r => setTimeout(r, ms))
-const today = new Intl.DateTimeFormat('en-CA').format(new Date())
+// A fixed weekday: the day row leaves out tomorrow, so on a Sunday it has no Mon (Lead e4d87fa8). The browser's clock runs
+// from 10:00 on this week's Wednesday, and the store is seeded for that day.
+const now = new Date(), wednesday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 3, 10)
+const today = new Intl.DateTimeFormat('en-CA').format(wednesday)
 const reseed = () => execSync(`cd ${repo} && node --no-warnings tests/evidence/draft-snooze/seed.ts ${store} ${today}`, { stdio: 'ignore' })
 const { plannedOn } = await import(repo + '/src/domain/workspace.ts')
 const planned = async title => { const w = await new SqliteWorkspaceRepository(store).load(); return plannedOn(w, w.tasks.find(x => x.title === title).id) }
@@ -17,6 +20,7 @@ for (const engine of (process.env.ONLY ?? 'chromium,webkit').split(',')) {
   for (const [w, h] of [[390, 844], [1280, 800]]) {
     const T = `${engine} ${w}`
     const c = await b.newContext({ viewport: { width: w, height: h }, serviceWorkers: 'block' })
+    await c.clock.install({ time: wednesday })
     const open = async () => { reseed(); const p = await c.newPage(); await p.goto(base + '/'); await p.locator('.draft-band').first().waitFor({ timeout: 30000 }); await p.waitForLoadState('networkidle').catch(() => {}); await wait(800); return p }
     const texts = async p => (await p.locator('[data-slot="toast"]:not([data-exiting="true"])').allInnerTexts()).map(s => s.replace(/\s+/g, ' ').trim())
     const front = p => p.locator('[data-slot="toast"]:not([data-exiting="true"])').first()
