@@ -145,11 +145,15 @@ stored on the device; `run` still resolves with the server's receipt.
   `Not saved · …` fallback is only a safety net, and a test fails if an A2 type uses it.
 - One notice per operation, also when the refusal is found on a retry, after a reload or in another tab (Ratchet).
   None when the caller says it in place.
-- In place, for the three he uses: **Rename page**, stored name back, red Meta line under the title
-  `Name not saved · changed elsewhere` (held: until Keep mine / Discard; refused: 4 s). **Links from a paste**, words
-  stay as plain text, red line under that block `Links not saved · changed elsewhere`.
+- In place (Lead 242d438f): **Rename page / rename to-do** are drawn ahead; on any refusal or hold his typed name stays
+  in the field, editable, with a red Meta line under it `Name not saved · <reason>`; Enter tries again, Esc gives up.
+  His words are never replaced by the old value without his say. **Links from a paste** (`make-link-pages`) waits:
+  the pasted words show at once as plain text, the chips replace them with the answer; a refusal uses the named notice
+  `Links not saved · <reason>`.
 
-**4.2 Not drawn ahead (Lead 5b22d29e).** New page, template page and new database wait for the server as today: press,
+**4.2 Not drawn ahead (Lead 5b22d29e, 242d438f; list Roadbuster 8f1f9f40).** Anything that makes something he can type
+into waits for the server as today (new page, template, database, row, task, comment, restore, link pages, add
+property, a paste that makes rows), and so do edit-comment and changes whose result depends on the answer: press,
 then the working look (same place, reduced opacity, spinner after about 300 ms, label width held), no second press.
 Rule: something he can type into isn't shown before the server has it, unless his words provably survive a refusal.
 
