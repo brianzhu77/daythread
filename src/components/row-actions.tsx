@@ -78,11 +78,12 @@ export function rowMenu(task: Task, role: string, planned: LocalDate | null, pag
 
 /**
  * Pick date…: the native date input keeps this tappable on iPhone without a custom calendar (as the Tasks screen).
- * `onCancel`: the picker closed with no day taken (Esc, Cancel, a tap away), so the caller can put focus back.
+ * `onCancel`: the picker closed with no day taken, so the caller can put focus back: `key` for Esc, `pointer` for a tap
+ * or click elsewhere, `other` for the picker's own Cancel or Done (iOS).
  * `at`: the control that opened it. The hidden input sits on it, in view: placed nowhere, iOS scrolled the page to it
  * (the end of the body) as it took focus, and the calendar opened with his row off screen (Jazz 380bf5b1).
  */
-export function pickDate(today: LocalDate, onPick: (date: LocalDate) => void, options: { onCancel?: () => void; at?: Element | null } = {}) {
+export function pickDate(today: LocalDate, onPick: (date: LocalDate) => void, options: { onCancel?: (by: 'key' | 'pointer' | 'other') => void; at?: Element | null } = {}) {
   const { onCancel, at } = options
   const input = document.createElement('input')
   input.type = 'date'
@@ -96,15 +97,16 @@ export function pickDate(today: LocalDate, onPick: (date: LocalDate) => void, op
   Object.assign(input.style, { position: 'fixed', opacity: '0', width: '1px', height: '1px', padding: '0', border: '0', top: r ? `${Math.round(r.top + r.height / 2)}px` : '50%', left: r ? `${Math.round(r.left + r.width / 2)}px` : '50%' })
   document.body.append(input)
   // iOS doesn't blur the input when he closes its calendar by tapping empty page: a tap anywhere else is a cancel.
-  const away = (e: PointerEvent) => { if (e.target !== input) input.blur() }
+  let by: 'key' | 'pointer' | 'other' = 'other'
+  const away = (e: PointerEvent) => { if (e.target !== input) { by = 'pointer'; input.blur() } }
   document.addEventListener('pointerdown', away, true)
   let picked = false
   input.addEventListener('change', () => {
     if (input.value && input.value >= today) { picked = true; onPick(input.value) }
     input.remove()
   })
-  input.addEventListener('keydown', e => { if (e.key === 'Escape') input.blur() })
-  input.addEventListener('blur', () => { document.removeEventListener('pointerdown', away, true); setTimeout(() => { input.remove(); if (!picked) onCancel?.() }, 500) })
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') { by = 'key'; input.blur() } })
+  input.addEventListener('blur', () => { document.removeEventListener('pointerdown', away, true); setTimeout(() => { input.remove(); if (!picked) onCancel?.(by) }, 500) })
   input.showPicker?.()
   input.focus()
 }

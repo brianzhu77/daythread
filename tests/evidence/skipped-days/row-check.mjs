@@ -119,6 +119,21 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await context.close()
   }
 
+  // 10. Pick… cancelled by a tap elsewhere on a phone: nothing stored, choices open, and no band button keeps focus, which
+  // on iOS brings up the editor's toolbar (Jazz 5b6ce414).
+  if (phone) {
+    reseed(); const { context, page } = await fresh()
+    await press(page, another(page, KATHY)); await wait(150)
+    const rev = stored().revision
+    await press(page, choices(page).locator('button', { hasText: 'Pick…' })); await wait(300)
+    // A tap on the draft line's words: not a control, nothing to store.
+    const line = await page.locator('.draft-line').boundingBox()
+    await page.touchscreen.tap(line.x + 8, line.y + line.height / 2); await wait(900)
+    const focus = await page.evaluate(() => document.activeElement?.closest('.draft-host') ? document.activeElement.textContent : '')
+    ok(`${tag} 10 Pick… cancelled by a tap away: nothing stored, choices open, no band button focused`, stored().revision === rev && await choices(page).count() === 1 && !focus, `rev ${rev} → ${stored().revision}, focused "${focus}"`)
+    await context.close()
+  }
+
   // 3. Pick a day: decided in place at once (struck, "moved to", the day marked), one write: skipped here, planned
   // there, tagged as the row's. The band and its choices close after the hold; the line counts one fewer.
   {
@@ -182,7 +197,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
     await page.keyboard.press('Enter'); await wait(200)
     const rev = stored().revision
     await choices(page).locator('button', { hasText: 'Pick…' }).focus(); await page.keyboard.press('Enter'); await wait(300); await page.keyboard.press('Escape'); await wait(900)
-    ok(`${tag} 7 Pick… cancelled: nothing stored, choices still open`, stored().revision === rev && await choices(page).count() === 1, `rev ${rev} → ${stored().revision}`)
+    const onPick = await page.evaluate(() => document.activeElement?.textContent === 'Pick…')
+    ok(`${tag} 7 Pick… cancelled: nothing stored, choices still open, focus back on Pick… (keyboard)`, stored().revision === rev && await choices(page).count() === 1 && onPick, `rev ${rev} → ${stored().revision}, on Pick… ${onPick}`)
     await choices(page).locator('button').first().focus(); await page.keyboard.press('Enter'); await wait(1500)
     const focus = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.className ?? '')
     ok(`${tag} 7 after the hold, focus on the next suggestion's ✓`, /^Apply /.test(focus) && !focus.includes('Kathy homework app'), focus)
