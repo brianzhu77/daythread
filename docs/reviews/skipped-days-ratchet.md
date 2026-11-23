@@ -1,3 +1,11 @@
+# Final independent review — f2f1f8fd CLEAR
+
+Delivered e77a2d7f. Final delta from 63ad2607 is test-only: actual elapsed time is recorded and at least three in-hold samples must be judged. This accounts for the prior nominal900ms observation reaching a legitimate scheduled close. No runtime delta; independent fixed-head six-scenario evidence stands.
+
+Jazz 5b6ce414 separately clears all three picker flows in Simulator Safari and Home Screen on 63ad2607, plus visual holds. Nonblocking native nit: cancel returning focus to Pick shows editor toolbar without keyboard, temporarily covering bottom nav. Lead owns whether to take that follow-up. This is Jazz evidence, not reviewer native testing.
+
+---
+
 # Updated review — 63ad2607
 
 The independently reproduced immediate jump is repaired. Six independent hold probes pass at 390: short move, tall move and tall plain skip in Chromium/WebKit, each with zero displacement at 60/300/600/900ms. Source delta reviewed; full typecheck passes. Phone age removal, retained disabled Another day line/minimum height, tall-band cap change, desktop wrapping and shared picker positioning inspected.
