@@ -115,6 +115,10 @@
   --line-strong: var(--gray-7);
   --fill-hover: var(--gray-3);
   --hover-dim: rgba(0, 0, 0, .06);
+  /* Tap feedback §1.2: a press is one step past hover, laid over whatever the control is: gray-4 / gray-5 on paper. */
+  --press-veil: rgba(0, 0, 0, .09);
+  --press-veil-strong: rgba(0, 0, 0, .12);
+  --press-lift: rgba(255, 255, 255, .2);
   --warn-line: #f0d6bd;
   --red-line: #efc9c4;
   --drop-line: #3484ed;
@@ -176,6 +180,8 @@
     --scrim: rgba(0, 0, 0, .55);
     --scrim-on-paper: color-mix(in srgb, black 55%, var(--paper));
     --hover-dim: rgba(255, 255, 255, .08);
+    --press-veil: rgba(255, 255, 255, .09);
+    --press-veil-strong: rgba(255, 255, 255, .13);
     --drop-line: var(--blue-9);
     --shadow-float: 0 2px 6px rgba(0, 0, 0, .35), 0 10px 30px rgba(0, 0, 0, .5);
     --shadow-row: 0 1px 2px rgba(0, 0, 0, .4);
@@ -268,6 +274,30 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
   outline: 2px solid var(--app-accent);
   outline-offset: 2px;
 }
+/* ---------- Press (tap feedback §1, press.ts) ----------
+   press.ts marks the control under a finger, mouse or key with data-press=<family> and data-press-tone. The look is a
+   veil over the control's own colour, so one rule fits a row, a blue button and a checked box alike. It shows in the
+   same frame (no transition in) and fades out over --dur-fast once lifted (data-press-out). A press is a passing state
+   laid over every other look, hover rules included, so these few declarations are !important. */
+@property --press-a { syntax: '<number>'; inherits: false; initial-value: 0; }
+[data-press] { --press-a: 1; --press-c: var(--press-veil); transition: none; }
+[data-press=icon], [data-press=box] { --press-c: var(--press-veil-strong); }
+/* A to-do box: a halo 6 px past the box, so it shows around the finger (Jazz 28eea1ab). Not the veil: a native box ignores it. */
+[data-press=box] { outline: 6px solid var(--press-now) !important; outline-offset: 0 !important; }
+/* On its own (no fill of its own), a pressed icon or row turns Ink: the part of a 40 px button a finger doesn't cover. */
+[data-press=icon][data-press-tone=theme], [data-press=row][data-press-tone=theme] { color: var(--ink) !important; }
+[data-press][data-press-tone=lift] { --press-c: var(--press-lift); }
+[data-press]:not([data-press-via], [data-press=box]), [data-press][data-press-via=image] { background-image: linear-gradient(var(--press-now), var(--press-now)) !important; }
+[data-press][data-press-via=shadow] { box-shadow: inset 0 0 0 100vmax var(--press-now) !important; }
+[data-press][data-press-via=filter] { filter: brightness(calc(1 - .08 * var(--press-a))) !important; }
+[data-press] { --press-now: color-mix(in srgb, var(--press-c) calc(var(--press-a) * 100%), transparent); }
+/* Words with no room around them get a pill behind them, drawn outside the box so nothing moves. */
+[data-press=text]:not([data-press-via=shadow]) { border-radius: 6px; box-shadow: 0 0 0 4px var(--press-now) !important; }
+[data-press][data-press-out] { --press-a: 0; transition: --press-a var(--dur-fast) ease !important; }
+/* A small button's row tints too (§1.3): a fingertip covers a 40 px button. */
+[data-press-row]:not([data-press-out]) { background-color: var(--gray-2) !important; }
+@media (prefers-reduced-motion: reduce) { [data-press][data-press-out] { transition: none !important; } }
+
 /* A menu's ring follows the last input, not the browser's guess (Jazz 540b35ea). Opened by a click or tap, a menu focuses
    its first item for the keyboard but draws no ring until a key is pressed; once a key is, WebKit still may not count the
    script's focus as visible, so the ring is drawn on plain focus. */
@@ -1810,6 +1840,32 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
   .draft-acts button:hover { background: var(--hover-dim); color: var(--ink); }
 }
 .draft-acts button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+/* Tap feedback §2: a decided band shows its result once the change is stored on the device. Nothing moves. */
+/* Applied: the line it will become, in place: Ink, solid box / bullet, plain line, no ✓ ✕. */
+.draft-band.is-applied { color: var(--ink); padding-right: 0; }
+/* The real line has no age label and no room for ✓ ✕: the band matches it, so nothing moves when the answer swaps them (Jazz 93fbd48f). */
+.draft-band.is-applied .draft-since { display: none; }
+/* The real line is a to-do row (32 px, 44 px with hover) in a block with 3 px above and below, and no margin above
+   it: the decided band takes the same room. */
+.draft-band.is-applied { margin-top: 0; min-height: 38px; }
+@media (hover: hover) { .draft-band.is-applied { min-height: 50px; } }
+.draft-band.is-applied .draft-box { border-style: solid; border-color: var(--check); }
+.draft-band.is-bullet.is-applied::before { border-style: solid; border-color: currentColor; background: currentColor; width: 6px; height: 6px; margin-top: -3px; left: 20px; }
+.draft-band.is-line.is-applied .draft-text { text-decoration: none; }
+/* Skipped: held in place for the tick's hold, struck through and faded, then closed. */
+.draft-band.is-skipped, .draft-band.is-closing { opacity: .5; }
+.draft-band.is-skipped .draft-text, .draft-band.is-closing .draft-text { text-decoration: line-through 1px var(--ink-3); }
+.draft-band.is-closing { min-height: 0; max-height: 0; margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; transition: max-height .15s ease, min-height .15s ease, margin .15s ease, padding .15s ease; }
+.draft-band.is-skipped { max-height: 120px; }
+@media (prefers-reduced-motion: reduce) { .draft-band.is-closing { display: none; } }
+/* Not stored on the device: working, where ✓ ✕ were. Always visible, even where ✓ ✕ wait for hover. */
+.draft-acts.is-working { opacity: 1; width: 64px; justify-content: center; }
+.draft-acts.is-working .draft-spin { margin: 0; }
+/* A refusal, said where he pressed (§2.1.4): Meta size, Deadline Red, under the band or alone in its place. */
+.draft-note { margin: -2px 0 4px; padding-left: var(--draft-pad, 14px); font-size: var(--text-meta); color: var(--red); }
+.draft-band-slot { min-height: 32px; display: flex; align-items: center; }
+.draft-band-slot .draft-note { margin: 0; }
+@media (hover: hover) { .draft-band-slot { min-height: 44px; } }
 @media (max-width: 599px) { .draft-band { padding-right: 80px; } .draft-acts { right: 0; } .draft-acts button { width: 40px; height: 40px; } }
 
 /* "N more open": quiet, the strip's meta size; its rows are plain (not suggestions), with ＋. */

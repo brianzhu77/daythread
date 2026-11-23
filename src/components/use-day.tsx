@@ -7,7 +7,7 @@ import { applyCommand, getDayView } from '../domain/workspace'
 import { rawOf, type Json, type RowEdit } from '../domain/database'
 import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand, runOutboxCommand } from '../server/functions'
-import { appWrites, capture, drainQueue, idbOutboxStore, outboxCounts, schedule, type DrainResult, type OutboxEntry, type OutboxStore, type SendAnswer } from './outbox'
+import { appWrites, capture, draftDecisions, drainQueue, idbOutboxStore, outboxCounts, schedule, type DraftDecision, type DrainResult, type OutboxEntry, type OutboxStore, type SendAnswer } from './outbox'
 import { isNetworkFailure } from './offline-copy'
 import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
@@ -110,6 +110,13 @@ export interface OutboxView {
   offline: boolean
   /** Not durable and a change still unsent after a second, or after a failed send (§8.4, Jazz 3c65a099): never a flash on every change. */
   atRisk: boolean
+  /**
+   * Tap feedback §2.6: the day draft's decisions stored on this device and not yet answered, so a band shows what he
+   * decided from the stored change itself, after a reload or offline too. `undone`: an Undo of it is stored after it.
+   */
+  decisions: DraftDecision[]
+  /** The draft decisions the server held (a conflict): said on their band until Keep mine or Discard (Jazz 93fbd48f). */
+  heldDecisions: DraftDecision[]
 }
 /** Set while the outbox may hold changes, so a load reads the store before the first paint only then (R1-18). */
 const outboxHint = {
@@ -120,7 +127,8 @@ const outboxHint = {
 }
 /** Two taps on one to-do closer than this are one tap (B98 item 2; Jazz may tune it). */
 const doubleTapMs = 500
-const emptyOutbox: OutboxView = { pending: 0, held: null, waiting: 0, durable: true, keptBack: false, offline: false, atRisk: false }
+const emptyOutbox: OutboxView = { pending: 0, held: null, waiting: 0, durable: true, keptBack: false, offline: false, atRisk: false, decisions: [], heldDecisions: [] }
+
 
 /** Commands queued or being sent in this tab, across providers: a reload waits for none (new-build.ts). */
 let commandsOut = 0
@@ -181,6 +189,8 @@ type RunOptions = {
    * discarded (false). A caller then shows it as on its way, never "not saved · Retry", which would make a second change.
    */
   onKept?: () => void
+  /** The server held the change (a conflict, changed since): kept for Keep mine / Discard in the banner; its caller may say so in place (tap feedback §2.1.4). */
+  onHeld?: (message: string) => void
   onLater?: (landed: boolean) => void
 }
 
@@ -289,9 +299,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     if (!entries.current.length && store.current && outboxHint.get()) void store.current.all().then(left => { if (!left.length) outboxHint.clear() }).catch(() => undefined)
     // The same split the drain sends by (Jazz b6c71626). His changes only: the app's own writes (opening a day, the
     // draft) are never counted to him (Jazz 8887e299).
-    const { held, waiting, pending } = outboxCounts(entries.current.filter(e => !handedBack.current.has(e.seq!)))
+    const shown = entries.current.filter(e => !handedBack.current.has(e.seq!))
+    const { held, waiting, pending } = outboxCounts(shown)
     const away = netAway.current || (typeof navigator !== 'undefined' && navigator.onLine === false)
-    setOutbox({ pending, held, waiting, durable: durable.current, keptBack: legacy.current && pending > 0, offline: away && pending > 0, atRisk: !durable.current && (slowUnsent.current || memoryUnsent.current.size > 0 || (away && commandsPending())) })
+    setOutbox({ pending, held, waiting, durable: durable.current, keptBack: legacy.current && pending > 0, offline: away && pending > 0, atRisk: !durable.current && (slowUnsent.current || memoryUnsent.current.size > 0 || (away && commandsPending())), decisions: draftDecisions(shown), heldDecisions: draftDecisions(shown, 'held') })
     if (entries.current.some(e => e.state === 'pending' && kept.current.has(e.seq!))) { const shown = predicted(true); if (shown) setWorkspace(shown) } else if (wsRef.current) setWorkspace(wsRef.current)
   }, [predicted])
   // After a send that didn't land, try again on its own: 2 s, 5 s, 15 s, then every 30 s, without waiting for `online`,
@@ -648,6 +659,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
               // A refusal shown in place (Undo's "Can't undo"): nothing to keep (Jazz acdfa91).
               if (entry) { await store.current?.remove(entry.seq!); entries.current = entries.current.filter(x => x.seq !== entry.seq); showOutbox() }
               options.onRefused?.((e.detail ?? '').match(options.inlineRefusal)![0])
+            } else if (e.kind === 'held') {
+              options.onHeld?.(e.detail ?? '')
             } else if (e.kind === 'failed') {
               setSaveState('failed'); setSaveError(e.detail ?? 'Not saved'); setLastFailed({ action, notice, operationId }); commandFailedOut = !durable.current
             } else if (e.kind === 'owner') reloadRef.current?.()

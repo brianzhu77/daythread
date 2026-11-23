@@ -1,6 +1,8 @@
 import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from '@tanstack/react-router'
 import { Analytics } from '@vercel/analytics/react'
+import { useEffect } from 'react'
 import { AppShell } from '../components/app-shell'
+import { installPress } from '../components/press'
 import { splashLinks } from '../components/splash'
 import { getAppInfo } from '../server/functions'
 import { previewStorageKey } from '../components/preview'
@@ -59,6 +61,12 @@ export const Route = createRootRoute({
  */
 const emailedLinkHandoff = `(function(){function f(){var p=new URLSearchParams(location.hash.slice(1));if(location.pathname!=='/sign-in'&&((p.get('access_token')&&p.get('type'))||p.get('error_code')))location.replace('/sign-in'+location.hash)}f();addEventListener('hashchange',f)})()`
 
+/** Tap feedback §1: every pressable shows the press, on every screen including sign-in. */
+function PressLayer() {
+  useEffect(() => installPress(), [])
+  return null
+}
+
 function Root() {
   // The sign-in and sign-up screens stand alone: the app frame would load the workspace.
   const signIn = useRouterState({ select: s => s.location.pathname === '/sign-in' || s.location.pathname === '/sign-up' })
@@ -69,6 +77,7 @@ function Root() {
         <HeadContent />
       </head>
       <body>
+        <PressLayer />
         {signIn ? <Outlet /> : (
           <AppShell>
             <Outlet />

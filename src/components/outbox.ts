@@ -33,6 +33,21 @@ export function predictedWrites(before: Workspace, after: Workspace): string[] {
   return keys
 }
 
+/** Tap feedback §2.6: a day draft decision stored and not answered yet. `undone`: an Undo of it (or a skip's reopen) is stored after it. */
+export interface DraftDecision { operationId: string; type: 'apply-draft' | 'skip-draft'; pageId: string; itemIds: string[]; undone: boolean }
+
+/**
+ * The draft decisions among `entries` still on their way (`pending`), so a band shows what he decided from the stored
+ * change itself; or (`held`) those the server held, which the band says in place until he picks Keep mine or Discard.
+ */
+export function draftDecisions(entries: readonly OutboxEntry[], state: OutboxEntry['state'] = 'pending'): DraftDecision[] {
+  const live = entries.filter(e => e.state === state)
+  const undoing = new Set(live.flatMap(e => e.action.type === 'undo' ? [e.action.targetOperationId] : e.action.type === 'reopen-draft' ? [e.action.skippedBy] : []))
+  return live.flatMap(e => e.action.type === 'apply-draft' || e.action.type === 'skip-draft'
+    ? [{ operationId: e.operationId, type: e.action.type, pageId: e.action.pageId, itemIds: e.action.itemIds, undone: undoing.has(e.operationId) }]
+    : [])
+}
+
 export type HeldReason = 'conflict' | 'changed-since' | 'maybe-applied' | 'refused' | 'gone'
 
 export interface OutboxEntry {
@@ -173,8 +188,12 @@ export function idbOutboxStore(factory: IDBFactory = indexedDB): OutboxStore {
   }
 }
 
-/** Writes the app makes by itself, not he (Lead b19f29b0): opening a day, the day draft, repeats, a smart note's answer. */
-export const appWrites: ReadonlySet<string> = new Set(['ensure-day', 'set-draft', 'skip-draft', 'run-repeats', 'set-smart-note-result'])
+/**
+ * Writes the app makes by itself, not he (Lead b19f29b0): opening a day, the day draft, repeats, a smart note's answer.
+ * Not `skip-draft`: only his ✕ and Dismiss send it, so when the server holds it he must hear it, in place and in the
+ * banner, like any change of his (Ratchet 85c5939a); an app write that's held is dropped without a word.
+ */
+export const appWrites: ReadonlySet<string> = new Set(['ensure-day', 'set-draft', 'run-repeats', 'set-smart-note-result'])
 
 /** Every string an action names: the ids it may depend on, over-approximated on purpose (§6). */
 export function referencedIds(action: Action): string[] {
