@@ -89,6 +89,11 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
         for (let i = 0; i < 60 && !(ts = await toasts(page)).some(t => /not (saved|deleted|moved)/i.test(t)); i++) await wait(100)
         ok(`${tag} 3 held delete: named notice`, ts.some(t => t.startsWith('Page not deleted · changed elsewhere')), ts.join(' / '))
         ok(`${tag} 3 held delete: the page is still there`, Boolean((await repo().load()).pages.find(p => p.id === PAGE && !p.trashedAt)))
+        // Jazz ea7e3ef4: on the phone the notice sits under the banner, never over its Keep mine / Discard (measured once
+        // its entry animation is over).
+        await wait(600)
+        const over = await page.evaluate(() => { const t = document.querySelector('[data-slot="toast"]')?.getBoundingClientRect(), bs = [...document.querySelectorAll('.banner')].map(b => b.getBoundingClientRect()).filter(r => r.height && r.bottom > 0); return t && bs.length ? bs.some(b => t.top < b.bottom - 0.5 && t.bottom > b.top + 0.5) : null })
+        ok(`${tag} 3 held delete: the notice doesn't cover the banner`, over === false, `overlap ${over}`)
       } else ok(`${tag} 3 held delete: Page actions found`, false, 'no Page actions button at this width')
       await context.close()
     }
@@ -199,14 +204,42 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
       const seen = []
       await page.exposeFunction('__toastSeen', t => seen.push(t))
       await page.evaluate(() => new MutationObserver(() => { for (const e of document.querySelectorAll('[data-slot="toast"]')) if (!e.dataset.seen) { e.dataset.seen = '1'; window.__toastSeen(e.textContent.replace(/\s+/g, ' ').trim()) } }).observe(document.body, { childList: true, subtree: true }))
+      // Ratchet a07a377f: what follows the held answer is slow (the reload after it, held 4 s here); the button's working
+      // mark still ends with the notice, not after.
+      await page.route('**/_serverFn/**', async r => { if (!r.request().url().includes('/_serverFn/cedd5fc6')) await wait(4000); await r.continue().catch(() => {}) })
       await page.locator('a', { hasText: 'Trip notes' }).first().hover().catch(() => {})
       await page.getByRole('button', { name: /New subpage in Trip notes/ }).first().click({ force: true })
-      for (let i = 0; i < 60 && !seen.some(t => /not created/.test(t)); i++) await wait(100)
+      let workingAtNotice = null
+      for (let i = 0; i < 60 && !seen.some(t => /not created/.test(t)); i++) await wait(50)
+      workingAtNotice = await page.locator('[data-working]').count()
+      ok(`${tag} 9 a waiting create held: its working mark ends with the notice`, workingAtNotice === 0, `working controls at the notice: ${workingAtNotice}`)
       await wait(1500)
       const named = seen.filter(t => /not (saved|created)/.test(t)), body = await page.locator('body').textContent()
       ok(`${tag} 9 a waiting create held: named once, with the banner's reason`, named.length === 1 && /^Page not created · (can\u2019t do this now|page was deleted elsewhere)/.test(named[0]), named.join(' / ') || 'none')
       ok(`${tag} 9 a waiting create held: no page made, the working mark gone`, (await repo().load()).pages.filter(p => p.parentId === PAGE).length === 0 && !(await page.locator('[data-working]').count()))
       ok(`${tag} 9 a waiting create held: the banner keeps its way back`, /Discard/.test(body), body.match(/Not saved[^·]{0,80}/)?.[0] ?? 'no banner text')
+      await context.close()
+    }
+
+    // 10. Ratchet 5444a11c: a type with its own mark (the draft's ✕), stored while sends fail and held later, is said
+    //     only by its own line, never by the notice too.
+    {
+      const { context, page } = await fresh()
+      await page.goto(`${base}/`); await page.locator('.draft-band, [data-draft-item]').first().waitFor({ timeout: 30000 }); await wait(800)
+      await page.route(OUTBOX, r => r.abort())
+      const seen = []
+      await page.exposeFunction('__toastSeen', t => seen.push(t))
+      await page.evaluate(() => new MutationObserver(() => { for (const e of document.querySelectorAll('[data-slot="toast"]')) if (!e.dataset.seen) { e.dataset.seen = '1'; window.__toastSeen(e.textContent.replace(/\s+/g, ' ').trim()) } }).observe(document.body, { childList: true, subtree: true }))
+      await page.locator('button[aria-label="Skip Renew the passport"]').click(); await wait(500)
+      const r = repo(), w = await r.load(), day = w.pages.find(p => p.type === 'daily' && p.date === new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' }).format(new Date()))
+      const { draftOf } = await import('../../../src/domain/day-draft.ts')
+      const other = draftOf(w, day.id).items.at(-1)
+      await r.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action: { type: 'skip-draft', pageId: day.id, itemIds: [other.id] } })
+      await page.unroute(OUTBOX)
+      let note = []
+      for (let i = 0; i < 200 && !(note = await page.evaluate(() => [...document.querySelectorAll('.draft-note')].map(e => e.textContent.trim()))).length; i++) await wait(100)
+      await wait(1500)
+      ok(`${tag} 10 own mark kept then held: its line, no notice on top`, note.includes('Not skipped · changed elsewhere') && !seen.some(t => /not (saved|skipped)/i.test(t)), `${note.join(' / ')} · notices ${seen.join(' / ') || 'none'}`)
       await context.close()
     }
 

@@ -271,6 +271,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
    * rebuilds a stale one (`stale`), or says a refusal in place (`inlineRefusal`). Those aren't said again.
    */
   const callerSays = useRef(new Map<string, { stale: boolean; inline?: RegExp }>())
+  /** The working mark of a waiting change, by operation, so a hold ends it at once (markWorking's end). */
+  const workingBy = useRef(new Map<string, () => void>())
   /** Changes already said to be not saved, by owner and operation: once each, whichever path found it (Ratchet b527e8d8). */
   const announced = useRef(new Set<string>())
   const durable = useRef(true), legacy = useRef(false), inFlight = useRef(new Set<number>())
@@ -336,7 +338,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     const before = new Map(entries.current.map(e => [e.seq, e]))
     entries.current = next
     const says = (e: OutboxEntry) => { const c = callerSays.current.get(e.operationId); return Boolean(c && ((c.stale && e.held?.stale) || c.inline?.test(e.held?.message ?? e.held?.reason ?? ''))) }
-    const back = next.filter(e => e.state === 'held' && !e.app && before.get(e.seq)?.state === 'pending' && (drawn(e.seq) || drawRule[e.action.type] !== 'own')
+    // A type with its own mark says it itself, kept or not (Ratchet 5444a11c).
+    const back = next.filter(e => e.state === 'held' && !e.app && before.get(e.seq)?.state === 'pending' && drawRule[e.action.type] !== 'own'
       && !says(e) && !announced.current.has(`${e.owner}:${e.operationId}`))
     const live = new Set(next.map(e => e.seq))
     for (const seq of drawAhead.current) if (!live.has(seq)) drawAhead.current.delete(seq)
@@ -347,6 +350,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     showOutbox()
     for (const e of back) {
       announced.current.add(`${e.owner}:${e.operationId}`)
+      // Its control stops working in the same render, not when later commands are done (Ratchet a07a377f).
+      workingBy.current.get(e.operationId)?.()
       // The caller says it if it's still on screen; otherwise (it closed, or this is a reload) the notice does.
       if (!takenBackBy.current.get(e.operationId)?.(e)) toast(takenBackText(e), { timeout: 6000 })
     }
@@ -621,7 +626,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       const pressed = justPressed()
       let endWorking: (() => void) | null = null
       const working = (action: Action | null | undefined, drawnNow: boolean) => {
-        if (pressed && action && !endWorking && drawRule[action.type] !== 'own' && !drawnNow) endWorking = markWorking(pressed)
+        if (pressed && action && !endWorking && drawRule[action.type] !== 'own' && !drawnNow) { endWorking = markWorking(pressed); workingBy.current.set(operationId, endWorking) }
       }
       // B98: built and stored now, against the predicted workspace, unless it's page text (the editor keeps its own drafts) or there's no outbox here.
       const owner = knownOwner, base = wsRef.current
@@ -760,7 +765,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       })
       queue.current = job.catch(() => undefined)
       // A caller rebuilds or refuses in place only while its run is out; after that a later hold is said like any other.
-      void job.finally(() => { commandsOut--; endWorking?.(); callerSays.current.delete(operationId) }).catch(() => undefined)
+      void job.finally(() => { commandsOut--; endWorking?.(); workingBy.current.delete(operationId); callerSays.current.delete(operationId) }).catch(() => undefined)
       return job
     },
     [transport, adopt, push, refresh, retireStaleUndo, predicted, sendOwn, showOutbox, handOff],
