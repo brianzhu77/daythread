@@ -132,8 +132,34 @@ a12fc0ff), his own Nov 22 sequence: four suggestions; ✓ row 1, ✓ row 3 1 s l
 Ticks already draw at once with a 1 s hold. Check on the phone that the press on the box is visible (Icon button look)
 and the tick appears in the same frame. Nothing else changes.
 
-## 4. Release 2 (not in this spec yet)
+## 4. Release 2 (contract: Ratchet b527e8d8, scope: Lead 5b22d29e)
 
-The rest of group A2 (about 45 controls) through the shared `run`, after Roadbuster's draw-ahead experiment and
-Ratchet's contract review. Same visible rule: the place he pressed shows the result once stored; a refusal is said
-there. Controls that need something only the server makes (a new page that then opens) get their own entry then.
+The rest of group A2 (about 45 controls) through the shared `run`. The place he pressed shows the result once it is
+stored on the device; `run` still resolves with the server's receipt.
+
+**4.1 Refused or held after being drawn (Lead f00eb610, wording Jazz 0a65952a, 5869fde3).** No banner-only fallback.
+- The change goes back where he pressed, and in the same visible change a notice says
+  `<What> not saved · changed elsewhere` (held) or `<What> not saved · <short reason>` (refused). Shown 6 s; the
+  banner's Keep mine / Discard stays as the lasting way back.
+- `<What>` is a noun per command type (Name, Icon, Cover, Property, Link, Move, …). Every A2 type has one; the plain
+  `Not saved · …` fallback is only a safety net, and a test fails if an A2 type uses it.
+- One notice per operation, also when the refusal is found on a retry, after a reload or in another tab (Ratchet).
+  None when the caller says it in place.
+- In place, for the three he uses: **Rename page**, stored name back, red Meta line under the title
+  `Name not saved · changed elsewhere` (held: until Keep mine / Discard; refused: 4 s). **Links from a paste**, words
+  stay as plain text, red line under that block `Links not saved · changed elsewhere`.
+
+**4.2 Not drawn ahead (Lead 5b22d29e).** New page, template page and new database wait for the server as today: press,
+then the working look (same place, reduced opacity, spinner after about 300 ms, label width held), no second press.
+Rule: something he can type into isn't shown before the server has it, unless his words provably survive a refusal.
+
+**4.3 Backlog: refused new page after he typed (Jazz 1ffaa939, 78aae57b; Ratchet point 5).** Comes back if a held or
+refused create shows up in his data, or if drawing new pages ahead is reopened.
+- The page stays in Pages where it was made: title Ink-faint, `Not saved` in Deadline Red at Meta size in the row's
+  date/count slot. Opening it shows his title and words with `Page not saved · <reason> · Save as new page ·
+  Copy text · Discard`; Discard asks `Discard this page? Keep · Discard`.
+- Outbox banner line `1 page not saved · Open` until each is saved or discarded.
+- Waiting (stored offline, not sent) is not failed: no `Not saved` until the server holds or refuses it.
+- Save as new page: fresh id, top level if the parent is gone, title and words; the old recovery retires only after
+  both the create and the content save have receipts. A failed or offline rescue leaves it `Not saved`.
+- No prompt on leaving and no browser close prompt: the words are kept on the device and the row finds them.
