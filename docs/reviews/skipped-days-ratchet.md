@@ -1,3 +1,13 @@
+# Focus delta — e88c4590 CLEAR with existing keyboard gap disclosed
+
+Delivered ff96fab0. Delta source review and typecheck pass. Independent Chromium/WebKit touch cancel: no write, choices remain open, no band control focused. WebKit keyboard Esc: no write, choices open, focus returns to Pick. Jazz d0318b91 separately clears Home Screen native cancel.
+
+Chromium 1280 keyboard: Enter opens Pick, a single Esc leaves hidden input focused/in DOM after 800ms, rather than returning focus to Pick. No write; choices remain open. Independently reproduces with exact f2f1f8fd picker components; no regression attribution to e88. This is an uncovered platform gap in the prior focus contract, not an app-wide keyboard trap. Reviewer recommends separate follow-up; Lead explicitly asked to accept the limitation or route a fix before gate. Prior all-platform focus assurance narrowed accordingly.
+
+Evidence tests/evidence/skipped-days/ratchet-cancel.mjs; logs /tmp/ratchet-377-cancel-{chromium,webkit,f2-baseline}.log. Sources restored to e88 after baseline comparison. Own server 43980 stopped. No production/native/model action.
+
+---
+
 # Final independent review — f2f1f8fd CLEAR
 
 Delivered e77a2d7f. Final delta from 63ad2607 is test-only: actual elapsed time is recorded and at least three in-hold samples must be judged. This accounts for the prior nominal900ms observation reaching a legitimate scheduled close. No runtime delta; independent fixed-head six-scenario evidence stands.
