@@ -12,12 +12,13 @@ if (!base || !storePath) { console.error('Usage: node tests/evidence/draw-ahead/
 const ok = (name, pass, detail = '') => { results.push(pass); console.log(`${pass ? 'PASS' : 'FAIL'} ${name}${detail ? ` · ${detail}` : ''}`) }
 const wait = ms => new Promise(r => setTimeout(r, ms))
 const OUTBOX = '**/_serverFn/cedd5fc6*'
-const PAGE = 'probe-page'
+const PAGE = 'probe-page', OTHER = 'probe-other'
 const repo = () => new SqliteWorkspaceRepository(storePath, undefined, { allowMissingLegacy: true })
 const elsewhere = async action => { const r = repo(), w = await r.load(); await r.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action }) }
 const reseed = async () => {
   execSync(`node --no-warnings tests/evidence/tap-feedback/seed.ts ${storePath}`, { stdio: 'ignore' })
   await elsewhere({ type: 'create-document', title: 'Trip notes', body: 'Packing list', pageId: PAGE })
+  await elsewhere({ type: 'create-document', title: 'Other page', body: '', pageId: OTHER })
 }
 const titleOf = async () => (await repo().load()).pages.find(p => p.id === PAGE)?.title
 
@@ -85,8 +86,8 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
         await menu.click(); await wait(150)
         await page.getByRole('menuitem', { name: 'Delete' }).click()
         let ts = []
-        for (let i = 0; i < 60 && !(ts = await toasts(page)).some(t => /not saved/.test(t)); i++) await wait(100)
-        ok(`${tag} 3 held delete: named notice`, ts.some(t => t.startsWith('Delete not saved · changed elsewhere')), ts.join(' / '))
+        for (let i = 0; i < 60 && !(ts = await toasts(page)).some(t => /not (saved|deleted|moved)/i.test(t)); i++) await wait(100)
+        ok(`${tag} 3 held delete: named notice`, ts.some(t => t.startsWith('Page not deleted · changed elsewhere')), ts.join(' / '))
         ok(`${tag} 3 held delete: the page is still there`, Boolean((await repo().load()).pages.find(p => p.id === PAGE && !p.trashedAt)))
       } else ok(`${tag} 3 held delete: Page actions found`, false, 'no Page actions button at this width')
       await context.close()
@@ -116,6 +117,70 @@ for (const engine of only ? [only] : ['chromium', 'webkit']) {
           ok(`${tag} 4 waits: the mark is gone after the answer`, !(await page.locator('[data-working]').count()))
         } else ok(`${tag} 4 waits: New page menu`, false, 'no menu item')
       } else ok(`${tag} 4 waits: New page button`, false, 'not on this screen')
+      await context.close()
+    }
+
+    // 5. Ratchet b527e8d8: a held change and an unrelated slow one after it in the same drain (another page renamed from
+    //    the sidebar at 1280). The held one is said (by the notice: its title field has gone) before the slow one is
+    //    answered, and the slow one still lands.
+    if (width >= 1280) {
+      const { context, page } = await fresh()
+      await elsewhere({ type: 'rename-page', pageId: PAGE, title: 'Trip (phone)' })
+      let n = 0, slowAnswered = 0
+      await page.route(OUTBOX, async r => { const i = ++n; if (i === 1) await wait(3000); else { await wait(5000); slowAnswered = Date.now() } await r.continue().catch(() => {}) })
+      const seen = []
+      await page.exposeFunction('__toastSeen', t => seen.push({ t, at: Date.now(), sent: n, slow: slowAnswered }))
+      await page.evaluate(() => new MutationObserver(() => { for (const e of document.querySelectorAll('[data-slot="toast"]')) if (!e.dataset.seen) { e.dataset.seen = '1'; window.__toastSeen(e.textContent.replace(/\s+/g, ' ').trim()) } }).observe(document.body, { childList: true, subtree: true }))
+      const t0 = Date.now()
+      await rename(page, 'Trip to Porto')
+      await page.locator('a', { hasText: 'Other page' }).first().click()
+      await page.waitForFunction(() => document.querySelector('[aria-label="Page title"]')?.textContent === 'Other page', null, { timeout: 5000 })
+      await rename(page, 'Other renamed')
+      const secondStoredBy = Date.now() - t0
+      for (let i = 0; i < 80 && !seen.some(x => /not saved/.test(x.t)); i++) await wait(100)
+      const said = seen.find(x => /not saved/.test(x.t))
+      // The second was stored while the first was out (3 s), so it's in the same drain; the word comes with the first's
+      // answer, not after the second's 5 s.
+      ok(`${tag} 5 held then slow: said with the held answer, before the slow one's`, Boolean(said) && /^Name not saved · changed elsewhere/.test(said.t) && secondStoredBy < 3000 && said.at - t0 < 4500 && said.slow === 0, said ? `${said.t} at ${said.at - t0} ms · second stored by ${secondStoredBy} ms · slow ${said.slow ? 'answered' : 'still out'}` : 'nothing said')
+      await wait(6000)
+      ok(`${tag} 5 and the slow one landed after`, slowAnswered > 0 && (await repo().load()).pages.find(p => p.id === OTHER)?.title === 'Other renamed', (await repo().load()).pages.find(p => p.id === OTHER)?.title)
+      await context.close()
+    }
+
+    // 6. Stored while the send fails, held on a later send: the run has returned, and the field still keeps his name
+    //    with its line, no generic notice (his words are never replaced without his say).
+    {
+      const { context, page } = await fresh()
+      await page.route(OUTBOX, r => r.abort())
+      await rename(page, 'Trip to Porto'); await wait(1500)
+      await elsewhere({ type: 'rename-page', pageId: PAGE, title: 'Trip (phone)' })
+      await page.unroute(OUTBOX)
+      let line = ''
+      for (let i = 0; i < 200 && !(line = await page.locator('.title-not-saved').textContent().catch(() => '') ?? ''); i++) await wait(100)
+      const field = await page.locator('[aria-label="Page title"]').textContent(), ts = await toasts(page)
+      ok(`${tag} 6 held on a later send: his name kept, said under it`, field === 'Trip to Porto' && line === 'Name not saved · changed elsewhere', `${field} · ${JSON.stringify(line)}`)
+      ok(`${tag} 6 held on a later send: no generic notice on top`, !ts.some(t => /not saved/.test(t)), ts.join(' / '))
+      await context.close()
+    }
+
+    // 7. The same after a reload: no caller is left, so the generic notice says it, once; the banner keeps his name.
+    {
+      const { context, page } = await fresh()
+      await page.route(OUTBOX, r => r.abort())
+      await rename(page, 'Trip to Porto'); await wait(1500)
+      await elsewhere({ type: 'rename-page', pageId: PAGE, title: 'Trip (phone)' })
+      const seen = []
+      await page.exposeFunction('__toastSeen', t => seen.push(t)).catch(() => {})
+      await page.unroute(OUTBOX)
+      await page.route(OUTBOX, r => r.abort())
+      await page.reload(); await page.locator('[aria-label="Page title"]').waitFor({ timeout: 30000 }); await wait(800)
+      await page.evaluate(() => new MutationObserver(() => { for (const e of document.querySelectorAll('[data-slot="toast"]')) if (!e.dataset.seen) { e.dataset.seen = '1'; window.__toastSeen(e.textContent.replace(/\s+/g, ' ').trim()) } }).observe(document.body, { childList: true, subtree: true }))
+      await page.unroute(OUTBOX)
+      for (let i = 0; i < 200 && !seen.some(t => /not saved/.test(t)); i++) await wait(100)
+      await wait(2500)
+      const named = seen.filter(t => /^Name not saved · changed elsewhere/.test(t)), body = await page.locator('body').textContent()
+      ok(`${tag} 7 after a reload: the named notice, once`, named.length === 1, seen.join(' / '))
+      ok(`${tag} 7 after a reload: the banner keeps his change`, /Keep mine/.test(body) && /Discard/.test(body))
       await context.close()
     }
   }

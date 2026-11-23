@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { aheadNoun, drawRule, drawsAhead, takenBackText } from '../src/components/draw-ahead.ts'
+import { aheadWord, drawRule, drawsAhead, takenBackText } from '../src/components/draw-ahead.ts'
 import type { Action } from '../src/domain/types.ts'
 
 // Release 2 (#374): what is drawn before the server answers. The Records make every action type placed and every
@@ -12,10 +12,10 @@ test('every drawn-ahead type has its own noun, never the plain fallback (Jazz 58
   for (const type of ahead) {
     const action = (type === 'change-database' ? { type, change: { kind: 'updateView' } } : { type }) as unknown as Action
     const text = takenBackText({ action, held: { reason: 'changed-since' } })
-    assert.match(text, /^\S.* not saved · changed elsewhere$/, type)
+    assert.match(text, / · changed elsewhere$/, type)
     assert.doesNotMatch(text, /^Not saved/, type)
   }
-  assert.deepEqual(Object.keys(aheadNoun).sort(), [...ahead].sort())
+  assert.deepEqual(Object.keys(aheadWord).sort(), [...ahead].sort())
 })
 
 test('the Lead and Ratchet rulings: what waits (5b22d29e, 242d438f, 6458ed11)', () => {
@@ -44,8 +44,18 @@ test('a database change that adds a column, view or automation waits; an edit of
 test('a database change is named by what it touches', () => {
   const text = (kind: string) => takenBackText({ action: { type: 'change-database', pageId: 'db', change: { kind } } as unknown as Action, held: { reason: 'conflict' } })
   assert.equal(text('updateProperty'), 'Property not saved · changed elsewhere')
-  assert.equal(text('moveView'), 'View not saved · changed elsewhere')
+  assert.equal(text('moveView'), 'View not moved · changed elsewhere')
+  assert.equal(text('removeProperty'), 'Property not deleted · changed elsewhere')
   assert.equal(text('updateWidget'), 'Widget not saved · changed elsewhere')
   assert.equal(text('setDashboardFilter'), 'Filter not saved · changed elsewhere')
   assert.equal(text('setAutomationActive'), 'Automation not saved · changed elsewhere')
+})
+
+test('deletes and moves say what didn\'t happen (Jazz f92b65df)', () => {
+  const text = (type: string) => takenBackText({ action: { type } as Action, held: { reason: 'conflict' } })
+  assert.equal(text('delete-page'), 'Page not deleted · changed elsewhere')
+  assert.equal(text('delete-pages'), 'Pages not deleted · changed elsewhere')
+  assert.equal(text('move-page'), 'Not moved · changed elsewhere')
+  assert.equal(text('delete-template'), 'Template not deleted · changed elsewhere')
+  assert.equal(text('delete-comment'), 'Comment not deleted · changed elsewhere')
 })

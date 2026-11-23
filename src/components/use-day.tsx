@@ -195,11 +195,11 @@ type RunOptions = {
   onHeld?: (message: string) => void
   onLater?: (landed: boolean) => void
   /**
-   * Release 2 (#374): this caller says it in place when its change, drawn before the answer, is held: then no generic
-   * notice. Called in the render that takes the change back, while the run is out; after that (a reload, a later
-   * drain) the generic notice says it.
+   * Release 2 (#374): this caller says it in place when its change, drawn before the answer, is held, and returns true
+   * if it did (it's still on screen): then no generic notice. Called in the render that takes the change back, also
+   * after the run returned (kept for later, then held on a later send). After a reload the generic notice says it.
    */
-  onTakenBack?: (entry: OutboxEntry) => void
+  onTakenBack?: (entry: OutboxEntry) => boolean
 }
 
 export type ActionSource = Action | ((workspace: Workspace) => Action | null)
@@ -264,8 +264,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   /** Release 2 (#374): his changes from this tab drawn as soon as they're stored, by seq (draw-ahead.ts); pruned as they leave. */
   const drawAhead = useRef(new Set<number>())
   const drawn = (seq: number | undefined) => seq !== undefined && (kept.current.has(seq) || drawAhead.current.has(seq))
-  /** Callers that say in place a drawn change the server held (RunOptions.onTakenBack), by operation id, while their run is out. */
-  const takenBackBy = useRef(new Map<string, (entry: OutboxEntry) => void>())
+  /** Callers that say in place a drawn change the server held (RunOptions.onTakenBack), by operation id, until it leaves the queue. */
+  const takenBackBy = useRef(new Map<string, (entry: OutboxEntry) => boolean>())
   /** Drawn changes already said to be taken back, by owner and operation: once each, whichever path found it (Ratchet b527e8d8). */
   const announced = useRef(new Set<string>())
   const durable = useRef(true), legacy = useRef(false), inFlight = useRef(new Set<number>())
@@ -332,13 +332,14 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     const back = next.filter(e => e.state === 'held' && !e.app && before.get(e.seq)?.state === 'pending' && drawn(e.seq) && !announced.current.has(`${e.owner}:${e.operationId}`))
     const live = new Set(next.map(e => e.seq))
     for (const seq of drawAhead.current) if (!live.has(seq)) drawAhead.current.delete(seq)
+    const ops = new Set(next.map(e => e.operationId))
+    for (const op of takenBackBy.current.keys()) if (!ops.has(op)) takenBackBy.current.delete(op)
     if (!back.length) return
     showOutbox()
     for (const e of back) {
       announced.current.add(`${e.owner}:${e.operationId}`)
-      const own = takenBackBy.current.get(e.operationId)
-      if (own) own(e)
-      else toast(takenBackText(e), { timeout: 6000 })
+      // The caller says it if it's still on screen; otherwise (it closed, or this is a reload) the notice does.
+      if (!takenBackBy.current.get(e.operationId)?.(e)) toast(takenBackText(e), { timeout: 6000 })
     }
   }, [showOutbox]) // eslint-disable-line react-hooks/exhaustive-deps
   // After a send that didn't land, try again on its own: 2 s, 5 s, 15 s, then every 30 s, without waiting for `online`,
@@ -630,6 +631,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
             outboxHint.set()
             ownJobs.current.add(seq)
             if (drawsAhead(full.action)) drawAhead.current.add(seq)
+            // Its caller's own word, kept as long as the change is in the queue (it may be held on a later send).
+            if (options.onTakenBack) takenBackBy.current.set(operationId, options.onTakenBack)
             const kept = { ...full, seq }
             options.onStored?.()
             // A drain in another tab may have read it into this tab's list already.
@@ -746,8 +749,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         }
       })
       queue.current = job.catch(() => undefined)
-      if (options.onTakenBack) takenBackBy.current.set(operationId, options.onTakenBack)
-      void job.finally(() => { commandsOut--; takenBackBy.current.delete(operationId); endWorking?.() }).catch(() => undefined)
+      void job.finally(() => { commandsOut--; endWorking?.() }).catch(() => undefined)
       return job
     },
     [transport, adopt, push, refresh, retireStaleUndo, predicted, sendOwn, showOutbox, handOff],

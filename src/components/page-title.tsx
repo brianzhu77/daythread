@@ -31,11 +31,16 @@ export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: bo
   /** Why his typed name isn't saved, while it's kept in the field; null when nothing is kept. */
   const [notSaved, setNotSaved] = useState<string | null>(null)
   const keeping = useRef(false)
-  const keep = (reason: string) => {
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  /** False when the field is gone: the generic notice says it instead. */
+  const keep = (reason: string): boolean => {
+    if (!mounted.current || !el.current?.isConnected) return false
     keeping.current = true
     // Not what the server has: Enter sends it again.
     saved.current = '\u0000'
     setNotSaved(reason)
+    return true
   }
   const save = () => {
     clearTimeout(timer.current)

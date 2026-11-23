@@ -34,16 +34,18 @@ export const drawRule = {
 type AheadType = { [K in Action['type']]: (typeof drawRule)[K] extends 'ahead' ? K : never }[Action['type']]
 
 /**
- * What the notice calls a change drawn ahead and then taken back: `<What> not saved · changed elsewhere` (Jazz 0a65952a).
- * Every drawn-ahead type has one (Jazz 5869fde3); the plain `Not saved` is only for a type added later.
+ * What the notice says when a change drawn ahead is taken back, before ` · changed elsewhere` (Jazz 0a65952a, f92b65df):
+ * `<What> not saved` for an edit, what didn't happen for a delete or move. Every drawn-ahead type has one (Jazz
+ * 5869fde3); the plain `Not saved` is only for a type added later.
  */
-export const aheadNoun: Record<AheadType, string> = {
-  'rename-page': 'Name', 'rename-task': 'Name', 'set-page-icon': 'Icon', 'set-page-cover': 'Cover', 'move-page': 'Move',
-  'delete-page': 'Delete', 'delete-pages': 'Delete', 'set-template-target': 'Template', 'delete-template': 'Delete',
-  'plan-task': 'Plan', 'plan-tasks': 'Plan', 'not-today': 'Not today', 'remove-task-row': 'Remove', 'set-task-dates': 'Dates',
-  'link-tasks': 'Blockers', 'edit-todos': 'Edit', 'paste-cells': 'Paste', 'change-database': 'Change',
-  'delete-comment': 'Delete', 'resolve-thread': 'Resolve', 'set-timezone': 'Time zone', 'set-week-start': 'Week start',
-  'handoff-done': 'Handoff',
+export const aheadWord: Record<AheadType, string> = {
+  'rename-page': 'Name not saved', 'rename-task': 'Name not saved', 'set-page-icon': 'Icon not saved', 'set-page-cover': 'Cover not saved',
+  'move-page': 'Not moved', 'delete-page': 'Page not deleted', 'delete-pages': 'Pages not deleted', 'set-template-target': 'Template not saved',
+  'delete-template': 'Template not deleted', 'plan-task': 'Plan not saved', 'plan-tasks': 'Plan not saved', 'not-today': 'Not set aside',
+  'remove-task-row': 'Not removed', 'set-task-dates': 'Dates not saved', 'link-tasks': 'Blockers not saved', 'edit-todos': 'Edit not saved',
+  'paste-cells': 'Paste not saved', 'change-database': 'Change not saved', 'delete-comment': 'Comment not deleted',
+  'resolve-thread': 'Not resolved', 'set-timezone': 'Time zone not saved', 'set-week-start': 'Week start not saved',
+  'handoff-done': 'Handoff not saved',
 }
 
 /**
@@ -69,18 +71,16 @@ export function drawsAhead(action: Action): boolean {
 /** The notice for a drawn-ahead change the server held: named, never silent (Lead 5d9ce740, f00eb610). */
 export function takenBackText(entry: Pick<OutboxEntry, 'action' | 'held'>): string {
   const a = entry.action
-  const noun = a.type === 'change-database' ? changeNoun((a.change as { kind: string }).kind) : (aheadNoun as Record<string, string | undefined>)[a.type]
-  return `${noun ? `${noun} not saved` : 'Not saved'} · changed elsewhere`
+  const word = a.type === 'change-database' ? changeWord((a.change as { kind: string }).kind) : (aheadWord as Record<string, string | undefined>)[a.type]
+  return `${word ?? 'Not saved'} · changed elsewhere`
 }
 
-/** A database change by what it touches (Jazz 0a65952a: Property, View, …). */
-function changeNoun(kind: string): string {
-  if (/Property$/.test(kind)) return 'Property'
-  if (/Automation/.test(kind)) return 'Automation'
-  if (/Widget$/.test(kind)) return 'Widget'
-  if (kind === 'setDashboardFilter') return 'Filter'
-  if (kind === 'setRepeat') return 'Repeat'
-  if (kind === 'setDefaultTemplate') return 'Template'
-  if (/View$/.test(kind)) return 'View'
-  return aheadNoun['change-database']
+/** A database change by what it touches (Jazz 0a65952a: Property, View, …); a removal or move by what didn't happen. */
+function changeWord(kind: string): string {
+  const what = /Property$/.test(kind) ? 'Property' : /Automation/.test(kind) ? 'Automation' : /Widget$/.test(kind) ? 'Widget'
+    : kind === 'setDashboardFilter' ? 'Filter' : kind === 'setRepeat' ? 'Repeat' : kind === 'setDefaultTemplate' ? 'Template' : /View$/.test(kind) ? 'View' : null
+  if (!what) return aheadWord['change-database']
+  if (/^remove/.test(kind)) return `${what} not deleted`
+  if (/^(move|swap)/.test(kind)) return `${what} not moved`
+  return `${what} not saved`
 }
