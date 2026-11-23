@@ -1890,6 +1890,51 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .draft-band.is-open-row { color: var(--ink-2); }
 @media (max-width: 599px) { .draft-more-toggle { min-height: 44px; } }
 
+/* #377 (Jazz sketch v4, Lead 028d4a5e / 78bf7fa0): a carried to-do skipped before: its age, the days, and Another day.
+   Inline after the title on a laptop; on a phone, age and days on line 2, Another day on line 3 at the text's edge. */
+.draft-meta { margin-left: 8px; font-size: var(--text-meta); color: var(--ink-3); overflow: hidden; }
+.draft-meta .draft-since { margin-left: 0; }
+.draft-meta .m-seg { white-space: nowrap; display: inline-block; }
+.draft-meta .m-dot { color: var(--ink-3); opacity: .8; white-space: pre; }
+.draft-skips { opacity: .8; white-space: nowrap; }
+.draft-another { font: inherit; font-size: var(--text-meta); color: var(--ink-2); background: none; border: 0; border-radius: 4px; padding: 0; min-height: 0; cursor: pointer; white-space: nowrap; position: relative; }
+.draft-another:disabled { cursor: default; }
+.draft-another .draft-chev { margin-left: 3px; font-size: 10px; }
+.draft-another[aria-expanded="true"] .draft-chev { transform: rotate(90deg); }
+.draft-another:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-radius: 4px; }
+@media (hover: hover) { .draft-another:not(:disabled):hover { color: var(--ink); } }
+@media (max-width: 599px) {
+  /* ✓ ✕ centred on the title's first line: the band's 28 px line box starts 7 px down, so its centre is 21 px from the
+     top, and the 44 px buttons sit 1 px above the band. The column stops 8 px short of ✓ (✓ ✕ take 82 px). */
+  .draft-band.has-skips { align-items: flex-start; padding-top: 7px; padding-bottom: 13px; padding-right: 90px; }
+  .draft-band.has-skips .draft-box { margin-top: 5px; }
+  .draft-band.has-skips .draft-acts { top: -1px; transform: none; }
+  .draft-band.has-skips .draft-meta { display: block; margin: 2px 0 0; line-height: 18px; }
+  /* A long date list wraps like text, between its days; the age stays whole. */
+  .draft-band.has-skips .m-seg { display: inline; white-space: normal; }
+  .draft-band.has-skips .m-seg.draft-since { white-space: nowrap; }
+  .draft-band.has-skips .draft-skips { white-space: normal; }
+  .draft-band.has-skips .m-dot { white-space: pre-wrap; }
+  .draft-band.has-skips .m-seg.is-another { display: block; margin-top: 6px; }
+  .draft-band.has-skips .m-seg.is-another .m-dot { display: none; }
+  /* A 44 px tall target inside the band (13 px band padding below), ending short of ✓ (the column stops 8 px short). */
+  .draft-another::after { content: ''; position: absolute; left: -6px; right: -4px; top: -13px; bottom: -13px; }
+}
+/* The day choices under the band, text lined up with the band's text: the notice's Move to row. */
+.draft-days { display: flex; flex-wrap: wrap; align-items: center; margin: -2px 0 6px; padding-left: 45px; }
+.draft-days-label { margin-right: 4px; font-size: var(--text-small); color: var(--ink-2); white-space: nowrap; }
+.draft-days button { font: inherit; font-size: var(--text-small); color: var(--ink); background: none; border: 0; border-radius: 7px; padding: 4px 10px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.draft-days button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+@media (hover: hover) { .draft-days button:hover { background: var(--hover-dim); } }
+/* 390: the label and three choices fit one line in the band's 285 px with 8 px sides (10 px needs 289). */
+@media (max-width: 599px) { .draft-days button { min-height: 44px; margin-block: -6px -6px; padding: 4px 8px; } .draft-days { margin-bottom: 8px; } }
+/* Decided from the row: the chosen day stays marked through the band's hold, then band and choices close together. */
+.draft-days.is-held button { opacity: .5; pointer-events: none; }
+.draft-days.is-held button.is-chosen { opacity: 1; background: var(--hover-dim); }
+.draft-days.is-held .draft-days-label { opacity: .5; }
+.draft-moved { color: var(--ink-2); }
+.draft-band.is-closing + .draft-days { display: none; }
+
 
 /* ---------- Database property editors and cell contents (databases design §6.3) ---------- */
 /* One shell: a popover under the cell at ≥ 900 px (the .app-menu surface), our bottom sheet below that. */

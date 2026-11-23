@@ -76,8 +76,11 @@ export function rowMenu(task: Task, role: string, planned: LocalDate | null, pag
   }
 }
 
-/** Pick date…: the native date input keeps this tappable on iPhone without a custom calendar (as the Tasks screen). */
-export function pickDate(today: LocalDate, onPick: (date: LocalDate) => void) {
+/**
+ * Pick date…: the native date input keeps this tappable on iPhone without a custom calendar (as the Tasks screen).
+ * `onCancel`: the picker closed with no day taken (Esc, Cancel, a tap away), so the caller can put focus back.
+ */
+export function pickDate(today: LocalDate, onPick: (date: LocalDate) => void, onCancel?: () => void) {
   const input = document.createElement('input')
   input.type = 'date'
   input.min = today
@@ -89,11 +92,13 @@ export function pickDate(today: LocalDate, onPick: (date: LocalDate) => void) {
   input.style.position = 'fixed'
   input.style.opacity = '0'
   document.body.append(input)
+  let picked = false
   input.addEventListener('change', () => {
-    if (input.value && input.value >= today) onPick(input.value)
+    if (input.value && input.value >= today) { picked = true; onPick(input.value) }
     input.remove()
   })
-  input.addEventListener('blur', () => setTimeout(() => input.remove(), 500))
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') input.blur() })
+  input.addEventListener('blur', () => setTimeout(() => { input.remove(); if (!picked) onCancel?.() }, 500))
   input.showPicker?.()
   input.focus()
 }

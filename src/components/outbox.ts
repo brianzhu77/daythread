@@ -3,6 +3,7 @@
 // Home Screen app never loses it. One IndexedDB store; where there is none, changes are sent as before and nothing
 // claims they were kept (§4).
 import { applyCommand } from '../domain/workspace.ts'
+import { draftOf } from '../domain/day-draft.ts'
 import type { Action, Page, Receipt, Workspace } from '../domain/types.ts'
 import { idsOfKey, pageKeys } from '../domain/conflict-keys.ts'
 import { readsBeyondApplied } from '../server/outbox-replay.ts'
@@ -34,7 +35,7 @@ export function predictedWrites(before: Workspace, after: Workspace): string[] {
 }
 
 /** Tap feedback §2.6: a day draft decision stored and not answered yet. `undone`: an Undo of it (or a skip's reopen) is stored after it. */
-export interface DraftDecision { operationId: string; type: 'apply-draft' | 'skip-draft'; pageId: string; itemIds: string[]; undone: boolean }
+export interface DraftDecision { operationId: string; type: 'apply-draft' | 'skip-draft' | 'move-draft'; pageId: string; itemIds: string[]; undone: boolean }
 
 /**
  * The draft decisions among `entries` still on their way (`pending`), so a band shows what he decided from the stored
@@ -43,8 +44,10 @@ export interface DraftDecision { operationId: string; type: 'apply-draft' | 'ski
 export function draftDecisions(entries: readonly OutboxEntry[], state: OutboxEntry['state'] = 'pending'): DraftDecision[] {
   const live = entries.filter(e => e.state === state)
   const undoing = new Set(live.flatMap(e => e.action.type === 'undo' ? [e.action.targetOperationId] : e.action.type === 'reopen-draft' ? [e.action.skippedBy] : []))
-  return live.flatMap(e => e.action.type === 'apply-draft' || e.action.type === 'skip-draft'
+  return live.flatMap((e): DraftDecision[] => e.action.type === 'apply-draft' || e.action.type === 'skip-draft'
     ? [{ operationId: e.operationId, type: e.action.type, pageId: e.action.pageId, itemIds: e.action.itemIds, undone: undoing.has(e.operationId) }]
+    // The row's Another day (#377): its item is decided (skipped) from the moment it's stored, like a ✕.
+    : e.action.type === 'move-draft' ? [{ operationId: e.operationId, type: e.action.type, pageId: e.action.pageId, itemIds: [e.action.itemId], undone: undoing.has(e.operationId) }]
     : [])
 }
 
@@ -363,6 +366,8 @@ export function labelFor(action: Action, ws: Workspace): string {
     case 'delete-page': case 'delete-pages': case 'remove-task-row': return quoted ? `deleted ${quoted}` : 'a delete'
     case 'run-button': case 'run-row-button': return quoted ? `ran ${quoted}` : 'ran a button'
     case 'undo': return 'an Undo'
+    // The row's Another day (#377): named by its to-do, so the banner's Keep mine / Discard says which one.
+    case 'move-draft': { const t = task(draftOf(ws, action.pageId)?.items.find(i => i.id === action.itemId)?.taskId); return t ? `moved "${cut(t.title)}"` : 'a move' }
     default: return quoted ? `a change on ${quoted}` : 'a change'
   }
 }
