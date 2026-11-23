@@ -1,3 +1,13 @@
+# Updated review — 63ad2607
+
+The independently reproduced immediate jump is repaired. Six independent hold probes pass at 390: short move, tall move and tall plain skip in Chromium/WebKit, each with zero displacement at 60/300/600/900ms. Source delta reviewed; full typecheck passes. Phone age removal, retained disabled Another day line/minimum height, tall-band cap change, desktop wrapping and shared picker positioning inspected.
+
+Author row-check rerun: 49/50. Only Chromium short move's nominal 900ms sample read -38px; earlier three samples and the other five hold cases passed. This may reach the scheduled one-second close after action/assertion overhead; not attributed conclusively. Author notified 43392ad3 to record actual elapsed time. The six independent probes reproduce no early jump. Original runtime blocker cleared; final test timing accounting remains with author. Native Safari/Home Screen picker verification remains Jazz's lane; reviewer has no native or real iPhone evidence.
+
+All unchanged functional evidence below remains valid. Own server 43980 stopped. No runtime source fixes by reviewer.
+
+---
+
 # PR231 independent review — 71c0ca95
 
 NOT CLEAR pending the moved-band hold geometry fix reported by Jazz 2cb3d6c2 and independently reproduced in Chromium/WebKit: the next row jumps up 42px 120ms after choosing a day at 390, during the required one-second hold. Keep the disabled Another day line height until the band and choices close together. Exact data predecessor a2509260 independently cleared; all source delta to 71c0ca95 read.
