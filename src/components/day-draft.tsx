@@ -47,7 +47,7 @@ export interface DayDraft {
   /** Tap feedback §2: decided on this device and not answered yet (from the stored change), by item. */
   decided: Record<string, 'apply' | 'skip'>
   /** Held by the server (the draft changed since): said on the band until Keep mine or Discard in the banner. */
-  held: Record<string, { kind: 'apply' | 'skip'; operationId: string }>
+  held: Record<string, { kind: 'apply' | 'skip'; operationId: string; /** One decision on several items (Apply all, Dismiss): said once, under the draft line (B109). */ batch: boolean }>
   apply(itemIds: string[], edits?: Record<string, string>, hooks?: DecisionHooks): Promise<DecisionOutcome & { applied: string[]; dropped: string[] }>
   /** The notice's ticket for Move to and its second Undo (use-day-draft.ts), or null when nothing was skipped. */
   skip(itemIds: string[], hooks?: DecisionHooks<DraftTicket>): Promise<DraftTicket | null>
@@ -210,8 +210,9 @@ const lastOrder = new Map<string, string[]>()
 function bandsOf(pageId: string, items: DraftItem[], decided: DayDraft['decided'], held: DayDraft['held']): ShownBand[] {
   const now = Date.now(), out: ShownBand[] = [], seen = new Set<string>()
   for (const item of items) known.set(item.id, item)
-  // Held: said for as long as it's held, not 4 s (Jazz 93fbd48f); a refusal's note lasts 4 s.
-  const heldNote = (id: string) => held[id] && (held[id].kind === 'apply' ? 'Not applied · changed elsewhere' : 'Not skipped · changed elsewhere')
+  // Held: said for as long as it's held, not 4 s (Jazz 93fbd48f); a refusal's note lasts 4 s. A batch's rows say
+  // nothing: they show as open again, and the draft line says it once (B109, Jazz e28c328e).
+  const heldNote = (id: string) => held[id] && !held[id].batch ? (held[id].kind === 'apply' ? 'Not applied · changed elsewhere' : 'Not skipped · changed elsewhere') : undefined
   const noteOf = (id: string) => { const n = notes.get(id); return heldNote(id) || (n && n.until > now ? n.text : undefined) }
   for (const item of items) {
     seen.add(item.id)
@@ -225,7 +226,7 @@ function bandsOf(pageId: string, items: DraftItem[], decided: DayDraft['decided'
     if (look === 'skipped' || look === 'closing') { seen.add(id); out.push({ item: l.item, look }) }
   }
   for (const [id, n] of notes) if (n.pageId === pageId && !seen.has(id) && n.until > now) { seen.add(id); out.push({ item: n.item, look: 'gone', note: n.text }) }
-  for (const id of Object.keys(held)) { const item = known.get(id); if (item && !seen.has(id)) out.push({ item, look: 'gone', note: heldNote(id) }) }
+  for (const id of Object.keys(held)) { const item = known.get(id), note = heldNote(id); if (item && note && !seen.has(id)) out.push({ item, look: 'gone', note }) }
   const order = lastOrder.get(pageId) ?? [], at = (id: string) => { const i = order.indexOf(id); return i < 0 ? Infinity : i }
   const sorted = out.map((b, i) => ({ b, i })).sort((x, y) => (at(x.b.item.id) - at(y.b.item.id)) || x.i - y.i).map(x => x.b)
   // New items keep the order the draft gives them, after those already shown.
@@ -523,9 +524,12 @@ export function DraftLine({ page }: { page: Page }) {
   if (draft.state === 'none') return null
   if (draft.state === 'preparing') return <p className="draft-line" role="status"><span className="draft-spin" aria-hidden="true" />Preparing…</p>
   if (n > 0 && !shown) return <p className="draft-line" role="status">Suggestions ready<span className="sep"> · </span><button type="button" className="draft-primary" onClick={show}>Show</button></p>
+  // A held Apply all or Dismiss is one decision: said once, here, until Keep mine or Discard (B109, Jazz e28c328e).
+  const batches = new Set(Object.values(draft.held).filter(h => h.batch).map(h => h.kind))
+  const heldLine = batches.size > 0 && <p className="draft-held" role="status">{[...batches].sort().map(k => k === 'apply' ? 'Not applied · changed elsewhere' : 'Not dismissed · changed elsewhere').join(' / ')}</p>
   const counts = n > 0 && <span className="draft-seg">{n} suggestion{n === 1 ? '' : 's'}<span className="sep"> · </span><button type="button" className="draft-primary" onClick={() => all('apply')}>Apply all</button><span className="sep"> · </span><button type="button" onClick={() => all('skip')}>Dismiss</button></span>
   const tail = draft.state === 'failed' ? <span className="draft-seg"><span className="draft-warn">Couldn’t draft</span><span className="sep"> · </span><button type="button" onClick={() => draft.retry()}>Retry</button></span>
     : draft.state === 'offline' ? <span className="draft-seg">Offline</span> : null
-  if (!counts && !tail) return null
-  return <p className="draft-line is-segs" role="status"><span className="draft-segs">{counts}{tail}</span></p>
+  if (!counts && !tail) return heldLine || null
+  return <><p className="draft-line is-segs" role="status"><span className="draft-segs">{counts}{tail}</span></p>{heldLine}</>
 }

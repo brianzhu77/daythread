@@ -28,7 +28,7 @@ export interface DayDraftHook {
    */
   decided: Record<string, 'apply' | 'skip'>
   /** Decisions the server held (the draft changed since), by item, with their operation: said in place until Keep mine or Discard. */
-  held: Record<string, { kind: 'apply' | 'skip'; operationId: string }>
+  held: Record<string, { kind: 'apply' | 'skip'; operationId: string; /** One decision on several items (Apply all, Dismiss): said once, under the draft line (B109). */ batch: boolean }>
   /**
    * `onStored`: the change is kept on this device (the first frame its band may look decided, §2). Resolves once the
    * server has answered: what it applied, what was no longer open, `refused` when nothing was ("Nothing to apply"), and
@@ -95,7 +95,7 @@ export function useDayDraft(page: Page): DayDraftHook {
   }, [outbox.decisions, page.id])
   const held = useMemo(() => {
     const out: DayDraftHook['held'] = {}
-    for (const d of outbox.heldDecisions) if (d.pageId === page.id) for (const id of d.itemIds) out[id] = { kind: d.type === 'apply-draft' ? 'apply' : 'skip', operationId: d.operationId }
+    for (const d of outbox.heldDecisions) if (d.pageId === page.id) for (const id of d.itemIds) out[id] = { kind: d.type === 'apply-draft' ? 'apply' : 'skip', operationId: d.operationId, batch: d.itemIds.length > 1 }
     return out
   }, [outbox.heldDecisions, page.id])
   const ask = useSyncExternalStore(subscribeAsks, () => asks.get(page.id), () => undefined)
