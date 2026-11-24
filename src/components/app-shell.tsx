@@ -3,6 +3,7 @@ import type { Workspace } from '../domain/types'
 import { dueRepeats } from '../domain/repeats'
 import { dueTodoRepeats } from '../domain/todo-repeats'
 import { liveTaskIds } from '../domain/workspace'
+import { mendKey } from './todo-repeat-view'
 import { Toast, type ToastProps } from '@heroui/react'
 import { toIso, todayIso } from './dates'
 import { usePreview } from './preview'
@@ -54,6 +55,8 @@ function RepeatingRows() {
   const { workspace, run } = useWorkspace()
   const [tick, setTick] = useState(0)
   const opened = useRef(false), lastInput = useRef(0)
+  /** The due repeats last asked to be mended: a kept mend isn't drawn, so they still look due until the server answers. */
+  const askedMend = useRef('')
   useEffect(() => {
     const input = () => { lastInput.current = Date.now() }
     const check = () => setTick(n => n + 1)
@@ -75,7 +78,9 @@ function RepeatingRows() {
     opened.current = true
     if (!opening && Date.now() - lastInput.current < idleBeforeRepeats) return
     const now = new Date(), today = toIso(now), time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    if (!dueRepeats(workspace, today, time).length && !dueRules(workspace, today, time).length && !(workspace.todoRepeats?.length && dueTodoRepeats(workspace, today).length && dueTodoRepeats(workspace, today, liveTaskIds(workspace)).length)) return
+    const mend = workspace.todoRepeats?.length && dueTodoRepeats(workspace, today).length ? mendKey(dueTodoRepeats(workspace, today, liveTaskIds(workspace))) : ''
+    if (!dueRepeats(workspace, today, time).length && !dueRules(workspace, today, time).length && !(mend !== '' && mend !== askedMend.current)) return
+    askedMend.current = mend
     void run({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped${s.full ? ' · database full' : ''}`).join(' · ') } : null), undefined, { quiet: true, stale: 'outcome', inlineRefusal: /Saved elsewhere/, onRefused: () => {} })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, revision])

@@ -2,14 +2,14 @@
 // (src/server/functions.ts). getDayView is a pure read of the loaded workspace.
 import { Button, toast } from '@heroui/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Action, DayView, LocalDate, Receipt, Task, Workspace } from '../domain/types'
+import type { Action, Command, DayView, LocalDate, Receipt, Task, Workspace } from '../domain/types'
 import { applyCommand, getDayView } from '../domain/workspace'
 import { rawOf, type Json, type RowEdit } from '../domain/database'
 import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand, runOutboxCommand } from '../server/functions'
 import { appWrites, capture, draftDecisions, drainQueue, idbOutboxStore, outboxCounts, schedule, type DraftDecision, type DrainResult, type OutboxEntry, type OutboxStore, type SendAnswer } from './outbox'
 import { isNetworkFailure } from './offline-copy'
-import { drawRule, drawsAhead, takenBackText } from './draw-ahead'
+import { drawRule, drawnWorkspace, drawsAhead, takenBackText } from './draw-ahead'
 import { justPressed, markWorking } from './press'
 import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
@@ -299,7 +299,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     if (!ws) return null
     for (const e of entries.current) {
       if (e.state !== 'pending' || e.action.type === 'undo' || (shown && !drawn(e.seq))) continue
-      try { ws = applyCommand(ws, { operationId: e.operationId, expectedRevision: ws.revision, action: e.action }).workspace } catch { /* the server will say */ }
+      try {
+        const command: Command = { operationId: e.operationId, expectedRevision: ws.revision, action: e.action }
+        ws = shown ? drawnWorkspace(ws, command) : applyCommand(ws, command).workspace
+      } catch { /* the server will say */ }
     }
     return ws
   }, [])

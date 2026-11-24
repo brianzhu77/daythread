@@ -1,4 +1,5 @@
-import type { Action } from '../domain/types'
+import type { Action, Command, Workspace } from '../domain/types'
+import { applyCommand } from '../domain/workspace.ts'
 import type { OutboxEntry } from './outbox'
 
 /**
@@ -102,6 +103,17 @@ const aheadChangeKinds: ReadonlySet<string> = new Set([
   'updateAutomation', 'setAutomationActive', 'removeAutomation', 'moveAutomation',
   'setDashboardFilter', 'updateWidget', 'moveWidget', 'swapWidget', 'removeWidget',
 ])
+
+/**
+ * A pending change as it is drawn before the server answers: the command by the domain's own code, except that no
+ * repeat makes its next to-do or takes one back (repeating-to-dos.md §3: the next line is never drawn ahead of the server).
+ */
+export function drawnWorkspace(ws: Workspace, command: Command): Workspace {
+  if (command.action.type === 'set-todo-repeat' || !ws.todoRepeats?.length) return applyCommand(ws, command).workspace
+  // Without its repeats the reducer neither advances nor takes back; the tick itself is the same.
+  const { todoRepeats, ...rest } = ws
+  return { ...applyCommand(rest, command).workspace, todoRepeats }
+}
 
 /** Whether this change is drawn as soon as it's stored. By payload where a type can also make things (Ratchet 6458ed11). */
 export function drawsAhead(action: Action): boolean {
