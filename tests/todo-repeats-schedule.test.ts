@@ -67,6 +67,17 @@ test('the mend never lands on a past day', () => {
   assert.equal(mendDay(rep({ until: '2026-11-29' }), mon, sat), null, 'ended')
 })
 
+test('a tick and the mend agree: the finish day counts, and "When it\'s done" lands after its own day', () => {
+  assert.equal(mendDay(rep(), nextMon, nextMon), '2026-12-07', 'finished late on a schedule day: that day was this one, as the tick counts it')
+  assert.equal(mendDay(rep({ until: nextMon }), nextMon, nextMon), null, 'so a repeat the tick ended is not started again by the mend')
+  assert.equal(mendDay(rep(), null, nextMon), nextMon, 'no day recorded: today is free')
+  const daily = rep({ every: 'day', from: 'done', slot: '2026-11-24' })
+  assert.equal(nextDay(daily, mon), wed, 'finished the day before its own day: its own day plus the interval, never its own day again')
+  assert.equal(mendDay(daily, mon, mon), wed)
+  assert.equal(mendDay(daily, null, mon), wed)
+  assert.equal(nextDay(rep({ every: 'day', interval: 5, from: 'done', slot: sat }), thu), '2026-12-01', 'early, but its plus-interval is after its own day: counted from the finish')
+})
+
 test('a schedule too long to walk has ended, rather than hanging or throwing', () => {
   const ancient = rep({ every: 'day', start: '1900-01-01', slot: '1900-01-01' })
   assert.equal(firstOccurrenceAfter(ancient, mon), null)

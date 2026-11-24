@@ -410,6 +410,11 @@ test('a finished current one whose page is in Trash is not mended, so opening th
   assert.equal(h.ws.tasks.length, 1)
   assert.equal(the(h).taskId, id)
   assert.throws(() => setRepeat(h, id, { ...weekly, interval: 2 }), /Reopen it first|in Trash/)
+  // Back from Trash, it is mended: the page being in Trash was what held it.
+  h.run({ type: 'restore-page', pageId: dayId(mon) })
+  h.run({ type: 'run-repeats', today: sat, time: '09:00', at })
+  assert.equal(h.ws.tasks.length, 2)
+  assert.equal(plannedOn(h.ws, the(h).taskId), nextMon)
 })
 
 test('a to-do two repeats remember: reopening it takes back only the next one that is as made', () => {
@@ -441,6 +446,58 @@ test('a next one that already exists is adopted, not made twice', () => {
   assert.equal(h.ws.tasks.length, 2)
   assert.equal(rows(h, taken).length, 1, 'no second line')
   assert.equal(the(h).taskId, taken)
+})
+
+// Found by the whole-branch review: the day rules where a tick and the mend have to agree.
+test('"When it\'s done", two finished on one day: the next is after its own day, never itself', () => {
+  const { h, id } = setup()
+  setRepeat(h, id, { every: 'day', interval: 1, from: 'done' })
+  const first = next(h, mon)
+  assert.equal(first.on, tue)
+  const second = next(h, mon)
+  assert.equal(second.on, wed, 'finished plus the interval is its own day, so its own day plus the interval')
+  assert.notEqual(second.taskId, first.taskId)
+  assert.equal(h.ws.tasks.length, 3)
+  assert.deepEqual(the(h).previous, { taskId: first.taskId, slot: tue })
+  assert.deepEqual(dueTodoRepeats(h.ws, mon), [])
+})
+
+test('the last one finished late on a schedule day ends the repeat, and the mend makes no other that day', () => {
+  for (const status of ['done', 'cancelled'] as const) {
+    const { h, id } = setup()
+    setRepeat(h, id, { ...weekly, until: nextMon })
+    const last = finish(h, id, nextMon, status)
+    assert.equal(last.receipt.nextTodos, undefined, status)
+    assert.equal(the(h).finishedOn, nextMon, 'the day a build that knows repeats saw it finished and made none')
+    assert.deepEqual(dueTodoRepeats(h.ws, nextMon), [], status)
+    h.run({ type: 'run-repeats', today: nextMon, time: '09:00', at })
+    assert.equal(h.ws.tasks.length, 1, status)
+    reopen(h, id, nextMon)
+    assert.equal(the(h).finishedOn, undefined, 'open again: nothing is finished')
+  }
+})
+
+test('after the mend nothing is due that day, whatever the rule', () => {
+  const rules: TodoRepeatRule[] = [weekly, { ...weekly, until: nextMon }, { every: 'day', interval: 1, from: 'schedule' }, { every: 'day', interval: 1, from: 'done' },
+    { every: 'day', interval: 5, from: 'done', until: sat }, { every: 'month', interval: 1, from: 'schedule' }]
+  for (const rule of rules) for (const doneOn of [mon, null]) for (const today of [mon, wed, nextMon, dec7]) {
+    const { h, id } = setup()
+    setRepeat(h, id, rule)
+    h.ws = { ...h.ws, tasks: h.ws.tasks.map(t => ({ ...t, status: 'done' as const, doneOn, version: t.version + 1 })) }
+    h.run({ type: 'run-repeats', today, time: '09:00', at })
+    assert.deepEqual(dueTodoRepeats(h.ws, today, liveTaskIds(h.ws)), [], JSON.stringify({ rule, doneOn, today }))
+  }
+})
+
+test('a next one given a blocker has been touched: it stays', () => {
+  const { h, id } = setup()
+  setRepeat(h, id, weekly)
+  h.save(dayId(mon), d => [...d, todo('r-2', 'Other', 'plan', mon)], { today: mon })
+  const made = next(h, mon)
+  h.run({ type: 'link-tasks', taskId: made.taskId, add: [h.task('Other').id], remove: [], at })
+  reopen(h, id)
+  assert.ok(h.ws.tasks.some(t => t.id === made.taskId))
+  assert.equal(the(h).taskId, made.taskId)
 })
 
 test('over the limit the whole change is refused', () => {
