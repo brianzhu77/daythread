@@ -1763,8 +1763,16 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       // When that day's to-do already exists, finished or the current one, the repeat steps over the day: otherwise it
       // would stay due, and every open would run this again (a revision, and Undo cleared) for nothing.
       if (state.todoRepeats?.length) {
-        for (const { repeat, on } of dueTodoRepeats(state, action.today, liveTaskIds(state))) {
-          if (!advanceRepeat(state, repeat, task(state, repeat.taskId), on, action.today)) repeat.slot = on;
+        for (const due of dueTodoRepeats(state, action.today, liveTaskIds(state))) {
+          const kept = structuredClone(state);
+          try {
+            const repeat = state.todoRepeats!.find((r) => r.id === due.repeat.id)!;
+            if (!advanceRepeat(state, repeat, task(state, repeat.taskId), due.on, action.today)) repeat.slot = due.on;
+          } catch {
+            // One repeat that can't make its next must not stop repeating rows, scheduled rules or the other repeats.
+            for (const key of Object.keys(state)) delete (state as unknown as Record<string, unknown>)[key];
+            Object.assign(state, kept);
+          }
         }
       }
       const rules = runScheduledRules(state, action, operationId);
