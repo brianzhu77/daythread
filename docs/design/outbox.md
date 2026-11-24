@@ -27,7 +27,7 @@ Offline is where it bites: a command made offline fails into `lastFailed` (heade
 - **The domain is pure and runs in the browser** (`applyCommand`), so a pending change can be shown applied locally.
 - **IndexedDB is already used** for the offline copy (`offline-copy.ts`), with owner stamping against late replies.
 - **Row-level storage on Postgres** (`workspace-rows.ts`: `rowsOf`, `planWrites`): pages (a database row is a page),
-  tasks, deleted tasks, comment threads, task links, plus the workspace's own settings.
+  tasks, deleted tasks, comment threads, task links, repeating to-dos, plus the workspace's own settings.
 
 ## 3. Scope
 
@@ -166,7 +166,7 @@ Outside this class, no command is known to read a row it doesn't write; the PR a
 ### Cost of the row check (Lead ace3f9fa)
 
 - **Postgres:** an additive, nullable `revision integer` column on `pages`, `tasks`, `deleted_tasks`,
-  `comment_threads`, `task_links`, and `settings_revision`, `rows_tracked_through`, `rows_untracked_until` and `receipts_forgotten_through` (integers) on `workspaces` (§11), set to the new revision on every row
+  `comment_threads`, `task_links`, `todo_repeats`, and `settings_revision`, `rows_tracked_through`, `rows_untracked_until` and `receipts_forgotten_through` (integers) on `workspaces` (§11), set to the new revision on every row
   the command writes (`planWrites` already lists them). No backfill: null means "not written since the column came",
   which is older than any entry the outbox can hold (the outbox ships with it), so it reads as 0. Migration runs through
   the existing runner; backup first, as for every schema change. Rows a command writes are already being upserted, so

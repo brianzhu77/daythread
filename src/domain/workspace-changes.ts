@@ -6,6 +6,7 @@ import { expandedWorkspace, strippedWorkspace, type SyncedRecord } from './synce
 import type { CommentThread } from './comments.ts'
 import type { Automation } from './automations.ts'
 import type { TaskLink } from './task-links.ts'
+import type { TodoRepeat } from './todo-repeats.ts'
 import type { Page, Task, Workspace } from './types.ts'
 
 export interface ListChanges<T> {
@@ -37,6 +38,8 @@ export interface WorkspaceChanges {
   todoAutomations?: Automation[] | null
   /** Links between to-dos, whole, when any changed. */
   links?: TaskLink[]
+  /** Repeating to-dos, whole, when any changed. */
+  todoRepeats?: TodoRepeat[]
 }
 
 /** Existing entries replaced where they are, removed ones dropped, new ones appended in the new list's order. */
@@ -67,9 +70,10 @@ export function changesBetween(before: Workspace, after: Workspace): WorkspaceCh
   const threads = JSON.stringify(before.threads ?? []) === JSON.stringify(after.threads ?? []) ? {} : { threads: after.threads ?? [] }
   const rules = JSON.stringify(before.todoAutomations ?? []) === JSON.stringify(after.todoAutomations ?? []) ? {} : { todoAutomations: after.todoAutomations?.length ? after.todoAutomations : null }
   const links = JSON.stringify(before.links ?? []) === JSON.stringify(after.links ?? []) ? {} : { links: after.links ?? [] }
+  const repeats = JSON.stringify(before.todoRepeats ?? []) === JSON.stringify(after.todoRepeats ?? []) ? {} : { todoRepeats: after.todoRepeats ?? [] }
   return {
     from: before.revision, revision: after.revision, timezone: after.timezone, ...(after.weekStart === 1 ? { weekStart: 1 as const } : {}), ...(after.todoAutomationsUnreadable ? { todoAutomationsUnreadable: true as const } : {}), undo: undoMarker(after),
-    pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced, ...smartNotes, ...threads, ...links, ...rules,
+    pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced, ...smartNotes, ...threads, ...links, ...repeats, ...rules,
   }
 }
 
@@ -85,9 +89,9 @@ function applyList<T extends { id: string }>(before: readonly T[], changes: List
 export function applyChanges(ws: Workspace, changes: WorkspaceChanges): Workspace | null {
   if (ws.revision !== changes.from) return null
   const pages = applyList(ws.pages, changes.pages), tasks = applyList(ws.tasks, changes.tasks)
-  const synced = changes.synced ?? ws.synced, smartNotes = changes.smartNotes ?? ws.smartNotes, threads = changes.threads ?? ws.threads, links = changes.links ?? ws.links, rules = changes.todoAutomations !== undefined ? changes.todoAutomations : ws.todoAutomations
+  const synced = changes.synced ?? ws.synced, smartNotes = changes.smartNotes ?? ws.smartNotes, threads = changes.threads ?? ws.threads, links = changes.links ?? ws.links, repeats = changes.todoRepeats ?? ws.todoRepeats, rules = changes.todoAutomations !== undefined ? changes.todoAutomations : ws.todoAutomations
   if (!pages || !tasks) return null
-  const { undo: _undo, smartNotes: _smartNotes, weekStart: _weekStart, threads: _threads, links: _links, todoAutomations: _rules, todoAutomationsUnreadable: _unread, ...rest } = ws
+  const { undo: _undo, smartNotes: _smartNotes, weekStart: _weekStart, threads: _threads, links: _links, todoRepeats: _repeats, todoAutomations: _rules, todoAutomationsUnreadable: _unread, ...rest } = ws
   return expandedWorkspace({
     ...rest, revision: changes.revision, timezone: changes.timezone, ...(changes.weekStart === 1 ? { weekStart: 1 as const } : {}), ...(changes.todoAutomationsUnreadable ? { todoAutomationsUnreadable: true as const } : {}), pages, tasks,
     deletedTasks: changes.deletedTasks ?? ws.deletedTasks, receipts: {},
@@ -95,6 +99,7 @@ export function applyChanges(ws: Workspace, changes: WorkspaceChanges): Workspac
     ...(smartNotes?.length ? { smartNotes } : {}),
     ...(threads?.length ? { threads } : {}),
     ...(links?.length ? { links } : {}),
+    ...(repeats?.length ? { todoRepeats: repeats } : {}),
     ...(rules?.length ? { todoAutomations: rules } : {}),
     ...(changes.undo ? { undo: changes.undo } : {}),
   })

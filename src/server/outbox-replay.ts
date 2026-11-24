@@ -37,7 +37,7 @@ export function writeKeys(write: Omit<RowDiff, 'timezone'> & { timezone?: string
     for (const r of set?.upsert ?? []) keys.push(`${kind}:${r.id}`)
     for (const id of set?.remove ?? []) keys.push(`${kind}:${id}`)
   }
-  add('page', write.pages); add('task', write.tasks); add('deleted', write.deleted); add('thread', write.threads); add('link', write.links)
+  add('page', write.pages); add('task', write.tasks); add('deleted', write.deleted); add('thread', write.threads); add('link', write.links); add('repeat', write.repeats)
   if (write.timezone !== undefined || write.weekStart !== undefined || write.todoAutomations !== undefined) keys.push('settings')
   return keys
 }
