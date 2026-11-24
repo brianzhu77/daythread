@@ -2,7 +2,7 @@
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
 import { newId, withOperationIds } from './ids.ts'
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
-import { repeatWords, standingRepeats, todoRepeatLimits, type TodoRepeat } from "./todo-repeats.ts";
+import { nextDay, repeatTaskId, repeatWords, standingRepeats, todoRepeatLimits, type TodoRepeat } from "./todo-repeats.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { amongApplied, decidedElsewhere, draftOf, takenOver, tookRef, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
@@ -593,6 +593,55 @@ function planOn(state: Workspace, t: Task, day: string, options: { from?: string
   if (changed) setDocument(target, doc);
   if (t.paused) { t.paused = false; t.version++; }
 }
+/** Makes the repeat's next to-do on `on` (or adopts a live one with its id) and moves the repeat on to it. */
+function advanceRepeat(state: Workspace, repeat: TodoRepeat, current: Task, on: string, createdOn: string): { taskId: string; on: string } {
+  const id = repeatTaskId(repeat.id, on);
+  // A retry, a second tab or a line pasted back may already have made it: one to-do per repeat and day.
+  if (!state.tasks.some((x) => x.id === id)) {
+    state.deletedTasks = state.deletedTasks.filter((x) => x.id !== id);
+    const shift = Math.round((Date.parse(`${on}T12:00:00Z`) - Date.parse(`${repeat.slot}T12:00:00Z`)) / 86_400_000);
+    const planned = plannedOn(state, current.id), rows = taskRows(state, current.id);
+    const line = rows.find((r) => r.role === "plan" && r.page.type === "daily" && r.page.date === planned) ?? rows[0];
+    // The line's words with its chips and references; a chip keeps its distance from the day, and gets its own event.
+    const content = line && Array.isArray(line.node.content)
+      ? (structuredClone(line.node.content) as { type?: string; props?: Record<string, unknown> }[]).map((c) => {
+        if (c?.type === "dateMention" && c.props) {
+          const was = c.props.date;
+          return { ...c, props: { ...c.props, eventId: newId(), ...(typeof was === "string" && /^\d{4}-\d{2}-\d{2}$/.test(was) ? { date: addDays(was, shift) } : {}) } };
+        }
+        return c?.type === "pageRef" ? { ...c, props: { ...c.props, refId: newId() } } : c;
+      })
+      : [textRun(current.title)];
+    const next = createTask(state, inlineText(content, on), ensureDay(state, on), createdOn, id);
+    if (current.deadlineOn) next.deadlineOn = addDays(current.deadlineOn, shift);
+    if (current.attentionOn) next.attentionOn = addDays(current.attentionOn, shift);
+    planOn(state, next, on);
+    const target = dayPage(state, on)!, doc = docOf(target);
+    const row = flatNodes(doc).find((n) => rowTaskId(n) === id && rowRole(n) === "plan");
+    if (row) { row.content = content; row.children = []; setDocument(target, doc); }
+  }
+  repeat.previous = { taskId: current.id, slot: repeat.slot };
+  repeat.taskId = id;
+  repeat.slot = on;
+  return { taskId: id, on };
+}
+/** `t` was just reopened: a repeat that remembers it takes its next one back, while that one is as it was made. */
+function takeNextBack(state: Workspace, t: Task): void {
+  for (const repeat of state.todoRepeats ?? []) {
+    if (repeat.previous?.taskId !== t.id) continue;
+    const next = state.tasks.find((x) => x.id === repeat.taskId);
+    if (!next || next.status !== "open" || next.paused || next.version !== 1) continue;
+    const rows = taskRows(state, next.id);
+    if (rows.length !== 1 || plannedOn(state, next.id) !== repeat.slot) continue;
+    const p = rows[0]!.page;
+    setDocument(p, removeNodes(docOf(p), new Set([rows[0]!.node.id])));
+    state.tasks = state.tasks.filter((x) => x.id !== next.id);
+    repeat.taskId = t.id;
+    repeat.slot = repeat.previous.slot;
+    delete repeat.previous;
+    return;
+  }
+}
 /** After a task's rows left `p`: a task born there with no other row goes (tombstoned); today's plan row gone one at a time is Not today. */
 function settleAfterRowsLeft(state: Workspace, p: Page, t: Task, options: { single: boolean; wasPlan: boolean; today?: string; plannedBefore: string | null }): void {
   const elsewhere = taskRows(state, t.id).some((r) => r.page.id !== p.id);
@@ -936,7 +985,7 @@ function heldSources(state: Workspace, result: SmartResult): SmartResult {
   const held = new Set(state.pages.map((p) => p.id));
   return { ...result, at: isoTime(result.at), blocks: result.blocks.map((b) => ({ ...b, sources: b.sources.filter((s) => held.has(s.pageId)) })) };
 }
-function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>; renamed?: Record<string, string>; conflicted?: string[] } {
+function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>; renamed?: Record<string, string>; conflicted?: string[]; nextTodos?: Receipt["nextTodos"] } {
   switch (action.type) {
     case "save-editor": {
       const p = page(state, action.pageId);
@@ -1058,7 +1107,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const today = date(action.today);
       if (t.status !== "open") throw new DomainError("Reopen it first");
       if (isBlankTask(t)) throw new DomainError("A to-do needs words");
-      if (!liveTaskIds(state).has(t.id)) throw new DomainError("That to-do is in Trash");
+      // Not today takes a to-do's line off its day, so a paused one may have no line at all: that one isn't in Trash.
+      const lineless = t.paused && !state.pages.some((p) => flatNodes(pageNodes(p)).some((n) => rowTaskId(n) === t.id));
+      if (!lineless && !liveTaskIds(state).has(t.id)) throw new DomainError("That to-do is in Trash");
       const existing = (state.todoRepeats ?? []).find((r) => r.taskId === t.id);
       const planned = plannedOn(state, t.id);
       const anchor = existing?.slot ?? (planned && !t.paused ? planned : today);
@@ -1086,11 +1137,19 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       return { message: `Repeats ${repeatWords(repeat)}`, entityId: t.id };
     }
     case "task-status": {
-      const t = task(state, action.taskId);
+      const t = task(state, action.taskId), was = t.status;
       t.status = action.status;
       t.doneOn = action.status === "done" ? (action.today ? date(action.today) : null) : null;
       t.version++;
-      return { message: action.status === "done" ? "Done" : action.status === "cancelled" ? "Cancelled" : "Reopened", entityId: t.id };
+      const message = action.status === "done" ? "Done" : action.status === "cancelled" ? "Cancelled" : "Reopened";
+      if (was === "open" && action.status !== "open" && action.today) {
+        // Finishing a repeat's current to-do makes its next one; a Cancel sent without a day is left to the mend.
+        const today = date(action.today), repeat = state.todoRepeats?.find((r) => r.taskId === t.id);
+        const on = repeat ? nextDay(repeat, today, state.weekStart ?? 0) : null;
+        if (repeat && on) return { message, entityId: t.id, nextTodos: [advanceRepeat(state, repeat, t, on, today)] };
+      }
+      if (was !== "open" && action.status === "open") takeNextBack(state, t);
+      return { message, entityId: t.id };
     }
     case "rename-task": {
       const t = task(state, action.taskId), title = text(action.title, 1000).trim();
@@ -1813,6 +1872,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (new Set(action.items.map((i) => i.taskId)).size !== action.items.length) throw new DomainError("Invalid to-dos");
       const today = date(action.today);
       let changed = 0, couldnt = 0, because: string | undefined;
+      const nextTodos: NonNullable<Receipt["nextTodos"]> = [];
       for (const { taskId, changes } of action.items) {
         if (!changes.length || changes.some((c) => !todoBarColumns.has(c.columnId))) throw new DomainError("Invalid to-dos");
         // Gone since this tab read it: one that couldn't, not a reason to refuse the rest.
@@ -1823,14 +1883,14 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
           const change = todoChange(state, taskId, move.id, move.value, today);
           if (!change) continue;
           if ("refused" in change) { refused = true; because ??= change.refused; continue; }
-          execute(state, change.action, operationId);
+          nextTodos.push(...(execute(state, change.action, operationId).nextTodos ?? []));
           did = true;
         }
         if (did) changed++;
         else if (refused) couldnt++;
       }
       if (!changed) throw new NoTodoChanged(because ?? (couldnt ? "Those to-dos are gone" : "Nothing to change"));
-      return { message: `${changed} to-do${changed === 1 ? "" : "s"} changed${couldnt ? ` · ${couldnt} couldn't` : ""}` };
+      return { message: `${changed} to-do${changed === 1 ? "" : "s"} changed${couldnt ? ` · ${couldnt} couldn't` : ""}`, ...(nextTodos.length ? { nextTodos } : {}) };
     }
     case "delete-pages": {
       const at = isoTime(action.at);
@@ -1948,7 +2008,7 @@ function applyCommandAs(input: Workspace, command: Command): CommandResult {
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { automations?: NonNullable<Receipt["automations"]>; message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number; shifted?: string[]; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }> };
+  let result: { automations?: NonNullable<Receipt["automations"]>; message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number; shifted?: string[]; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>; nextTodos?: Receipt["nextTodos"] };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");

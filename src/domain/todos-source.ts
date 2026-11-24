@@ -143,7 +143,7 @@ export function todoChange(ws: Workspace, taskId: string, columnId: string, raw:
   const to = typeof raw === 'string' ? raw : null, from = statusOf(t)
   if (!to || to === from) return null
   if (to === todoStatus.done) return { action: { type: 'task-status', taskId, status: 'done', today }, notice: 'Done' }
-  if (to === todoStatus.cancelled) return { action: { type: 'task-status', taskId, status: 'cancelled' }, notice: 'Cancelled' }
+  if (to === todoStatus.cancelled) return { action: { type: 'task-status', taskId, status: 'cancelled', today }, notice: 'Cancelled' }
   if (to === todoStatus.paused) return from === todoStatus.open ? { action: { type: 'not-today', taskId, date: was ?? today }, notice: 'Not today' } : { refused: 'Reopen it first' }
   if (from === todoStatus.paused) return { action: { type: 'plan-task', taskId, date: today, today }, notice: 'On today' }
   return { action: { type: 'task-status', taskId, status: 'open' }, notice: from === todoStatus.cancelled ? 'Restored' : 'Reopened' }
