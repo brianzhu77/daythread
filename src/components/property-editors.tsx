@@ -124,7 +124,7 @@ const composing = (e: KeyboardEvent) => e.nativeEvent.isComposing || e.keyCode =
 interface ShellProps {
   wide: boolean
   anchor: HTMLElement | null
-  property: Property
+  property: Pick<Property, 'name'>
   rowTitle: string
   /** The editor decides what each way of leaving does; the shell stays open until the caller unmounts it. */
   onDismiss(reason: Dismiss): void
@@ -157,7 +157,7 @@ function useNoCaretAfterSheet(sheet: boolean) {
   }, [sheet])
 }
 
-function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, maxWidth = 320, minWidth = 240, onComment, children }: ShellProps) {
+export function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, maxWidth = 320, minWidth = 240, onComment, children }: ShellProps) {
   useNoCaretAfterSheet(!wide)
   // Keys stay inside: nothing typed here reaches the page editor's handlers through the React tree (§10). That also
   // keeps Esc from the dismiss listeners on the document, so the shell handles Esc itself. (They still catch an Esc

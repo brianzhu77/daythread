@@ -67,10 +67,11 @@ import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
 import { endOfLineAbove, rowArrows } from './row-arrows'
 import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, registerEditorHold, rememberLeaveSave, sendHolding, trackLeaveSave } from './editor-flush'
-import { noticeWithNext, repeatPages, undoHoldPages } from './todo-repeat-view'
+import { noticeWithNext, repeatMenuLabel, repeatPages, repeatsIn, undoHoldPages } from './todo-repeat-view'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { BlockedMark, blockedByLabel, openBlockerPicker } from './blockers'
+import { openRepeatEditor } from './todo-repeat'
 import { databaseRows, isDatabase } from '../domain/database'
 import { openedByTurnover } from './use-screen-today'
 import { openedByMove } from './new-build'
@@ -268,6 +269,7 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const seen = t && shown && shown !== t.status ? { ...t, status: shown } : t
   // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
   const planned = t && workspace ? plannedOn(workspace, t.id) : null
+  const repeat = t && workspace ? repeatsIn(workspace).get(t.id) : undefined
   const model = seen && rows ? rowMenu(seen, role, planned, rows.pageDate, rows.today) : null
   // A11: last, under a divider, after the task's own actions (Jazz line-links-states §1).
   const copy = model ? rows!.copyLink(blockId) : null
@@ -286,7 +288,7 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {role === 'plan' && seen?.status === 'open' && planned && planDate && planned !== planDate && <span contentEditable={false} className="editor-reference-tag">Moved to {shortLabel(planned)}</span>}
     {/* A done or cancelled task keeps the button's space, hidden, so a long title doesn't reflow when it's ticked (#9). */}
     {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(seen?.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: todayIso(), today: todayIso() }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
-    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(t!.status === 'open' && workspace ? [{ items: [{ label: blockedByLabel(workspace, t!.id), onSelect: () => openBlockerPicker(t!.id, taskLine.current) }] }] : []), { items: [{ label: 'Copy', onSelect: () => rows!.copyRow(blockId) }, ...(copy ? [{ label: 'Copy link to line', onSelect: copy }] : [])] }]} onEscape={() => rows!.focusRow(blockId)} /></span>}
+    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(t!.status === 'open' && workspace ? [{ items: [{ label: blockedByLabel(workspace, t!.id), onSelect: () => openBlockerPicker(t!.id, taskLine.current) }, ...(repeat || t!.title.trim() ? [{ label: repeatMenuLabel(repeat), onSelect: () => openRepeatEditor(t!.id, taskLine.current) }] : [])] }] : []), { items: [{ label: 'Copy', onSelect: () => rows!.copyRow(blockId) }, ...(copy ? [{ label: 'Copy link to line', onSelect: copy }] : [])] }]} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {/* One group at the line's end, so a deadline and "Since" sit together rather than one wrapping under the other at 390. */}
     {seen && seen.status === 'open' && (hasDateFacts(seen) || since) && <span contentEditable={false} className="editor-date-tag">
       {hasDateFacts(seen) && <DateTag task={seen} today={todayIso()} pageDate={planDate || todayIso()} />}
@@ -2612,8 +2614,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!model) return null
     const choose = (intent: RowIntent) => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, intent) }
     const keep = (e: { preventDefault(): void }) => e.preventDefault()
+    const taskLine = () => document.querySelector<HTMLElement>(`.bn-block-outer[data-id="${CSS.escape(id)}"] .editor-task`)
+    const repeat = repeatsIn(latestWorkspace.current).get(t.id)
     const [tomorrow, ...rest] = model.primary[0]?.label === 'Tomorrow' ? model.primary : [null, ...model.primary]
-    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), { items: [{ label: blockedByLabel(latestWorkspace.current, t.id), onSelect: () => { selected.current = []; setSelectionLabel(''); openBlockerPicker(t.id, document.querySelector(`.bn-block-outer[data-id="${CSS.escape(id)}"] .editor-task`)) } }] }, { items: [{ label: 'Comment', onSelect: () => commentOn(id) }, { label: 'Copy', onSelect: () => { selected.current = []; setSelectionLabel(''); copyRow(id) } }, ...(lineLinkTarget(id) ? [{ label: 'Copy link to line', onSelect: () => { selected.current = []; setSelectionLabel(''); copyLineLink(id) } }] : [])] }, { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
+    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), { items: [{ label: blockedByLabel(latestWorkspace.current, t.id), onSelect: () => { selected.current = []; setSelectionLabel(''); openBlockerPicker(t.id, taskLine()) } }, ...(repeat || t.title.trim() ? [{ label: repeatMenuLabel(repeat), onSelect: () => { selected.current = []; setSelectionLabel(''); openRepeatEditor(t.id, taskLine()) } }] : [])] }, { items: [{ label: 'Comment', onSelect: () => commentOn(id) }, { label: 'Copy', onSelect: () => { selected.current = []; setSelectionLabel(''); copyRow(id) } }, ...(lineLinkTarget(id) ? [{ label: 'Copy link to line', onSelect: () => { selected.current = []; setSelectionLabel(''); copyLineLink(id) } }] : [])] }, { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
     return <div className="editor-selection-bar is-row-actions" onPointerDown={keep}>
       {tomorrow && <button type="button" onClick={() => choose(tomorrow.intent)}>{tomorrow.label}</button>}
       {model.anotherDay && <RowMenu label="Another day" triggerClass="editor-bar-button" trigger="Another day" groups={menuGroups({ ...model, groups: model.groups.filter(g => g.title === 'Another day') }, todayIso(), choose)} />}
