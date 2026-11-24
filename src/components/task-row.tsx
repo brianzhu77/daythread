@@ -29,7 +29,7 @@ export function useTaskActions(today: LocalDate) {
     }))
 
   const cancel = (task: Task) =>
-    run({ type: 'task-status', taskId: task.id, status: 'cancelled' }, r => ({ text: 'Cancelled', undoOperationId: r.operationId }))
+    run({ type: 'task-status', taskId: task.id, status: 'cancelled', today }, r => ({ text: 'Cancelled', undoOperationId: r.operationId }))
 
   return { markDone, planOn, notToday, cancel }
 }

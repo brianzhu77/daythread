@@ -2,7 +2,7 @@
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
 import { newId, withOperationIds } from './ids.ts'
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
-import { nextDay, repeatTaskId, repeatWords, standingRepeats, todoRepeatLimits, type TodoRepeat } from "./todo-repeats.ts";
+import { dueTodoRepeats, nextDay, repeatTaskId, repeatWords, standingRepeats, todoRepeatLimits, type TodoRepeat } from "./todo-repeats.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { amongApplied, decidedElsewhere, draftOf, takenOver, tookRef, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
@@ -1744,6 +1744,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (noRoom) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, noRoom, ""), full: true });
         if (missed) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, missed) });
       }
+      // A finished current to-do that got no next one (an older server, a Cancel sent without a day) is mended here.
+      for (const { repeat, on } of dueTodoRepeats(state, action.today, liveTaskIds(state))) advanceRepeat(state, repeat, task(state, repeat.taskId), on, action.today);
       const rules = runScheduledRules(state, action, operationId);
       return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}), ...(rules ? { automations: rules } : {}) };
     }

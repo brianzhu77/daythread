@@ -2543,7 +2543,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       intent.kind === 'move' ? { type: 'plan-task', taskId: t.id, date: intent.date, from: day, today }
       : intent.kind === 'bring-today' ? { type: 'plan-task', taskId: t.id, date: today, today }
       : intent.kind === 'not-today' ? { type: 'not-today', taskId: t.id, date: day, onlyThisDay: true }
-      : { type: 'task-status', taskId: t.id, status: intent.kind === 'cancel' ? 'cancelled' : 'open' }
+      : { type: 'task-status', taskId: t.id, status: intent.kind === 'cancel' ? 'cancelled' : 'open', today }
     // The caret leaves a row that goes: to the end of the line above (Jazz §3).
     const index = nodes().findIndex(n => n.id === blockId)
     const above = index > 0 ? nodes()[index - 1]!.id : null
