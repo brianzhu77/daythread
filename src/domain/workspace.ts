@@ -1760,7 +1760,13 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (missed) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, missed) });
       }
       // A finished current to-do that got no next one (an older server, a Cancel sent without a day) is mended here.
-      if (state.todoRepeats?.length) for (const { repeat, on } of dueTodoRepeats(state, action.today, liveTaskIds(state))) advanceRepeat(state, repeat, task(state, repeat.taskId), on, action.today);
+      // When that day's to-do already exists, finished or the current one, the repeat steps over the day: otherwise it
+      // would stay due, and every open would run this again (a revision, and Undo cleared) for nothing.
+      if (state.todoRepeats?.length) {
+        for (const { repeat, on } of dueTodoRepeats(state, action.today, liveTaskIds(state))) {
+          if (!advanceRepeat(state, repeat, task(state, repeat.taskId), on, action.today)) repeat.slot = on;
+        }
+      }
       const rules = runScheduledRules(state, action, operationId);
       return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}), ...(rules ? { automations: rules } : {}) };
     }

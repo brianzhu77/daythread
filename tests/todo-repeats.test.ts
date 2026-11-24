@@ -448,6 +448,26 @@ test('a next one that already exists is adopted, not made twice', () => {
   assert.equal(the(h).taskId, taken)
 })
 
+test('the mend steps over a day whose to-do already exists and is finished', () => {
+  const { h, id } = setup()
+  setRepeat(h, id, weekly)
+  const taken = repeatTaskId(the(h).id, nextMon)
+  h.day(nextMon)
+  h.save(dayId(nextMon), d => [...d, { ...todo('r-x', 'Weekly review', 'plan', nextMon), props: { taskId: taken, role: 'plan', planDate: nextMon } }], { today: mon })
+  finish(h, taken, mon)
+  // The floor build's server ticks the current one and knows nothing of repeats.
+  h.ws = { ...h.ws, tasks: h.ws.tasks.map(t => (t.id === id ? { ...t, status: 'done' as const, doneOn: mon, version: t.version + 1 } : t)) }
+  h.run({ type: 'run-repeats', today: sat, time: '09:00', at })
+  assert.equal(h.ws.tasks.length, 2)
+  assert.equal(the(h).slot, nextMon)
+  assert.equal(the(h).taskId, id)
+  h.run({ type: 'run-repeats', today: sat, time: '09:00', at })
+  const made = h.ws.tasks.find(t => t.status === 'open' && plannedOn(h.ws, t.id) === dec7)
+  assert.ok(made)
+  assert.equal(the(h).taskId, made.id)
+  assert.deepEqual(dueTodoRepeats(h.ws, sat, liveTaskIds(h.ws)), [])
+})
+
 // Found by the whole-branch review: the day rules where a tick and the mend have to agree.
 test('"When it\'s done", two finished on one day: the next is after its own day, never itself', () => {
   const { h, id } = setup()
