@@ -68,6 +68,8 @@ export interface Receipt {
   automations?: { databaseId: string; ran: string[]; paused: { name: string; reason: string }[]; /** From catching up on opening: says nothing unless one failed, and has no Undo (§6). */ scheduled?: true };
   /** run-repeats: what it left out, for one notice. */
   skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>;
+  /** The to-dos a repeat made in this command, for the notice. */
+  nextTodos?: Array<{ taskId: string; on: LocalDate }>;
   /** save-editor: lines left a synced block shown on this many pages. */
   linesRemovedFrom?: number;
   /** A cell edit that moved the rows it blocks: which ones. */
@@ -98,6 +100,8 @@ export interface Workspace {
   todoAutomationsUnreadable?: true;
   /** To-dos blocked by others (task-links.ts), in a table of their own. Absent until there's one. */
   links?: import("./task-links.ts").TaskLink[];
+  /** Repeating to-dos (todo-repeats.ts), in a table of their own. Absent until there's one. */
+  todoRepeats?: import("./todo-repeats.ts").TodoRepeat[];
   receipts: Record<string, Receipt>;
   undo?: {
     operationId: string;

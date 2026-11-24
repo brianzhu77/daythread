@@ -7,7 +7,7 @@ import type { Page, WeekStart, Workspace } from './types.ts'
 
 const daysIn = (year: number, month: number) => new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
 /** The nth occurrence. A month keeps its day where it can: from the 31st, February's falls on its last. */
-function occurrence(repeat: Repeat, n: number): string {
+function occurrence(repeat: Schedule, n: number): string {
   const step = n * repeat.interval
   if (repeat.every === 'day') return addDays(repeat.start, step)
   if (repeat.every === 'week') return addDays(repeat.start, step * 7)
@@ -17,12 +17,13 @@ function occurrence(repeat: Repeat, n: number): string {
   const day = Math.min(d, daysIn(year, month))
   return `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
+type Schedule = Pick<Repeat, 'every' | 'interval' | 'start' | 'weekdays'>
 const maxWalk = 40_000
 /**
  * Every occurrence in order. Weekdays count by calendar week from the one holding the start, so "every 2 weeks on Tue and Thu" keeps a week's
  * Tue and Thu together, which is why the week's first day matters to it. Changing that later can't make a row twice: ids go by date.
  */
-function* occurrences(repeat: Repeat, weekStart: WeekStart): Generator<string> {
+function* occurrences(repeat: Schedule, weekStart: WeekStart): Generator<string> {
   if (repeat.every !== 'week' || !repeat.weekdays?.length) {
     for (let n = 0; n < maxWalk; n++) yield occurrence(repeat, n)
     return
@@ -34,6 +35,11 @@ function* occurrences(repeat: Repeat, weekStart: WeekStart): Generator<string> {
       if (date >= repeat.start) yield date
     }
   }
+}
+/** The first schedule day strictly after `after`; null when the walk ends first. */
+export function firstOccurrenceAfter(repeat: Schedule, after: string, weekStart: WeekStart = 0): string | null {
+  for (const date of occurrences(repeat, weekStart)) if (date > after) return date
+  return null
 }
 /** Every date due by now: after the last it made, and not from before it was set up. */
 export function dueDates(repeat: Repeat, today: string, time: string, weekStart: WeekStart = 0): string[] {
