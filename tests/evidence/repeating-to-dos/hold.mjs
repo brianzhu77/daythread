@@ -4,6 +4,7 @@
 // typed since the held Undo saves them first, which takes the one Undo slot, so it is refused ("Can't undo · edited since") and nothing is lost.
 // H4: tapping the box again reopens. H5: a double tap ticks once. H6: a to-do with no repeat ticks at once.
 // H7: offline with unsaved words, the stored tick is held behind the "changed elsewhere" banner and Keep mine lands it, one next to-do.
+// H8: the same as H2 from a To-dos view's Status cell (Done) instead of the box.
 // Usage: node tests/evidence/repeating-to-dos/hold.mjs <base-url> <store-path> [chromium|webkit]  (a throwaway store the server at <base-url> uses)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
@@ -159,6 +160,21 @@ await scenario('H7: offline with words typed: nothing drawn; back online the ban
   const checks = { noNext: !said.includes('Next'), noNewRow: rowsOffline === rowsBefore, banner: /changed elsewhere/i.test(banner), heldTick: tickWas === 'open' && nextWas === 0, noLostWord: inEditor.includes('kept') || docText().includes('kept'), keepShown: keepShown > 0, done: task('Take the bins out').status === 'done', oneNextTodo: nextTodos().length === 1 }
   return { ok: Object.values(checks).every(Boolean), checks, saw: { banner, tickWas, nextWas, tickNow: task('Take the bins out').status, nextNow: nextTodos().length, keptStored: docText().includes('kept') } }
 }, wide, `/day/${tomorrow}`)
+
+// H8: the To-dos view's Status cell finishes a repeating to-do through the same held path as its box (final review, Fix 1).
+await scenario('H8: Lists with tomorrow in a side peek, typed there, then Status → Done on Take the bins out: saved, held, no conflict', async page => {
+  const peek = page.locator('.peek')
+  if (!(await peek.locator('[data-node-type="blockContainer"][data-id="tp"]').count())) return { ok: false, peekOpened: false, url: page.url() }
+  await typeAtEnd(peek, page, 'tp', ' kept')
+  const row = page.locator('.app-main tr.database-row', { hasText: 'Take the bins out' }).first()
+  await row.locator('.database-cell[data-cell*="|status|"]').click(); await wait(300)
+  await page.getByRole('option', { name: /^Done/ }).first().click()
+  const conflicts = await noConflict(page)
+  await wait(1200)
+  const said = await notices(page)
+  const checks = { noConflict: !conflicts.length, kept: docText().includes('kept'), oneNextTodo: nextTodos().length === 1, done: task('Take the bins out').status === 'done', notice: said.includes(`Done · Next ${shortDate(tomorrow)}`) }
+  return { ok: Object.values(checks).every(Boolean), checks, conflicts, said }
+}, wide, `/pages?page=lists&peek=day%3A${tomorrow}&side=1`)
 
 await browser.close()
 console.log(failed ? `${failed} failed` : 'all passed')

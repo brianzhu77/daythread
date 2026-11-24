@@ -237,7 +237,7 @@ export function usePendingCells() {
  * (design §13: "Never a silent revert") and the table says "1 change not saved · Retry · Undo".
  */
 export function useCommitCell() {
-  const { run, refresh, latest } = useWorkspace()
+  const { run, runHeld, refresh, latest } = useWorkspace()
   /** `also`: more cells of this row in the same save, so one Undo takes them all: a drag across both layers of a view. */
   const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void, beforeId?: string | null, also: { columnId: string; raw: Json | undefined }[] = []) => {
     const key = pendingKey(row.id, columnId)
@@ -253,7 +253,8 @@ export function useCommitCell() {
       // Release 2: held after it was drawn, the cell says it where he typed (`not saved · Retry`), with his value, and the
       // generic notice stays quiet (Jazz f92b65df). Not on screen: the notice says it.
       const onTakenBack = () => { setPendingCell(key, pendingTodo(true)); return shownUnsaved.has(db.id) }
-      void run(change.action, r => ({ text: notice ?? change.notice, undoOperationId: r.operationId }), newId(), { quiet: true, onTakenBack }).then(r => {
+      // Held: Done or Cancelled on a repeating to-do writes its next one's page, which may be open in an editor (repeating-to-dos.md §6).
+      void runHeld(change.action, r => ({ text: notice ?? change.notice, undoOperationId: r.operationId }), newId(), { quiet: true, onTakenBack }).then(r => {
         setPendingCell(key, r ? null : pendingTodo(true))
         if (!r) return
         // New words change lines on their pages: a tab open on one should read that as this browser, not another device.

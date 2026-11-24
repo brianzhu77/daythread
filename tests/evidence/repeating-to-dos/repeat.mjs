@@ -91,7 +91,7 @@ await scenario('R2 1280: Repeat… → Weekly sets it, with its notice, its icon
   return { ok: /Repeats every week/.test(said) && stored?.every === 'week' && stored.interval === 1 && mark === 1 && items.includes('Repeat · Every week…') && !items.includes('Repeat…') && !repeatOf('Reply about the offsite') && after === 0, said, stored, mark, items, after }
 })
 
-await scenario('R3 1280: the editor shows the rule, From and Ends change it, Off leaves only the Repeat field', async page => {
+await scenario('R3 1280: the editor shows the rule, From and Ends change it, Off leaves only the Repeat field; it keeps its place on Off and on Weekly again, and Esc leaves focus in the line', async page => {
   await row(page, 'Weekly review').locator('.repeat-mark').click(); await wait(500)
   const e = editor(page), selected = name => e.locator(`select[aria-label="${name}"] option:checked`).textContent()
   const weekday = new Date(`${today}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' })
@@ -100,14 +100,31 @@ await scenario('R3 1280: the editor shows the rule, From and Ends change it, Off
   const done = { days: await e.locator('.database-repeat-days button').count(), next: (await e.locator('.database-menu-quiet').textContent()).trim(), stored: repeatOf('Weekly review')?.from }
   await e.locator('select[aria-label="Ends"]').selectOption({ label: 'On a date' }); await wait(1200)
   const date = { value: await e.locator('input[type=date]').inputValue(), stored: repeatOf('Weekly review')?.until }
+  // Off takes the icon away: the editor keeps its place (it is placed against the line, not the icon), on Off and on Weekly again.
+  const place = async () => { const b = await page.locator('.property-popover').boundingBox(); return b && { x: Math.round(b.x), y: Math.round(b.y) } }
+  const at = { before: await place() }
   await e.locator('select[aria-label="Repeat"]').selectOption({ label: 'Off' }); await wait(1200)
+  at.off = await place()
   const off = { selects: await e.locator('select').count(), inputs: await e.locator('input').count(), buttons: await e.locator('button').count(), stored: repeatOf('Weekly review') ?? null }
-  const ok = first.repeat === 'Weekly' && first.every === '1' && first.unit === 'week' && first.days === 7 && first.pressed.length === 1 && first.pressed[0][0] === weekday && first.pressed[0][1] === true
+  await e.locator('select[aria-label="Repeat"]').selectOption({ label: 'Weekly' }); await wait(1200)
+  at.again = await place()
+  const near = p => Boolean(at.before && p && Math.abs(p.x - at.before.x) <= 4 && Math.abs(p.y - at.before.y) <= 4)
+  const kept = { off: near(at.off), again: near(at.again) }
+  // Esc: the icon that opened it is gone, so focus goes to the line (its caret), never to the page's body.
+  await page.keyboard.press('Escape'); await wait(500)
+  const focus = await page.evaluate(() => {
+    const a = document.activeElement, sel = getSelection()?.anchorNode
+    const lineOf = n => (n instanceof Element ? n : n?.parentElement)?.closest('.editor-task')
+    const line = lineOf(a) ?? (a?.isContentEditable ? lineOf(sel) : null)
+    return { on: a?.tagName ?? null, inRow: Boolean(line?.textContent.startsWith('Weekly review')) }
+  })
+  const ok = kept.off && kept.again && focus.on !== 'BODY' && focus.inRow
+    && first.repeat === 'Weekly' && first.every === '1' && first.unit === 'week' && first.days === 7 && first.pressed.length === 1 && first.pressed[0][0] === weekday && first.pressed[0][1] === true
     && first.from === 'Its day' && first.ends === 'Never' && first.next === `Next ${label(plusDays(today, 7))}`
     && done.days === 0 && done.next.endsWith(' if done today') && done.stored === 'done'
     && date.value === plusDays(today, 28) && date.stored === plusDays(today, 28)
     && off.selects === 1 && off.inputs === 0 && off.buttons === 0 && off.stored === null
-  return { ok, first, done, date, off }
+  return { ok, first, done, date, off, at, focus }
 })
 
 await scenario('R4 1280: by keyboard, Enter opens the editor, Tab reaches every control in order, Esc closes it onto the icon', async page => {

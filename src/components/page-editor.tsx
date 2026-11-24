@@ -293,7 +293,7 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {seen && seen.status === 'open' && (hasDateFacts(seen) || since || repeat) && <span contentEditable={false} className="editor-date-tag">
       {hasDateFacts(seen) && <DateTag task={seen} today={todayIso()} pageDate={planDate || todayIso()} />}
       {since && <span className="editor-since is-since">Since {sinceLabel(since, todayIso())}</span>}
-      {repeat && <RepeatMark taskId={seen.id} rule={repeat} />}
+      {repeat && <RepeatMark taskId={seen.id} rule={repeat} focusRow={rows ? () => rows.focusRow(blockId) : undefined} />}
     </span>}
     {t && <BlockedMark taskId={t.id} />}
   </div>

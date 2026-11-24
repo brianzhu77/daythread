@@ -11,16 +11,26 @@ import { RepeatIcon } from './icons'
 import { todayIso } from './dates'
 import { useWorkspace } from './use-day'
 
-let current: { taskId: string; anchor: HTMLElement | null } | null = null
+/** Where focus goes back to when the editor closes: the control that opened it, or its row once that control is gone. */
+interface FocusBack { opener: HTMLElement; focusRow(): void }
+let current: { taskId: string; anchor: HTMLElement | null; back?: FocusBack } | null = null
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach(l => l())
-export function openRepeatEditor(taskId: string, anchor: HTMLElement | null) { current = { taskId, anchor }; notify() }
+export function openRepeatEditor(taskId: string, anchor: HTMLElement | null, back?: FocusBack) { current = { taskId, anchor, back }; notify() }
 const close = () => { current = null; notify() }
 
-/** The repeat icon at a line's end: not text, a tap opens the editor. */
-export function RepeatMark({ taskId, rule }: { taskId: string; rule: TodoRepeatRule }) {
+/**
+ * The repeat icon at a line's end: not text, a tap opens the editor. The editor is placed against the line or row, as
+ * from the menu, since Off takes this icon away. `focusRow`: how the row takes focus back (a line's caret); without
+ * it, its ⋯, as the row menu's Esc does.
+ */
+export function RepeatMark({ taskId, rule, focusRow }: { taskId: string; rule: TodoRepeatRule; focusRow?: () => void }) {
   const name = repeatMarkName(rule)
-  return <button type="button" contentEditable={false} className="repeat-mark" aria-label={name} title={name} aria-haspopup="dialog" {...noCaret} onClick={e => openRepeatEditor(taskId, e.currentTarget)}><RepeatIcon /></button>
+  const open = (opener: HTMLElement) => {
+    const row = opener.closest<HTMLElement>('.editor-task, .task-row')
+    openRepeatEditor(taskId, row ?? opener, { opener, focusRow: focusRow ?? (() => row?.querySelector<HTMLElement>('[aria-haspopup=menu]')?.focus()) })
+  }
+  return <button type="button" contentEditable={false} className="repeat-mark" aria-label={name} title={name} aria-haspopup="dialog" {...noCaret} onClick={e => open(e.currentTarget)}><RepeatIcon /></button>
 }
 
 /**
@@ -48,13 +58,22 @@ export function RepeatEditorHost() {
   const fields = repeatFields(repeat)
   const today = todayIso()
   const weekStart = workspace.weekStart ?? 0
+  // Done or Esc on the popover: back to the icon, or to its row if Off took the icon away. Not after a click elsewhere,
+  // which put focus where it was clicked. The sheet keeps its own way.
+  const dismiss = (reason: string) => {
+    const back = open.back
+    close()
+    if (!wide || !back || reason === 'outside') return
+    if (back.opener.isConnected) back.opener.focus()
+    else back.focusRow()
+  }
   const send = (edit: RepeatEdit) => {
     const rule = ruleAfter(repeat, edit, today)
     if (rule === undefined) return
     void run({ type: 'set-todo-repeat', taskId: task.id, repeat: rule, today, at: new Date().toISOString() }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, { inlineRefusal, onRefused })
   }
 
-  return <EditorShell wide={wide} anchor={open.anchor} property={{ name: 'Repeat' }} rowTitle={task.title} onDismiss={close} minWidth={312} maxWidth={312}>
+  return <EditorShell wide={wide} anchor={open.anchor} property={{ name: 'Repeat' }} rowTitle={task.title} onDismiss={dismiss} minWidth={312} maxWidth={312}>
     <div className="todo-repeat-editor">
       <label className="database-menu-row database-repeat-field">Repeat
         <select aria-label="Repeat" value={fields.every} onChange={e => send({ field: 'every', value: e.target.value as typeof fields.every })}>
