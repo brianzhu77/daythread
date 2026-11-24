@@ -2,6 +2,7 @@
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
 import { newId, withOperationIds } from './ids.ts'
 import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.ts";
+import { repeatWords, standingRepeats, todoRepeatLimits, type TodoRepeat } from "./todo-repeats.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { amongApplied, decidedElsewhere, draftOf, takenOver, tookRef, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
@@ -1039,6 +1040,50 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!added && !removed) throw new DomainError("Nothing to change");
       if (links.length) state.links = links; else delete state.links;
       return { message: added === 1 && !removed && named ? `Blocked by ${named}` : !added ? (removed === 1 ? "Unblocked" : `${removed} blockers taken off`) : "Blockers changed", entityId: t.id };
+    }
+    case "set-todo-repeat": {
+      const t = state.tasks.find((x) => x.id === action.taskId);
+      if (!t) throw new DomainError("That to-do was deleted");
+      const rule = action.repeat;
+      if (rule === null) {
+        const before = state.todoRepeats ?? [];
+        const rest = before.filter((r) => r.taskId !== t.id);
+        if (rest.length === before.length) throw new DomainError("Nothing to change");
+        if (rest.length) state.todoRepeats = rest; else delete state.todoRepeats;
+        return { message: "Repeat off", entityId: t.id };
+      }
+      const whole = (n: unknown, low: number, high: number) => typeof n === "number" && Number.isInteger(n) && n >= low && n <= high;
+      if (!whole(rule.interval, 1, 999) || (rule.weekdays && (!rule.weekdays.length || !rule.weekdays.every((d) => whole(d, 0, 6))))) throw new DomainError("Invalid repeat");
+      const until = rule.until ? date(rule.until) : undefined;
+      const today = date(action.today);
+      if (t.status !== "open") throw new DomainError("Reopen it first");
+      if (isBlankTask(t)) throw new DomainError("A to-do needs words");
+      if (!liveTaskIds(state).has(t.id)) throw new DomainError("That to-do is in Trash");
+      const existing = (state.todoRepeats ?? []).find((r) => r.taskId === t.id);
+      const planned = plannedOn(state, t.id);
+      const anchor = existing?.slot ?? (planned && !t.paused ? planned : today);
+      // Weekdays only mean something for a weekly schedule; its own day alone is what no weekdays says.
+      let weekdays: number[] | undefined;
+      if (rule.every === "week" && rule.from === "schedule" && rule.weekdays) {
+        weekdays = [...new Set(rule.weekdays)].sort((a, b) => a - b);
+        if (weekdays.length === 1 && weekdays[0] === new Date(`${anchor}T12:00:00Z`).getUTCDay()) weekdays = undefined;
+      }
+      const kept = { every: rule.every, interval: rule.interval, ...(weekdays ? { weekdays } : {}), from: rule.from, ...(until ? { until } : {}) };
+      let repeat: TodoRepeat;
+      if (!existing) {
+        repeat = { id: newId(), taskId: t.id, slot: anchor, start: anchor, ...kept, createdAt: isoTime(action.at) };
+      } else {
+        const same = (a: number[] | undefined, b: number[] | undefined) => (a ?? []).join() === (b ?? []).join();
+        if (existing.every === kept.every && existing.interval === kept.interval && same(existing.weekdays, weekdays) && existing.from === kept.from && existing.until === until) throw new DomainError("Nothing to change");
+        // A new rhythm starts again from the current to-do's own day; From and Ends alone leave the start.
+        const restarts = existing.every !== kept.every || existing.interval !== kept.interval || !same(existing.weekdays, weekdays);
+        const { weekdays: _w, until: _u, ...rest } = existing;
+        repeat = { ...rest, ...kept, start: restarts ? existing.slot : existing.start };
+      }
+      const others = (state.todoRepeats ?? []).filter((r) => r.taskId !== t.id);
+      state.todoRepeats = [...others, repeat];
+      if (standingRepeats(state).length > todoRepeatLimits.total) throw new DomainError(`${todoRepeatLimits.total.toLocaleString("en-US")} repeating to-dos at most`);
+      return { message: `Repeats ${repeatWords(repeat)}`, entityId: t.id };
     }
     case "task-status": {
       const t = task(state, action.taskId);

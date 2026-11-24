@@ -137,6 +137,8 @@ export type Action =
   | { type: "answer-form"; databaseId: string; viewId: string; pageId: string; title: string; values: Record<string, import("./database.ts").Json>; at: string }
   /** Blockers added to and taken off one to-do, as one change with one Undo (todo-dependency.md §4). */
   | { type: "link-tasks"; taskId: string; add: string[]; remove: string[]; at: string }
+  /** A to-do's repeat set, changed or turned off (repeating-to-dos.md). */
+  | { type: "set-todo-repeat"; taskId: string; repeat: import("./todo-repeats.ts").TodoRepeatRule | null; today: LocalDate; at: string }
   /** New words for a to-do: its title and every line of it, on any page. */
   | { type: "rename-task"; taskId: string; title: string }
   /** Synced blocks: this place, or every place on the original, becomes ordinary lines. */

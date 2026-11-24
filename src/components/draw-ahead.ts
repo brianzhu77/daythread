@@ -17,7 +17,7 @@ export const drawRule = {
   'rename-page': 'ahead', 'rename-task': 'ahead', 'set-page-icon': 'ahead', 'set-page-cover': 'ahead', 'move-page': 'ahead',
   'delete-page': 'ahead', 'delete-pages': 'ahead', 'set-template-target': 'ahead', 'delete-template': 'ahead',
   'plan-task': 'ahead', 'plan-tasks': 'ahead', 'not-today': 'ahead', 'remove-task-row': 'ahead', 'set-task-dates': 'ahead',
-  'link-tasks': 'ahead', 'edit-todos': 'ahead', 'paste-cells': 'ahead', 'change-database': 'ahead', 'delete-comment': 'ahead',
+  'link-tasks': 'ahead', 'set-todo-repeat': 'ahead', 'edit-todos': 'ahead', 'paste-cells': 'ahead', 'change-database': 'ahead', 'delete-comment': 'ahead',
   'resolve-thread': 'ahead', 'set-timezone': 'ahead', 'set-week-start': 'ahead', 'handoff-done': 'ahead',
 
   'create-document': 'wait', 'create-template': 'wait', 'create-database': 'wait', 'add-row': 'wait', 'add-rows': 'wait',
@@ -55,6 +55,7 @@ const ahead: Record<AheadType, Words> = {
   'remove-task-row': ['Not removed', 'to-do', 'to-do may already be removed'],
   'set-task-dates': ['Dates not saved', 'to-do', 'dates may already be saved'],
   'link-tasks': ['Blockers not saved', 'to-do', 'blockers may already be saved'],
+  'set-todo-repeat': ['Repeat not saved', 'to-do', 'repeat may already be saved'],
   'edit-todos': ['Edit not saved', 'to-do', 'edit may already be saved'],
   'paste-cells': ['Paste not saved', 'row', 'paste may already be saved'],
   'change-database': ['Change not saved', 'database', 'change may already be saved'],
