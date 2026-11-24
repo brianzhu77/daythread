@@ -5,6 +5,7 @@ import { blockersOf, linkLimits, loopReason, standingLinks } from "./task-links.
 import { dueTodoRepeats, nextDay, repeatTaskId, repeatWords, standingRepeats, todoRepeatLimits, type TodoRepeat } from "./todo-repeats.ts";
 import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
+import { validDate } from "./date-chip.ts";
 import { amongApplied, decidedElsewhere, draftOf, takenOver, tookRef, draftPageId, draftReplaceable, draftSettled, eligibleTask, isDraft, normalizeDraftItems, offeredOn, placeItem, plannedAfter, remadeItems, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { automationProblem, dueRules, firedRules, type Automation, type FiredRule, type RuleSource } from "./automations.ts";
@@ -593,11 +594,16 @@ function planOn(state: Workspace, t: Task, day: string, options: { from?: string
   if (changed) setDocument(target, doc);
   if (t.paused) { t.paused = false; t.version++; }
 }
-/** Makes the repeat's next to-do on `on` (or adopts a live one with its id) and moves the repeat on to it. */
-function advanceRepeat(state: Workspace, repeat: TodoRepeat, current: Task, on: string, createdOn: string): { taskId: string; on: string } {
+/**
+ * Makes the repeat's next to-do on `on` (or adopts an open one with its id that isn't the current one) and moves the repeat
+ * on to it. Null when a to-do with that id is the current one or is finished: then there is no next one and the repeat is as it was.
+ */
+function advanceRepeat(state: Workspace, repeat: TodoRepeat, current: Task, on: string, createdOn: string): { taskId: string; on: string } | null {
   const id = repeatTaskId(repeat.id, on);
   // A retry, a second tab or a line pasted back may already have made it: one to-do per repeat and day.
-  if (!state.tasks.some((x) => x.id === id)) {
+  const existing = state.tasks.find((x) => x.id === id);
+  if (existing && (existing.id === current.id || existing.status !== "open")) return null;
+  if (!existing) {
     state.deletedTasks = state.deletedTasks.filter((x) => x.id !== id);
     const shift = Math.round((Date.parse(`${on}T12:00:00Z`) - Date.parse(`${repeat.slot}T12:00:00Z`)) / 86_400_000);
     const planned = plannedOn(state, current.id), rows = taskRows(state, current.id);
@@ -607,12 +613,13 @@ function advanceRepeat(state: Workspace, repeat: TodoRepeat, current: Task, on: 
       ? (structuredClone(line.node.content) as { type?: string; props?: Record<string, unknown> }[]).map((c) => {
         if (c?.type === "dateMention" && c.props) {
           const was = c.props.date;
-          return { ...c, props: { ...c.props, eventId: newId(), ...(typeof was === "string" && /^\d{4}-\d{2}-\d{2}$/.test(was) ? { date: addDays(was, shift) } : {}) } };
+          return { ...c, props: { ...c.props, eventId: newId(), ...(validDate(was) ? { date: addDays(was, shift) } : {}) } };
         }
         return c?.type === "pageRef" ? { ...c, props: { ...c.props, refId: newId() } } : c;
       })
       : [textRun(current.title)];
-    const next = createTask(state, inlineText(content, on), ensureDay(state, on), createdOn, id);
+    // Cut, as a chip's words can make the line longer than a title may be, and that mustn't refuse the tick.
+    const next = createTask(state, inlineText(content, on).slice(0, 1000), ensureDay(state, on), createdOn, id);
     if (current.deadlineOn) next.deadlineOn = addDays(current.deadlineOn, shift);
     if (current.attentionOn) next.attentionOn = addDays(current.attentionOn, shift);
     planOn(state, next, on);
@@ -623,9 +630,10 @@ function advanceRepeat(state: Workspace, repeat: TodoRepeat, current: Task, on: 
   repeat.previous = { taskId: current.id, slot: repeat.slot };
   repeat.taskId = id;
   repeat.slot = on;
+  delete repeat.finishedOn;
   return { taskId: id, on };
 }
-/** `t` was just reopened: a repeat that remembers it takes its next one back, while that one is as it was made. */
+/** `t` was just reopened: a repeat that remembers it takes its next one back, while that one is as it was made (no blocker or thread names it). */
 function takeNextBack(state: Workspace, t: Task): void {
   for (const repeat of state.todoRepeats ?? []) {
     if (repeat.previous?.taskId !== t.id) continue;
@@ -633,6 +641,7 @@ function takeNextBack(state: Workspace, t: Task): void {
     if (!next || next.status !== "open" || next.paused || next.version !== 1) continue;
     const rows = taskRows(state, next.id);
     if (rows.length !== 1 || plannedOn(state, next.id) !== repeat.slot) continue;
+    if (state.links?.some((l) => l.blockedId === next.id || l.blockerId === next.id) || state.threads?.some((th) => th.anchor?.taskId === next.id)) continue;
     const p = rows[0]!.page;
     setDocument(p, removeNodes(docOf(p), new Set([rows[0]!.node.id])));
     state.tasks = state.tasks.filter((x) => x.id !== next.id);
@@ -1131,8 +1140,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         const { weekdays: _w, until: _u, ...rest } = existing;
         repeat = { ...rest, ...kept, start: restarts ? existing.slot : existing.start };
       }
-      const others = (state.todoRepeats ?? []).filter((r) => r.taskId !== t.id);
-      state.todoRepeats = [...others, repeat];
+      const all = state.todoRepeats ?? [];
+      state.todoRepeats = existing ? all.map((r) => (r === existing ? repeat : r)) : [...all, repeat];
       if (standingRepeats(state).length > todoRepeatLimits.total) throw new DomainError(`${todoRepeatLimits.total.toLocaleString("en-US")} repeating to-dos at most`);
       return { message: `Repeats ${repeatWords(repeat)}`, entityId: t.id };
     }
@@ -1146,9 +1155,15 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         // Finishing a repeat's current to-do makes its next one; a Cancel sent without a day is left to the mend.
         const today = date(action.today), repeat = state.todoRepeats?.find((r) => r.taskId === t.id);
         const on = repeat ? nextDay(repeat, today, state.weekStart ?? 0) : null;
-        if (repeat && on) return { message, entityId: t.id, nextTodos: [advanceRepeat(state, repeat, t, on, today)] };
+        const made = repeat && on ? advanceRepeat(state, repeat, t, on, today) : null;
+        if (made) return { message, entityId: t.id, nextTodos: [made] };
+        // No next one: the day it was finished is kept, so the mend doesn't start again what this tick ended.
+        if (repeat) repeat.finishedOn = today;
       }
-      if (was !== "open" && action.status === "open") takeNextBack(state, t);
+      if (was !== "open" && action.status === "open") {
+        for (const r of state.todoRepeats ?? []) if (r.taskId === t.id) delete r.finishedOn;
+        takeNextBack(state, t);
+      }
       return { message, entityId: t.id };
     }
     case "rename-task": {
@@ -1745,7 +1760,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (missed) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, missed) });
       }
       // A finished current to-do that got no next one (an older server, a Cancel sent without a day) is mended here.
-      for (const { repeat, on } of dueTodoRepeats(state, action.today, liveTaskIds(state))) advanceRepeat(state, repeat, task(state, repeat.taskId), on, action.today);
+      if (state.todoRepeats?.length) for (const { repeat, on } of dueTodoRepeats(state, action.today, liveTaskIds(state))) advanceRepeat(state, repeat, task(state, repeat.taskId), on, action.today);
       const rules = runScheduledRules(state, action, operationId);
       return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}), ...(rules ? { automations: rules } : {}) };
     }

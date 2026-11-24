@@ -28,7 +28,7 @@ export interface ThreadRow { id: string; page_id: string; version: number; creat
 /** A to-do blocked by another: its own table, keyed on both tasks, which an older build never reads, so its saves and deletes leave it alone (todo-dependency.md §4). */
 export interface LinkRow { id: string; blocked_id: string; blocker_id: string; created_at: string }
 /** A repeating to-do's rule: its own table, which an older build never reads, so its saves and Undo leave it alone. */
-export interface TodoRepeatRow { id: string; task_id: string; slot: string; previous_task_id: string | null; previous_slot: string | null; starts_on: string; every_unit: TodoRepeat['every']; every_count: number; /** JSON, "[1,4]"; null when absent. */ weekdays: string | null; counts_from: TodoRepeat['from']; ends_on: string | null; created_at: string }
+export interface TodoRepeatRow { id: string; task_id: string; slot: string; previous_task_id: string | null; previous_slot: string | null; starts_on: string; every_unit: TodoRepeat['every']; every_count: number; /** JSON, "[1,4]"; null when absent. */ weekdays: string | null; counts_from: TodoRepeat['from']; ends_on: string | null; finished_on: string | null; created_at: string }
 
 export interface Rows { revision: number; timezone: string; /** Absent or 0: Sunday. */ weekStart?: WeekStart; /** To-dos' rules as JSON, on the workspace's row, which an older build never writes; null with none. */ todoAutomations?: string | null; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[]; threads: ThreadRow[]; /** Absent from a store before links. */ links?: LinkRow[]; /** Absent from a store before repeating to-dos. */ repeats?: TodoRepeatRow[] }
 export interface RowSet<R extends { id: string }> { upsert: R[]; remove: string[] }
@@ -96,14 +96,14 @@ const linkRow = (l: TaskLink): LinkRow => ({ id: linkId(l), blocked_id: l.blocke
 const linkOf = (r: LinkRow): TaskLink => ({ blockedId: r.blocked_id, blockerId: r.blocker_id, createdAt: r.created_at })
 const repeatRow = (r: TodoRepeat): TodoRepeatRow => ({
   id: r.id, task_id: r.taskId, slot: r.slot, previous_task_id: r.previous?.taskId ?? null, previous_slot: r.previous?.slot ?? null, starts_on: r.start,
-  every_unit: r.every, every_count: r.interval, weekdays: r.weekdays ? JSON.stringify(r.weekdays) : null, counts_from: r.from, ends_on: r.until ?? null, created_at: r.createdAt,
+  every_unit: r.every, every_count: r.interval, weekdays: r.weekdays ? JSON.stringify(r.weekdays) : null, counts_from: r.from, ends_on: r.until ?? null, finished_on: r.finishedOn ?? null, created_at: r.createdAt,
 })
 const repeatOfRow = (r: TodoRepeatRow): TodoRepeat => ({
   id: r.id, taskId: r.task_id, slot: r.slot,
   ...(r.previous_task_id !== null && r.previous_slot !== null ? { previous: { taskId: r.previous_task_id, slot: r.previous_slot } } : {}),
   start: r.starts_on, every: r.every_unit, interval: r.every_count,
   ...(r.weekdays !== null ? { weekdays: JSON.parse(r.weekdays) as number[] } : {}),
-  from: r.counts_from, ...(r.ends_on !== null ? { until: r.ends_on } : {}), createdAt: r.created_at,
+  from: r.counts_from, ...(r.ends_on !== null ? { until: r.ends_on } : {}), ...(r.finished_on !== null ? { finishedOn: r.finished_on } : {}), createdAt: r.created_at,
 })
 export function workspaceOf(rows: Rows): Workspace {
   const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)

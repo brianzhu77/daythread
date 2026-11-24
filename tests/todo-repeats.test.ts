@@ -500,6 +500,45 @@ test('a next one given a blocker has been touched: it stays', () => {
   assert.equal(the(h).taskId, made.taskId)
 })
 
+test('a next one with a comment on its line has been touched: it stays', () => {
+  const { h, id } = setup()
+  setRepeat(h, id, weekly)
+  const made = next(h, mon)
+  const line = rows(h, made.taskId)[0]!
+  h.run({ type: 'add-comment', pageId: line.page, threadId: 'th', commentId: 'thc', body: 'A note', at, anchor: { blockId: line.node.id as string, quote: 'Weekly review', taskId: made.taskId } })
+  reopen(h, id)
+  assert.ok(h.ws.tasks.some(t => t.id === made.taskId))
+  assert.equal(the(h).taskId, made.taskId)
+})
+
+test('changing a repeat keeps its place in the list', () => {
+  const h = harness()
+  h.day(mon)
+  h.save(dayId(mon), d => [...d, todo('r-1', 'One', 'plan', mon), todo('r-2', 'Two', 'plan', mon)], { today: mon })
+  setRepeat(h, h.task('One').id, weekly)
+  setRepeat(h, h.task('Two').id, weekly)
+  setRepeat(h, h.task('One').id, { ...weekly, interval: 2 })
+  assert.deepEqual(h.ws.todoRepeats!.map(r => [r.taskId, r.interval]), [[h.task('One').id, 2], [h.task('Two').id, 1]])
+})
+
+test('the next one copies a chip with no real date as it is, and a line its chip makes too long is cut, not refused', () => {
+  const h = harness()
+  h.day(mon)
+  // 993 characters and "@Dec 28" fill the line; a week on, its chip reads "@Jan 4, 2027", past 1,000.
+  h.save(dayId(mon), d => [...d, { ...todo('r-1', 'Bad chip', 'plan', mon), content: [text('Bad chip '), { type: 'dateMention', props: { eventId: 'e1', date: '2026-02-31', time: null } }] },
+    { ...todo('r-2', 'Long', 'plan', mon), content: [text('x'.repeat(993)), chip('e2', '2026-12-28')] }], { today: mon })
+  const bad = h.ws.tasks.find(t => t.title.startsWith('Bad chip'))!.id, long = h.ws.tasks.find(t => t.title.startsWith('xxx'))!.id
+  setRepeat(h, bad, weekly)
+  const made = finish(h, bad, mon).receipt.nextTodos![0]!
+  const chipOf = (taskId: string) => (rows(h, taskId)[0]!.node.content as { type?: string; props?: Record<string, unknown> }[]).find(c => c.type === 'dateMention')
+  assert.equal(chipOf(made.taskId)?.props?.date, '2026-02-31', 'copied unchanged')
+  h.run({ type: 'set-todo-repeat', taskId: long, repeat: weekly, today: mon, at })
+  const second = finish(h, long, mon).receipt.nextTodos
+  assert.equal(second?.length, 1)
+  assert.equal(chipOf(second![0]!.taskId)?.props?.date, '2027-01-04')
+  assert.equal(task(h, second![0]!.taskId).title.length, 1_000)
+})
+
 test('over the limit the whole change is refused', () => {
   const kept = todoRepeatLimits.total
   todoRepeatLimits.total = 2

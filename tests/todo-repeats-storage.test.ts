@@ -63,6 +63,15 @@ test('repeats go through the rows and back, an inverse from before them leaves t
   assert.deepEqual(applyChanges(before, changes)!.todoRepeats, after.todoRepeats)
   assert.equal(changesBetween(before, before).todoRepeats, undefined, 'unchanged repeats are not sent')
   assert.ok(second)
+  // A last one finished that made no next: the day it was finished goes through the rows and back.
+  const ended = harness(); ended.day(mon)
+  ended.save(dayId(mon), () => [todo('e-1', 'Last time', 'plan', mon)], { today: mon })
+  ended.run({ type: 'set-todo-repeat', taskId: ended.task('Last time').id, repeat: { ...weekly, until: mon }, today: mon, at })
+  ended.run(tick(ended.task('Last time').id))
+  assert.equal(ended.ws.todoRepeats![0]!.finishedOn, mon)
+  assert.equal(rowsOf(ended.ws).repeats![0]!.finished_on, mon)
+  assert.deepEqual(workspaceOf(rowsOf(ended.ws)).todoRepeats, ended.ws.todoRepeats)
+  assert.equal(rowsOf(before).repeats!.every(r => r.finished_on === null), true, 'none recorded, null in the row')
   // Taking the last repeat off sends the empty list, and the other side then has none.
   const off = harness(); off.day(mon)
   off.save(dayId(mon), () => [todo('o-1', 'Once', 'plan', mon)], { today: mon })

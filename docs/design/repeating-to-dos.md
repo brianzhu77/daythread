@@ -1,6 +1,6 @@
 # Repeating to-dos: design
 
-- Author: Claude · 2026-11-24 · status: **proposal, waiting for Brian's approval. Not built.**
+- Author: Claude · 2026-11-24 · status: **approved by Brian 2026-11-24. Phase 1 (no screen) built; phases 2 and 3 not built.**
 - Asked by Brian (2026-11-24): add repeating to-dos; look at how Todoist and TickTick do it, then design and plan ours. He
   suggested a to-do line that expands on focus to show extended properties, stored either as block properties
   (Notion's way) or in a separate table, and left the choice to me.
@@ -116,7 +116,8 @@ into such a place unchanged.
   the schedule day it was made for, kept with the repeat, since Planned moves with carry-over and with Another day.
   Weekly on Monday: done on Wednesday, next Monday; done on the Saturday before, the Monday after its own. Daily,
   carried from Monday and done on Wednesday: Thursday.
-- **The next day, "When it's done":** the day it was finished plus the interval. Weekdays aren't offered here.
+- **The next day, "When it's done":** the day it was finished plus the interval. If that isn't after its own day (he
+  finished it early), its own day plus the interval. Weekdays aren't offered here.
 - **Monthly and yearly keep their day where they can:** from the 31st, February's falls on its last day (as
   `repeats.ts` does now).
 - **What the next one copies:** the line's words with its tags, links and page references. Start and Deadline keep
@@ -166,7 +167,7 @@ one new line the notice names.
 
 - **Storage:** a `todo_repeats` table (name is the builder's), one row per repeat: its id, the current to-do's id and
   slot, the one before it and its slot (for §4's reopening; null at first), `start`, `every`, `interval`, `weekdays`,
-  `from` (`schedule` or `done`), `until`, `createdAt`. `Workspace.repeats?`,
+  `from` (`schedule` or `done`), `until`, `finishedOn`, `createdAt`. `Workspace.todoRepeats?`,
   absent until there's one, in `RowDiff` as `links` is, so an inverse written by an older build leaves it alone. A repeat
   whose to-do is missing is kept, not in force. Bound the number per workspace and refuse over it; name the number
   after measuring.
@@ -183,9 +184,10 @@ one new line the notice names.
   callers send it, and a Cancel that comes without one makes nothing in the command and is left to the mend.
 - **The floor build's server** ticks it and makes no next one. `run-repeats`, on opening the app, mends that and a
   Cancel without a day: a repeat in force whose current to-do is finished gets its next one, once, saying nothing, as
-  scheduled rules don't. **The mend never writes to a past day.** "Its day": the first schedule day on or after today
-  that's after the slot. "When it's done": the day it was finished plus the interval, or today if that has passed; with
-  no day recorded, today plus the interval.
+  scheduled rules don't. **The mend never writes to a past day.** "Its day": the first schedule day after its own day
+  and the day it was finished, and not before today. "When it's done": as a tick works it out, or today if that has
+  passed; with no day recorded, today plus the interval. A repeat records the day its current to-do was finished when
+  the command made no next one, so the mend never starts again what a tick ended.
 - **A tick now writes another page's document.** `task-status` is drawn by its own path today (`draw-ahead.ts`:
   `own`) and changes no document; `edit-todos` ticks too and is drawn `ahead`. Neither prediction makes the next line
   (§3). When the next one's day page is open in an editor with unsaved words (tomorrow's page in the main pane, today's

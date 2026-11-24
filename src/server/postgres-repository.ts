@@ -30,7 +30,7 @@ interface Scope extends WorkspaceInfo { userId: string | null }
 const upsertBatch = 500
 const threadColumns = ['id', 'page_id', 'version', 'created_at', 'resolved_at', 'comments', 'anchor', 'property'] as const
 const linkColumns = ['id', 'blocked_id', 'blocker_id', 'created_at'] as const
-const repeatColumns = ['id', 'task_id', 'slot', 'previous_task_id', 'previous_slot', 'starts_on', 'every_unit', 'every_count', 'weekdays', 'counts_from', 'ends_on', 'created_at'] as const
+const repeatColumns = ['id', 'task_id', 'slot', 'previous_task_id', 'previous_slot', 'starts_on', 'every_unit', 'every_count', 'weekdays', 'counts_from', 'ends_on', 'finished_on', 'created_at'] as const
 const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved', 'database_json', 'row_values', 'created_at', 'edited_at', 'icon', 'cover', 'cover_position'] as const
 /** Columns added to `pages` after its first release (databases): added on start when missing, before any build writes them. */
 const addedPageColumns = ['database_json', 'row_values', 'created_at', 'edited_at', 'icon', 'cover', 'cover_position'] as const
@@ -134,7 +134,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
             workspace_id uuid not null references ${s}.workspaces (id) on delete cascade,
             id text not null, task_id text not null, slot text not null, previous_task_id text, previous_slot text,
             starts_on text not null, every_unit text not null, every_count integer not null, weekdays text,
-            counts_from text not null, ends_on text, created_at text not null,
+            counts_from text not null, ends_on text, finished_on text, created_at text not null,
             primary key (workspace_id, id)
           );
           alter table ${s}.todo_repeats enable row level security;

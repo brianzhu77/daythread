@@ -18,6 +18,8 @@ export interface TodoRepeat {
   weekdays?: number[]
   from: 'schedule' | 'done'
   until?: LocalDate
+  /** The day its current to-do was finished, when the command knew it and made no next one. The mend counts from it. */
+  finishedOn?: LocalDate
   createdAt: string
 }
 export type TodoRepeatRule = Pick<TodoRepeat, 'every' | 'interval' | 'weekdays' | 'from' | 'until'>
@@ -41,17 +43,25 @@ const later = (a: LocalDate, b: LocalDate) => (a > b ? a : b)
 const step = (r: TodoRepeat, day: LocalDate) => firstOccurrenceAfter({ every: r.every, interval: r.interval, start: day }, day)
 const within = (r: TodoRepeat, d: LocalDate | null) => (d && (!r.until || d <= r.until) ? d : null)
 
+/** "When it's done": the finish day plus the interval, or its own day plus the interval when that isn't after its own day (finished early). */
+function doneDay(r: TodoRepeat, finishedOn: LocalDate): LocalDate | null {
+  const d = step(r, finishedOn)
+  return d && d <= r.slot ? step(r, r.slot) : d
+}
 /** The day the next to-do is made for when this one is finished: what was missed is skipped, never made up. */
 export function nextDay(repeat: TodoRepeat, finishedOn: LocalDate, weekStart: WeekStart = 0): LocalDate | null {
   return within(repeat, repeat.from === 'done'
-    ? step(repeat, finishedOn)
+    ? doneDay(repeat, finishedOn)
     : firstOccurrenceAfter(repeat, later(repeat.slot, finishedOn), weekStart))
 }
 /** Like `nextDay`, for a finished to-do found without a next one: never a day in the past. `finishedOn` is null when none was recorded. */
 export function mendDay(repeat: TodoRepeat, finishedOn: LocalDate | null, today: LocalDate, weekStart: WeekStart = 0): LocalDate | null {
-  if (repeat.from === 'schedule') return within(repeat, firstOccurrenceAfter(repeat, later(repeat.slot, addDays(today, -1)), weekStart))
-  const d = finishedOn ? step(repeat, finishedOn) : step(repeat, today)
-  return within(repeat, d && finishedOn ? later(d, today) : d)
+  if (repeat.from === 'schedule') {
+    const after = later(later(repeat.slot, addDays(today, -1)), finishedOn ?? repeat.slot)
+    return within(repeat, firstOccurrenceAfter(repeat, after, weekStart))
+  }
+  const d = doneDay(repeat, finishedOn ?? today)
+  return within(repeat, d && later(d, today))
 }
 
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -71,7 +81,7 @@ export function dueTodoRepeats(ws: Pick<Workspace, 'todoRepeats' | 'tasks' | 'we
     if (live && !live.has(repeat.taskId)) continue
     const task = ws.tasks.find(t => t.id === repeat.taskId)
     if (!task || task.status === 'open') continue
-    const on = mendDay(repeat, task.status === 'done' ? task.doneOn ?? null : null, today, ws.weekStart ?? 0)
+    const on = mendDay(repeat, repeat.finishedOn ?? (task.status === 'done' ? task.doneOn ?? null : null), today, ws.weekStart ?? 0)
     if (on) out.push({ repeat, on })
   }
   return out
