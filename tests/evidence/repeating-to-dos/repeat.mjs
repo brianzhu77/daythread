@@ -38,7 +38,6 @@ const scenario = async (name, act, options = wide, path = '/', seed = '') => {
   const ok = r.ok && !errors.length
   if (!ok) failed++
   console.log(ok ? 'PASS' : 'FAIL', name, JSON.stringify({ ...r, errors }).slice(0, 900))
-  if (shots && /^R12/.test(name)) await page.screenshot({ path: `${shots}/repeat-${name.slice(0, 3).trim()}-${engine}-${options.viewport.width}-closed.png` }).catch(() => {})
   await context.close()
 }
 const row = (page, title) => page.locator('.editor-task', { has: page.locator('.editor-task-title', { hasText: new RegExp(`^${title}`) }) }).first()
@@ -227,6 +226,7 @@ for (const options of [wide, phone]) {
       return { mark: getComputedStyle(el).color, ink }
     })
     const dark = await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches)
+    if (shots) await page.screenshot({ path: `${shots}/repeat-R12-${engine}-${options.viewport.width}-closed.png` }).catch(() => {})
     await row(page, 'Weekly review').locator('.repeat-mark').click(); await wait(600)
     if (shots) await page.screenshot({ path: `${shots}/repeat-R12-${engine}-${options.viewport.width}-editor.png` }).catch(() => {})
     return { ok: dark && colours.mark === colours.ink && (await editor(page).count()) === 1, dark, colours }

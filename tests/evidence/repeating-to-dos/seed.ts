@@ -2,7 +2,7 @@
 // a reference line for Take the bins out; Notes, a document with a reference line for Weekly review; Lists, a page with a To-dos view.
 // Usage: node --no-warnings tests/evidence/repeating-to-dos/seed.ts <store-path> <today> [plain]  (`plain`: no repeats)
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
-import { editorSeed, pageContentKey } from '../../../src/domain/editor-document.ts'
+import { pageContentKey } from '../../../src/domain/editor-document.ts'
 import { addDays } from '../../../src/domain/database.ts'
 import type { Action } from '../../../src/domain/types.ts'
 const [path, today, plain] = process.argv.slice(2)
@@ -16,7 +16,6 @@ const para = (id: string, text: string) => ({ id, type: 'paragraph', props: {}, 
 const tomorrow = addDays(today, 1)
 await run({ type: 'ensure-day', date: today })
 const day = ws.pages.find(p => p.id === `day:${today}`)!
-void editorSeed
 await run({ type: 'save-editor', pageId: day.id, expectedContent: pageContentKey(day), document: JSON.stringify([line('a', 'Weekly review'), line('b', 'Water the plants'), line('c', 'Take the bins out'), line('d', 'Book the dentist'), line('e', 'Reply about the offsite'), line('f', 'Send the signed lease form back to the landlord before the end of the month'), para('p', 'Last line')]), today })
 const id = (title: string) => ws.tasks.find(t => t.title.startsWith(title))!.id
 await run({ type: 'ensure-day', date: tomorrow })

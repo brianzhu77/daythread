@@ -101,7 +101,7 @@ export function RepeatEditorHost() {
         {fields.ends === 'date' && <label className="database-menu-row database-repeat-field"><span />
           <input type="date" aria-label="Ends on" min={today} value={fields.until} onChange={e => send({ field: 'until', value: e.target.value })} />
         </label>}
-        <p className="database-menu-quiet">{nextLine(repeat, today, weekStart)}</p>
+        <p className="database-menu-quiet" aria-live="polite">{nextLine(repeat, today, weekStart)}</p>
       </>}
     </div>
   </EditorShell>

@@ -96,6 +96,8 @@ export function ruleAfter(repeat: TodoRepeat | undefined, edit: RepeatEdit, toda
     case 'ends': until = edit.value === 'never' ? undefined : repeat.until ?? addDays(repeat.slot > today ? repeat.slot : today, 28); break
     case 'until':
       if (!/^\d{4}-\d{2}-\d{2}$/.test(edit.value)) return undefined
+      // A day before the later of its own day and today ends nothing that is left: as if unchanged.
+      if (edit.value < (repeat.slot > today ? repeat.slot : today)) return undefined
       until = edit.value; break
   }
   const rule: TodoRepeatRule = { every, interval, from, ...(weekdays ? { weekdays } : {}), ...(until ? { until } : {}) }

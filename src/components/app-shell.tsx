@@ -53,7 +53,7 @@ const idleBeforeRepeats = 120_000
  * after opening it waits for a tab he can see and isn't working in: a tab in the background would take the Undo of the one he's using.
  */
 function RepeatingRows() {
-  const { workspace, runHeld } = useWorkspace()
+  const { workspace, runHeld, outbox } = useWorkspace()
   const [tick, setTick] = useState(0)
   const opened = useRef(false), lastInput = useRef(0)
   /** The due repeats last asked to be mended: a kept mend isn't drawn, so they still look due until the server answers. */
@@ -79,10 +79,12 @@ function RepeatingRows() {
     opened.current = true
     if (!opening && Date.now() - lastInput.current < idleBeforeRepeats) return
     const now = new Date(), today = toIso(now), time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    const mend = workspace.todoRepeats?.length && dueTodoRepeats(workspace, today).length ? mendKey(dueTodoRepeats(workspace, today, liveTaskIds(workspace))) : ''
+    // A tick kept on the device (offline, or a failed send) is drawn, so its to-do looks due for a mend; the tick makes its
+    // next one when it lands, and a mend sent meanwhile would find nothing due and take the Undo. Rows still go.
+    const mend = !outbox.pending && workspace.todoRepeats?.length && dueTodoRepeats(workspace, today).length ? mendKey(dueTodoRepeats(workspace, today, liveTaskIds(workspace))) : ''
     if (!dueRepeats(workspace, today, time).length && !dueRules(workspace, today, time).length && !(mend !== '' && mend !== askedMend.current)) return
     askedMend.current = mend
-    void runHeld({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped${s.full ? ' · database full' : ''}`).join(' · ') } : null), undefined, { quiet: true, stale: 'outcome', inlineRefusal: /Saved elsewhere/, onRefused: () => {} })
+    void runHeld({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped${s.full ? ' · database full' : ''}`).join(' · ') } : null), undefined, { quiet: true, stale: 'outcome', inlineRefusal: /Saved elsewhere/, onRefused: () => { askedMend.current = '' } })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, revision])
   return null

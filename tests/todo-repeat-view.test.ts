@@ -92,6 +92,11 @@ test('one edit in the editor is one rule to send', () => {
   assert.equal(ruleAfter(repeat(), { field: 'from', value: 'schedule' }, tue), undefined)
 })
 
+test('an end date before the later of its own day and today changes nothing', () => {
+  assert.equal(ruleAfter(repeat({ until: '2026-12-22' }), { field: 'until', value: '2026-11-22' }, mon), undefined, 'the day before its slot and today')
+  assert.equal(ruleAfter(repeat({ until: '2026-12-22' }), { field: 'until', value: '0027-12-22' }, mon), undefined, 'a year typed short')
+})
+
 test('every rule the editor sends is one the command takes, each with its own Undo', () => {
   const h = setup('Weekly review'), id = h.task('Weekly review').id
   const now = () => repeatsIn(h.ws).get(id)
