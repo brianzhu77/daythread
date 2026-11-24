@@ -6,6 +6,7 @@ import type { LineTarget } from './page-refs.ts'
 import { todosSourceId } from './todos-id.ts'
 import type { Action, LocalDate, Page, Task, Workspace } from './types.ts'
 import { withLinks } from './relations.ts'
+import { repeatOf, repeatWords } from './todo-repeats.ts'
 import { blockersOf, blockingOf } from './task-links.ts'
 import { canRenameTask, isBlankTask, plannedOn, taskRows } from './workspace.ts'
 
@@ -24,6 +25,8 @@ export const todoStatus = { id: 'status', open: 'open', done: 'done', paused: 'p
 const planned = 'planned', start = 'start', deadline = 'deadline', page = 'page'
 /** Two sides of one link (todo-dependency.md §1). Blocking is read from the other side; only Blocked by is set. */
 export const blockedByColumn = 'blockedBy', blockingColumn = 'blocking'
+/** The rule of the to-do a repeat is on now; read-only, as the rule is set on the line. */
+export const repeatColumn = 'repeat'
 /** What several to-dos can change at once (R4-17, §11). Their words are each their own. */
 export const todoBarColumns: ReadonlySet<string> = new Set([todoStatus.id, planned, start, deadline])
 const properties: Property[] = [
@@ -39,9 +42,10 @@ const properties: Property[] = [
   { id: page, name: 'Page', type: 'text', readOnly: true },
   { id: blockedByColumn, name: 'Blocked by', type: 'relation', target: todosSourceId, targetTitle: 'To-dos' },
   { id: blockingColumn, name: 'Blocking', type: 'relation', target: todosSourceId, targetTitle: 'To-dos', readOnly: true },
+  { id: repeatColumn, name: 'Repeat', type: 'text', readOnly: true },
 ]
 /** Not shown until asked for, under Properties (§2). */
-const offered = new Set([blockedByColumn, blockingColumn])
+const offered = new Set([blockedByColumn, blockingColumn, repeatColumn])
 /** The first view: what's open, with the chip showing (Bumblebee, R2-8); the rest is a tap on the chip away. */
 const firstView: View = {
   id: 'todos-open', name: 'Table', layout: 'table',
@@ -74,6 +78,8 @@ function rowOf(ws: Workspace, t: Task): Page {
   const by = ids(blockersOf(ws, t.id)), blocks = ids(blockingOf(ws, t.id))
   if (by.length) values[blockedByColumn] = by
   if (blocks.length) values[blockingColumn] = blocks
+  const repeat = t.status === 'open' ? repeatOf(ws, t.id) : undefined
+  if (repeat) { const words = repeatWords(repeat); values[repeatColumn] = words.charAt(0).toUpperCase() + words.slice(1) }
   return { id: todoRowId(t.id), type: 'document', date: null, title: t.title, document: '[]', parentId: todosSourceId, values } as Page
 }
 
@@ -85,7 +91,7 @@ export function withTodos(ws: Workspace): Workspace {
   // The two link columns name their rows, as a relation's options do.
   const options = ws.tasks.filter(t => !isBlankTask(t)).map(t => ({ id: todoRowId(t.id), name: t.title }))
   // Its rules are the workspace's, as To-dos isn't stored (automations.md §7).
-  const database = { ...todosDatabase, properties: todosDatabase.properties.map(p => (offered.has(p.id) ? { ...p, options } : p)), ...(ws.todoAutomations?.length ? { automations: ws.todoAutomations } : {}) }
+  const database = { ...todosDatabase, properties: todosDatabase.properties.map(p => (offered.has(p.id) && p.type === 'relation' ? { ...p, options } : p)), ...(ws.todoAutomations?.length ? { automations: ws.todoAutomations } : {}) }
   const source = { id: todosSourceId, type: 'document', date: null, title: todosTitle, document: '[]', database } as Page
   const next = { ...ws, pages: [...ws.pages, source, ...ws.tasks.filter(t => !isBlankTask(t)).map(t => rowOf(ws, t))] }
   projected.set(ws, next)

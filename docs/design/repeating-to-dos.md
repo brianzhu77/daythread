@@ -1,6 +1,6 @@
 # Repeating to-dos: design
 
-- Author: Claude · 2026-11-24 · status: **approved by Brian 2026-11-24. Phases 1 and 2 built; phase 3 not built.**
+- Author: Claude · 2026-11-24 · status: **approved by Brian 2026-11-24. Phases 1, 2 and 3 built.**
 - Asked by Brian (2026-11-24): add repeating to-dos; look at how Todoist and TickTick do it, then design and plan ours. He
   suggested a to-do line that expands on focus to show extended properties, stored either as block properties
   (Notion's way) or in a separate table, and left the choice to me.

@@ -6,6 +6,7 @@ import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
 import { clockIn } from './formula.ts'
 import { withLinks } from './relations.ts'
+import { repeatOf, repeatWords } from './todo-repeats.ts'
 import { blockedNow, type Blocked } from './task-links.ts'
 import { liveTaskIds } from './workspace.ts'
 import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, localWall, valueText, type Database, type FileValue } from './database.ts'
@@ -118,7 +119,8 @@ function blockLines(n: EditorNode, ws: Workspace, names: Map<string, string>, as
       const mark = task?.status === 'done' ? 'x' : task?.status === 'cancelled' ? '-' : ' '
       // As the mark on the page reads, with every blocker named (todo-dependency.md §3).
       const by = task ? blockedIn(ws).get(task.id)?.by.map(t => t.title.trim()).filter(Boolean) : undefined
-      return [`- [${mark}] ${text || task!.title.trim()}${by?.length ? ` · Blocked by ${by.join(', ')}` : ''}`]
+      const repeat = task?.status === 'open' ? repeatOf(ws, task.id) : undefined
+      return [`- [${mark}] ${text || task!.title.trim()}${by?.length ? ` · Blocked by ${by.join(', ')}` : ''}${repeat ? ` · Repeats ${repeatWords(repeat)}` : ''}`]
     }
     case 'checkListItem':
     case 'sourceChecklist':
