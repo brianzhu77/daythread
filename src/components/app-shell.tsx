@@ -52,7 +52,7 @@ const idleBeforeRepeats = 120_000
  * after opening it waits for a tab he can see and isn't working in: a tab in the background would take the Undo of the one he's using.
  */
 function RepeatingRows() {
-  const { workspace, run } = useWorkspace()
+  const { workspace, runHeld } = useWorkspace()
   const [tick, setTick] = useState(0)
   const opened = useRef(false), lastInput = useRef(0)
   /** The due repeats last asked to be mended: a kept mend isn't drawn, so they still look due until the server answers. */
@@ -81,7 +81,7 @@ function RepeatingRows() {
     const mend = workspace.todoRepeats?.length && dueTodoRepeats(workspace, today).length ? mendKey(dueTodoRepeats(workspace, today, liveTaskIds(workspace))) : ''
     if (!dueRepeats(workspace, today, time).length && !dueRules(workspace, today, time).length && !(mend !== '' && mend !== askedMend.current)) return
     askedMend.current = mend
-    void run({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped${s.full ? ' · database full' : ''}`).join(' · ') } : null), undefined, { quiet: true, stale: 'outcome', inlineRefusal: /Saved elsewhere/, onRefused: () => {} })
+    void runHeld({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped${s.full ? ' · database full' : ''}`).join(' · ') } : null), undefined, { quiet: true, stale: 'outcome', inlineRefusal: /Saved elsewhere/, onRefused: () => {} })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, revision])
   return null

@@ -9,7 +9,7 @@ import { TagText } from './tag-text'
 
 /** The task actions shared by plan rows, the strip, Start the day and review step 1 (01 §2). */
 export function useTaskActions(today: LocalDate) {
-  const { run, toggleTask } = useWorkspace()
+  const { run, runHeld, toggleTask } = useWorkspace()
 
   // B72: through the shared tick, so a second tap while it saves is ignored. Show the box with `useTaskTick`.
   const markDone = (task: Task) =>
@@ -29,7 +29,7 @@ export function useTaskActions(today: LocalDate) {
     }))
 
   const cancel = (task: Task) =>
-    run({ type: 'task-status', taskId: task.id, status: 'cancelled', today }, r => ({ text: 'Cancelled', undoOperationId: r.operationId }))
+    runHeld({ type: 'task-status', taskId: task.id, status: 'cancelled', today }, r => ({ text: 'Cancelled', undoOperationId: r.operationId }))
 
   return { markDone, planOn, notToday, cancel }
 }

@@ -66,7 +66,7 @@ import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './da
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
 import { endOfLineAbove, rowArrows } from './row-arrows'
-import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
+import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, registerEditorHold, rememberLeaveSave, trackLeaveSave } from './editor-flush'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { BlockedMark, blockedByLabel, openBlockerPicker } from './blockers'
@@ -487,7 +487,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const scroller = useContext(EditorScrollerContext)
   // B70: a page made inside the day template would be copied into every day, so the template makes none (Jazz §2).
   const onTemplate = isTemplate(page)
-  const { run, refresh, latest } = useWorkspace()
+  const { run, runHeld, refresh, latest } = useWorkspace()
   const smartNotesOn = useSmartNotesOn()
   const copyBlockRef = useRef<(blockId: string) => void>(() => undefined)
   const endPlaceRef = useRef<(action: Extract<Action, { type: 'unsync-block' | 'delete-synced-place' }>) => Promise<void>>(async () => undefined)
@@ -1110,6 +1110,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     } finally { settled() }
   }, [editor, key, latest, page.id, run])
   flushRef.current = flush
+  const heldRef = useRef(held)
+  heldRef.current = held
   // B35 part 2: keep this tab's slot marked alive, mark it closed when the tab goes, and on coming back check whether
   // another tab claimed it meanwhile.
   useEffect(() => {
@@ -1169,6 +1171,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (dirty.current) await flushRef.current()
     for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
     return !dirty.current
+  }), [page.id])
+  useEffect(() => registerEditorHold(page.id, async send => {
+    // Closed after the command found it (an outer hold was still saving): nothing is set on a dead editor, and its own leaving save carries his words.
+    if (left.current) return send()
+    const taken = await heldRef.current(send, 'Saving…')
+    // Busy with a change of its own, or what he typed can't be saved now: the command still goes, and this page's next save meets the state it already has for a change made elsewhere.
+    return taken.sent ? taken.receipt : send()
   }), [page.id])
   useEffect(() => editor.onBeforeChange(({ getChanges, tr }) => {
     if (!isHistoryTransaction(tr)) return
@@ -2511,24 +2520,28 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const closeRowNotice = () => { if (rowNotice.current) toast.close(rowNotice.current.key); rowNotice.current = null }
   useEffect(() => () => closeRowNotice(), [])
   async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }, notice: Parameters<typeof run>[1] = null, alwaysShow = false): Promise<Receipt | null> {
-    if (historyPending.current) return null
+    const word = action.type === 'unsync-block' ? 'Unsyncing…' : action.type === 'delete-synced-place' ? 'Deleting…' : action.type === 'undo' ? 'Undoing…' : 'Saving…'
+    return (await held(() => runHeld(action, notice, operationId, options), word, alwaysShow)).receipt
+  }
+  /** Flush → hold → `send` → show the server's page. `sent: false`: another server change is on its way here, or what he typed can't be saved, and `send` was not called. */
+  async function held(send: () => Promise<Receipt | null>, word: string, alwaysShow = false): Promise<{ sent: boolean; receipt: Receipt | null }> {
+    if (historyPending.current) return { sent: false, receipt: null }
     historyPending.current = true; setHistoryBusy(true)
     const letGo = holdEditor()
     clearTimeout(timer.current)
-    const word = action.type === 'unsync-block' ? 'Unsyncing…' : action.type === 'delete-synced-place' ? 'Deleting…' : action.type === 'undo' ? 'Undoing…' : 'Saving…'
     const showPaused = setTimeout(() => setPausedFor(word), pausedAfterMs)
     try {
       for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
       if (dirty.current) await flushRef.current()
       for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
-      if (dirty.current || sending.current) return null
-      const receipt = await run(action, notice, operationId, options)
+      if (dirty.current || sending.current) return { sent: false, receipt: null }
+      const receipt = await send()
       // Closed meanwhile (a peek): there's no view left to show it in.
-      if (left.current) return receipt
+      if (left.current) return { sent: true, receipt }
       const ws = latest()
       const p = ws?.pages.find(x => x.id === page.id)
       if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; if (alwaysShow || pageContentKey(p) !== base.current) applyServerPage(p, ws) }
-      return receipt
+      return { sent: true, receipt }
     } finally {
       clearTimeout(showPaused); setPausedFor(null)
       historyPending.current = false; setHistoryBusy(false)

@@ -620,7 +620,7 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
 type CellMoves = { id: string; value: Json | undefined }[]
 /** R3-26: several cards to one place, in one change with one Undo. Each keeps its value's own rules, and they keep their order among the rows. */
 export function useMoveRows(db: Page & { database: Database }, view: View, context: ViewContext, groups: ViewGroups | null) {
-  const { run, latest } = useWorkspace()
+  const { runHeld, latest } = useWorkspace()
   return (moving: readonly { rowId: string; from: string | null }[], to: string) => {
     const stored = latest(), ws = stored && db.database.fixed ? withTodos(stored) : stored
     if (!ws || !groups) return
@@ -652,7 +652,7 @@ export function useMoveRows(db: Page & { database: Database }, view: View, conte
     }
     function send() {
       show(false)
-      void run(todoItems ? { type: 'edit-todos', items: todoItems, today: todayIso() } : { type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: /couldn't/.test(r.message) ? r.message : notice, undoOperationId: r.operationId }), newId(), {
+      void runHeld(todoItems ? { type: 'edit-todos', items: todoItems, today: todayIso() } : { type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: /couldn't/.test(r.message) ? r.message : notice, undoOperationId: r.operationId }), newId(), {
         quiet: true, stale: 'outcome', inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { show(null); toast('A row changed elsewhere, so nothing moved', { timeout: 6000 }) },
       }).then(r => { if (r) show(null); else if ([...pendingCells.values()].some(p => p.databaseId === db.id && p.retry === send)) show(true) })
     }
@@ -1562,7 +1562,7 @@ function PickedButtons({ db, picked, track, runRowButton }: { db: Page & { datab
 }
 
 function EditPickedButton({ db, rowIds, editing, setEditing, track }: { db: Page & { database: Database }; rowIds: string[]; editing: string | null; setEditing(id: string | null): void; track(words: string, work: Promise<unknown>): void }) {
-  const { workspace, run } = useWorkspace()
+  const { workspace, run, runHeld } = useWorkspace()
   const [open, setOpen] = useState(false)
   const property = editing ? db.database.properties.find(p => p.id === editing) ?? null : null
   const anchor = useRef<HTMLButtonElement>(null)
@@ -1574,7 +1574,7 @@ function EditPickedButton({ db, rowIds, editing, setEditing, track }: { db: Page
     setEditing(null)
     if (todos) {
       const items = rowIds.flatMap(id => { const taskId = taskIdOfRow(id); return taskId ? [{ taskId, changes: [{ columnId: p.id, value: (raw ?? null) as Json }] }] : [] })
-      if (items.length) track(`Changing ${items.length === 1 ? '1 to-do' : `${items.length} to-dos`}…`, run({ type: 'edit-todos', items, today: todayIso() }, r => ({ text: r.message, undoOperationId: r.operationId })))
+      if (items.length) track(`Changing ${items.length === 1 ? '1 to-do' : `${items.length} to-dos`}…`, runHeld({ type: 'edit-todos', items, today: todayIso() }, r => ({ text: r.message, undoOperationId: r.operationId })))
       return
     }
     const items = rows.map(r => ({ pageId: r.id, values: { [p.id]: raw ?? null } as Record<string, Json>, expected: { [p.id]: (rawOf(r, p.id) ?? null) as Json } }))
