@@ -11,7 +11,7 @@ import { useMemo, useRef } from 'react'
 import { TagText } from './tag-text'
 import { ParentLine, treeIndent, useTaskTree } from './task-tree'
 import { BlockedMark, blockedByLabel, openBlockerPicker } from './blockers'
-import { openRepeatEditor } from './todo-repeat'
+import { RepeatMark, openRepeatEditor } from './todo-repeat'
 import { repeatMenuLabel, repeatsIn } from './todo-repeat-view'
 
 export const taskViews = ['today', 'upcoming', 'open', 'paused'] as const
@@ -117,6 +117,7 @@ function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Ta
       <DateTag task={task} today={today} label={label} />
       {/* Upcoming keeps set-aside rows' dates (02 Not today) but they must not read as commitments; the Not today tab needs no marker. */}
       {paused && label !== undefined && <span className="app-tag paused">Not today</span>}
+      {!done && repeat && <RepeatMark taskId={task.id} rule={repeat} />}
       <RowMenu
         label={`Actions for ${task.title}`}
         groups={[

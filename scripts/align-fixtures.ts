@@ -87,6 +87,7 @@ const document: EditorNode[] = [
   todo('Fixture wrapped to-do in three lines at a phone width, long enough to wrap once more on a laptop, as some of his long notes do', 'plan'),
   todo('Fixture done to-do', 'plan'),
   todo('Fixture cancelled to-do', 'plan'),
+  todo('Fixture repeating to-do', 'plan'),
   // B39: a nested to-do's checkbox starts at its parent's text; two levels deep.
   todo('Fixture parent to-do', 'plan', [todo('Fixture child to-do', 'plan', [todo('Fixture grandchild to-do', 'plan')]), bullet('Fixture note under a to-do')]),
   // A synced block (B21-18): its lines keep the columns they have outside, at each level, and the label clears what's around it.
@@ -233,6 +234,7 @@ const task = (title: string) => {
 }
 ws = await run({ type: 'task-status', taskId: task('Fixture done to-do').id, status: 'done', today })
 ws = await run({ type: 'task-status', taskId: task('Fixture cancelled to-do').id, status: 'cancelled', today })
+ws = await run({ type: 'set-todo-repeat', taskId: task('Fixture repeating to-do').id, repeat: { every: 'week', interval: 1, from: 'schedule' }, today, at: new Date().toISOString() })
 
 // Today's page gets one written line if it has none, so the picker's dot on today is measured (Jazz 27200c3).
 ws = await run({ type: 'ensure-day', date: today })

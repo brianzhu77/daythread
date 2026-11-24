@@ -1098,6 +1098,13 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .editor-date-tag .app-tag { font-size:var(--text-caption); }
 /* B92: the app noting how long it has waited, in the margin: plain Ink-soft words, no fill, so it never reads as something he set (Jazz 535b6fff). */
 .editor-since { align-self:center; color:var(--ink-2); font-size:var(--text-meta); line-height:20px; white-space:nowrap; }
+/* Repeating to-dos: the mark at a line's end, with the deadline and Since. An icon alone, so the words wrap as they do without it. */
+.repeat-mark { position:relative; flex:none; display:inline-grid; place-content:center; width:24px; height:24px; min-height:0; padding:0; border:0; border-radius:var(--radius-control); background:transparent; color:var(--ink-3); cursor:pointer; }
+@media (hover:hover) { .repeat-mark:hover { background:var(--app-surface); color:var(--ink); } }
+/* A finger's target without a taller row: 44 wide and the line's own 32 high, so it never reaches into the next line. */
+@media (hover:none) { .repeat-mark::before { content:''; position:absolute; inset:-4px -10px; } }
+.task-row .repeat-mark { margin-top:10px; }
+@media (hover:none) { .task-row .repeat-mark::before { inset:-10px; } }
 /* Desktop: + sits just outside the content column so it never covers right-aligned date tags; the phone tab bar owns + below 900px. */
 @media(max-width:899px) { .desktop-capture-plus { display:none; } }
 @media(min-width:900px) {

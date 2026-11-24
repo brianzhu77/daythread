@@ -71,7 +71,7 @@ import { noticeWithNext, repeatMenuLabel, repeatPages, repeatsIn, undoHoldPages 
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { BlockedMark, blockedByLabel, openBlockerPicker } from './blockers'
-import { openRepeatEditor } from './todo-repeat'
+import { RepeatMark, openRepeatEditor } from './todo-repeat'
 import { databaseRows, isDatabase } from '../domain/database'
 import { openedByTurnover } from './use-screen-today'
 import { openedByMove } from './new-build'
@@ -269,7 +269,7 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const seen = t && shown && shown !== t.status ? { ...t, status: shown } : t
   // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
   const planned = t && workspace ? plannedOn(workspace, t.id) : null
-  const repeat = t && workspace ? repeatsIn(workspace).get(t.id) : undefined
+  const repeat = workspace && seen?.status === 'open' ? repeatsIn(workspace).get(seen.id) : undefined
   const model = seen && rows ? rowMenu(seen, role, planned, rows.pageDate, rows.today) : null
   // A11: last, under a divider, after the task's own actions (Jazz line-links-states §1).
   const copy = model ? rows!.copyLink(blockId) : null
@@ -290,9 +290,10 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(seen?.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: todayIso(), today: todayIso() }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
     {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(t!.status === 'open' && workspace ? [{ items: [{ label: blockedByLabel(workspace, t!.id), onSelect: () => openBlockerPicker(t!.id, taskLine.current) }, ...(repeat || t!.title.trim() ? [{ label: repeatMenuLabel(repeat), onSelect: () => openRepeatEditor(t!.id, taskLine.current) }] : [])] }] : []), { items: [{ label: 'Copy', onSelect: () => rows!.copyRow(blockId) }, ...(copy ? [{ label: 'Copy link to line', onSelect: copy }] : [])] }]} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {/* One group at the line's end, so a deadline and "Since" sit together rather than one wrapping under the other at 390. */}
-    {seen && seen.status === 'open' && (hasDateFacts(seen) || since) && <span contentEditable={false} className="editor-date-tag">
+    {seen && seen.status === 'open' && (hasDateFacts(seen) || since || repeat) && <span contentEditable={false} className="editor-date-tag">
       {hasDateFacts(seen) && <DateTag task={seen} today={todayIso()} pageDate={planDate || todayIso()} />}
       {since && <span className="editor-since is-since">Since {sinceLabel(since, todayIso())}</span>}
+      {repeat && <RepeatMark taskId={seen.id} rule={repeat} />}
     </span>}
     {t && <BlockedMark taskId={t.id} />}
   </div>

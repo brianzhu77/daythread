@@ -4,7 +4,10 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { toast } from '@heroui/react'
 import { everyNames, RepeatEvery, RepeatWeekdays } from './repeat-fields'
 import { EditorShell, useWide } from './property-editors'
-import { nextLine, repeatFields, repeatsIn, ruleAfter, type RepeatEdit } from './todo-repeat-view'
+import { nextLine, repeatFields, repeatMarkName, repeatsIn, ruleAfter, type RepeatEdit } from './todo-repeat-view'
+import type { TodoRepeatRule } from '../domain/todo-repeats'
+import { noCaret } from './blockers'
+import { RepeatIcon } from './icons'
 import { todayIso } from './dates'
 import { useWorkspace } from './use-day'
 
@@ -13,6 +16,12 @@ const listeners = new Set<() => void>()
 const notify = () => listeners.forEach(l => l())
 export function openRepeatEditor(taskId: string, anchor: HTMLElement | null) { current = { taskId, anchor }; notify() }
 const close = () => { current = null; notify() }
+
+/** The repeat icon at a line's end: not text, a tap opens the editor. */
+export function RepeatMark({ taskId, rule }: { taskId: string; rule: TodoRepeatRule }) {
+  const name = repeatMarkName(rule)
+  return <button type="button" contentEditable={false} className="repeat-mark" aria-label={name} title={name} aria-haspopup="dialog" {...noCaret} onClick={e => openRepeatEditor(taskId, e.currentTarget)}><RepeatIcon /></button>
+}
 
 /**
  * Refusals the editor says itself, once, in their own words. A drawn change the server refuses (the limit reached

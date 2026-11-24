@@ -190,7 +190,7 @@ function measure() {
       Object.assign(row, { kind: `${status} task`, empty: !title.textContent.trim(), ...firstLine(title) })
       if (box && visible(box)) { row.markers.checkbox = cy(box.getBoundingClientRect()); row.boxLeft = box.getBoundingClientRect().left }
       // The row's other parts on its first line (A12): the ⋯ (laid out even while hidden), and the labels and tags.
-      for (const [name, selector] of [['⋯ button', '.editor-row-more'], ['Cancelled label', '.editor-cancelled-tag'], ['reference tag', '.editor-reference-tag'], ['date tag', '.editor-date-tag'], ['Plan for today', '.editor-plan-action']]) {
+      for (const [name, selector] of [['⋯ button', '.editor-row-more'], ['Cancelled label', '.editor-cancelled-tag'], ['reference tag', '.editor-reference-tag'], ['date tag', '.editor-date-tag'], ['Plan for today', '.editor-plan-action'], ['repeat mark', '.repeat-mark']]) {
         const part = content.querySelector(selector)
         if (part && visible(part)) row.markers[name] = cy(part.getBoundingClientRect())
       }
