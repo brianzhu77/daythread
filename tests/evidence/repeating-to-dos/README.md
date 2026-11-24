@@ -21,7 +21,7 @@ Every script that reseeds the store removes and rebuilds that file itself, so th
 | `limit.ts` | What the 1,000-repeat limit costs (§6 "Bound the number per workspace"): in memory, 1,001 to-dos over ten day pages; median of 21 runs of a tick of a plain and of a repeating to-do, `repeatsIn`, `dueTodoRepeats`, `repeatPages`, and the size of `todoRepeats`, with none and with 1,000. No browser, no database. | `node --no-warnings tests/evidence/repeating-to-dos/limit.ts` |
 | `floor.ts` | The floor build and an older tab against the new server, on real Postgres with real writes (§7 "The floor build ticks a repeating to-do and deletes its line ..."). | `DATABASE_TEST_URL=postgres://… node --no-warnings tests/evidence/repeating-to-dos/floor.ts <floor-worktree>` |
 
-`repeat.mjs` runs in Chromium and in WebKit (pass the engine). `R4` uses Option+Tab in WebKit, as Safari's Tab skips buttons by default. `R1` compares the long line's wrapping with a store seeded `plain`, which the script makes itself. `R12` writes screenshots to `[shots-dir]` for the design review.
+`repeat.mjs` runs in Chromium and in WebKit (pass the engine). `R4` uses Option+Tab in WebKit, as Safari's Tab skips buttons by default. `R1` compares the long line's height with the same words in a store seeded `plain` (which the script makes itself): with the icon it may take at most one line more, never fewer, since the icon takes width at the line's end; both heights are printed. `R12` writes screenshots to `[shots-dir]` for the design review.
 
 ### `pixels.mjs`
 

@@ -1,5 +1,6 @@
 // Repeating to-dos on the screen, in the built app (repeating-to-dos.md §3, §7): the icon and its height, setting, changing and turning off a repeat, the
-// editor by keyboard, the tick's and Cancel's notices, the mark isn't text, the phone's sheet, Tasks and Upcoming, a document page, offline, and dark.
+// R1: the icon adds no row height, and a long line takes at most one line more than the same words without a repeat (the icon takes width), never fewer.
+// Editor by keyboard, the tick's and Cancel's notices, the mark isn't text, the phone's sheet, Tasks and Upcoming, a document page, offline, and dark.
 // Usage: node tests/evidence/repeating-to-dos/repeat.mjs <base-url> <store-path> [chromium|webkit] [shots-dir]  (a throwaway store the server at <base-url> uses)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
@@ -62,7 +63,7 @@ const plainSeed = async (options) => {
 for (const [options, plain] of [[wide, 44], [phone, 32]]) {
   const width = options.viewport.width
   const longPlain = await plainSeed(options)
-  await scenario(`R1 ${width}: a repeating to-do is as tall as one that isn't, its icon is in line with the box, the long line wraps as before`, async page => {
+  await scenario(`R1 ${width}: a repeating to-do is as tall as one that isn't, its icon is in line with the box, the long line takes at most one line more than without a repeat, never fewer`, async page => {
     const h = { offsite: await height(page, 'Reply about the offsite'), bins: await height(page, 'Take the bins out'), dentist: await height(page, 'Book the dentist') }
     const marks = await page.locator('.repeat-mark').count()
     const dentistTag = await row(page, 'Book the dentist').locator('.editor-date-tag').count(), dentistMark = await row(page, 'Book the dentist').locator('.repeat-mark').count()
@@ -73,7 +74,7 @@ for (const [options, plain] of [[wide, 44], [phone, 32]]) {
       const box = await row(page, title).locator('input[type=checkbox]').boundingBox(), mark = await row(page, title).locator('.repeat-mark').boundingBox()
       off.push(Math.abs(centre(box) - centre(mark)))
     }
-    return { ok: h.offsite === plain && h.bins === plain && marks === 4 && dentistTag >= 1 && dentistMark === 0 && long === longPlain && off.every(d => d <= 1), h, marks, dentistTag, dentistMark, long, longPlain, room, off }
+    return { ok: h.offsite === plain && h.bins === plain && marks === 4 && dentistTag >= 1 && dentistMark === 0 && long >= longPlain && long <= longPlain + 24 && off.every(d => d <= 1), h, marks, dentistTag, dentistMark, long, longPlain, room, lines: { with: long / 24, without: longPlain / 24 }, off }
   }, options)
 }
 
