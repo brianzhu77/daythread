@@ -246,7 +246,7 @@ function readme(day: string, timezone: string, leftOut: string[]): string {
 - \`templates/\`: one Markdown file per template; \`template-for: days\` marks the one new day pages start from.
 - \`workspace.json\`: every fact behind the pages (pages with their documents, tasks, trashed pages), format \`daythread-export\` version ${exportFormatVersion}. A page's \`document\` is BlockNote JSON; \`markdownFile\` names its Markdown file.
 
-To-dos are \`- [ ]\` open, \`- [x]\` done, \`- [-]\` cancelled. One waiting on others ends with \`· Blocked by\` and their names. Nested lines are indented one tab per level.
+To-dos are \`- [ ]\` open, \`- [x]\` done, \`- [-]\` cancelled. One waiting on others ends with \`· Blocked by\` and their names. A repeating one ends with \`· Repeats\` and its rule. Nested lines are indented one tab per level.
 ${leftOut.length ? `
 ## Files are not in this export
 

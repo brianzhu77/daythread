@@ -50,3 +50,9 @@ test('To-dos: a read-only Repeat column, hidden until asked for, says the rule f
   assert.equal(both.find(p => p.id === `todo:${first}`)!.values?.[repeatColumn], undefined, 'the finished one says nothing')
   assert.equal(both.find(p => p.id !== `todo:${first}`)!.values?.[repeatColumn], 'Every week')
 })
+
+test("the export's own description says how a repeating to-do reads", async () => {
+  const { exportFiles } = await import('../src/domain/export.ts')
+  const readme = exportFiles(setup().ws, new Date(at)).find(f => f.path.endsWith('/README.md'))!.text
+  assert.ok(readme.includes('A repeating one ends with `· Repeats` and its rule.'))
+})
