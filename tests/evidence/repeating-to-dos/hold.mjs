@@ -1,5 +1,9 @@
 // A tick that writes an open page (repeating-to-dos.md §6) in the built app: the page's editor saves what was typed, holds typing, and shows the
 // server's page, so no conflict shows and no word is lost; a to-do with no repeat ticks at once, as it always did.
+// H1-H2: the tick's notice names the next day. H3a/H3b: the notice's Undo is held; with nothing typed since it takes the tick back, with unsaved words
+// typed since the held Undo saves them first, which takes the one Undo slot, so it is refused ("Can't undo · edited since") and nothing is lost.
+// H4: tapping the box again reopens. H5: a double tap ticks once. H6: a to-do with no repeat ticks at once.
+// H7: offline with unsaved words, the stored tick is held behind the "changed elsewhere" banner and Keep mine lands it, one next to-do.
 // Usage: node tests/evidence/repeating-to-dos/hold.mjs <base-url> <store-path> [chromium|webkit]  (a throwaway store the server at <base-url> uses)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
@@ -82,15 +86,26 @@ await scenario('H2: the same with tomorrow in a side peek and the tick in the ma
   return { ok: Object.values(checks).every(Boolean), checks, ...r }
 }, wide, `/day/${today}?peek=day%3A${tomorrow}&side=1`)
 
-await scenario('H3: after the tick, more typed and the notice\'s Undo: the next one goes, both words stay, no conflict', async page => {
+// The app keeps one Undo slot and any later command of his takes it. H3a: nothing typed after the tick, so the notice's Undo takes it back.
+await scenario('H3a: after the tick, nothing typed: the notice\'s Undo takes back the tick and the next one, no conflict', async page => {
+  await tickTomorrow(page, page)
+  await page.getByRole('button', { name: 'Undo' }).first().click()
+  const conflicts = await noConflict(page)
+  await wait(1200)
+  const checks = { noConflict: !conflicts.length, kept: docText().includes('kept'), noNextRow: nextRows().length === 0, reopenedAndCurrent: reopenedAndCurrent() }
+  return { ok: Object.values(checks).every(Boolean), checks, conflicts }
+}, wide, `/day/${tomorrow}`)
+
+// H3b: unsaved words typed after the tick. The held Undo saves them first; that save takes the Undo slot, so the tick's Undo is refused in the app's words.
+await scenario('H3b: after the tick, more typed: the held Undo saves it first, then is refused; both words stay, the next one stays, no conflict', async page => {
   await tickTomorrow(page, page)
   await typeAtEnd(page, page, 'tp', ' more')
   await page.getByRole('button', { name: 'Undo' }).first().click()
   const conflicts = await noConflict(page)
   await wait(1200)
-  const text = docText()
-  const checks = { noConflict: !conflicts.length, kept: text.includes('kept'), more: text.includes('more'), noNextRow: nextRows().length === 0, reopenedAndCurrent: reopenedAndCurrent() }
-  return { ok: Object.values(checks).every(Boolean), checks, conflicts }
+  const text = docText(), said = await notices(page)
+  const checks = { noConflict: !conflicts.length, kept: text.includes('kept'), more: text.includes('more'), refused: said.includes("Can't undo · edited since"), nextStays: nextRows().length === 1 }
+  return { ok: Object.values(checks).every(Boolean), checks, conflicts, said }
 }, wide, `/day/${tomorrow}`)
 
 await scenario('H4: after the tick, more typed and the same box tapped again: reopened, the next one goes, no conflict', async page => {
@@ -123,7 +138,9 @@ await scenario('H6: a to-do with no repeat ticks at once, not made to wait for t
   return { ok: after !== null && after <= 300, after, done: task('Book the dentist').status }
 }, wide, `/day/${today}`)
 
-await scenario('H7: offline, the tick still goes once and nothing is drawn; no word is lost', async (page, { context }) => {
+// H7: offline with unsaved words on the next one's page. Back online the editor's own save lands before the stored tick replays, and the
+// server's row check holds the tick behind the "changed elsewhere" banner; Keep mine then sends it: the to-do is done and one next to-do exists.
+await scenario('H7: offline with words typed: nothing drawn; back online the banner holds the tick, no word is lost; Keep mine lands it once', async (page, { context }) => {
   const rowsBefore = await page.locator('.editor-task').count()
   await context.setOffline(true)
   await typeAtEnd(page, page, 'tp', ' kept')
@@ -132,12 +149,15 @@ await scenario('H7: offline, the tick still goes once and nothing is drawn; no w
   const said = await notices(page), rowsOffline = await page.locator('.editor-task').count()
   await context.setOffline(false)
   await wait(6000)
-  const conflict = await page.locator('.editor-save-line.is-conflict').count(), line = (await page.locator('.editor-save-line').first().textContent())?.trim()
+  const banner = (await page.evaluate(() => document.body.innerText.split('\n').find(l => /changed elsewhere/i.test(l)) ?? '')).trim()
+  const tickWas = task('Take the bins out').status, nextWas = nextTodos().length
   const inEditor = await page.locator('[data-node-type="blockContainer"][data-id="tp"]').first().textContent()
-  // "Decisions for Brian" 3: a tick sent later can be held by the outbox's row check, as any change can; say so if it was.
-  const banner = (await page.evaluate(() => document.body.innerText.split('\n').find(l => /^Not saved|changed elsewhere/i.test(l)) ?? '')).trim()
-  const checks = { noNext: !said.includes('Next'), noNewRow: rowsOffline === rowsBefore, oneNextTodo: nextTodos().length === 1, noLostWord: inEditor.includes('kept') || docText().includes('kept') }
-  return { ok: Object.values(checks).every(Boolean), checks, saw: { conflict: conflict > 0, line, banner, tick: task('Take the bins out').status, keptInEditor: inEditor.includes('kept'), keptStored: docText().includes('kept'), nextRowsStored: nextRows().length } }
+  const keep = page.getByRole('button', { name: /Keep mine/i }).first()
+  const keepShown = await keep.count()
+  if (keepShown) await keep.click()
+  await wait(4000)
+  const checks = { noNext: !said.includes('Next'), noNewRow: rowsOffline === rowsBefore, banner: /changed elsewhere/i.test(banner), heldTick: tickWas === 'open' && nextWas === 0, noLostWord: inEditor.includes('kept') || docText().includes('kept'), keepShown: keepShown > 0, done: task('Take the bins out').status === 'done', oneNextTodo: nextTodos().length === 1 }
+  return { ok: Object.values(checks).every(Boolean), checks, saw: { banner, tickWas, nextWas, tickNow: task('Take the bins out').status, nextNow: nextTodos().length, keptStored: docText().includes('kept') } }
 }, wide, `/day/${tomorrow}`)
 
 await browser.close()
