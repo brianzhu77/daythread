@@ -66,7 +66,8 @@ import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './da
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
 import { endOfLineAbove, rowArrows } from './row-arrows'
-import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, registerEditorHold, rememberLeaveSave, trackLeaveSave } from './editor-flush'
+import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, registerEditorHold, rememberLeaveSave, sendHolding, trackLeaveSave } from './editor-flush'
+import { noticeWithNext, repeatPages, undoHoldPages } from './todo-repeat-view'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { BlockedMark, blockedByLabel, openBlockerPicker } from './blockers'
@@ -2515,7 +2516,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * runs, so no autosave races the server's rewrite; then show the server's page. A failure releases the editor with
    * the draft as it was (Ratchet 980d5695).
    */
-  const rowNotice = useRef<{ key: string; operationId: string; fingerprint: string } | null>(null)
+  const rowNotice = useRef<{ key: string; operationId: string; fingerprint: string; holds: readonly string[] } | null>(null)
   const menuReturn = useRef<{ blockId: string; selection: ReturnType<Selection['toJSON']> } | null>(null)
   const closeRowNotice = () => { if (rowNotice.current) toast.close(rowNotice.current.key); rowNotice.current = null }
   useEffect(() => () => closeRowNotice(), [])
@@ -2563,6 +2564,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const caretHere = editor.getTextCursorPosition().block.id === blockId
     closeRowNotice()
     const operationId = newOperationId()
+    const holds = repeatPages(latest() ?? latestWorkspace.current, action)
     const receipt = await onServer(action, operationId)
     if (!receipt) { notDone('Not done · your text is kept'); return }
     // The menu took focus; give it back to the row (or the line above, if the row left) so ⌘Z and typing go on.
@@ -2572,19 +2574,20 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       intent.kind === 'move' ? `Moved to ${noticeDate(intent.date)}`
       : intent.kind === 'bring-today' ? 'On today'
       : intent.kind === 'not-today' ? (receipt.message.startsWith('Removed from') ? `Removed from ${weekday(day)} · still planned for ${weekday(plannedOn(latestWorkspace.current, t.id) ?? day)}` : notTodayText(t, day, today))
-      : intent.kind === 'cancel' ? 'Cancelled' : 'Restored'
+      : intent.kind === 'cancel' ? noticeWithNext('Cancelled', receipt, today) : 'Restored'
+    const undoHolds = undoHoldPages(latest() ?? latestWorkspace.current, receipt, holds)
     const key: string = toast(text, {
       timeout: 8000,
-      actionProps: { children: 'Undo', onPress: () => void undoRowAction(operationId) },
+      actionProps: { children: 'Undo', onPress: () => void undoRowAction(operationId, undoHolds) },
       onClose: () => { if (rowNotice.current?.key === key) rowNotice.current = null },
     })
-    rowNotice.current = { key, operationId, fingerprint: JSON.stringify(editor.document) }
+    rowNotice.current = { key, operationId, fingerprint: JSON.stringify(editor.document), holds: undoHolds }
   }
   /** The notice's Undo, and ⌘Z while it shows: the server's undo of that action, run like the action itself. */
-  async function undoRowAction(operationId: string) {
+  async function undoRowAction(operationId: string, holds: readonly string[] = []) {
     closeRowNotice()
     let refused = ''
-    const receipt = await onServer({ type: 'undo', targetOperationId: operationId }, newOperationId(), { inlineRefusal: /Cannot undo after later changes/, onRefused: m => { refused = m } })
+    const receipt = await sendHolding(holds.filter(id => id !== page.id), () => onServer({ type: 'undo', targetOperationId: operationId }, newOperationId(), { inlineRefusal: /Cannot undo after later changes/, onRefused: m => { refused = m } }))
     if (receipt) toast('Undone', { timeout: 4000 })
     else notDone(refused ? "Can't undo · changed since" : "Couldn't undo · your text is kept")
   }
@@ -2934,7 +2937,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         if (!e.shiftKey && last && last.fingerprint === JSON.stringify(editor.document)) { void undoLinkPaste(last.operationId); return }
         // A12 §3: while a row action's notice shows and nothing was edited since, ⌘Z is that notice's Undo.
         const row = rowNotice.current
-        if (!e.shiftKey && row && row.fingerprint === JSON.stringify(editor.document)) { void undoRowAction(row.operationId); return }
+        if (!e.shiftKey && row && row.fingerprint === JSON.stringify(editor.document)) { void undoRowAction(row.operationId, row.holds); return }
         void performHistory(e.shiftKey ? 'redo' : 'undo'); return
       }
       if (e.key === ' ' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && /^(?:#{1,3}|[-*>]|1\.|\[\])$/.test(editor.prosemirrorState.selection.$from.parent.textBetween(0, editor.prosemirrorState.selection.$from.parentOffset))) { e.preventDefault(); editor.insertInlineContent(' '); return }

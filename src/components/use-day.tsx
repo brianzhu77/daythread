@@ -17,7 +17,7 @@ import { sampleActions } from './fixture'
 import { todayIso } from './dates'
 import { openAutomations } from './automation-sheet'
 import { flushAllEditors, sendHolding } from './editor-flush'
-import { repeatPages } from './todo-repeat-view'
+import { noticeWithNext, repeatPages, undoHoldPages } from './todo-repeat-view'
 import { offlineCopy } from './offline-copy'
 import { setDraftOwner } from './draft-slots'
 import { HOLD_MS, heldWorkspace, isSaving, settleTick, shownStatus, tapTarget, withTick, type Tick, type Ticks, type TickStatus } from './task-ticks'
@@ -154,6 +154,8 @@ export function isConflict(message: string | null): boolean {
 export interface Notice {
   text: string
   undoOperationId?: string
+  /** The pages its Undo holds, as the command was held (a repeat's next to-do made or taken back on an open page). */
+  undoHolds?: readonly string[]
   extra?: { label: string; run: () => void }
 }
 
@@ -605,14 +607,14 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
 
   const runRef = useRef<WorkspaceContextValue['run'] | null>(null)
   const push = useCallback((spec: Notice) => {
-    const { text, undoOperationId, extra } = spec
+    const { text, undoOperationId, undoHolds, extra } = spec
     const close = () => toast.close(key)
     const undo = undoOperationId && {
       children: 'Undo',
       onPress: () => {
         close()
         if (wsRef.current?.undo?.operationId === undoOperationId)
-          void runRef.current?.({ type: 'undo', targetOperationId: undoOperationId }, { text: 'Undone' }, undefined, { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
+          void sendHolding(undoHolds ?? [], () => runRef.current?.({ type: 'undo', targetOperationId: undoOperationId }, { text: 'Undone' }, undefined, { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) }) ?? Promise.resolve(null))
       },
     }
     const other = extra && { children: extra.label, onPress: () => { close(); extra.run() } }
@@ -697,7 +699,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           setSaveError(null)
           setLastFailed(null)
           commandFailedOut = false
-          const spec = typeof notice === 'function' ? notice(result.receipt) : notice
+          const made = typeof notice === 'function' ? notice(result.receipt) : notice
+          const holds = made ? undoHoldPages(result.workspace, result.receipt, options.held ?? []) : []
+          const spec = made && (result.receipt.nextTodos?.length || holds.length)
+            ? { ...made, text: noticeWithNext(made.text, result.receipt, todayIso()), ...(holds.length ? { undoHolds: holds } : {}) }
+            : made
           const rules = result.receipt.automations
           // What rules did goes on the notice his change already has, with its one Undo: "Moved to Done · Log finish · Undo" (automations.md §5).
           if (rules?.scheduled) { if (rules.paused.length) push(scheduledFailure(rules)); else if (spec) push(spec) }
@@ -780,6 +786,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   )
   runRef.current = run
   const runHeld = useCallback<WorkspaceContextValue['run']>((source, notice, operationId, options) => {
+    // No repeating to-do: nothing here can be held, and replaying the outbox through the reducer would only slow a tick.
+    if (!wsRef.current?.todoRepeats?.length) return run(source, notice, operationId, options)
     const ws = typeof source === 'function' ? null : predicted() ?? wsRef.current
     const pages = ws && typeof source !== 'function' ? repeatPages(ws, source) : []
     if (!pages.length) return run(source, notice, operationId, options)
