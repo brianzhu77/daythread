@@ -1,6 +1,6 @@
 # Repeating to-dos: design
 
-- Author: Claude · 2026-11-24 · status: **approved by Brian 2026-11-24. Phase 1 (no screen) built; phases 2 and 3 not built.**
+- Author: Claude · 2026-11-24 · status: **approved by Brian 2026-11-24. Phases 1 and 2 built; phase 3 not built.**
 - Asked by Brian (2026-11-24): add repeating to-dos; look at how Todoist and TickTick do it, then design and plan ours. He
   suggested a to-do line that expands on focus to show extended properties, stored either as block properties
   (Notion's way) or in a separate table, and left the choice to me.
@@ -91,16 +91,17 @@ into such a place unchanged.
   With From set to "When it's done" the next day depends on the day he ticks, so the last line reads
   "Next Sun, Nov 29 if done today". Once set, the menu item reads `Repeat · Every week…`.
 - **Seeing it:** every line of the current to-do, plan or reference, on any page, carries a small repeat icon at its
-  end, with the deadline and "Since" in the one group there (`editor-date-tag`); Tasks and Upcoming show it too. It's an icon alone so that a to-do's words wrap
-  as they do now at 390; its accessible name says the rule ("Repeats every week"). A tap opens the same editor. Like
+  end, with the deadline and "Since" in the one group there (`editor-date-tag`); Tasks and Upcoming show it too. It's an icon alone, 34 px of the line's width
+  like any item at a line's end, so a borderline-long line can wrap one line more than it would without a repeat. Its
+  accessible name says the rule ("Repeats every week"). A tap opens the same editor. Like
   the Blocked by mark it isn't text: the caret skips it, a copy of the line leaves it out, and a tap on a phone raises
   no keyboard. **Finished ones carry no icon:** they're ordinary done to-dos.
 - **Ticking it:** the line is done and stays on its day, as any to-do. The box shows the tap at once, as now. When
   the server answers, the notice reads **"Done · Next Mon, Dec 7 · Undo"** and the next one is on that day's page and
   in Upcoming. Each screen keeps the words its tick notice has today and adds the day: a day page says "Task
   completed · Next Mon, Dec 7", Tasks says "Done · Next Mon, Dec 7" (`page-editor.tsx`, `task-row.tsx`). Undo takes
-  back the tick and the next one together. **Offline,** the notice is the plain one that screen has today; the
-  next one appears when the tick is sent, with no late notice. The browser never draws the next line ahead of the
+  back the tick and the next one together. Offline, he sees what an offline tick shows today (no notice; the
+  banner counts the change); the next one appears when the tick is sent, with no late notice. The browser never draws the next line ahead of the
   server (`draw-ahead.ts`: nothing he can type into is shown before the server has it).
 - **Not ticking it:** nothing new. It carries over as any open to-do, and no second one is made while it's open.
 
