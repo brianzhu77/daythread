@@ -97,6 +97,34 @@ private func expectError(_ expected: TransportError, _ call: () async throws -> 
     #expect(request.path == "/api/v1/auth/sign-out")
     #expect(request.header("Authorization") == "Bearer tok-1")
     #expect(request.header("Accept") == "application/json")
+    #expect(request.header("Content-Type") == "application/json")
+    #expect(request.bodyText == "{}", "an empty body, so the header is true")
+  }
+
+  /// The server refuses a v1 write that does not say it is JSON; a read says nothing about a body it does not send.
+  @Test func everyPostSaysItIsJSONAndAGetSendsNoBody() async throws {
+    let server = StubServer()
+    let transport = server.transport()
+    server.answer(status: 200, json: #"{"token":"t","owner":"o","expiresAt":"2030-01-01T00:00:00.000Z"}"#)
+    _ = try await transport.signIn(email: "a@example.com", password: "pw", timezone: "UTC")
+    server.answer(status: 200, json: #"{"ok":true}"#)
+    try await transport.signOut(token: "t")
+    server.answer(status: 200, json: #"{"status":"already-applied","owner":"o"}"#)
+    _ = try await transport.send(token: "t", operationId: "op", action: action, expectedOwner: "o", basis: basis)
+    server.answer(status: 200, json: #"{"owner":"o","email":null,"signIn":false}"#)
+    _ = try await transport.account(token: nil)
+    server.answer(status: 200, json: #"{"owner":"o","unchanged":true,"revision":7}"#)
+    _ = try await transport.workspace(token: nil, have: 7)
+
+    let posts = server.requests.filter { $0.method == "POST" }
+    #expect(posts.map(\.path) == ["/api/v1/auth/sign-in", "/api/v1/auth/sign-out", "/api/v1/commands"])
+    for post in posts {
+      #expect(post.header("Content-Type") == "application/json", "\(post.path)")
+      #expect(try JSON.parse(try #require(post.bodyText)).objectValue != nil, "\(post.path) sends a JSON object")
+    }
+    let gets = server.requests.filter { $0.method == "GET" }
+    #expect(gets.count == 2)
+    for get in gets { #expect(get.body == nil || get.body?.isEmpty == true, "\(get.path)") }
   }
 
   @Test func signOutTreatsASignedOutSessionAsDone() async throws {

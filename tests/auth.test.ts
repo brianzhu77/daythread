@@ -658,7 +658,39 @@ test('no spelling of a v1 path reaches an app handler under a cookie', async () 
     assert.notEqual(encoded.status, 200, 'a cookie is not an account on an app path, however it is spelled')
     const signOut = appRoute(h.server.handleAppSignOut)
     assert.equal((await run(signOut, '/api//v1/auth/sign-out', withCookie, 'POST')).status, 404)
-    assert.equal((await run(signOut, '/api/%761/auth/sign-out', withCookie, 'POST')).status, 200, 'an app path with no bearer ends nothing')
+    assert.equal((await run(signOut, '/api/%761/auth/sign-out', { ...withCookie, 'content-type': 'application/json' }, 'POST')).status, 200, 'an app path with no bearer ends nothing')
     assert.ok(await h.server.ownerSession(cookieValue), 'the cookie\'s session still exists')
+  } finally { await h.close() }
+})
+
+test('a v1 write must say it is JSON: sign-in and sign-out included; the gate still answers first for a request it refuses', async () => {
+  const h = await handlers()
+  try {
+    const { appRoute } = h.server
+    h.supabase.verified.set('owner@example.com', A); await h.accounts.invite('owner@example.com')
+    const body = JSON.stringify({ email: 'owner@example.com', password: 'right' })
+    const post = (path: string, headers: Record<string, string>, payload = body) => new Request(`https://daythread.test${path}`, { method: 'POST', headers, body: payload })
+    const signIn = appRoute(h.server.handleAppSignIn), signOut = appRoute(h.server.handleAppSignOut)
+    for (const type of [undefined, 'text/plain', 'application/x-www-form-urlencoded']) {
+      const headers: Record<string, string> = type === undefined ? {} : { 'content-type': type }
+      for (const [route, path] of [[signIn, '/api/v1/auth/sign-in'], [signOut, '/api/v1/auth/sign-out']] as const) {
+        const response = await route({ request: post(path, headers) })
+        assert.equal(response.status, 415, `${path} with ${type ?? 'no content type'}`)
+        assert.deepEqual(await response.json(), { error: 'unsupported-media-type' })
+      }
+    }
+    assert.equal(await h.count('sessions'), 0, 'no sign-in ran')
+    const signedIn = await signIn({ request: post('/api/v1/auth/sign-in', { 'content-type': 'application/json; charset=utf-8' }) })
+    assert.equal(signedIn.status, 200)
+    const { token } = await signedIn.json() as { token: string }
+    const out = await signOut({ request: post('/api/v1/auth/sign-out', { 'content-type': 'application/json', authorization: `Bearer ${token}` }, '{}') })
+    assert.equal(out.status, 200)
+    assert.equal(await h.count('sessions'), 0, 'signed out')
+
+    // The gate does not look at the content type: what it refuses keeps its own status.
+    const foreign = await h.server.checkRequest(post('/api/v1/commands', { 'content-type': 'text/plain', 'sec-fetch-site': 'cross-site' }), 'router')
+    assert.ok(foreign instanceof Response); assert.equal(foreign.status, 403)
+    const signedOut = await h.server.checkRequest(post('/api/v1/commands', { 'content-type': 'text/plain' }), 'router')
+    assert.ok(signedOut instanceof Response); assert.equal(signedOut.status, 401)
   } finally { await h.close() }
 })

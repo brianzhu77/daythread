@@ -7,6 +7,7 @@ import { SqliteWorkspaceRepository } from '../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../src/domain/editor-document.ts'
 import type { OutboxOutcome } from '../src/server/outbox-command.ts'
 import { commandReply, handleCommand, handleSave, haveOf, saveReply, workspaceReply } from '../src/server/api-v1.ts'
+import { appRoute } from '../src/server/auth/app-path.ts'
 
 const dirs: string[] = []
 // The handlers read the store the server is configured with.
@@ -87,4 +88,27 @@ test('every route file under src/routes/api/v1 wraps its handlers in appRoute', 
     assert.ok(handlers.length > 0, `${file.pathname} declares a handler`)
     for (const [, method, value] of handlers) assert.ok(value!.startsWith('appRoute('), `${file.pathname}: ${method} is not wrapped in appRoute`)
   }
+})
+
+test('a v1 write must say it is JSON: anything else is 415 before the handler runs or the body is read; a read needs nothing', async () => {
+  let ran = 0
+  const route = appRoute(async () => { ran++; return Response.json({ ok: true }) })
+  const call = async (method: string, contentType?: string) => {
+    const headers: Record<string, string> = contentType === undefined ? {} : { 'content-type': contentType }
+    const request = new Request('http://localhost/api/v1/commands', { method, headers, body: method === 'GET' ? undefined : '{"a":1}' })
+    return { response: await route({ request }), request }
+  }
+  for (const type of [undefined, 'text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x', 'application/jsonx', 'text/json']) {
+    const { response, request } = await call('POST', type)
+    assert.equal(response.status, 415, `content type ${type ?? 'none'}`)
+    assert.deepEqual(await response.json(), { error: 'unsupported-media-type' })
+    assert.equal(response.headers.get('cache-control'), 'no-store')
+    assert.equal(request.bodyUsed, false, 'the body is never read')
+  }
+  assert.equal(ran, 0, 'the handler never ran')
+  for (const type of ['application/json', 'application/json; charset=utf-8', 'Application/JSON;Charset=UTF-8', ' application/json ']) {
+    assert.equal((await call('POST', type)).response.status, 200, `content type ${type}`)
+  }
+  assert.equal((await call('GET')).response.status, 200, 'a GET needs no content type')
+  assert.equal(ran, 5)
 })
