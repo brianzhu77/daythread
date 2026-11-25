@@ -40,7 +40,7 @@ public struct URLSessionTransport: ServerTransport {
 
   public func signOut(token: String) async throws {
     do {
-      _ = try await perform(.post, "auth/sign-out", token: token, readsBody: false)
+      _ = try await perform(.post, "auth/sign-out", token: token, body: .object([:]), readsBody: false)
     } catch TransportError.signedOut {
       // The session is already gone, which is what signing out is for.
     }
@@ -140,9 +140,10 @@ public struct URLSessionTransport: ServerTransport {
     request.httpMethod = method.rawValue
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-    if let body {
+    if method == .post {
+      // The server refuses a v1 write that does not say it is JSON; one with nothing to say sends `{}`, so it is true.
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      request.httpBody = Data(JSON.write(body).utf8)
+      request.httpBody = Data(JSON.write(body ?? .object([:])).utf8)
     }
 
     let data: Data, response: URLResponse

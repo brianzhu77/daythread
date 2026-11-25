@@ -679,9 +679,9 @@ test('a v1 write must say it is JSON: sign-in and sign-out included; the gate st
         assert.deepEqual(await response.json(), { error: 'unsupported-media-type' })
       }
     }
-    assert.equal(await h.count('sessions'), 0, 'no sign-in ran')
     const signedIn = await signIn({ request: post('/api/v1/auth/sign-in', { 'content-type': 'application/json; charset=utf-8' }) })
     assert.equal(signedIn.status, 200)
+    assert.equal(await h.count('sessions'), 1, 'only this sign-in made a session: the refused ones never ran')
     const { token } = await signedIn.json() as { token: string }
     const out = await signOut({ request: post('/api/v1/auth/sign-out', { 'content-type': 'application/json', authorization: `Bearer ${token}` }, '{}') })
     assert.equal(out.status, 200)
