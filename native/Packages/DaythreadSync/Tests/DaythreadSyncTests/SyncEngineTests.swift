@@ -105,46 +105,46 @@ actor RecordingStore: WorkspaceStore {
   func load() async throws -> (workspace: Workspace, owner: String)? { try await inner.load() }
 
   func replace(with workspace: Workspace, owner: String) async throws {
-    try check("replace")
     log.append("replace \(owner) \(workspace.revision)")
+    try check("replace")
     try await inner.replace(with: workspace, owner: owner)
   }
 
   func write(_ workspace: Workspace, changed: WorkspaceChanges) async throws {
-    try check("write")
     log.append("write \(workspace.revision)")
+    try check("write")
     try await inner.write(workspace, changed: changed)
   }
 
   func entries() async throws -> [OutboxEntry] { try await inner.entries() }
 
   func append(_ entry: NewOutboxEntry) async throws -> OutboxEntry {
-    try check("append")
     log.append("append \(entry.operationId)")
+    try check("append")
     return try await inner.append(entry)
   }
 
   func update(_ entry: OutboxEntry) async throws {
-    try check("update")
     log.append("update \(entry.operationId)")
+    try check("update")
     try await inner.update(entry)
   }
 
   func remove(seq: Int) async throws {
-    try check("remove")
     log.append("remove \(seq)")
+    try check("remove")
     try await inner.remove(seq: seq)
   }
 
   func acknowledge(seq: Int, revision: Int?) async throws {
-    try check("acknowledge")
     log.append("acknowledge \(seq) \(revision.map(String.init) ?? "-")")
+    try check("acknowledge")
     try await inner.acknowledge(seq: seq, revision: revision)
   }
 
   func erase() async throws {
-    try check("erase")
     log.append("erase")
+    try check("erase")
     try await inner.erase()
   }
 }
@@ -905,29 +905,72 @@ private struct Harness {
     #expect(await current(h.engine) == state(.ready, after))
   }
 
-  @Test func after_a_401_the_next_launch_shows_nothing_and_asks_nothing() async throws {
-    let h = try await Harness([.failure(TransportError.signedOut)], copy: try workspace(5))
+  /// An engine that met a 401, then a second engine opened on the same stores, as after a relaunch.
+  private func relaunchAfterA401(
+    _ script: [FakeTransport.Reply]
+  ) async throws -> (h: Harness, next: SyncEngine, transport: FakeTransport, seen: Seen) {
+    let h = try await Harness(
+      [.failure(TransportError.signedOut)], copy: try workspace(5), entries: [pending("op-1", base: 5)])
     await h.engine.start()
-
-    let silent = FakeTransport()
-    let next = SyncEngine(transport: silent, tokens: h.tokens, store: h.store, now: { noon })
+    await h.store.forget()
+    let transport = FakeTransport(script)
+    let next = SyncEngine(transport: transport, tokens: h.tokens, store: h.store, now: { noon })
     let seen = Seen()
     let reader = Task { for await value in next.states { await seen.add(value) } }
     await next.start()
     reader.cancel()
-
-    #expect(await silent.calls == [])
-    #expect(await current(next) == state(.signedOut, nil))
-    #expect(await !seen.all.contains { $0.workspace != nil })
+    return (h, next, transport, seen)
   }
 
-  @Test func a_copy_left_by_a_failed_erase_is_never_shown_and_is_erased_at_the_next_start() async throws {
+  @Test func after_a_401_the_next_launch_hides_the_copy_and_keeps_its_outbox() async throws {
+    let (h, next, transport, seen) = try await relaunchAfterA401([])
+
+    #expect(await transport.calls == [])
+    #expect(await current(next) == state(.signedOut, nil))
+    #expect(await !seen.all.contains { $0.workspace != nil })
+    #expect(await h.log == [])
+    #expect(try await h.kept?.workspace == workspace(5))
+    #expect(try await h.entries == ["op-1 pending base 5 own []"])
+  }
+
+  @Test func after_a_401_and_a_relaunch_the_same_owner_gets_the_copy_and_its_outbox_back() async throws {
+    let copy = try workspace(5)
+    let applied = try changes(from: 5, to: 6, adding: "new")
+    let (h, next, transport, _) = try await relaunchAfterA401([
+      .session(firstAgain), .workspace(.unchanged(revision: 5, owner: "user-1")),
+      .outcome(.applied(receipt: .object([:]), changes: applied, owner: "user-1")),
+    ])
+
+    try await next.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
+
+    #expect(await !h.log.contains("erase"))
+    #expect(await transport.sends == [send("op-1", base: 5, token: "tok-3")])
+    #expect(try await h.entries == [])
+    #expect(await current(next) == state(.ready, try required(copy.applying(applied))))
+  }
+
+  @Test func after_a_401_and_a_relaunch_another_owner_erases_first() async throws {
+    let served = try workspace(2)
+    let (h, next, transport, _) = try await relaunchAfterA401([
+      .session(second), .workspace(.full(served, owner: "user-2")),
+    ])
+
+    try await next.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
+
+    #expect(await h.log == ["erase", "replace user-2 2"])
+    #expect(await transport.sends == [])
+    #expect(try await h.entries == [])
+    #expect(await current(next) == state(.ready, served))
+  }
+
+  @Test func a_copy_an_erase_could_not_remove_stays_hidden_and_is_not_erased_at_launch() async throws {
     let h = try await Harness(opening + [.done], copy: try workspace(5))
     await h.engine.start()
     await h.store.fail("erase")
 
     await h.engine.signOut()
 
+    #expect(await h.log == ["erase", "erase"])
     #expect(await current(h.engine) == state(.signedOut, nil))
     #expect(try h.tokens.read() == nil)
     #expect(try await h.kept != nil)
@@ -942,10 +985,28 @@ private struct Harness {
     reader.cancel()
 
     #expect(await silent.calls == [])
-    #expect(await h.log == ["erase"])
-    #expect(try await h.kept == nil)
+    #expect(await h.log == [])
+    #expect(try await h.kept != nil)
     #expect(await current(next) == state(.signedOut, nil))
     #expect(await !seen.all.contains { $0.workspace != nil })
+  }
+
+  @Test func a_sign_in_that_cannot_erase_the_previous_account_fails_signed_out() async throws {
+    let h = try await Harness(opening + [.session(second)], copy: try workspace(5))
+    await h.engine.start()
+    await h.store.fail("erase")
+
+    await #expect(throws: StoreRefused.self) {
+      try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
+    }
+
+    #expect(await current(h.engine) == state(.signedOut, nil))
+    #expect(try h.tokens.read() == nil)
+    #expect(
+      await h.calls == [
+        .account(token: "tok-1"), .workspace(token: "tok-1", have: 5),
+        .signIn(email: "two@example.com", timezone: "UTC"),
+      ])
   }
 
   @Test func a_local_copy_without_a_session_is_shown_at_once() async throws {
