@@ -1,0 +1,3 @@
+{
+  "document": "[{\"id\":\"t1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:t1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Parent\",\"styles\":{}}],\"children\":[{\"id\":\"t2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:t2\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Child\",\"styles\":{}}],\"children\":[{\"id\":\"t3\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:t3\",\"role\":\"reference\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Grandchild\",\"styles\":{}}],\"children\":[]}]}]}]"
+}

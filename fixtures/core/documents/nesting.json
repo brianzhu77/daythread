@@ -1,0 +1,3 @@
+{
+  "document": "[{\"id\":\"n1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Level one\",\"styles\":{}}],\"children\":[{\"id\":\"n2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Level two\",\"styles\":{}}],\"children\":[{\"id\":\"n3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Level three\",\"styles\":{}}],\"children\":[{\"id\":\"n4\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Level four\",\"styles\":{}}],\"children\":[]}]}]}]}]"
+}

@@ -14,7 +14,7 @@ on:
   push:
     branches: [main]
     # Docs change nothing that runs: a docs-only push deploys nothing, so a gated tree stays the one that's live.
-    paths-ignore: ['docs/**', '*.md', '.impeccable/**']
+    paths-ignore: ['docs/**', '*.md', '.impeccable/**', 'native/**', 'fixtures/**']
   workflow_dispatch:
     inputs:
       action:

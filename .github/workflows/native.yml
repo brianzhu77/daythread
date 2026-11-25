@@ -1,0 +1,52 @@
+# The native app (native/): the Swift packages' tests and the app's, against the shared cases in fixtures/core (made from
+# the TypeScript domain by scripts/export-core-fixtures.ts; ci.yml checks they are current). Every step is guarded by the
+# folder it needs, so this passes while native/ does not exist yet or holds only some of it.
+# If the image's newest Xcode cannot build for iOS 26, only the two `swift test` steps can run until the image catches up.
+name: Native
+
+on:
+  pull_request:
+    paths: ['native/**', 'fixtures/**', '.github/workflows/native.yml']
+  push:
+    branches: [main]
+    paths: ['native/**', 'fixtures/**', '.github/workflows/native.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Select the newest Xcode on the image
+        run: |
+          newest=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest/Contents/Developer"; fi
+          xcodebuild -version
+      - name: swift test (DaythreadCore)
+        run: |
+          if [ -d native/Packages/DaythreadCore ]; then cd native/Packages/DaythreadCore && swift test; else echo "native/Packages/DaythreadCore does not exist yet"; fi
+      - name: swift test (DaythreadSync)
+        run: |
+          if [ -d native/Packages/DaythreadSync ]; then cd native/Packages/DaythreadSync && swift test; else echo "native/Packages/DaythreadSync does not exist yet"; fi
+      - name: xcodebuild test (iOS Simulator)
+        run: |
+          if [ -d native/Daythread.xcodeproj ]; then
+            cd native
+            device=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [^(]*' | sed 's/ *$//')
+            xcodebuild test -project Daythread.xcodeproj -scheme Daythread -destination "platform=iOS Simulator,name=$device" CODE_SIGNING_ALLOWED=NO
+          else echo "native/Daythread.xcodeproj does not exist yet"; fi
+      - name: xcodebuild build (Mac Catalyst)
+        run: |
+          if [ -d native/Daythread.xcodeproj ]; then
+            cd native
+            xcodebuild build -project Daythread.xcodeproj -scheme Daythread -destination 'platform=macOS,variant=Mac Catalyst' CODE_SIGNING_ALLOWED=NO
+          else echo "native/Daythread.xcodeproj does not exist yet"; fi
