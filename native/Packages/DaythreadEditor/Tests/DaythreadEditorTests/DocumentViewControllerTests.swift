@@ -195,5 +195,64 @@
       #expect(text(of: after)?.string == "one, changed")
       #expect(after.accessibilityLabel == "one, changed")
     }
+
+    // MARK: nesting
+
+    private func allSubviews(_ view: UIView) -> [UIView] {
+      view.subviews + view.subviews.flatMap { allSubviews($0) }
+    }
+
+    /// The leading edge, in the list's coordinates, of what a cell shows: its text, or for a divider its line.
+    private func leadingEdge(of kind: String, at item: Int, in controller: DocumentViewController) throws -> CGFloat {
+      let list = try collection(controller)
+      let cell = try cell(controller, item)
+      let views = allSubviews(cell)
+      let target: UIView?
+      switch kind {
+      case "divider": target = views.first { $0.bounds.height < 2 && $0.bounds.width > 100 }
+      default:
+        target = views.compactMap { $0 as? UILabel }.first { $0.text != "•" && !($0.text ?? "").hasSuffix(".") || ($0.text ?? "").count > 3 }
+      }
+      let view = try #require(target, "no content for \(kind) at \(item)")
+      return view.convert(view.bounds, to: list).minX
+    }
+
+    private func markerEdge(at item: Int, in controller: DocumentViewController) throws -> CGFloat {
+      let list = try collection(controller)
+      let labels = allSubviews(try cell(controller, item)).compactMap { $0 as? UILabel }
+      let marker = try #require(labels.first { $0.text == "•" })
+      return marker.convert(marker.bounds, to: list).minX
+    }
+
+    @Test(arguments: ["bulletListItem", "numberedListItem", "paragraph", "heading", "quote", "task", "divider", "database"])
+    func aNestedRowIsIndentedTwentyPointsPerDepth(kind: String) throws {
+      func make(_ id: String) -> Block {
+        let props: JSONObject = kind == "task" ? ["taskId": .string("k")] : JSONObject()
+        return block(id, kind, props, text: ["divider", "database"].contains(kind) ? nil : "some words here")
+      }
+      let blocks = [
+        make("k0"),
+        block("p", "bulletListItem", text: "parent", children: [
+          make("k1"),
+          block("q", "bulletListItem", text: "child", children: [make("k2")]),
+        ]),
+      ]
+      let controller = hosted()
+      controller.show(
+        page: try makePage(blocks), in: try makeWorkspace(tasks: [taskJSON("k", status: "open")]))
+      _ = try collection(controller)
+      // Rows: k0, p, k1, q, k2.
+      let root = try leadingEdge(of: kind, at: 0, in: controller)
+      let one = try leadingEdge(of: kind, at: 2, in: controller)
+      let two = try leadingEdge(of: kind, at: 4, in: controller)
+      #expect(abs(one - root - 20) <= 0.5, "depth 1: \(one - root)")
+      #expect(abs(two - root - 40) <= 0.5, "depth 2: \(two - root)")
+      if kind == "bulletListItem" {
+        let marker = try markerEdge(at: 1, in: controller)
+        #expect(abs(try markerEdge(at: 2, in: controller) - marker - 20) <= 0.5)
+        #expect(abs(try markerEdge(at: 3, in: controller) - marker - 20) <= 0.5)
+        #expect(abs(try markerEdge(at: 4, in: controller) - marker - 40) <= 0.5)
+      }
+    }
   }
 #endif
