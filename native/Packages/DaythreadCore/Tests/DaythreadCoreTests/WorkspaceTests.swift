@@ -173,4 +173,16 @@ import Testing
     let workspace = try #require(Workspace(try Self.workspace(pages: "[\(pages)]")))
     #expect(Audit.pagesThatDoNotRoundTrip(workspace) == ["broken", "spaced", "object"])
   }
+
+  /// A day's draft is a hidden page (`type: "draft"`) whose document is the draft's own object, not blocks.
+  @Test func audit_holds_a_day_draft_to_writing_back_the_same_not_to_being_blocks() throws {
+    let pages = [
+      #"{"id":"day:2026-11-25","type":"daily","date":"2026-11-25","title":"","document":"[]"}"#,
+      #"{"id":"draft:day:2026-11-25","type":"draft","date":null,"title":"","parentId":"day:2026-11-25","document":"{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"a\",\"place\":\"fill\",\"taskId\":\"t1\",\"source\":\"model\",\"state\":\"applied\"}],\"moreOpen\":[],\"recipe\":5}"}"#,
+      #"{"id":"draft:spaced","type":"draft","title":"","document":"{ \"status\":\"ready\"}"}"#,
+      #"{"id":"draft:broken","type":"draft","title":"","document":"{not json"}"#,
+    ].joined(separator: ",")
+    let workspace = try #require(Workspace(try Self.workspace(pages: "[\(pages)]")))
+    #expect(Audit.pagesThatDoNotRoundTrip(workspace) == ["draft:spaced", "draft:broken"])
+  }
 }
