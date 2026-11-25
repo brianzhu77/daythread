@@ -542,3 +542,89 @@ test('app paths read the token from Authorization only; every other path from th
   assert.equal(tokenOf(appReq('/pages', cookie, 'GET')), 'fromcookie')
   assert.equal(tokenOf(appReq('/api/v1/workspace', { authorization: 'Basic abc' }, 'GET')), undefined)
 })
+
+test('app paths are matched whatever the case, and only under /api/v1/', async () => {
+  const { isAppPath, tokenOf } = await import('../src/server/auth/server.ts')
+  assert.equal(isAppPath('/api/v1/account'), true)
+  assert.equal(isAppPath('/API/V1/account'), true, 'the router matches paths case-insensitively')
+  assert.equal(isAppPath('/api/v1'), false)
+  assert.equal(isAppPath('/api/v10/x'), false)
+  assert.equal(isAppPath('/api/auth/sign-in'), false)
+  assert.equal(tokenOf(appReq('/API/V1/workspace', { cookie: '__Host-daythread_session=fromcookie' }, 'GET')), undefined)
+  assert.equal(tokenOf(appReq('/API/V1/workspace', { authorization: 'Bearer frombearer' }, 'GET')), 'frombearer')
+})
+
+test('bearer parsing: the scheme is case-insensitive, the token is trimmed, an empty one is none; a bearer beats a cookie on an app path only', async () => {
+  const { tokenOf } = await import('../src/server/auth/server.ts')
+  const bearer = (value: string, path = '/api/v1/workspace') => tokenOf(appReq(path, { authorization: value }, 'GET'))
+  assert.equal(bearer('Bearer '), undefined)
+  assert.equal(bearer('Bearer    '), undefined)
+  assert.equal(bearer('Bearer'), undefined)
+  assert.equal(bearer('bearer x'), 'x')
+  assert.equal(bearer('BEARER x'), 'x')
+  assert.equal(bearer('Bearer   x  '), 'x')
+  const both = { authorization: 'Bearer frombearer', cookie: '__Host-daythread_session=fromcookie' }
+  assert.equal(tokenOf(appReq('/api/v1/workspace', both, 'GET')), 'frombearer')
+  assert.equal(tokenOf(appReq('/pages', both, 'GET')), 'fromcookie')
+})
+
+test('app sign-in: the token comes back in the body and no cookie is set; as a bearer it is that account; sign-out ends it', async () => {
+  const h = await handlers()
+  try {
+    h.supabase.verified.set('owner@example.com', A)
+    await h.accounts.invite('owner@example.com')
+    const appPost = (path: string, body: unknown) => new Request(`https://daythread.test${path}`, { method: 'POST', body: JSON.stringify(body) })
+    const res = await h.server.handleAppSignIn(appPost('/api/v1/auth/sign-in', { email: 'owner@example.com', password: 'right', timezone: 'America/Vancouver' }))
+    assert.equal(res.status, 200); assert.equal(res.headers.get('set-cookie'), null)
+    const { token, owner, expiresAt } = await res.json() as { token: string; owner: string; expiresAt: string }
+    assert.match(token, /^[\w-]{40,}$/); assert.equal(owner, A); assert.ok(Date.parse(expiresAt) > Date.now())
+    assert.equal(await h.repo.timezoneOf(A), 'America/Vancouver')
+    const asApp = (path: string, method = 'GET') => new Request(`https://daythread.test${path}`, { method, headers: { authorization: `Bearer ${token}` } })
+    const account = await h.server.handleAppAccount(asApp('/api/v1/account'))
+    assert.deepEqual(await account.json(), { owner: A, email: 'owner@example.com', signIn: true })
+    assert.equal(account.headers.get('set-cookie'), null)
+    const out = await h.server.handleAppSignOut(asApp('/api/v1/auth/sign-out', 'POST'))
+    assert.equal(out.status, 200); assert.deepEqual(await out.json(), { ok: true }); assert.equal(out.headers.get('set-cookie'), null, 'the app has no cookie to clear')
+    assert.equal(await h.sessions.check(token), null)
+    assert.equal((await h.server.handleAppAccount(asApp('/api/v1/account'))).status, 401, 'the ended session is not an account')
+    const wrong = await h.server.handleAppSignIn(appPost('/api/v1/auth/sign-in', { email: 'owner@example.com', password: 'no' }))
+    assert.equal(wrong.status, 401); assert.equal(wrong.headers.get('set-cookie'), null)
+    assert.equal(((await wrong.json()) as { error: string }).error, 'wrong')
+    h.supabase.verified.set('other@example.com', B)
+    const refused = await h.server.handleAppSignIn(appPost('/api/v1/auth/sign-in', { email: 'other@example.com', password: 'right' }))
+    assert.equal(refused.status, 403); assert.equal(refused.headers.get('set-cookie'), null)
+    assert.equal(((await refused.json()) as { error: string }).error, 'not-invited')
+    assert.equal(await h.count('sessions'), 0)
+  } finally { await h.close() }
+})
+
+test('app account with sign-in off is the local owner; with no session it is 401', async () => {
+  const h = await handlers()
+  try {
+    const bare = new Request('https://daythread.test/api/v1/account')
+    assert.equal((await h.server.handleAppAccount(bare)).status, 401)
+    process.env.DAYTHREAD_AUTH = 'off'
+    assert.deepEqual(await (await h.server.handleAppAccount(bare)).json(), { owner: 'local', email: null, signIn: false })
+  } finally { await h.close() }
+})
+
+test('the gate on an app path: a bearer is let in as its owner; a cookie alone is signed-out; sign-in is public; a renewed session sets no cookie', async () => {
+  const h = await handlers()
+  try {
+    h.supabase.verified.set('owner@example.com', A); await h.accounts.invite('owner@example.com')
+    const body = JSON.stringify({ email: 'owner@example.com', password: 'right' })
+    const signedIn = await (await h.server.handleAppSignIn(new Request('https://app.test/api/v1/auth/sign-in', { method: 'POST', body }))).json() as { token: string }
+    const cookie = h.cookieOf(await h.server.handleSignIn(h.post('/api/auth/sign-in', JSON.parse(body))))!
+    const get = (headers: Record<string, string>, path = '/api/v1/account') => new Request(`https://app.test${path}`, { headers })
+    assert.deepEqual(await h.server.checkRequest(get({ authorization: `Bearer ${signedIn.token}` }), 'router'), { owner: A })
+    const byCookie = await h.server.checkRequest(get({ cookie: `__Host-daythread_session=${cookie}` }), 'router')
+    assert.ok(byCookie instanceof Response); assert.equal(byCookie.status, 401); assert.deepEqual(await byCookie.json(), { error: 'signed-out' })
+    const publicSignIn = await h.server.checkRequest(new Request('https://app.test/api/v1/auth/sign-in', { method: 'POST' }), 'router')
+    assert.deepEqual(publicSignIn, {})
+    // A session due for renewal: on an app path the gate must not try to set a cookie (this test has no request
+    // context, so appendResponseHeader would throw), and the session is renewed all the same.
+    const old = await h.sessions.create(A, 'owner@example.com', new Date(Date.now() - renewEveryMs - 60_000))
+    assert.deepEqual(await h.server.checkRequest(get({ authorization: `Bearer ${old.token}` }), 'router'), { owner: A })
+    assert.ok((await h.sessions.check(old.token))!.expiresAt.getTime() > old.expiresAt.getTime(), 'renewed')
+  } finally { await h.close() }
+})
