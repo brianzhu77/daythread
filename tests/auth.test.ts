@@ -520,3 +520,25 @@ test('the account of a request is the session the gate let in: one cookie, read 
     assert.equal(await h.server.accountOf(get(https, `${host}=${b}`)), null, 'sign-in off: no account')
   } finally { await h.close() }
 })
+
+// The native app (Phase 0): on /api/v1/ it comes in by `Authorization: Bearer`, never by the cookie.
+const appReq = (path: string, headers: Record<string, string> = {}, method = 'POST') => new Request(`https://daythread.test${path}`, { method, headers })
+
+test('app paths: a write with no Origin and no Sec-Fetch-Site passes; a browser from another site is still refused', async () => {
+  const { sameOrigin } = await import('../src/server/auth/server.ts')
+  assert.equal(sameOrigin(appReq('/api/v1/commands')), true)
+  assert.equal(sameOrigin(appReq('/api/v1/commands', { origin: 'https://evil.example' })), false)
+  assert.equal(sameOrigin(appReq('/api/v1/commands', { 'sec-fetch-site': 'cross-site' })), false)
+  assert.equal(sameOrigin(appReq('/api/v1/commands', { 'sec-fetch-site': 'same-origin' })), true)
+  assert.equal(sameOrigin(appReq('/api/auth/sign-in')), false, 'every other path: unchanged')
+})
+
+test('app paths read the token from Authorization only; every other path from the cookie only', async () => {
+  const { tokenOf } = await import('../src/server/auth/server.ts')
+  const cookie = { cookie: '__Host-daythread_session=fromcookie' }
+  assert.equal(tokenOf(appReq('/api/v1/workspace', { authorization: 'Bearer frombearer' }, 'GET')), 'frombearer')
+  assert.equal(tokenOf(appReq('/api/v1/workspace', cookie, 'GET')), undefined)
+  assert.equal(tokenOf(appReq('/pages', { authorization: 'Bearer frombearer' }, 'GET')), undefined)
+  assert.equal(tokenOf(appReq('/pages', cookie, 'GET')), 'fromcookie')
+  assert.equal(tokenOf(appReq('/api/v1/workspace', { authorization: 'Basic abc' }, 'GET')), undefined)
+})
