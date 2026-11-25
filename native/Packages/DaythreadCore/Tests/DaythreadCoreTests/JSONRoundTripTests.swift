@@ -112,7 +112,7 @@ import Testing
     ("\"a\nb\"", .controlCharacterInString, 2),
     (#""\x""#, .badEscape, 2),
     (#""\u12g4""#, .badEscape, 5),
-    (#""\u12"#, .badEscape, 5),
+    (#""\u12"#, .unterminatedString, 5),
     ("01", .badNumber, 1),
     ("-", .badNumber, 1),
     ("-a", .badNumber, 1),
