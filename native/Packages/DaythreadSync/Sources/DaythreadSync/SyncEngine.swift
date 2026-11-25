@@ -76,22 +76,22 @@ public actor SyncEngine {
   /// Whose copy may be shown before the server answers: the stored copy is published at once only when a stored
   /// session names the copy's owner, or when the copy is the Mac's (`local`) and there is no session. With a session
   /// for another owner nothing is shown until the load replaces the copy. With no session over a copy that is not
-  /// `local` (left by a session that expired, or by an erase that failed at sign-out), the copy is erased again and
-  /// sign-in is shown, without any request: a shared device never shows someone's notes with nobody signed in.
+  /// `local` (left by a session that expired, or by an erase that failed at sign-out), sign-in is shown at once,
+  /// without any request, and the copy and its outbox stay on disk, hidden: the same owner signing in gets them back
+  /// (the outbox is sent with its operation ids), another owner signing in erases them first. Nothing is erased here.
   public func start() async {
     await acquire()
     await readCopyIfNeeded()
-    var orphaned = false
+    var hidden = false
     if let copy, case .success(nil) = readSession(), copy.owner != Self.localOwner {
-      orphaned = true
-      if (try? await store.erase()) != nil { self.copy = nil }
+      hidden = true
       phase = .signedOut
       copyShown = false
       held = 0
     }
     publish()
     release()
-    if !orphaned { await requestPass(load: true) }
+    if !hidden { await requestPass(load: true) }
   }
 
   /// Asks the server for the workspace, then sends what the outbox holds. For opening, returning to the app and
@@ -118,7 +118,8 @@ public actor SyncEngine {
 
   /// Signs in, then loads. A session of another account than the stored copy's erases the copy and its outbox first;
   /// the same account's are kept and sent. The transport's errors are thrown unchanged. If the device cannot erase or
-  /// keep the session after the server accepted it, it ends signed out with nothing shown, and that error is thrown.
+  /// keep the session after the server accepted it, it ends signed out with nothing shown and the token cleared, and
+  /// that error is thrown: a new account is never signed in over another account's rows.
   public func signIn(email: String, password: String, timezone: String) async throws {
     let session = try await transport.signIn(email: email, password: password, timezone: timezone)
     await acquire()
@@ -154,6 +155,10 @@ public actor SyncEngine {
 
   /// Tells the server, then erases the copy, the outbox and the session whatever it answered: a shared device must not
   /// keep someone's notes. The last action wins: a sign-in that completes while the server is being told is kept.
+  ///
+  /// If `erase` throws, it is tried once more; if it still throws, this ends signed out anyway. The copy then stays on
+  /// disk but hidden (`start` shows no copy without its session), and is erased at the next sign-in under another
+  /// owner.
   public func signOut() async {
     await acquire()
     epoch += 1
@@ -177,8 +182,7 @@ public actor SyncEngine {
     guard signIns == signInsBefore else { return }
     epoch += 1
     running?.cancel()
-    // If the erase fails, the copy stays hidden: `start` shows no copy without its session and erases it again.
-    try? await store.erase()
+    if (try? await store.erase()) == nil { try? await store.erase() }
     try? tokens.clear()
     copy = nil
     copyRead = true
