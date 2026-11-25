@@ -4,13 +4,17 @@
 
 ## Platform
 
-web
+web, ios, macos
 
 ## Users
 
 **Primary: Brian**, the owner, a senior engineer. He uses Daythread every day on an iPhone (installed from Safari as a
 Home Screen app) and in a Mac browser, to start and end his day, keep notes, and hold the material and structured
 records he used to keep in Notion and Craft. He writes notes in Chinese and English; the interface is English.
+
+**A native app:** a native app for iPhone and Mac is being built in Swift (`docs/design/native-app.md`). Phase 0 is
+built: it signs in and shows Today read only from a copy on the device, offline too. Everything else is still the web
+app's. The web app and the Home Screen app remain what he uses daily until phase 1.
 
 **Direction (Brian, 2026-11-08):** he is the first user, and the product is meant to become one other people sign up
 for. Design must not assume one person's habits, and nothing about him becomes a hard-coded rule.
@@ -50,6 +54,8 @@ model configured and says "Simulated" when none is set. A mocked reply is never 
   (sidebar, peek). Every visual change is checked at both.
 - **Rhythm:** morning (today's page with carried to-dos), the day (notes, pasted links, `/` and `@` and `[[`
   commands, databases), evening (the Tomorrow block on today's page).
+- **Native app:** iPhone and Mac, in Swift, on the same server. Today read only, from a copy on the device, with the
+  offline line when it cannot update. Its list of what is built is `docs/plan/native-parity.md`.
 - **Offline:** the shell and the last loaded workspace open offline; drafts are kept and retried; failures are shown
   quietly with Retry.
 - **Dark mode** follows the system setting; no switch in the app.
@@ -83,6 +89,9 @@ model configured and says "Simulated" when none is set. A mocked reply is never 
   `postgres` (PGlite in tests); Node 24. One JS bundle so moving between screens never downloads.
 - Two stored record kinds, Page and Task; everything else is derived from the page documents. Isolation per workspace
   is enforced by the server on every statement.
+- Native app (`native/`): Swift, UIKit with SwiftUI only for forms, Apple frameworks only. It uses the same server
+  through `/api/v1`. The rules are ported to Swift and held to the server's by shared
+  cases in `fixtures/core`.
 - 44 px touch targets on the phone. System font stack. Icons are the app's own SVG set in `src/components/icons.tsx`.
 
 **Terminology on screen:** page, day page, to-do (a `Task` in code), row, property, view, linked view, database,

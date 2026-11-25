@@ -35,6 +35,12 @@ import { Route as ApiPushKeyRouteImport } from './routes/api/push/key'
 import { Route as ApiPushSubscribeRouteImport } from './routes/api/push/subscribe'
 import { Route as ApiPushTickRouteImport } from './routes/api/push/tick'
 import { Route as ApiPushUnsubscribeRouteImport } from './routes/api/push/unsubscribe'
+import { Route as ApiV1AccountRouteImport } from './routes/api/v1/account'
+import { Route as ApiV1CommandsRouteImport } from './routes/api/v1/commands'
+import { Route as ApiV1SavesRouteImport } from './routes/api/v1/saves'
+import { Route as ApiV1WorkspaceRouteImport } from './routes/api/v1/workspace'
+import { Route as ApiV1AuthSignInRouteImport } from './routes/api/v1/auth/sign-in'
+import { Route as ApiV1AuthSignOutRouteImport } from './routes/api/v1/auth/sign-out'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -166,6 +172,36 @@ const ApiPushUnsubscribeRoute = ApiPushUnsubscribeRouteImport.update({
   path: '/api/push/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1AccountRoute = ApiV1AccountRouteImport.update({
+  id: '/api/v1/account',
+  path: '/api/v1/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1CommandsRoute = ApiV1CommandsRouteImport.update({
+  id: '/api/v1/commands',
+  path: '/api/v1/commands',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1SavesRoute = ApiV1SavesRouteImport.update({
+  id: '/api/v1/saves',
+  path: '/api/v1/saves',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1WorkspaceRoute = ApiV1WorkspaceRouteImport.update({
+  id: '/api/v1/workspace',
+  path: '/api/v1/workspace',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1AuthSignInRoute = ApiV1AuthSignInRouteImport.update({
+  id: '/api/v1/auth/sign-in',
+  path: '/api/v1/auth/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1AuthSignOutRoute = ApiV1AuthSignOutRouteImport.update({
+  id: '/api/v1/auth/sign-out',
+  path: '/api/v1/auth/sign-out',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -194,6 +230,12 @@ export interface FileRoutesByFullPath {
   '/api/push/subscribe': typeof ApiPushSubscribeRoute
   '/api/push/tick': typeof ApiPushTickRoute
   '/api/push/unsubscribe': typeof ApiPushUnsubscribeRoute
+  '/api/v1/account': typeof ApiV1AccountRoute
+  '/api/v1/commands': typeof ApiV1CommandsRoute
+  '/api/v1/saves': typeof ApiV1SavesRoute
+  '/api/v1/workspace': typeof ApiV1WorkspaceRoute
+  '/api/v1/auth/sign-in': typeof ApiV1AuthSignInRoute
+  '/api/v1/auth/sign-out': typeof ApiV1AuthSignOutRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -222,6 +264,12 @@ export interface FileRoutesByTo {
   '/api/push/subscribe': typeof ApiPushSubscribeRoute
   '/api/push/tick': typeof ApiPushTickRoute
   '/api/push/unsubscribe': typeof ApiPushUnsubscribeRoute
+  '/api/v1/account': typeof ApiV1AccountRoute
+  '/api/v1/commands': typeof ApiV1CommandsRoute
+  '/api/v1/saves': typeof ApiV1SavesRoute
+  '/api/v1/workspace': typeof ApiV1WorkspaceRoute
+  '/api/v1/auth/sign-in': typeof ApiV1AuthSignInRoute
+  '/api/v1/auth/sign-out': typeof ApiV1AuthSignOutRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -251,6 +299,12 @@ export interface FileRoutesById {
   '/api/push/subscribe': typeof ApiPushSubscribeRoute
   '/api/push/tick': typeof ApiPushTickRoute
   '/api/push/unsubscribe': typeof ApiPushUnsubscribeRoute
+  '/api/v1/account': typeof ApiV1AccountRoute
+  '/api/v1/commands': typeof ApiV1CommandsRoute
+  '/api/v1/saves': typeof ApiV1SavesRoute
+  '/api/v1/workspace': typeof ApiV1WorkspaceRoute
+  '/api/v1/auth/sign-in': typeof ApiV1AuthSignInRoute
+  '/api/v1/auth/sign-out': typeof ApiV1AuthSignOutRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -281,6 +335,12 @@ export interface FileRouteTypes {
     | '/api/push/subscribe'
     | '/api/push/tick'
     | '/api/push/unsubscribe'
+    | '/api/v1/account'
+    | '/api/v1/commands'
+    | '/api/v1/saves'
+    | '/api/v1/workspace'
+    | '/api/v1/auth/sign-in'
+    | '/api/v1/auth/sign-out'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -309,6 +369,12 @@ export interface FileRouteTypes {
     | '/api/push/subscribe'
     | '/api/push/tick'
     | '/api/push/unsubscribe'
+    | '/api/v1/account'
+    | '/api/v1/commands'
+    | '/api/v1/saves'
+    | '/api/v1/workspace'
+    | '/api/v1/auth/sign-in'
+    | '/api/v1/auth/sign-out'
   id:
     | '__root__'
     | '/'
@@ -337,6 +403,12 @@ export interface FileRouteTypes {
     | '/api/push/subscribe'
     | '/api/push/tick'
     | '/api/push/unsubscribe'
+    | '/api/v1/account'
+    | '/api/v1/commands'
+    | '/api/v1/saves'
+    | '/api/v1/workspace'
+    | '/api/v1/auth/sign-in'
+    | '/api/v1/auth/sign-out'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -366,6 +438,12 @@ export interface RootRouteChildren {
   ApiPushSubscribeRoute: typeof ApiPushSubscribeRoute
   ApiPushTickRoute: typeof ApiPushTickRoute
   ApiPushUnsubscribeRoute: typeof ApiPushUnsubscribeRoute
+  ApiV1AccountRoute: typeof ApiV1AccountRoute
+  ApiV1CommandsRoute: typeof ApiV1CommandsRoute
+  ApiV1SavesRoute: typeof ApiV1SavesRoute
+  ApiV1WorkspaceRoute: typeof ApiV1WorkspaceRoute
+  ApiV1AuthSignInRoute: typeof ApiV1AuthSignInRoute
+  ApiV1AuthSignOutRoute: typeof ApiV1AuthSignOutRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -552,6 +630,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPushUnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/account': {
+      id: '/api/v1/account'
+      path: '/api/v1/account'
+      fullPath: '/api/v1/account'
+      preLoaderRoute: typeof ApiV1AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/commands': {
+      id: '/api/v1/commands'
+      path: '/api/v1/commands'
+      fullPath: '/api/v1/commands'
+      preLoaderRoute: typeof ApiV1CommandsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/saves': {
+      id: '/api/v1/saves'
+      path: '/api/v1/saves'
+      fullPath: '/api/v1/saves'
+      preLoaderRoute: typeof ApiV1SavesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/workspace': {
+      id: '/api/v1/workspace'
+      path: '/api/v1/workspace'
+      fullPath: '/api/v1/workspace'
+      preLoaderRoute: typeof ApiV1WorkspaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/auth/sign-in': {
+      id: '/api/v1/auth/sign-in'
+      path: '/api/v1/auth/sign-in'
+      fullPath: '/api/v1/auth/sign-in'
+      preLoaderRoute: typeof ApiV1AuthSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/auth/sign-out': {
+      id: '/api/v1/auth/sign-out'
+      path: '/api/v1/auth/sign-out'
+      fullPath: '/api/v1/auth/sign-out'
+      preLoaderRoute: typeof ApiV1AuthSignOutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -582,6 +702,12 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPushSubscribeRoute: ApiPushSubscribeRoute,
   ApiPushTickRoute: ApiPushTickRoute,
   ApiPushUnsubscribeRoute: ApiPushUnsubscribeRoute,
+  ApiV1AccountRoute: ApiV1AccountRoute,
+  ApiV1CommandsRoute: ApiV1CommandsRoute,
+  ApiV1SavesRoute: ApiV1SavesRoute,
+  ApiV1WorkspaceRoute: ApiV1WorkspaceRoute,
+  ApiV1AuthSignInRoute: ApiV1AuthSignInRoute,
+  ApiV1AuthSignOutRoute: ApiV1AuthSignOutRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

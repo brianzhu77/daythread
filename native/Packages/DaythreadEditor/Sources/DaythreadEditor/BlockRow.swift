@@ -1,0 +1,38 @@
+import DaythreadCore
+
+/// One line of a drawn page: a block, flattened, with what a cell needs to draw it.
+public struct BlockRow: Hashable, Sendable, Identifiable {
+  /// How a text row is set.
+  public enum TextStyle: Hashable, Sendable {
+    case paragraph
+    /// 1 to 3.
+    case heading(level: Int)
+    case bullet
+    /// Counted from 1 within a run of numbered siblings.
+    case numbered(Int)
+    case quote
+  }
+
+  public enum Kind: Hashable, Sendable {
+    case text(style: TextStyle)
+    /// `status` is nil for a row whose task the workspace does not hold yet.
+    case todo(status: TodoTask.Status?, paused: Bool)
+    case separator
+    /// A block this version does not draw, by the name it is shown under.
+    case placeholder(name: String)
+  }
+
+  /// The block's id; unique within a page's rows (see `BlockRows`).
+  public let id: String
+  public let kind: Kind
+  public let depth: Int
+  /// The block's inline content. Nil for a separator and a placeholder.
+  public let content: JSONValue?
+
+  public init(id: String, kind: Kind, depth: Int, content: JSONValue?) {
+    self.id = id
+    self.kind = kind
+    self.depth = depth
+    self.content = content
+  }
+}

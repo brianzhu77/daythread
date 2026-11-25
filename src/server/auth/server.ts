@@ -9,6 +9,7 @@ import type { SqlClient } from '../db/sql.ts'
 import { validTimezone } from '../../domain/workspace.ts'
 import { authConfig, authRequired, normalizeEmail, type AuthConfig } from './config.ts'
 import { onWorkers } from '../hosting.ts'
+import { isAppPath } from './app-path.ts'
 import { AccountStore } from './accounts.ts'
 import { SessionStore, type CheckedSession, type Outcome } from './sessions.ts'
 import * as supabaseAuth from './supabase.ts'
@@ -16,7 +17,7 @@ import type { ResetResult, SignUpResult, VerifyResult } from './supabase.ts'
 
 /** Reachable without a session: the sign-in and sign-up screens and the calls they make; build assets are public code. */
 // /api/push/tick is the scheduler's, let in by CRON_SECRET; /sw.js is the service worker, fetched by the browser itself.
-const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out', '/api/auth/recover', '/api/auth/resend', '/api/auth/reset-password', '/api/auth/confirm', '/api/push/tick'])
+const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/v1/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out', '/api/auth/recover', '/api/auth/resend', '/api/auth/reset-password', '/api/auth/confirm', '/api/push/tick'])
 const isPublic = (path: string) => publicPaths.has(path) || path.startsWith('/assets/') || path.startsWith('/splash/') || /^\/[\w-]+\.(ico|png|svg|webmanifest|js|html)$/.test(path)
 
 let store: SessionStore | undefined
@@ -58,8 +59,18 @@ export function sessionCookie(request: Request, token: string, expiresAt: Date |
   const maxAge = expiresAt ? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)) : 0
   return `${cookieName(request)}=${expiresAt ? token : ''}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure(request) ? '; Secure' : ''}`
 }
-/** The session token a request carries: the one reader of the cookie, for the gate and for everything behind it. */
-function tokenOf(request: Request): string | undefined {
+// Re-exported: the gate and its tests read them here; the route files import app-path.ts directly.
+export { isAppPath, appRoute } from './app-path.ts'
+/**
+ * The session token a request carries: the one reader of it, for the gate and for everything behind it. An app path
+ * reads `Authorization: Bearer` only and every other path the cookie only, so a cookie can never act on an app path
+ * (nor a bearer token on the web's), and the account the gate names is the one the handler acts for.
+ */
+export function tokenOf(request: Request): string | undefined {
+  if (isAppPath(new URL(request.url).pathname)) {
+    const match = /^bearer\s+(.*)$/i.exec(request.headers.get('authorization') ?? '')
+    return match?.[1]?.trim() || undefined
+  }
   const name = cookieName(request)
   for (const part of (request.headers.get('cookie') ?? '').split(';')) {
     const [key, ...value] = part.trim().split('=')
@@ -71,10 +82,14 @@ function tokenOf(request: Request): string | undefined {
 /**
  * Writes only from this site: a browser always sends Sec-Fetch-Site or Origin on a POST, so a write with neither, or
  * from another site, is refused. SameSite=Lax already keeps the cookie off cross-site POSTs; this is the second lock.
+ * An app path may pass with neither: a browser always sends one on a write, so a request with neither is not a
+ * browser, and an app path honours no cookie, so a browser has no credential there to be tricked into using. With
+ * either header present, the rule is the same as everywhere else.
  */
 export function sameOrigin(request: Request): boolean {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return true
   const site = request.headers.get('sec-fetch-site')
+  if (site === null && request.headers.get('origin') === null && isAppPath(new URL(request.url).pathname)) return true
   if (site !== null) return site === 'same-origin'
   const origin = request.headers.get('origin')
   return origin !== null && origin === new URL(request.url).origin
@@ -101,7 +116,7 @@ export async function checkRequest(request: Request, handlerType: 'serverFn' | '
   if (isPublic(url.pathname)) return {}
   const session = await ownerSession(tokenOf(request))
   if (session) {
-    if (session.renewed) appendResponseHeader('set-cookie', sessionCookie(request, tokenOf(request)!, session.expiresAt))
+    if (session.renewed && !isAppPath(url.pathname)) appendResponseHeader('set-cookie', sessionCookie(request, tokenOf(request)!, session.expiresAt))
     return { owner: session.userId }
   }
   if (handlerType === 'serverFn' || url.pathname.startsWith('/api/') || request.method !== 'GET')
@@ -194,11 +209,25 @@ async function admit(tx: SqlClient, userId: string, address: string, zone: strin
  * sign-in makes the account and its workspace, in the same transaction as the session, so nothing is left half done.
  */
 export async function handleSignIn(request: Request): Promise<Response> {
+  const issued = await signInAttempt(request, 'handleSignIn')
+  if (issued instanceof Response) return issued
+  return Response.json({ ok: true }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, issued.token, issued.expiresAt) } })
+}
+
+/** The native app's sign-in: the same attempt, refusals and brakes; the token comes back in the body, never a cookie. */
+export async function handleAppSignIn(request: Request): Promise<Response> {
+  const issued = await signInAttempt(request, 'handleAppSignIn')
+  if (issued instanceof Response) return issued
+  return Response.json({ token: issued.token, expiresAt: issued.expiresAt.toISOString(), owner: issued.userId }, { headers: noStore })
+}
+
+/** The attempt behind both sign-ins: a refusal as its response, or the session made for the account. */
+async function signInAttempt(request: Request, handler: string): Promise<Response | { token: string; expiresAt: Date; userId: string }> {
   const body = signInBody.safeParse(await request.json().catch(() => null))
   if (!body.success) return refuse(401, 'wrong')
   const ipWait = ipWaitMs(clientIp(request))
   if (ipWait > 0) return tooMany(ipWait)
-  let issued: { token: string; expiresAt: Date } | undefined, refusal: 'unconfirmed' | 'not-invited' | undefined, attempt
+  let issued: { token: string; expiresAt: Date; userId: string } | undefined, refusal: 'unconfirmed' | 'not-invited' | undefined, attempt
   try {
     const config = authConfig()
     await Promise.all([workspaceStore().prepare(), accounts().prepare(), sessions().prepare()])
@@ -208,15 +237,29 @@ export async function handleSignIn(request: Request): Promise<Response> {
       // Known: an account row, or a workspace without one (the one migrated from shot 1 gets its account row now).
       const known = (await accounts().account(result.userId, tx)) ?? (await workspaceStore().workspaceOf(result.userId, tx))
       if (!known && !(await allowed(config, result.email, tx))) { refusal = 'not-invited'; return 'neutral' }
-      issued = await admit(tx, result.userId, result.email, zoneOf(body.data.timezone))
+      issued = { ...(await admit(tx, result.userId, result.email, zoneOf(body.data.timezone))), userId: result.userId }
       return 'ok'
     })
-  } catch (error) { return unavailable('handleSignIn', error) }
+  } catch (error) { return unavailable(handler, error) }
   if (attempt.waitMs > 0) return tooMany(attempt.waitMs)
   if (refusal === 'unconfirmed') return refuse(401, 'unconfirmed')
   if (refusal === 'not-invited') return refuse(403, 'not-invited')
   if (attempt.outcome !== 'ok' || !issued) return refuse(401, 'wrong')
-  return Response.json({ ok: true }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, issued.token, issued.expiresAt) } })
+  return issued
+}
+
+/** The app's sign-out: ends the bearer's session. The app has no cookie, so none is cleared. */
+export async function handleAppSignOut(request: Request): Promise<Response> {
+  await sessions().delete(tokenOf(request))
+  return Response.json({ ok: true }, { headers: noStore })
+}
+
+/** Who the app is signed in as; with sign-in off, the one local owner. */
+export async function handleAppAccount(request: Request): Promise<Response> {
+  if (!authRequired()) return Response.json({ owner: 'local', email: null, signIn: false }, { headers: noStore })
+  const session = await ownerSession(tokenOf(request))
+  if (!session) return Response.json({ error: 'signed-out' }, { status: 401, headers: noStore })
+  return Response.json({ owner: session.userId, email: session.email, signIn: true }, { headers: noStore })
 }
 
 /**

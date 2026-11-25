@@ -1,0 +1,65 @@
+# The native app (native/): the Swift packages' tests and the app's, against the shared cases in fixtures/core (made from
+# the TypeScript domain by scripts/export-core-fixtures.ts; ci.yml checks they are current). Every step is guarded by the
+# folder it needs, so this passes while native/ does not exist yet or holds only some of it.
+# If the image's newest Xcode cannot build for iOS 26, only the `swift test` steps can run until the image catches up.
+name: Native
+
+on:
+  pull_request:
+    paths: ['native/**', 'fixtures/**', '.github/workflows/native.yml']
+  push:
+    branches: [main]
+    paths: ['native/**', 'fixtures/**', '.github/workflows/native.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Select the newest Xcode on the image
+        run: |
+          newest=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest/Contents/Developer"; fi
+          xcodebuild -version
+      - name: swift test (DaythreadCore)
+        run: |
+          if [ -d native/Packages/DaythreadCore ]; then cd native/Packages/DaythreadCore && swift test; else echo "native/Packages/DaythreadCore does not exist yet"; fi
+      - name: swift test (DaythreadSync)
+        run: |
+          if [ -d native/Packages/DaythreadSync ]; then cd native/Packages/DaythreadSync && swift test; else echo "native/Packages/DaythreadSync does not exist yet"; fi
+      - name: swift test (DaythreadEditor)
+        run: |
+          if [ -d native/Packages/DaythreadEditor ]; then cd native/Packages/DaythreadEditor && swift test; else echo "native/Packages/DaythreadEditor does not exist yet"; fi
+      # The editor's UIKit suite (a row whose kind changes, and the drawn text) runs only on a simulator.
+      - name: xcodebuild test (DaythreadEditor, iOS Simulator)
+        run: |
+          if [ -d native/Packages/DaythreadEditor ]; then
+            cd native/Packages/DaythreadEditor
+            xcodebuild test -scheme DaythreadEditor -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest'
+          else echo "native/Packages/DaythreadEditor does not exist yet"; fi
+      # Only the unit tests hosted in the app: the UI tests need the Node servers that native/scripts/ui-test.sh starts.
+      # Signed for the simulator without a team (no CODE_SIGNING_ALLOWED=NO), so the host app keeps its entitlements and
+      # the Keychain tests can run.
+      - name: xcodebuild test (app unit tests, iOS Simulator)
+        run: |
+          if [ -d native/Daythread.xcodeproj ]; then
+            cd native
+            xcodebuild test -project Daythread.xcodeproj -scheme Daythread -only-testing:DaythreadTests \
+              -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest'
+          else echo "native/Daythread.xcodeproj does not exist yet"; fi
+      - name: xcodebuild build (Mac Catalyst)
+        run: |
+          if [ -d native/Daythread.xcodeproj ]; then
+            cd native
+            xcodebuild build -project Daythread.xcodeproj -scheme Daythread -destination 'platform=macOS,variant=Mac Catalyst' CODE_SIGNING_ALLOWED=NO
+          else echo "native/Daythread.xcodeproj does not exist yet"; fi

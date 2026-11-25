@@ -861,8 +861,10 @@ function addRows(state: Workspace, db: ReturnType<typeof databasePage>, rows: Ar
     state.pages.push(row);
   }
 }
+/** The local day of an ISO time in a zone: the rule behind every "today" the domain reads from a clock. */
+export const localDayIn = (timezone: string, at: string): string => new Date(at).toLocaleDateString("en-CA", { timeZone: timezone });
 /** The local day of an ISO time in the workspace's zone. */
-const localDay = (state: Workspace, at: string): string => new Date(at).toLocaleDateString("en-CA", { timeZone: state.timezone });
+const localDay = (state: Workspace, at: string): string => localDayIn(state.timezone, at);
 /** A4: what Restore on a page brings back: the page plus its descendants trashed in the same delete. */
 function restoreSetOf(state: Workspace, p: Page): Set<string> {
   const ids = new Set([p.id]);

@@ -34,6 +34,8 @@ jobs:
       - run: npm test
         env:
           FUTURE_DAYS_CONTRACT: '1'
+      - name: Core fixtures are up to date (the native app's cases)
+        run: node scripts/export-core-fixtures.ts --check
       - name: Build (the Mac app)
         run: npm run build
       - name: Build (Vercel output)
