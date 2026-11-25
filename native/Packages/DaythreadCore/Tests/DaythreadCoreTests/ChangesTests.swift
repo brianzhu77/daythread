@@ -54,6 +54,21 @@ import Testing
     }
   }
 
+  @Test func a_workspace_after_changes_equals_itself_read_back() throws {
+    for c in try Self.cases() where c.after != .null {
+      let before = try #require(Workspace(c.before))
+      let changes = try #require(WorkspaceChanges(c.changes))
+      let applied = try #require(before.applying(changes))
+      let readBack = try #require(Workspace(applied.json()))
+      #expect(readBack == applied, "\(c.name)")
+      #expect(readBack.hashValue == applied.hashValue, "\(c.name) hash")
+      #expect(applied != before, "\(c.name) differs from before")
+      #expect(applied.json().objectValue?["revision"]?.intValue == applied.revision, "\(c.name) revision")
+      let twin = try #require(Workspace(c.before))
+      #expect(twin.applying(changes) == applied, "\(c.name) twin")
+    }
+  }
+
   @Test func changes_made_from_another_revision_do_not_apply() throws {
     let file = try Self.fixture("task-ticked")
     var workspace = try #require(Workspace(file.before))
