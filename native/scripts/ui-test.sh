@@ -7,14 +7,30 @@
 # directories removed on exit, however the run ends, and so are the stores the UI tests made in the app's container.
 # Never uses port 3000 or .daythread-local/.
 #
+# The simulator is named, not numbered: "iPhone 17" on iOS 26.5, or DAYTHREAD_SIMULATOR_NAME and
+# DAYTHREAD_SIMULATOR_OS. Its UDID is looked up only to find the app's container when cleaning up.
+#
 #   native/scripts/ui-test.sh [extra xcodebuild arguments, e.g. -only-testing:DaythreadUITests]
 set -eu
 
 native=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(dirname "$native")
-simulator=0D25B4A2-E761-45AC-9857-5FBB3B90E2BE
+simulator_name=${DAYTHREAD_SIMULATOR_NAME:-iPhone 17}
+simulator_os=${DAYTHREAD_SIMULATOR_OS:-26.5}
+destination="platform=iOS Simulator,name=$simulator_name,OS=$simulator_os"
 today_port=3741
 sign_in_port=3742
+
+# The UDID of the named simulator on that iOS, from simctl; empty when there is none.
+simulator_udid() {
+  xcrun simctl list devices available -j | node --no-warnings --input-type=module -e "
+    let text = ''
+    for await (const chunk of process.stdin) text += chunk
+    const runtime = 'com.apple.CoreSimulator.SimRuntime.iOS-' + process.argv[1].replaceAll('.', '-')
+    const device = (JSON.parse(text).devices[runtime] ?? []).find(d => d.name === process.argv[2])
+    process.stdout.write(device?.udid ?? '')
+  " "$simulator_os" "$simulator_name"
+}
 
 for port in $today_port $sign_in_port; do
   if lsof -nP -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1; then
@@ -31,8 +47,18 @@ clean_up() {
   for pid in $pids; do kill "$pid" 2>/dev/null || true; done
   for pid in $pids; do wait "$pid" 2>/dev/null || true; done
   rm -rf "$work"
-  container=$(xcrun simctl get_app_container "$simulator" app.daythread.Daythread data 2>/dev/null || true)
-  if [ -n "$container" ]; then rm -f "$container/Library/Application Support/Daythread/test-"*; fi
+  udid=$(simulator_udid 2>/dev/null || true)
+  if [ -n "$udid" ]; then
+    # simctl finds the container only while the simulator runs, and xcodebuild may have shut it down: read the
+    # containers' metadata instead.
+    for container in "$HOME/Library/Developer/CoreSimulator/Devices/$udid/data/Containers/Data/Application/"*/; do
+      metadata="$container.com.apple.mobile_container_manager.metadata.plist"
+      [ -f "$metadata" ] || continue
+      if [ "$(plutil -extract MCMMetadataIdentifier raw "$metadata" 2>/dev/null)" = app.daythread.Daythread ]; then
+        rm -f "$container/Library/Application Support/Daythread/test-"*
+      fi
+    done
+  fi
   exit $status
 }
 trap clean_up EXIT
@@ -113,4 +139,4 @@ TEST_RUNNER_DAYTHREAD_SERVER_URL="http://127.0.0.1:$today_port" \
 TEST_RUNNER_DAYTHREAD_TODAY_TITLE="$title" \
 TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL="http://127.0.0.1:$sign_in_port" \
   xcodebuild test -project "$native/Daythread.xcodeproj" -scheme Daythread \
-  -destination "platform=iOS Simulator,id=$simulator" -derivedDataPath "$native/DerivedData" "$@"
+  -destination "$destination" -derivedDataPath "$native/DerivedData" "$@"

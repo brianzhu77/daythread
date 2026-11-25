@@ -9,9 +9,11 @@ import os
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
   private(set) lazy var model: AppModel = {
+    let server = Self.serverURL()
+    let origin = ServerOrigin(server)
     let engine = SyncEngine(
-      transport: URLSessionTransport(baseURL: Self.serverURL()), tokens: KeychainTokenStore(),
-      store: Self.openStore())
+      transport: URLSessionTransport(baseURL: server), tokens: KeychainTokenStore(service: origin.keychainService),
+      store: Self.openStore(origin))
     return AppModel(engine: engine)
   }()
 
@@ -26,13 +28,16 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
 
   private static let productionURL = URL(string: "https://daythread.dogrod.com")
 
-  /// `-DaythreadServerURL <url>` (UI tests), else the build's `DaythreadServerURL`. A URL that does not parse stops a
-  /// Debug build at launch; a Release build uses the production server, never another.
+  /// A Debug build: `-DaythreadServerURL <url>` (UI tests) when given, else the build's `DaythreadServerURL` from
+  /// `Info.plist`; a URL that does not parse stops it at launch. A Release build: always the `Info.plist` value, never
+  /// a launch argument, and the production server when that value does not parse.
   private static func serverURL() -> URL {
-    let arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
-    let text =
-      arguments["DaythreadServerURL"] as? String
-      ?? Bundle.main.object(forInfoDictionaryKey: "DaythreadServerURL") as? String
+    let infoValue = Bundle.main.object(forInfoDictionaryKey: "DaythreadServerURL") as? String
+    #if DEBUG
+      let text = launchArgument("DaythreadServerURL") ?? infoValue
+    #else
+      let text = infoValue
+    #endif
     if let text, let url = URL(string: text), ["http", "https"].contains(url.scheme), url.host() != nil {
       return url
     }
@@ -48,16 +53,23 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
 
   private static let storeLog = Logger(subsystem: "app.daythread.Daythread", category: "store")
 
-  /// `Application Support/Daythread/workspace.store`, or `<name>.store` with `-DaythreadStoreName <name>` (UI tests).
-  /// The folder is left out of backups and, on iPhone and iPad, readable once the device has been unlocked after a
-  /// restart. A store that cannot be opened is kept in memory for this launch, and the reason logged.
-  private static func openStore() -> any WorkspaceStore {
+  /// `Application Support/Daythread/workspace-<origin>.store` (see `ServerOrigin`); in a Debug build,
+  /// `<name>.store` with `-DaythreadStoreName <name>` (UI tests). The folder is left out of backups and, on iPhone and
+  /// iPad, readable once the device has been unlocked after a restart. A store that cannot be opened is kept in memory
+  /// for this launch, and the reason logged.
+  private static func openStore(_ origin: ServerOrigin) -> any WorkspaceStore {
     do {
       let folder = try FileManager.default.url(
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).appending(path: "Daythread", directoryHint: .isDirectory)
       try prepare(folder)
-      return try SwiftDataWorkspaceStore.open(at: folder.appending(path: "\(storeName()).store"))
+      #if DEBUG
+        let explicitName = launchArgument("DaythreadStoreName")
+      #else
+        let explicitName: String? = nil
+      #endif
+      let file = storeFileName(for: origin, explicitName: explicitName)
+      return try SwiftDataWorkspaceStore.open(at: folder.appending(path: file))
     } catch {
       storeLog.error("The store on the device could not be opened; this launch keeps it in memory: \(error)")
       return MemoryWorkspaceStore()
@@ -76,12 +88,15 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     #endif
   }
 
-  /// A plain file name only; anything else is the default.
-  private static func storeName() -> String {
-    let arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
-    guard let name = arguments["DaythreadStoreName"] as? String,
+  /// `<explicitName>.store` when the name is a plain file name, else the origin's own store.
+  nonisolated static func storeFileName(for origin: ServerOrigin, explicitName: String?) -> String {
+    guard let name = explicitName,
       !name.isEmpty, name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") })
-    else { return "workspace" }
-    return name
+    else { return origin.storeFileName }
+    return "\(name).store"
+  }
+
+  private static func launchArgument(_ name: String) -> String? {
+    UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)[name] as? String
   }
 }

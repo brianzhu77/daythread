@@ -8,6 +8,29 @@
   @MainActor
   final class TodayViewController: UIViewController {
     static let offlineLine = "Offline · showing what was last loaded"
+    static let failedLine = "Couldn't update · showing what was last loaded"
+
+    /// What the prompt says over the copy: offline first, then a pass that failed otherwise.
+    static func prompt(for state: SyncState) -> String? {
+      if state.offline { return offlineLine }
+      if state.failure != nil { return failedLine }
+      return nil
+    }
+
+    enum AccountRow: Equatable {
+      case roundTrip(failing: Int, total: Int)
+      case address(String)
+      case signOut
+    }
+
+    /// The account menu's rows; "Sign out" only while a session is stored. No rows, no account button.
+    static func accountRows(state: SyncState, address: String?, roundTrip: AppModel.RoundTrip?) -> [AccountRow] {
+      var rows: [AccountRow] = []
+      if let roundTrip { rows.append(.roundTrip(failing: roundTrip.failing, total: roundTrip.total)) }
+      if let address { rows.append(.address(address)) }
+      if state.signedIn { rows.append(.signOut) }
+      return rows
+    }
 
     private let model: AppModel
     private let document = DocumentViewController()
@@ -27,7 +50,6 @@
       view.backgroundColor = .systemBackground
       navigationItem.largeTitleDisplayMode = .always
       accountButton.accessibilityLabel = "Account"
-      navigationItem.rightBarButtonItem = accountButton
 
       addChild(document)
       document.view.frame = view.bounds
@@ -40,45 +62,40 @@
       }
       refreshControl.addTarget(self, action: #selector(pulled), for: .valueChanged)
 
-      let center = NotificationCenter.default
-      center.addObserver(
+      NotificationCenter.default.addObserver(
         self, selector: #selector(dayMayHaveChanged), name: UIApplication.significantTimeChangeNotification, object: nil)
-      center.addObserver(self, selector: #selector(sceneBecameActive), name: UIScene.didActivateNotification, object: nil)
     }
 
     /// UIKit calls this again whenever what it reads from `model` changes.
     override func updateProperties() {
       super.updateProperties()
       let state = model.state
-      let workspace = state?.workspace
+      let workspace = state.workspace
       let today = LocalDate.today(in: workspace?.timezone ?? TimeZone.current.identifier, at: Date())
       title = DayTitle.text(for: today)
-      navigationItem.prompt = state?.offline == true ? Self.offlineLine : nil
+      navigationItem.prompt = Self.prompt(for: state)
       if let workspace {
         // Until the engine has made today's page, an empty one stands in for it.
         if let page = workspace.dayPage(today) ?? Self.emptyPage(on: today) {
           document.show(page: page, in: workspace)
         }
       }
-      accountButton.menu = accountMenu()
+      let rows = Self.accountRows(state: state, address: model.address, roundTrip: model.roundTrip)
+      accountButton.menu = UIMenu(children: rows.map(menuElement))
+      navigationItem.rightBarButtonItem = rows.isEmpty ? nil : accountButton
     }
 
-    private func accountMenu() -> UIMenu {
-      var rows: [UIMenuElement] = []
-      if let roundTrip = model.roundTrip {
-        rows.append(
-          UIAction(title: "Round trip · \(roundTrip.failing) of \(roundTrip.total) pages fail", attributes: .disabled) {
-            _ in
-          })
-      }
-      if let address = model.address {
-        rows.append(UIAction(title: address, attributes: .disabled) { _ in })
-      }
-      rows.append(
-        UIAction(title: "Sign out", image: nil, attributes: .destructive) { [model] _ in
+    private func menuElement(_ row: AccountRow) -> UIMenuElement {
+      switch row {
+      case .roundTrip(let failing, let total):
+        UIAction(title: "Round trip · \(failing) of \(total) pages fail", attributes: .disabled) { _ in }
+      case .address(let address):
+        UIAction(title: address, attributes: .disabled) { _ in }
+      case .signOut:
+        UIAction(title: "Sign out", attributes: .destructive) { [model] _ in
           Task { await model.signOut() }
-        })
-      return UIMenu(children: rows)
+        }
+      }
     }
 
     private static func emptyPage(on date: LocalDate) -> Page? {
@@ -100,11 +117,6 @@
 
     @objc private func dayMayHaveChanged() {
       setNeedsUpdateProperties()
-      Task { await model.refresh() }
-    }
-
-    @objc private func sceneBecameActive(_ notification: Notification) {
-      guard let scene = notification.object as? UIScene, scene === view.window?.windowScene else { return }
       Task { await model.refresh() }
     }
   }

@@ -27,8 +27,9 @@ public enum SignInFailure: Equatable, Sendable {
 @MainActor
 @Observable
 public final class AppModel {
-  /// Nil only until the engine's first state arrives, which it sends as soon as it is asked.
-  public private(set) var state: SyncState?
+  /// The engine's latest state; until its first arrives (it sends one as soon as it is asked), the state of an engine
+  /// that has not started.
+  public private(set) var state = SyncState()
   /// The address that signed in on this launch; the engine does not publish one.
   private(set) var address: String?
   /// Pages whose document does not write back byte for byte (Debug builds only); nil when every page does.

@@ -8,7 +8,8 @@ public struct KeychainError: Error, Equatable, Sendable {
 }
 
 /// Keeps the session as JSON in one generic-password Keychain item, readable once the device has been unlocked
-/// after a restart (so a background refresh can use it).
+/// after a restart (so a background refresh can use it), and on this device only: it travels in no backup and no
+/// migration to another device.
 public final class KeychainTokenStore: TokenStore {
   static let account = "session"
   let service: String
@@ -43,12 +44,16 @@ public final class KeychainTokenStore: TokenStore {
 
   public func write(_ session: Session) throws {
     let data = Data(JSON.write(session.json()).utf8)
-    let update = SecItemUpdate(identity as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+    // The accessibility is written on an update too, so an item kept under an older rule moves to this one.
+    let changes: [String: Any] = [
+      kSecValueData as String: data, kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+    ]
+    let update = SecItemUpdate(identity as CFDictionary, changes as CFDictionary)
     if update == errSecSuccess { return }
     guard update == errSecItemNotFound else { throw KeychainError(status: update) }
     var item = identity
     item[kSecValueData as String] = data
-    item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+    item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
     let add = SecItemAdd(item as CFDictionary, nil)
     guard add == errSecSuccess else { throw KeychainError(status: add) }
   }

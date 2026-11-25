@@ -26,8 +26,8 @@ session yet; that waits for a team.
 ## Run against a local server
 
 The server is the build setting `DAYTHREAD_SERVER_URL`, written into `Info.plist` as `DaythreadServerURL`: Debug
-`http://127.0.0.1:3000` (`npm run dev`, sign-in off), Release `https://daythread.dogrod.com`. A launch argument
-overrides it, and another picks the store file:
+`http://127.0.0.1:3000` (`npm run dev`, sign-in off), Release `https://daythread.dogrod.com`. In a Debug build only, a
+launch argument overrides it and another picks the store file; a Release build always uses the `Info.plist` value:
 
 ```sh
 xcrun simctl launch <simulator> app.daythread.Daythread \
@@ -55,16 +55,38 @@ Rules for a shared machine:
 
 - Port 3000 and `.daythread-local/` belong to the server you use day to day: tests never start anything on 3000,
   never point the app at it, and never read that directory.
-- One simulator: `iPhone 17`, iOS 26.5 (`0D25B4A2-E761-45AC-9857-5FBB3B90E2BE`), set in the wrapper. Leave the other
-  simulators alone; put its appearance and text size back if you change them.
+- One simulator: `iPhone 17`, iOS 26.5, named in the wrapper (`DAYTHREAD_SIMULATOR_NAME` and
+  `DAYTHREAD_SIMULATOR_OS` override it). Leave the other simulators alone; put its appearance and text size back if you
+  change them.
 - Build output goes to `native/DerivedData` (ignored).
 
 ## On the device
 
-- The store: `Application Support/Daythread/workspace.store` (or `<name>.store` with `-DaythreadStoreName`), left out
-  of backups, and on iPhone and iPad readable once the device has been unlocked after a restart. In the simulator:
-  `xcrun simctl get_app_container <simulator> app.daythread.Daythread data`, then `Library/Application Support/Daythread`.
-- The session: one Keychain item, service `app.daythread.Daythread`.
+The server's origin (scheme, host and port) is part of who you are signed in to: the store and the session are named
+after it, so a build pointed at one server and later at another keeps two copies and two sessions, and never sends one
+server's token to the other. The origin's slug is the origin lower-cased with every character outside `[a-z0-9.-]`
+replaced by `-` (`https://daythread.dogrod.com` is `https---daythread.dogrod.com`).
+
+- The store: `Application Support/Daythread/workspace-<slug>.store` (in a Debug build, `<name>.store` with
+  `-DaythreadStoreName`), left out of backups, and on iPhone and iPad readable once the device has been unlocked after
+  a restart. In the simulator: `xcrun simctl get_app_container <simulator> app.daythread.Daythread data`, then
+  `Library/Application Support/Daythread`.
+- The session: one Keychain item, service `app.daythread.Daythread.<slug>`, readable once the device has been unlocked
+  after a restart, and on this device only (no backup, no migration).
+
+## When a load fails
+
+With nothing on the device to show, a failed load shows "Couldn't load" and a "Retry" button; with a copy shown, the
+prompt reads "Offline · showing what was last loaded" or, for any other failure, "Couldn't update · showing what was
+last loaded". The app refreshes whenever it becomes active. The sync engine logs each pass, each failure (its case and
+status), each outbox outcome (operation id and outcome) and each sign-in and sign-out under subsystem
+`app.daythread.Daythread`, category `sync`, never a token, a title or a document's text; a workspace that does not
+read is logged with the row and field that failed:
+
+```sh
+xcrun simctl spawn <simulator> log show --last 1h --info \
+  --predicate 'subsystem == "app.daythread.Daythread" AND category == "sync"'
+```
 
 ## The audit
 
@@ -77,3 +99,6 @@ xcrun simctl spawn <simulator> log show --last 1h --info \
 ```
 
 When any page fails, the account menu gains a first row, "Round trip · N of M pages fail".
+
+The account menu offers "Sign out" only while a session is stored (never against a server with sign-in off); with
+nothing to put in it, the account button is not shown.
