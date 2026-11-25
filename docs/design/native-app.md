@@ -1,6 +1,6 @@
 # The native app: architecture and order
 
-- Author: Claude · 2026-11-25 · status: **approved by Brian 2026-11-25 ("LGTM. let's do it"). Phase 0 is built except the install on his phone (`docs/plan/native-phase-0.md`).**
+- Author: Claude · 2026-11-25 · status: **approved by Brian 2026-11-25 ("LGTM. let's do it"). Phase 0 is built, merged and checked on his data on the simulator; the install on his phone is deferred (`docs/plan/native-phase-0.md`).**
 - Asked by Brian (2026-11-25): make Daythread native first. His words, in order:
   - "交互采用原生组件作为基础，如果有冲突的部分，以原生为主" (native components are the base; where there is a conflict,
     native wins).

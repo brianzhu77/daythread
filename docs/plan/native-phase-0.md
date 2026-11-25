@@ -12,7 +12,7 @@ functions the web app already calls. The app is four Swift packages (`DaythreadC
 there, and sends changes through an outbox that follows `docs/design/outbox.md`. Shared JSON test cases, written by a
 script from the TypeScript domain, hold the Swift core to the server's rules.
 
-**Status (2026-11-25):** Tasks 1 to 11 built and reviewed; Task 12 steps 1 and 2 written; step 3 (his phone, his data) waits for his Apple Developer team id.
+**Status (2026-11-25):** Tasks 1 to 11 built, reviewed, merged (#234) and deployed. Task 12 steps 1 and 2 written; step 3 was run on the simulator on his data instead of his phone (Brian, 2026-11-25: "let's defer the install part. test on the simulator"), results under Task 12. The install on his phone, with Airplane Mode, is still to do.
 
 **Tech Stack:** Server: the existing TanStack Start, zod, `node --test`. App: Swift 6 language mode, UIKit, SwiftUI
 (sign-in form only), SwiftData, URLSession, Security, Network, Observation, Swift Testing, XCTest. No third-party
@@ -733,6 +733,22 @@ Needs from Brian: his Apple Developer team id, set as the target's team (design 
   Task 5, fixed with its document's shape added to the script in Task 4 before phase 1 starts.
 - [ ] **Step 4: Commit** `docs(native): phase 0 results, the parity list and the app's design notes`.
 
+**Results on the simulator (2026-11-25, iPhone 17, iOS 26.5, a Debug build pointed at production; Brian signed in
+himself):**
+
+- Today shows his day: the title, his headings, quotes, to-dos and Chinese text, at revision 1522. Every row of his
+  workspace reads (88 pages); the sync log names none.
+- The audit first said "26 of 88 pages fail". All 26 were his days' drafts: hidden pages of `type: "draft"` whose
+  `document` is the draft's own object (`DayDraft` in `src/domain/day-draft.ts`), not an array of blocks. The reader
+  was right and the audit was wrong to hold them to being blocks. Fixed: a draft is held to writing back byte for
+  byte as the object it is (`Audit`, `Page.isDraft`). After the fix: "0 of 88 pages fail", all 62 block documents
+  and all 26 drafts.
+- On a relaunch the copy on the device is on screen before the server answers (the audit of the stored copy is
+  logged 1.7 s before the first "Pass done").
+- Not run: the relaunch with no network. The simulator shares the Mac's network, and the app has no switch for it
+  (rightly). The offline line is covered by the UI tests against a stopped server; on his data it waits for the
+  phone.
+
 ## Order and independence
 
 - Tasks 1 to 3 are one PR to the server and deploy on merge; they change nothing the web app does. Task 4 is its
@@ -753,6 +769,8 @@ the point at which it has to be settled. Nothing on this list is needed for phas
 - A block key the app adds lands after `children`; the web's order is id, type, props, content, children.
 
 **Before the app can make an edit**
+- A day's draft is a page whose `document` is an object. Anything that walks pages as documents (a page list,
+  search, the day draft itself) must leave drafts out with `Page.isDraft`, as the server does with `isDraft`.
 - Sign-out with unsent changes erases them without draining or warning.
 - A copy without its session is hidden and kept. With an empty outbox there is nothing to protect, and erasing on
   a definite signed-out answer would suit a shared device better.
@@ -786,4 +804,6 @@ the point at which it has to be settled. Nothing on this list is needed for phas
   page view's simulator suite, the app's unit tests, the Mac Catalyst build).
 - Production with the new routes: after the deploy, a cookie alone on `/api/v1/account` must get 401, a foreign
   `Origin` on a v1 write 403, and a v1 write without `Content-Type: application/json` 415.
-- Whether every row of Brian's real workspace reads: Task 12. A row that does not is named in the sync log.
+- Whether every row of Brian's real workspace reads: it does (Task 12's results).
+- A launch runs two passes one after the other, and a launch with no session logs "Pass failed: signed-out" at
+  error level, twice. Neither is wrong on screen; both are noise to remove with phase 1's engine work.

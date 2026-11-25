@@ -36,6 +36,10 @@ public struct Page: Hashable, Sendable, Identifiable {
   /// Everything the server sent, for fields later phases read.
   public let raw: JSONObject
 
+  /// A day's draft (`isDraft` in `src/domain/day-draft.ts`): a hidden page under its day page, whose
+  /// `document` is the draft's own object, never an array of blocks.
+  public var isDraft: Bool { type == "draft" }
+
   /// Nil when `id`, `type`, `title` or `document` is not a string, or when `date`, `parentId` or
   /// `trashedAt` is present, not null and not a string (a date, for `date`).
   public init?(_ json: JSONValue) {
