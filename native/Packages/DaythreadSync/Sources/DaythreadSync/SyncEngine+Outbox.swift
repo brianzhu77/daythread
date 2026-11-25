@@ -20,9 +20,16 @@ extension SyncEngine {
       // Every send states the entry's own basis; `readsBeyond` is stated conservatively until a command's reads are
       // ported (design, outbox §5 and §6).
       let basis = OutboxBasis(baseRevision: entry.baseRevision, ownRevisions: entry.ownRevisions, readsBeyond: true)
-      let outcome = try await transport.send(
-        token: pass.session?.token, operationId: entry.operationId, action: entry.action,
-        expectedOwner: entry.owner, basis: basis)
+      let outcome: CommandOutcome
+      do {
+        outcome = try await transport.send(
+          token: pass.session?.token, operationId: entry.operationId, action: entry.action,
+          expectedOwner: entry.owner, basis: basis)
+      } catch TransportError.refused(status: 400, reason: _) {
+        // The server will never accept this body: retrying it would block every entry behind it.
+        try await hold(entry, reason: "bad-request", pass)
+        continue
+      }
       switch try await settle(outcome, of: entry, pass) {
       case .send:
         continue
@@ -41,6 +48,21 @@ extension SyncEngine {
     }
   }
 
+  /// Holds `entry` for him, as the server's `held` outcome would.
+  private func hold(_ entry: OutboxEntry, reason: String, _ pass: Pass) async throws {
+    try await enter(pass)
+    defer { release() }
+    offline = false
+    failure = nil
+    SyncLog.logger.notice("Outbox \(entry.operationId, privacy: .public): \(reason, privacy: .public), held")
+    var kept = entry
+    kept.state = .held
+    kept.reason = reason
+    try await store.update(kept)
+    held = await heldCount()
+    publish()
+  }
+
   private func nextPending(_ pass: Pass) async throws -> OutboxEntry? {
     try await enter(pass)
     defer { release() }
@@ -51,6 +73,8 @@ extension SyncEngine {
     try await enter(pass)
     defer { release() }
     offline = false
+    failure = nil
+    SyncLog.logger.info("Outbox \(entry.operationId, privacy: .public): \(outcome.kind, privacy: .public)")
     // A reply under another owner than the copy's is never applied to it.
     guard let copy, outcome.owner == copy.owner else {
       publish()
@@ -100,6 +124,12 @@ extension SyncEngine {
   /// that refuses is asked again after the next load. Runs inside a store section.
   func ensureToday() async {
     guard let copy else { return }
+    // `today` would read an unknown zone as GMT, and ask for another day than the account's.
+    guard LocalDate.isKnown(timezone: copy.workspace.timezone) else {
+      SyncLog.logger.error(
+        "The workspace's time zone is not one this device knows; no day page is asked for: \(copy.workspace.timezone, privacy: .public)")
+      return
+    }
     let today = LocalDate.today(in: copy.workspace.timezone, at: now())
     guard copy.workspace.dayPage(today) == nil, let entries = try? await store.entries() else { return }
     let asked = entries.contains { entry in
@@ -113,6 +143,17 @@ extension SyncEngine {
 }
 
 extension CommandOutcome {
+  /// The outcome's name, for the log: never its message, rows or changes.
+  fileprivate var kind: String {
+    switch self {
+    case .applied: "applied"
+    case .held: "held"
+    case .alreadyApplied: "already-applied"
+    case .refused: "refused"
+    case .ownerMismatch: "owner-mismatch"
+    }
+  }
+
   /// The account the server answered as.
   fileprivate var owner: String {
     switch self {

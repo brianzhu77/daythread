@@ -39,6 +39,11 @@ public struct LocalDate: Hashable, Comparable, Sendable {
     return LocalDate(unchecked: text)
   }
 
+  /// Whether the system knows `timezone`; `today` reads one it does not know as GMT.
+  public static func isKnown(timezone: String) -> Bool {
+    TimeZone(identifier: timezone) != nil
+  }
+
   private init(unchecked value: String) { self.value = value }
 
   private static func pad(_ number: Int, _ width: Int) -> String {

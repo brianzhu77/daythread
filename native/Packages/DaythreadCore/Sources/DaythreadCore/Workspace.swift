@@ -1,22 +1,25 @@
-/// A field was present but not what the record needs.
-private struct Unreadable: Error {}
+/// The field that kept a record from reading: absent where it is required, or not what the record needs. Nil for a
+/// record that is not an object at all.
+private struct Unreadable: Error {
+  let field: String?
+}
 
 extension JSONObject {
   /// A string, or nil when the key is absent or null. Anything else is unreadable.
-  fileprivate func optionalString(_ key: String) throws -> String? {
+  fileprivate func optionalString(_ key: String) throws(Unreadable) -> String? {
     guard let value = self[key], value != .null else { return nil }
-    guard let text = value.stringValue else { throw Unreadable() }
+    guard let text = value.stringValue else { throw Unreadable(field: key) }
     return text
   }
 
-  fileprivate func requiredString(_ key: String) throws -> String {
-    guard let text = self[key]?.stringValue else { throw Unreadable() }
+  fileprivate func requiredString(_ key: String) throws(Unreadable) -> String {
+    guard let text = self[key]?.stringValue else { throw Unreadable(field: key) }
     return text
   }
 
-  fileprivate func optionalDate(_ key: String) throws -> LocalDate? {
+  fileprivate func optionalDate(_ key: String) throws(Unreadable) -> LocalDate? {
     guard let text = try optionalString(key) else { return nil }
-    guard let date = LocalDate(text) else { throw Unreadable() }
+    guard let date = LocalDate(text) else { throw Unreadable(field: key) }
     return date
   }
 }
@@ -36,16 +39,18 @@ public struct Page: Hashable, Sendable, Identifiable {
   /// Nil when `id`, `type`, `title` or `document` is not a string, or when `date`, `parentId` or
   /// `trashedAt` is present, not null and not a string (a date, for `date`).
   public init?(_ json: JSONValue) {
-    guard let raw = json.objectValue else { return nil }
-    do {
-      id = try raw.requiredString("id")
-      type = try raw.requiredString("type")
-      title = try raw.requiredString("title")
-      document = try raw.requiredString("document")
-      date = try raw.optionalDate("date")
-      parentId = try raw.optionalString("parentId")
-      trashedAt = try raw.optionalString("trashedAt")
-    } catch { return nil }
+    try? self.init(reading: json)
+  }
+
+  fileprivate init(reading json: JSONValue) throws(Unreadable) {
+    guard let raw = json.objectValue else { throw Unreadable(field: nil) }
+    id = try raw.requiredString("id")
+    type = try raw.requiredString("type")
+    title = try raw.requiredString("title")
+    document = try raw.requiredString("document")
+    date = try raw.optionalDate("date")
+    parentId = try raw.optionalString("parentId")
+    trashedAt = try raw.optionalString("trashedAt")
     self.raw = raw
   }
 }
@@ -65,16 +70,19 @@ public struct TodoTask: Hashable, Sendable, Identifiable {
   /// Nil when `id` or `title` is not a string, `status` is not one of open, done and cancelled,
   /// `paused` is not a boolean, or a date is present, not null and not a date.
   public init?(_ json: JSONValue) {
-    guard let raw = json.objectValue, let paused = raw["paused"]?.boolValue else { return nil }
-    do {
-      id = try raw.requiredString("id")
-      title = try raw.requiredString("title")
-      guard let status = Status(rawValue: try raw.requiredString("status")) else { throw Unreadable() }
-      self.status = status
-      deadlineOn = try raw.optionalDate("deadlineOn")
-      attentionOn = try raw.optionalDate("attentionOn")
-    } catch { return nil }
+    try? self.init(reading: json)
+  }
+
+  fileprivate init(reading json: JSONValue) throws(Unreadable) {
+    guard let raw = json.objectValue else { throw Unreadable(field: nil) }
+    id = try raw.requiredString("id")
+    title = try raw.requiredString("title")
+    guard let status = Status(rawValue: try raw.requiredString("status")) else { throw Unreadable(field: "status") }
+    self.status = status
+    guard let paused = raw["paused"]?.boolValue else { throw Unreadable(field: "paused") }
     self.paused = paused
+    deadlineOn = try raw.optionalDate("deadlineOn")
+    attentionOn = try raw.optionalDate("attentionOn")
     self.raw = raw
   }
 }
@@ -107,24 +115,59 @@ public struct Workspace: Hashable, Sendable {
   /// Nil when `revision` is not an integer, `timezone` not a string, `pages` or `tasks` not arrays,
   /// or any page or task in them is unreadable. Rows are never dropped quietly.
   public init?(_ json: JSONValue) {
-    guard
-      let raw = json.objectValue, let revision = raw["revision"]?.intValue,
-      let timezone = raw["timezone"]?.stringValue,
-      let pageValues = raw["pages"]?.arrayValue, let taskValues = raw["tasks"]?.arrayValue
-    else { return nil }
+    guard case .success(let workspace) = Self.read(json) else { return nil }
+    self = workspace
+  }
+
+  /// Why `init?` refuses `json`, or nil when it reads: the first field that fails, at the top level
+  /// (`workspace: revision`), or in a row, named by its kind, its index in its array and its id when the id reads
+  /// (`page 12 (id day:2026-10-22): date`, `task 3: id`). It never holds a title or any document text, so it can be
+  /// logged.
+  public static func unreadableReason(_ json: JSONValue) -> String? {
+    guard case .failure(let reason) = read(json) else { return nil }
+    return reason.text
+  }
+
+  private struct Reason: Error {
+    let text: String
+
+    init(text: String) { self.text = text }
+
+    init(row kind: String, index: Int, _ value: JSONValue, _ error: Unreadable) {
+      var text = "\(kind) \(index)"
+      if let id = value.objectValue?["id"]?.stringValue { text += " (id \(id))" }
+      text += ": \(error.field ?? "not an object")"
+      self.text = text
+    }
+  }
+
+  /// The one reading `init?` and `unreadableReason` share, so the two can never disagree.
+  private static func read(_ json: JSONValue) -> Result<Workspace, Reason> {
+    guard let raw = json.objectValue else { return .failure(Reason(text: "workspace: not an object")) }
+    func top(_ field: String) -> Result<Workspace, Reason> { .failure(Reason(text: "workspace: \(field)")) }
+    guard let revision = raw["revision"]?.intValue else { return top("revision") }
+    guard let timezone = raw["timezone"]?.stringValue else { return top("timezone") }
+    guard let pageValues = raw["pages"]?.arrayValue else { return top("pages") }
+    guard let taskValues = raw["tasks"]?.arrayValue else { return top("tasks") }
     var pages: [Page] = []
     pages.reserveCapacity(pageValues.count)
-    for value in pageValues {
-      guard let page = Page(value) else { return nil }
-      pages.append(page)
+    for (index, value) in pageValues.enumerated() {
+      do throws(Unreadable) {
+        pages.append(try Page(reading: value))
+      } catch {
+        return .failure(Reason(row: "page", index: index, value, error))
+      }
     }
     var tasks: [TodoTask] = []
     tasks.reserveCapacity(taskValues.count)
-    for value in taskValues {
-      guard let task = TodoTask(value) else { return nil }
-      tasks.append(task)
+    for (index, value) in taskValues.enumerated() {
+      do throws(Unreadable) {
+        tasks.append(try TodoTask(reading: value))
+      } catch {
+        return .failure(Reason(row: "task", index: index, value, error))
+      }
     }
-    self.init(raw: raw, revision: revision, timezone: timezone, pages: pages, tasks: tasks)
+    return .success(Workspace(raw: raw, revision: revision, timezone: timezone, pages: pages, tasks: tasks))
   }
 
   init(raw: JSONObject, revision: Int, timezone: String, pages: [Page], tasks: [TodoTask]) {

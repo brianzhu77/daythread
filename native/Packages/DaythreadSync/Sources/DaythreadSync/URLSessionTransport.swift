@@ -65,7 +65,13 @@ public struct URLSessionTransport: ServerTransport {
       guard let revision = object["revision"]?.intValue else { throw TransportError.unreadable }
       return .unchanged(revision: revision, owner: owner)
     }
-    guard let json = object["workspace"], let workspace = Workspace(json) else {
+    guard let json = object["workspace"] else {
+      SyncLog.logger.error("The workspace reply has no workspace")
+      throw TransportError.unreadable
+    }
+    guard let workspace = Workspace(json) else {
+      let reason = Workspace.unreadableReason(json) ?? "unknown"
+      SyncLog.logger.error("The workspace did not read: \(reason, privacy: .public)")
       throw TransportError.unreadable
     }
     return .full(workspace, owner: owner)

@@ -13,8 +13,45 @@ public struct SyncState: Sendable, Equatable {
   public var offline: Bool
   /// Outbox entries the server held or refused, waiting for him.
   public var held: Int
+  /// Why the last pass ended early, when the reason was neither lack of network (`offline`) nor a session the server
+  /// no longer knows; nil again once the server answers.
+  public var failure: SyncFailure?
+  /// A session is stored on the device: there is someone to sign out.
+  public var signedIn: Bool
 
-  static let initial = SyncState(phase: .starting, workspace: nil, offline: false, held: 0)
+  public init(
+    phase: Phase = .starting, workspace: Workspace? = nil, offline: Bool = false, held: Int = 0,
+    failure: SyncFailure? = nil, signedIn: Bool = false
+  ) {
+    self.phase = phase
+    self.workspace = workspace
+    self.offline = offline
+    self.held = held
+    self.failure = failure
+    self.signedIn = signedIn
+  }
+
+  static let initial = SyncState()
+}
+
+/// Why a pass ended early, as far as the screens tell it apart.
+public enum SyncFailure: Sendable, Equatable {
+  /// The request failed below HTTP, other than for lack of network.
+  case unreachable
+  /// The server answered with an error, asked to wait, or refused the request.
+  case server
+  /// The server answered with something this client cannot read.
+  case unreadable
+
+  /// Nil for lack of network and for a session the server no longer knows: the state says those its own way.
+  init?(_ error: any Error) {
+    switch error as? TransportError {
+    case .offline?, .signedOut?: return nil
+    case .server?, .wait?, .refused?: self = .server
+    case .unreadable?: self = .unreadable
+    case nil: self = .unreachable
+    }
+  }
 }
 
 /// Hands each reader its own stream: the current state at once, then every change. A reader that stops is forgotten.

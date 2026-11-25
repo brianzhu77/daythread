@@ -27,6 +27,9 @@ public actor SyncEngine {
   var phase: SyncState.Phase = .starting
   var offline = false
   var held = 0
+  var failure: SyncFailure?
+  /// Whether a session is stored, as last read or written.
+  private var signedIn = false
   /// What the store keeps, read once and then kept in step with every store call this engine makes.
   var copy: (workspace: Workspace, owner: String)?
   private var copyRead = false
@@ -41,7 +44,8 @@ public actor SyncEngine {
   private var finished = 0
   private var loadWanted = false
   var epoch = 0
-  /// Sign-ins completed, so a sign-out can tell that a newer sign-in happened while it waited for the server.
+  /// Sign-ins completed (their session kept), so a sign-out can tell that a newer sign-in happened while it waited for
+  /// the server. A sign-in that fails does not count: the sign-out still erases.
   private var signIns = 0
 
   // MARK: Store sections
@@ -82,6 +86,7 @@ public actor SyncEngine {
   public func start() async {
     await acquire()
     await readCopyIfNeeded()
+    signedIn = (try? tokens.read()) != nil
     var hidden = false
     if let copy, case .success(nil) = readSession(), copy.owner != Self.localOwner {
       hidden = true
@@ -124,7 +129,6 @@ public actor SyncEngine {
     let session = try await transport.signIn(email: email, password: password, timezone: timezone)
     await acquire()
     epoch += 1
-    signIns += 1
     running?.cancel()
     do {
       await readCopyIfNeeded()
@@ -136,16 +140,23 @@ public actor SyncEngine {
       }
       try tokens.write(session)
     } catch {
+      SyncLog.logger.error("Sign-in could not be kept on the device: \(SyncLog.describe(error), privacy: .public)")
       try? tokens.clear()
       phase = .signedOut
+      signedIn = false
+      failure = nil
       copyShown = false
       held = 0
       publish()
       release()
       throw error
     }
+    signIns += 1
+    SyncLog.logger.notice("Signed in")
     phase = .ready
+    signedIn = true
     offline = false
+    failure = nil
     copyShown = copy != nil
     held = await heldCount()
     publish()
@@ -179,15 +190,23 @@ public actor SyncEngine {
 
     await acquire()
     defer { release() }
-    guard signIns == signInsBefore else { return }
+    guard signIns == signInsBefore else {
+      SyncLog.logger.notice("Sign-out superseded by a sign-in that completed meanwhile")
+      return
+    }
     epoch += 1
     running?.cancel()
-    if (try? await store.erase()) == nil { try? await store.erase() }
+    var erased = (try? await store.erase()) != nil
+    if !erased { erased = (try? await store.erase()) != nil }
     try? tokens.clear()
+    let told = reachedServer.map { $0 ? "told" : "offline" } ?? "not told"
+    SyncLog.logger.notice("Signed out; server \(told, privacy: .public); copy erased: \(erased, privacy: .public)")
     copy = nil
     copyRead = true
     copyShown = false
     phase = .signedOut
+    signedIn = false
+    failure = nil
     held = 0
     if let reachedServer { offline = !reachedServer }
     publish()
@@ -241,6 +260,8 @@ public actor SyncEngine {
       try await enter(pass)
       defer { release() }
       held = await heldCount()
+      SyncLog.logger.info(
+        "Pass done: revision \(self.copy?.workspace.revision ?? -1, privacy: .public), held \(self.held, privacy: .public)")
       publish()
     } catch {
       await end(pass, after: error)
@@ -251,25 +272,35 @@ public actor SyncEngine {
     await acquire()
     defer { release() }
     await readCopyIfNeeded()
-    return Pass(epoch: epoch, session: try? tokens.read())
+    let session = try? tokens.read()
+    signedIn = session != nil
+    return Pass(epoch: epoch, session: session)
   }
 
-  /// Keeps everything on a failure. Only lack of network sets `offline`; a session the server no longer knows is
-  /// cleared and sign-in is shown, with the copy and the outbox kept for the next sign-in to claim or erase.
+  /// Keeps everything on a failure. Lack of network sets `offline`; a session the server no longer knows is cleared
+  /// and sign-in is shown, with the copy and the outbox kept for the next sign-in to claim or erase; any other reason
+  /// is kept in `failure` until the server next answers.
   private func end(_ pass: Pass, after error: any Error) async {
-    if error is CancellationError || error is Superseded { return }
+    if error is CancellationError || error is Superseded {
+      SyncLog.logger.info("Pass dropped: \(SyncLog.describe(error), privacy: .public)")
+      return
+    }
+    SyncLog.logger.error("Pass failed: \(SyncLog.describe(error), privacy: .public)")
     guard (try? await enter(pass)) != nil else { return }
     defer { release() }
     switch error as? TransportError {
     case .offline?:
       offline = true
     case .signedOut?:
+      SyncLog.logger.notice("The server no longer knows the session; signed out")
       try? tokens.clear()
       phase = .signedOut
+      signedIn = false
+      failure = nil
       copyShown = false
       offline = false
     default:
-      break
+      failure = SyncFailure(error)
     }
     held = await heldCount()
     publish()
@@ -280,6 +311,7 @@ public actor SyncEngine {
     try await enter(pass)
     defer { release() }
     offline = false
+    failure = nil
     if pass.session == nil && account.signIn {
       phase = .signedOut
       copyShown = false
@@ -306,6 +338,7 @@ public actor SyncEngine {
     try await enter(pass)
     defer { release() }
     offline = false
+    failure = nil
     switch reply {
     case .unchanged(let revision, let owner):
       guard let copy, copy.owner == owner, copy.workspace.revision == revision else {
@@ -382,6 +415,8 @@ public actor SyncEngine {
 
   func publish() {
     broadcast.publish(
-      SyncState(phase: phase, workspace: copyShown ? copy?.workspace : nil, offline: offline, held: held))
+      SyncState(
+        phase: phase, workspace: copyShown ? copy?.workspace : nil, offline: offline, held: held, failure: failure,
+        signedIn: signedIn))
   }
 }
