@@ -211,7 +211,7 @@
       switch kind {
       case "divider": target = views.first { $0.bounds.height < 2 && $0.bounds.width > 100 }
       default:
-        target = views.compactMap { $0 as? UILabel }.first { $0.text != "•" && !($0.text ?? "").hasSuffix(".") || ($0.text ?? "").count > 3 }
+        target = views.compactMap { $0 as? UILabel }.first
       }
       let view = try #require(target, "no content for \(kind) at \(item)")
       return view.convert(view.bounds, to: list).minX
@@ -219,8 +219,8 @@
 
     private func markerEdge(at item: Int, in controller: DocumentViewController) throws -> CGFloat {
       let list = try collection(controller)
-      let labels = allSubviews(try cell(controller, item)).compactMap { $0 as? UILabel }
-      let marker = try #require(labels.first { $0.text == "•" })
+      let images = allSubviews(try cell(controller, item)).compactMap { $0 as? UIImageView }
+      let marker = try #require(images.first)
       return marker.convert(marker.bounds, to: list).minX
     }
 

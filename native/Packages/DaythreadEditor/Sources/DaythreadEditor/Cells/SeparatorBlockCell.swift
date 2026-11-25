@@ -2,29 +2,38 @@
   import UIKit
 
   /// A divider: one hairline in the system's separator colour, across the list's margins.
-  final class SeparatorBlockCell: UICollectionViewListCell {
+  final class SeparatorBlockCell: BlockCell {
     private let line = UIView()
+    private lazy var lineLeading = line.leadingAnchor.constraint(equalTo: leadingAnchor)
 
     override init(frame: CGRect) {
       super.init(frame: frame)
       line.backgroundColor = .separator
       line.translatesAutoresizingMaskIntoConstraints = false
-      contentView.addSubview(line)
+      // On the cell, so the indent is the cell's own and not the system's for its content view.
+      addSubview(line)
       NSLayoutConstraint.activate([
-        line.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
-        line.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
-        line.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+        lineLeading,
+        line.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.margin),
+        line.centerYAnchor.constraint(equalTo: centerYAnchor),
         line.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)),
       ])
       isAccessibilityElement = false
+      indentationDidChange()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// The system's own side margin for a list row.
+    private static let margin = UIListContentConfiguration.cell().directionalLayoutMargins.leading
+
+    override func indentationDidChange() {
+      lineLeading.constant = Self.margin + indentation
+    }
+
     func configure(depth: Int) {
-      indentationLevel = depth
-      indentationWidth = DocumentViewController.indentationWidth
+      setDepth(depth)
     }
   }
 #endif

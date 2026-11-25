@@ -3,7 +3,7 @@
   import DaythreadCore
 
   /// A to-do: the system's checkmark symbol and its title; a finished one is dimmed and struck through.
-  final class TodoBlockCell: UICollectionViewListCell {
+  final class TodoBlockCell: BlockCell {
     private var status: TodoTask.Status?
     /// The SF Symbol drawn at the leading edge.
     private(set) var symbolName = "circle"
@@ -13,8 +13,7 @@
       self.status = status
       symbolName = Self.symbol(for: status)
       self.text = text
-      indentationLevel = depth
-      indentationWidth = DocumentViewController.indentationWidth
+      setDepth(depth)
       isAccessibilityElement = true
       accessibilityLabel = String(text.characters)
       accessibilityValue =

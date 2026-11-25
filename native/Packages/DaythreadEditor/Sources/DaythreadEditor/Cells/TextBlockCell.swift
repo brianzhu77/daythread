@@ -2,10 +2,9 @@
   import UIKit
 
   /// A paragraph, heading, list item or quote: its line in the system's text style for it.
-  final class TextBlockCell: UICollectionViewListCell {
+  final class TextBlockCell: BlockCell {
     private var style: BlockRow.TextStyle = .paragraph
     private var text = AttributedString()
-    private var marker: (text: String, width: CGFloat)?
     private let quoteBar = UIView()
     private lazy var quoteBarLeading = quoteBar.leadingAnchor.constraint(equalTo: leadingAnchor)
 
@@ -33,8 +32,7 @@
     func configure(style: BlockRow.TextStyle, depth: Int, text: AttributedString) {
       self.style = style
       self.text = text
-      indentationLevel = depth
-      indentationWidth = DocumentViewController.indentationWidth
+      setDepth(depth)
       isAccessibilityElement = true
       accessibilityLabel = String(text.characters)
       if case .heading = style { accessibilityTraits.insert(.header) } else { accessibilityTraits.remove(.header) }
@@ -54,10 +52,13 @@
       } else {
         quoteBar.isHidden = true
       }
+      if let marker = markerImage(traits: state.traitCollection) {
+        content.image = marker
+        content.imageProperties.tintColor = .secondaryLabel
+      }
       contentConfiguration = content
-      quoteBarLeading.constant = Self.defaultLeadingMargin + CGFloat(indentationLevel) * indentationWidth
+      quoteBarLeading.constant = Self.defaultLeadingMargin + indentation
       bringSubviewToFront(quoteBar)
-      updateMarker(traits: state.traitCollection)
     }
 
     private static func font(for style: BlockRow.TextStyle) -> (UIFont.TextStyle, bold: Bool) {
@@ -72,37 +73,27 @@
       }
     }
 
-    /// The bullet or number, in a column as wide as the widest number the system font would need, so
-    /// every item's text starts on the same edge.
-    private func updateMarker(traits: UITraitCollection) {
-      let text: String?
+    /// The bullet or number, as the leading image of the row, in a column as wide as the widest number the
+    /// system font would need: every item's text starts on one edge, and the marker moves with the indent
+    /// like the checkmark of a to-do does.
+    private func markerImage(traits: UITraitCollection) -> UIImage? {
+      let text: String
       switch style {
       case .bullet: text = "•"
       case .numbered(let number): text = "\(number)."
-      default: text = nil
-      }
-      guard let text else {
-        if marker != nil { accessories = [] }
-        marker = nil
-        return
+      default: return nil
       }
       let font = UIFont.preferredFont(forTextStyle: .body, compatibleWith: traits)
       let width = ceil(("99." as NSString).size(withAttributes: [.font: font]).width)
-      if let marker, marker.text == text, marker.width == width { return }
-      marker = (text, width)
-
-      let label = UILabel()
-      label.text = text
-      label.font = font
-      label.adjustsFontForContentSizeCategory = true
-      label.textColor = .secondaryLabel
-      label.textAlignment = .right
-      label.isAccessibilityElement = false
-      accessories = [
-        .customView(
-          configuration: .init(
-            customView: label, placement: .leading(displayed: .always), reservedLayoutWidth: .custom(width)))
-      ]
+      let paragraph = NSMutableParagraphStyle()
+      paragraph.alignment = .right
+      let size = CGSize(width: width, height: ceil(font.lineHeight))
+      let image = UIGraphicsImageRenderer(size: size).image { _ in
+        (text as NSString).draw(
+          in: CGRect(origin: .zero, size: size),
+          withAttributes: [.font: font, .foregroundColor: UIColor.black, .paragraphStyle: paragraph])
+      }
+      return image.withRenderingMode(.alwaysTemplate)
     }
   }
 #endif

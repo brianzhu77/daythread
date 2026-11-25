@@ -2,13 +2,12 @@
   import UIKit
 
   /// A block this version does not draw: its name, with a dashed rectangle, in secondary colours.
-  final class PlaceholderBlockCell: UICollectionViewListCell {
+  final class PlaceholderBlockCell: BlockCell {
     private var name = ""
 
     func configure(name: String, depth: Int) {
       self.name = name
-      indentationLevel = depth
-      indentationWidth = DocumentViewController.indentationWidth
+      setDepth(depth)
       isAccessibilityElement = true
       accessibilityLabel = name
       setNeedsUpdateConfiguration()
