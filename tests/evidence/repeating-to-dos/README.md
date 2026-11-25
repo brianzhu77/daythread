@@ -43,9 +43,9 @@ Use the commit the work started from, not an older `main`: anything else that ch
 
 `<repeating>` is how many of lines 0 to 24 repeat daily (0 for none; line 25 never does). The store is seeded again before every open, because a tick changes it. `tick` is line 0 (repeating when `<repeating>` > 0), `plainTick` is line 25, ticked on the same page after it, so its time includes whatever the first tick left behind. Run it with `0` and with `25` and compare.
 
-### `floor.ts` has NOT been run on Postgres
+### `floor.ts` on Postgres
 
-It needs a real Postgres (`DATABASE_TEST_URL`, a disposable database; the schema `daythread_test_repeats` is dropped before and after) and a worktree of the floor build (an older build, whose `todo_repeats` table it has never heard of). Neither exists where it was written. It parses and prints its usage with no arguments (`node --no-warnings tests/evidence/repeating-to-dos/floor.ts`, exit 2) and type-checks. Its logic was exercised once against PGlite with the pre-feature build (`5b79bd68`) as the floor, which is not a real Postgres. The owner or CI must run it on Postgres before release.
+It needs a real Postgres (`DATABASE_TEST_URL`, a disposable database; the schema `daythread_test_repeats` is dropped before and after) and a worktree of the floor build (an older build, whose `todo_repeats` table it has never heard of). It was first run on 2026-11-25; see Results.
 
 Order differs from the plan in one place: an Undo only reaches the latest change, so the Undo of Charlie's tick comes before the Cancel without a day, not after.
 
@@ -61,6 +61,7 @@ First recorded 2026-11-24 on the build at `317eb118` (Task 10 of the phase 2 pla
 | --- | --- | --- |
 | `npm run typecheck` | RUN-PASS | clean, exit 0 |
 | `TZ=America/Vancouver FUTURE_DAYS_CONTRACT=1 npm test` | RUN-PASS | 1404 tests, 1390 pass, 0 fail, 14 skipped. All 14 skip for want of `DATABASE_TEST_URL`: the two brake/first-sign-in races and the twelve "real Postgres:" tests |
+| `npm test` with `DATABASE_TEST_URL` (Postgres 17.11, local) | RUN-PASS | run 2026-11-25 on the build at `f9935cb1`: 1408 tests, 1408 pass, 0 fail, 0 skipped. The 14 that skip without a database all ran |
 | `npm run build` | RUN-PASS | builds, exit 0 (the usual `INEFFECTIVE_DYNAMIC_IMPORT` note for `export.ts`) |
 | `node scripts/check-alignment.mjs` (fixtures from `scripts/align-fixtures.ts` on a copy of `tests/fixtures/v1/workspace.sqlite`) | RUN-PASS | 1214 passed, 0 failed, 2 missing ("picker dot on today" at 1280 and 390). Exit 1 because of the 2 missing; the base `5b79bd68` run the same way gives 1204 passed, 0 failed and the same 2 missing. `repeat mark on first line: "Fixture repeating to-do"` measured +0.0 px at 1280 and at 390 |
 
@@ -75,7 +76,7 @@ First recorded 2026-11-24 on the build at `317eb118` (Task 10 of the phase 2 pla
 | `pixels.mjs` | Chromium, 1280 and 390, light and dark | RUN-PASS, re-run 2026-11-24 (final fix wave) | the same: 20 of 20 byte-equal, both ⋯ menus differ only by `Repeat…` under `Blocked by…`. First run: `5b79bd68` against this branch on copies of one `plain` store: 20 of 20 screenshots byte-equal (14 to 46 KB each, sizes differing by page, so not blank pages); both ⋯ menus differ only by `Repeat…` under `Blocked by…` |
 | `day-weight.mjs` | Chromium, 390, 4× CPU | RUN-FAIL on `words` | 9 runs each, alternating 0 and 25 repeating. Medians (ms), no repeats (min–max, spread) → with 25: `words` 685 (678–701, 23) → **742** (733–830): 57 ms over the median, past the 23 ms spread, and every run with repeats was slower than every run without; `typed` 309 (279–319, 40) → 310: within; `plainTick` 175 (152–192, 40) → 188: within; `tick` (not gated) 147 → 143 |
 | `limit.ts` | Node, no browser | RUN-FAIL on the plain tick | median of 21, 1,001 to-dos, ten day pages, three runs. Plain tick 1.61 ms with none → 3.84 / 3.79 / 3.79 ms with 1,000 repeats: +2.2 ms, +136%, past "within 10% or 2 ms". `repeatsIn` 0.14–0.15 ms (≤ 2: pass). `dueTodoRepeats` 3.05–3.11 ms (≤ 10: pass). Also: repeating tick 4.59–4.66 ms, `repeatPagesForATick` 0.14 ms, `todoRepeats` 202,891 bytes. `todoRepeatLimits` not changed |
-| `floor.ts` | Postgres | NOT RUN | needs a real Postgres (`DATABASE_TEST_URL`) and a floor build's worktree; neither exists on this machine. The owner or CI must run it before release |
+| `floor.ts` | Postgres 17.11, local | RUN-PASS | run 2026-11-25 on the build at `f9935cb1`, in a database made for the run and dropped after, with `origin/main` (`1ddbb4cc`, which has no `todo_repeats`) checked out as the floor: all 14 checks PASS. The floor ticked Alpha and deleted Bravo's last line and left `todo_repeats` alone (three rows, unchanged); the mend made Alpha's missed next one once; an older tab's tick of Charlie made one next to-do; Undo put the repeat back; a Cancel with no day was mended on the next run |
 
 ### By hand (throwaway Playwright scripts outside the repo, Chromium unless named)
 
@@ -112,5 +113,4 @@ First recorded 2026-11-24 on the build at `317eb118` (Task 10 of the phase 2 pla
 ### Not run here; open before release
 
 - A real iPhone or the Simulator: a tap on the icon with the keyboard up (the keyboard must not change), and a tick of a repeating reference line on the next one's own page with the keyboard up.
-- `floor.ts` on real Postgres with a floor worktree.
 - `pixels.mjs` on a copy of Brian's real data.
