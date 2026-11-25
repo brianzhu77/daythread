@@ -31,7 +31,7 @@ import Testing
 
   /// The fixture's workspace with `changes` replaced by `patch` merged over it.
   static func patched(_ name: String, _ patch: String) throws -> (before: JSONValue, changes: JSONValue) {
-    let file = try #require(try Fixtures.cases(name))
+    let file = try fixture(name)
     var changes = try #require(file.changes.objectValue)
     let patch = try #require(try json(patch).objectValue)
     for key in patch.keys { changes[key] = patch[key] }
@@ -79,7 +79,7 @@ import Testing
 
   @Test(arguments: ["from", "revision", "timezone", "pages", "tasks"])
   func changes_without_a_required_field_are_unreadable(_ key: String) throws {
-    var changes = try #require(try Self.fixture("task-ticked").changes.objectValue)
+    var changes = try #require(Self.fixture("task-ticked").changes.objectValue)
     changes[key] = nil
     #expect(WorkspaceChanges(.object(changes)) == nil)
   }
@@ -91,7 +91,7 @@ import Testing
     ("undo", "5"), ("synced", "{}"), ("todoAutomations", "3"), ("deletedTasks", #""x""#),
   ])
   func changes_with_a_malformed_field_are_unreadable(key: String, value: String) throws {
-    var changes = try #require(try Self.fixture("task-ticked").changes.objectValue)
+    var changes = try #require(Self.fixture("task-ticked").changes.objectValue)
     changes[key] = try json(value)
     #expect(WorkspaceChanges(.object(changes)) == nil)
   }

@@ -5,7 +5,7 @@ import Testing
 
 @Suite(.serialized) struct TodayTests {
   static func instant(_ text: String) throws -> Date {
-    try #require(try Date(text, strategy: .iso8601))
+    try Date(text, strategy: .iso8601)
   }
 
   @Test func every_shared_case_gives_the_accounts_day() throws {

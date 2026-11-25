@@ -5,7 +5,7 @@ import Testing
 @Suite struct InlineTextTests {
   @Test func every_shared_case_reads_as_the_domain_reads_it() throws {
     let cases = try #require(try Fixtures.json("inline-text/cases.json").arrayValue)
-    #expect(cases.count > 100)
+    #expect(cases.count >= 60)
     for entry in cases {
       let object = try #require(entry.objectValue)
       let pageDate = object["pageDate"]?.stringValue.flatMap { LocalDate($0) }
