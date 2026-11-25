@@ -73,7 +73,11 @@ enum WorkspaceStoreContract {
       try await store.write(after, changed: change.changes)
       let loaded = try required(try await store.load())
       #expect(loaded.owner == owner, "\(change.name)")
-      #expect(loaded.workspace == after, "\(change.name)")
+      // `==` also compares the object a workspace was read from, whose revision `applying` leaves as it was.
+      #expect(loaded.workspace.json() == after.json(), "\(change.name)")
+      #expect(loaded.workspace.revision == after.revision, "\(change.name)")
+      #expect(loaded.workspace.pages == after.pages, "\(change.name)")
+      #expect(loaded.workspace.tasks == after.tasks, "\(change.name)")
       #expect(loaded.workspace.pages.map(\.id) == after.pages.map(\.id), "\(change.name)")
       #expect(loaded.workspace.tasks.map(\.id) == after.tasks.map(\.id), "\(change.name)")
       #expect(

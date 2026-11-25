@@ -30,7 +30,7 @@ enum StoreFixtures {
     var all: [JSONValue] = try names(in: "workspaces").map { try json("workspaces/\($0).json") }
     for name in try names(in: "changes") {
       let file = try json("changes/\(name).json").objectValue
-      for key in ["before", "after"] { if let value = file?[key] { all.append(value) } }
+      for key in ["before", "after"] { if let value = file?[key], value != .null { all.append(value) } }
     }
     return try all.map { try required(Workspace($0)) }
   }
