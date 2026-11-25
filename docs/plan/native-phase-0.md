@@ -12,6 +12,8 @@ functions the web app already calls. The app is four Swift packages (`DaythreadC
 there, and sends changes through an outbox that follows `docs/design/outbox.md`. Shared JSON test cases, written by a
 script from the TypeScript domain, hold the Swift core to the server's rules.
 
+**Status (2026-11-25):** Tasks 1 to 11 built and reviewed; Task 12 steps 1 and 2 written; step 3 (his phone, his data) waits for his Apple Developer team id.
+
 **Tech Stack:** Server: the existing TanStack Start, zod, `node --test`. App: Swift 6 language mode, UIKit, SwiftUI
 (sign-in form only), SwiftData, URLSession, Security, Network, Observation, Swift Testing, XCTest. No third-party
 packages.
