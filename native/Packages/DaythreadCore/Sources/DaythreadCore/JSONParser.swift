@@ -200,7 +200,7 @@ private struct JSONParser {
 
     let value = try decodeEscapes(start: start, end: end)
     let raw = String(decoding: source, as: UTF8.self)
-    return JSON.escapedContents(of: value) == raw ? .string(value) : .verbatim(value, raw: raw)
+    return JSON.escapedContents(of: value).hasSameCodeUnits(as: raw) ? .string(value) : .verbatim(value, raw: raw)
   }
 
   private func decodeEscapes(start: Int, end: Int) throws -> String {

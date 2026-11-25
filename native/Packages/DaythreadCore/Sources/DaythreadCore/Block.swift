@@ -60,12 +60,13 @@ public struct Block: Hashable, Sendable, Identifiable {
     raw = node
   }
 
-  /// The node to write: `raw`, with each named field that differs from what was read replacing its
-  /// key in place, or appended when the node had no such key.
+  /// The node to write: `raw`, with each named field that differs from what the node reads as
+  /// replacing its key in place, or appended when the node had no such key. A field that was not
+  /// changed is never re-emitted, so an id written with an escape keeps its escape.
   var value: JSONValue {
     var node = raw
-    replace("id", with: .string(id), in: &node)
-    replace("type", with: .string(type), in: &node)
+    if !(node["id"]?.stringValue?.hasSameCodeUnits(as: id) ?? false) { node["id"] = .string(id) }
+    if !(node["type"]?.stringValue?.hasSameCodeUnits(as: type) ?? false) { node["type"] = .string(type) }
     if node["props"] != nil || !props.keys.isEmpty { replace("props", with: .object(props), in: &node) }
     replace("content", with: content, in: &node)
     if node["children"] != nil || !children.isEmpty {
@@ -74,6 +75,7 @@ public struct Block: Hashable, Sendable, Identifiable {
     return .object(node)
   }
 
+  /// Replaces the key only when `current` differs (by code units) from what the node holds.
   private func replace(_ key: String, with current: JSONValue?, in node: inout JSONObject) {
     if node[key] != current { node[key] = current }
   }

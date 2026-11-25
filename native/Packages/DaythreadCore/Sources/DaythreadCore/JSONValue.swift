@@ -38,9 +38,66 @@ public enum JSONValue: Hashable, Sendable {
   }
 }
 
+extension String {
+  /// Equality by UTF-8 code units. `==` treats canonically equivalent strings (NFC and NFD forms)
+  /// as equal, which would hide an edit that only changes the normalization.
+  func hasSameCodeUnits(as other: String) -> Bool {
+    utf8.elementsEqual(other.utf8)
+  }
+}
+
+/// Strings compare and hash by code units, so two values are equal only when they write the same bytes.
+extension JSONValue {
+  public static func == (lhs: JSONValue, rhs: JSONValue) -> Bool {
+    switch (lhs, rhs) {
+    case (.null, .null): true
+    case (.bool(let a), .bool(let b)): a == b
+    case (.string(let a), .string(let b)), (.number(let a), .number(let b)): a.hasSameCodeUnits(as: b)
+    case (.verbatim(let a, let rawA), .verbatim(let b, let rawB)):
+      a.hasSameCodeUnits(as: b) && rawA.hasSameCodeUnits(as: rawB)
+    case (.array(let a), .array(let b)): a == b
+    case (.object(let a), .object(let b)): a == b
+    default: false
+    }
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    switch self {
+    case .null: hasher.combine(0 as UInt8)
+    case .bool(let flag):
+      hasher.combine(1 as UInt8)
+      hasher.combine(flag)
+    case .string(let text):
+      hasher.combine(2 as UInt8)
+      hasher.combine(codeUnits: text)
+    case .number(let token):
+      hasher.combine(3 as UInt8)
+      hasher.combine(codeUnits: token)
+    case .array(let items):
+      hasher.combine(4 as UInt8)
+      hasher.combine(items)
+    case .object(let object):
+      hasher.combine(5 as UInt8)
+      hasher.combine(object)
+    case .verbatim(let value, let raw):
+      hasher.combine(6 as UInt8)
+      hasher.combine(codeUnits: value)
+      hasher.combine(codeUnits: raw)
+    }
+  }
+}
+
+extension Hasher {
+  fileprivate mutating func combine(codeUnits text: String) {
+    for byte in text.utf8 { combine(byte) }
+    combine(0xFF as UInt8)
+  }
+}
+
 /// A JSON object whose keys keep the order they were read in.
 public struct JSONObject: Hashable, Sendable {
   public private(set) var keys: [String]
+  // Keys are plain identifiers (addition 2), so the index compares them as `String` does.
   private var storage: [String: JSONValue]
 
   public init() {
