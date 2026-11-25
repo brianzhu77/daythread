@@ -129,6 +129,8 @@ for (const [name, nodes] of documents) put(`documents/${name}.json`, { document:
     [{ type: 'link', href: 'https://example.com', content: [text('a '), styled('styled', { bold: true }), text(' link')] }],
     [chip('e', day)], [chip('e', day, '09:30')], [chip('e', day, '14:05')], [chip('e', '2025-03-04', '00:00')], [chip('e', '2026-01-01', '23:59')],
     [text('At '), chip('e', day, '12:00'), text(' sharp')],
+    // Every month's name, with and without a time; the day is also the month number so a mix-up shows.
+    Array.from({ length: 12 }, (_, i) => { const n = String(i + 1).padStart(2, '0'); return chip('e', `2026-${n}-${n}`, i % 2 ? '08:05' : null) }),
     [pageRef('doc-a', 'r1')], [text('a'), pageRef('doc-a', 'r1', { newTitle: 'New' }), text('b')],
     [text('中文 \u{1F600} " \\ \u2028 \u0007')],
     [1, 'x', null, { type: 'text' }, { type: 'unknown' }, text('kept')],
@@ -178,7 +180,12 @@ if (!JSON.parse(files.get('changes/page-removed.json')!).changes.pages.remove.le
 // ---- today -------------------------------------------------------------------------------------------------------------
 {
   const ats = ['2026-10-22T06:30:00Z', '2026-10-22T07:00:00Z', '2026-10-22T16:00:00Z', '2026-03-08T09:59:00Z', '2026-03-08T10:00:00Z']
-  put('today/cases.json', ['America/Vancouver', 'Asia/Shanghai'].flatMap(timezone => ats.map(at => ({ timezone, at, day: localDayIn(timezone, at) }))))
+  // The midnight after the Vancouver clock change: a fixed UTC-8 would read the second instant as the 8th.
+  const springForward = ['2026-03-09T06:59:00Z', '2026-03-09T07:00:00Z']
+  put('today/cases.json', [
+    ...['America/Vancouver', 'Asia/Shanghai'].flatMap(timezone => ats.map(at => ({ timezone, at, day: localDayIn(timezone, at) }))),
+    ...springForward.map(at => ({ timezone: 'America/Vancouver', at, day: localDayIn('America/Vancouver', at) })),
+  ])
 }
 
 // ---- README ------------------------------------------------------------------------------------------------------------
