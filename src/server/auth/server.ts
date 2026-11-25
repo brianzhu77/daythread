@@ -9,6 +9,7 @@ import type { SqlClient } from '../db/sql.ts'
 import { validTimezone } from '../../domain/workspace.ts'
 import { authConfig, authRequired, normalizeEmail, type AuthConfig } from './config.ts'
 import { onWorkers } from '../hosting.ts'
+import { isAppPath } from './app-path.ts'
 import { AccountStore } from './accounts.ts'
 import { SessionStore, type CheckedSession, type Outcome } from './sessions.ts'
 import * as supabaseAuth from './supabase.ts'
@@ -58,11 +59,8 @@ export function sessionCookie(request: Request, token: string, expiresAt: Date |
   const maxAge = expiresAt ? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)) : 0
   return `${cookieName(request)}=${expiresAt ? token : ''}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure(request) ? '; Secure' : ''}`
 }
-/**
- * The native app's paths: it sends its session token as a bearer token, and the gate honours no cookie on them. The
- * router matches paths case-insensitively, so `/API/V1/x` reaches the same handler and has to be an app path too.
- */
-export const isAppPath = (path: string): boolean => path.toLowerCase().startsWith('/api/v1/')
+// Re-exported: the gate and its tests read them here; the route files import app-path.ts directly.
+export { isAppPath, appRoute } from './app-path.ts'
 /**
  * The session token a request carries: the one reader of it, for the gate and for everything behind it. An app path
  * reads `Authorization: Bearer` only and every other path the cookie only, so a cookie can never act on an app path
