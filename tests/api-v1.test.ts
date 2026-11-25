@@ -5,9 +5,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteWorkspaceRepository } from '../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../src/domain/editor-document.ts'
+import type { OutboxOutcome } from '../src/server/outbox-command.ts'
 import { commandReply, handleCommand, handleSave, haveOf, saveReply, workspaceReply } from '../src/server/api-v1.ts'
 
 const dirs: string[] = []
+// The handlers read the store the server is configured with.
+process.env.DAYTHREAD_STORAGE = 'sqlite'
+process.env.DAYTHREAD_SQLITE_PATH = join(mkdtempSync(join(tmpdir(), 'daythread-api-v1-handlers-')), 'workspace.sqlite')
+process.env.DAYTHREAD_LOCAL_DATA_PATH = process.env.DAYTHREAD_SQLITE_PATH.replace(/sqlite$/, 'json')
+dirs.push(join(process.env.DAYTHREAD_SQLITE_PATH, '..'))
 const create = () => {
   const dir = mkdtempSync(join(tmpdir(), 'daythread-api-v1-'))
   dirs.push(dir)
@@ -31,11 +37,17 @@ test('workspace: whole when the app has nothing or another revision, "unchanged"
 
 test('commands: the outbox rule and its outcomes; a body that is not a command is 400', async () => {
   const repo = await withDay()
-  const body = { operationId: 'add', action: { type: 'add-task', pageId: 'day:2026-10-22', title: 'Water the plants' }, expectedOwner: 'local', basis: { baseRevision: 1, ownRevisions: [], readsBeyond: false } }
-  const first = await commandReply(repo, 'local', body)
-  assert.equal(first.status, 200); assert.equal(first.body.status, 'applied'); assert.equal(first.body.changes.from, 1)
-  assert.equal((await commandReply(repo, 'local', body)).body.status, 'applied', 'a replay answers with its receipt')
-  assert.equal((await commandReply(repo, 'someone-else', body)).body.status, 'owner-mismatch')
+  // expectedRevision is required by the schema the web outbox already used; runOutbox takes the base from `basis`.
+  const body = { operationId: 'add', expectedRevision: 1, action: { type: 'add-task', pageId: 'day:2026-10-22', title: 'Water the plants' }, expectedOwner: 'local', basis: { baseRevision: 1, ownRevisions: [], readsBeyond: false } }
+  const outcome = async (owner: string) => {
+    const reply = await commandReply(repo, owner, body)
+    assert.equal(reply.status, 200)
+    return reply.body as OutboxOutcome
+  }
+  const first = await outcome('local')
+  assert.equal(first.status, 'applied'); assert.equal(first.status === 'applied' && first.changes.from, 1)
+  assert.equal((await outcome('local')).status, 'applied', 'a replay answers with its receipt')
+  assert.equal((await outcome('someone-else')).status, 'owner-mismatch')
   assert.deepEqual(await commandReply(repo, 'local', { nonsense: true }), { status: 400, body: { error: 'bad-request' } })
 })
 

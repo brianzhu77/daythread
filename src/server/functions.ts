@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { commandSchema, smartRange } from "../domain/command-schema";
+import { commandSchema, outboxCommandSchema, smartRange } from "../domain/command-schema";
 import { smartLimits } from "../domain/smart-note";
 
 export const loadWorkspace = createServerFn({ method: "GET" })
@@ -42,10 +42,7 @@ export const runCommand = createServerFn({ method: "POST" })
  * not a throw, except a failure of the server itself, which the browser retries later.
  */
 export const runOutboxCommand = createServerFn({ method: "POST" })
-  .validator((input: unknown) => commandSchema.extend({
-    expectedOwner: z.string().min(1).max(200),
-    basis: z.object({ baseRevision: z.number().int().nonnegative(), ownRevisions: z.array(z.number().int().nonnegative()).max(10_000), readsBeyond: z.boolean() }),
-  }).parse(input))
+  .validator((input: unknown) => outboxCommandSchema.parse(input))
   .handler(async ({ data }) => {
     const [{ getRepository }, { currentOwner }, { runOutbox }] = await Promise.all([import("./storage"), import("./auth/request-owner"), import("./outbox-command")]);
     return runOutbox(getRepository(), currentOwner() ?? "local", data);

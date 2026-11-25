@@ -154,3 +154,9 @@ export const commandSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   action,
 });
+
+/** A change from the outbox (docs/design/outbox.md §5): the command, whose workspace it was made in, and what it was built on. */
+export const outboxCommandSchema = commandSchema.extend({
+  expectedOwner: z.string().min(1).max(200),
+  basis: z.object({ baseRevision: z.number().int().nonnegative(), ownRevisions: z.array(z.number().int().nonnegative()).max(10_000), readsBeyond: z.boolean() }),
+});
