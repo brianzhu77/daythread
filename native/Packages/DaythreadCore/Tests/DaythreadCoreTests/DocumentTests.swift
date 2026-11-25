@@ -129,4 +129,50 @@ import Testing
       #expect(Document.blocks(s).isEmpty == (name == "empty"), "\(name)")
     }
   }
+
+  // MARK: Fields are rewritten only when they changed
+
+  @Test func an_escaped_id_is_written_back_as_it_was() throws {
+    let s = #"[{"id":"\u0061","type":"paragraph","props":{},"content":[],"children":[]}]"#
+    #expect(s.utf8.contains(UInt8(ascii: "\\")))
+    var blocks = Document.blocks(s)
+    #expect(blocks.first?.id == "a")
+    #expect(Document.write(blocks) == s)
+    blocks[0].id = "b"
+    #expect(Document.write(blocks) == #"[{"id":"b","type":"paragraph","props":{},"content":[],"children":[]}]"#)
+  }
+
+  @Test func an_escaped_type_is_written_back_as_it_was() throws {
+    let s = #"[{"id":"a","type":"par\u0061graph","props":{},"content":[],"children":[]}]"#
+    #expect(s.utf8.contains(UInt8(ascii: "\\")))
+    var blocks = Document.blocks(s)
+    #expect(blocks.first?.type == "paragraph")
+    #expect(Document.write(blocks) == s)
+    blocks[0].type = "heading"
+    #expect(Document.write(blocks) == #"[{"id":"a","type":"heading","props":{},"content":[],"children":[]}]"#)
+  }
+
+  private static let nfc = String(Unicode.Scalar(0xE9)!)
+  private static let nfd = String(String.UnicodeScalarView([Unicode.Scalar(0x65)!, Unicode.Scalar(0x301)!]))
+
+  @Test func a_document_holding_decomposed_text_round_trips_byte_identically() throws {
+    let s = "[{\"id\":\"a\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"caf\(Self.nfd)\",\"styles\":{}}],\"children\":[]}]"
+    #expect(Array(Document.write(Document.blocks(s)).utf8) == Array(s.utf8))
+    #expect(Array(JSON.write(try JSON.parse(s)).utf8) == Array(s.utf8))
+  }
+
+  @Test func an_edit_that_only_changes_normalization_is_written() throws {
+    func document(_ text: String) -> String {
+      "[{\"id\":\"a\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"\(text)\",\"styles\":{}}],\"children\":[]}]"
+    }
+    var blocks = Document.blocks(document(Self.nfd))
+    blocks[0].content = .array([.object(textRun(Self.nfc))])
+    #expect(Array(Document.write(blocks).utf8) == Array(document(Self.nfc).utf8))
+  }
+
+  @Test func an_id_that_only_changes_normalization_is_written() throws {
+    var blocks = Document.blocks("[{\"id\":\"\(Self.nfd)\",\"type\":\"paragraph\",\"props\":{},\"children\":[]}]")
+    blocks[0].id = Self.nfc
+    #expect(Array(Document.write(blocks).utf8) == Array("[{\"id\":\"\(Self.nfc)\",\"type\":\"paragraph\",\"props\":{},\"children\":[]}]".utf8))
+  }
 }

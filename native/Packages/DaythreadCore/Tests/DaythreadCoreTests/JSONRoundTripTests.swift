@@ -62,35 +62,65 @@ import Testing
 
   // MARK: Strings the writer could not reproduce are kept as written
 
+  /// Every input below is built from raw literals; the backslash check keeps an escape from
+  /// silently turning into the literal character it stands for.
+  private func escaped(_ input: String, backslashes: Int) -> String {
+    #expect(input.utf8.filter { $0 == UInt8(ascii: "\\") }.count == backslashes)
+    return input
+  }
+
   @Test func a_lone_surrogate_is_written_back_as_it_was() throws {
-    let value = try JSON.parse(#""\ud83d""#)
-    #expect(JSON.write(value) == #""\ud83d""#)
+    let input = escaped(#""\ud83d""#, backslashes: 1)
+    #expect(input.utf8.count == 8)
+    let value = try JSON.parse(input)
+    guard case .verbatim = value else { Issue.record("expected .verbatim, got \(value)"); return }
+    #expect(JSON.write(value) == input)
     #expect(value.stringValue == "\u{FFFD}")
   }
 
   @Test func escapes_JSON_stringify_would_not_write_are_kept() throws {
-    let value = try JSON.parse(#""a\/bé""#)
-    #expect(JSON.write(value) == #""a\/bé""#)
-    #expect(value.stringValue == "a/bé")
-    #expect(try JSON.parse(#""a\/bé""#).stringValue == "a/bé")
-    #expect(JSON.write(try JSON.parse(#""a\/bé""#)) == #""a\/bé""#)
+    let input = escaped(#""a\/b\u00e9""#, backslashes: 2)
+    let value = try JSON.parse(input)
+    guard case .verbatim = value else { Issue.record("expected .verbatim, got \(value)"); return }
+    #expect(JSON.write(value) == input)
+    #expect(value.stringValue == "a/b\u{E9}")
+  }
+
+  @Test func a_slash_escape_next_to_a_literal_accent_is_kept() throws {
+    let input = escaped(#""a\/bé""#, backslashes: 1)
+    let value = try JSON.parse(input)
+    #expect(JSON.write(value) == input)
+    #expect(value.stringValue == "a/b\u{E9}")
   }
 
   @Test func an_upper_case_hex_escape_is_kept() throws {
-    let value = try JSON.parse(#""é""#)
-    #expect(JSON.write(value) == #""é""#)
-    #expect(value.stringValue == "é")
+    let input = escaped(#""\u00E9""#, backslashes: 1)
+    let value = try JSON.parse(input)
+    guard case .verbatim = value else { Issue.record("expected .verbatim, got \(value)"); return }
+    #expect(JSON.write(value) == input)
+    #expect(value.stringValue == "\u{E9}")
   }
 
   @Test func a_surrogate_pair_written_as_two_escapes_reads_as_one_character() throws {
-    let value = try JSON.parse(#""😀""#)
-    #expect(value.stringValue == "😀")
-    #expect(JSON.write(value) == #""😀""#)
+    let input = escaped(#""\ud83d\ude00""#, backslashes: 2)
+    let value = try JSON.parse(input)
+    guard case .verbatim = value else { Issue.record("expected .verbatim, got \(value)"); return }
+    #expect(value.stringValue == "\u{1F600}")
+    #expect(JSON.write(value) == input)
+  }
+
+  @Test func a_literal_astral_character_is_a_plain_string() throws {
+    let input = "\"\u{1F600}\""
+    #expect(!input.utf8.contains(UInt8(ascii: "\\")))
+    #expect(try JSON.parse(input) == .string("\u{1F600}"))
+    #expect(JSON.write(try JSON.parse(input)) == input)
   }
 
   @Test func a_string_the_writer_would_write_identically_is_a_plain_string() throws {
-    #expect(try JSON.parse(#""😀""#) == .string("😀"))
-    #expect(try JSON.parse(#""a\"b\\c\n\u0007""#) == .string("a\"b\\c\n\u{07}"))
+    let input = escaped(#""a\"b\\c\n\u0007""#, backslashes: 5)
+    let value = try JSON.parse(input)
+    guard case .string = value else { Issue.record("expected .string, got \(value)"); return }
+    #expect(value.stringValue == "a\"b\\c\n\u{07}")
   }
 
   @Test func a_string_with_a_literal_replacement_character_is_a_plain_string() throws {
@@ -98,9 +128,9 @@ import Testing
   }
 
   @Test func a_verbatim_string_inside_a_document_is_kept() throws {
-    let s = #"[{"a\/b":"xé","c":["\ud83d"]}]"#
+    let s = #"[{"a\/b":"x\u00e9","c":["\ud83d"]}]"#
     // Keys are written canonically (additions, item 2); values are kept as written.
-    #expect(JSON.write(try JSON.parse(s)) == #"[{"a/b":"xé","c":["\ud83d"]}]"#)
+    #expect(JSON.write(try JSON.parse(s)) == #"[{"a/b":"x\u00e9","c":["\ud83d"]}]"#)
   }
 
   // MARK: Malformed input
@@ -190,5 +220,25 @@ import Testing
     var hits = 0
     for i in 0..<20_000 where object["k\(i)"] == .number("\(i)") { hits += 1 }
     #expect(hits == 20_000)
+  }
+
+  // MARK: Equality is by code units
+
+  @Test func strings_that_differ_only_in_normalization_are_different_values() {
+    let nfc = String(Unicode.Scalar(0xE9)!)
+    let nfd = String(String.UnicodeScalarView([Unicode.Scalar(0x65)!, Unicode.Scalar(0x301)!]))
+    #expect(nfc.utf8.count != nfd.utf8.count)
+    #expect(JSONValue.string(nfc) != JSONValue.string(nfd))
+    #expect(JSONValue.number(nfc) != JSONValue.number(nfd))
+    #expect(JSONValue.verbatim(nfc, raw: "x") != JSONValue.verbatim(nfd, raw: "x"))
+    #expect(JSONValue.verbatim("x", raw: nfc) != JSONValue.verbatim("x", raw: nfd))
+    #expect(JSONValue.string(nfc) == JSONValue.string(nfc))
+    #expect(JSONValue.string(nfc).hashValue == JSONValue.string(nfc).hashValue)
+    var a = JSONObject()
+    var b = JSONObject()
+    a["k"] = .string(nfc)
+    b["k"] = .string(nfd)
+    #expect(JSONValue.object(a) != JSONValue.object(b))
+    #expect(JSONValue.array([.string(nfc)]) != JSONValue.array([.string(nfd)]))
   }
 }
