@@ -32,7 +32,8 @@ extension SyncEngine {
         try await loadWorkspace(pass, have: nil)
         try await enter(pass)
         defer { release() }
-        try await acknowledge(entry, revision: revision)
+        // After a load under another owner, the entries left are that owner's; this revision is not theirs.
+        try await store.acknowledge(seq: entry.seq, revision: copy?.owner == entry.owner ? revision : nil)
       case .loadWholeAndStop:
         try await loadWorkspace(pass, have: nil)
         return
@@ -61,11 +62,13 @@ extension SyncEngine {
         publish()
         return .loadWholeThenAcknowledge(revision: changes.revision)
       }
+      // Two transactions: a death between them leaves the entry pending, and its replay is answered with the
+      // receipt the server kept and acknowledged then.
       try await store.write(next, changed: changes)
       self.copy = (next, copy.owner)
-      try await acknowledge(entry, revision: changes.revision)
+      try await store.acknowledge(seq: entry.seq, revision: changes.revision)
     case .alreadyApplied:
-      try await store.remove(seq: entry.seq)
+      try await store.acknowledge(seq: entry.seq, revision: nil)
       held = await heldCount()
       publish()
       return .loadWhole
@@ -83,21 +86,9 @@ extension SyncEngine {
     return .send
   }
 
-  /// Drops the acknowledged entry and tells every later entry of its owner the revision it produced, so their row
-  /// check does not count it as someone else's write. Runs inside a store section.
-  private func acknowledge(_ entry: OutboxEntry, revision: Int) async throws {
-    try await store.remove(seq: entry.seq)
-    // After a load under another owner, the entries left are that owner's; this revision is not theirs.
-    guard copy?.owner == entry.owner else { return }
-    for var later in try await store.entries() where later.seq > entry.seq {
-      later.ownRevisions.append(revision)
-      try await store.update(later)
-    }
-  }
-
   /// Writes an entry under the copy's owner, built on the copy's revision. Runs inside a store section.
-  func append(action: JSONValue, label: String) async throws -> OutboxEntry? {
-    guard let copy else { return nil }
+  func append(action: JSONValue, label: String) async throws -> OutboxEntry {
+    guard let copy else { throw SyncError.notReady }
     return try await store.append(
       NewOutboxEntry(
         kind: .command, owner: copy.owner, operationId: UUID().uuidString.lowercased(), action: action,

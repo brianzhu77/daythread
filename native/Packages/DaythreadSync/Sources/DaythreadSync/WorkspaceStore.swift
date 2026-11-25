@@ -25,6 +25,9 @@ public protocol WorkspaceStore: Sendable {
   /// Keeps the new `ownRevisions`, `state` and `reason` of an entry that is there.
   func update(_ entry: OutboxEntry) async throws
   func remove(seq: Int) async throws
+  /// In one transaction: removes the entry `seq` and, when `revision` is given, appends it to the `ownRevisions` of
+  /// every later entry of the stored owner that does not have it yet. A `seq` that is not there changes nothing.
+  func acknowledge(seq: Int, revision: Int?) async throws
   /// Forgets everything, `seq` included.
   func erase() async throws
 }

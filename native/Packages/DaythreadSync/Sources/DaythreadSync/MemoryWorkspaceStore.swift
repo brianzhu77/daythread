@@ -46,6 +46,16 @@ public actor MemoryWorkspaceStore: WorkspaceStore {
     outbox.removeAll { $0.seq == seq }
   }
 
+  public func acknowledge(seq: Int, revision: Int?) async throws {
+    guard outbox.contains(where: { $0.seq == seq }) else { return }
+    outbox.removeAll { $0.seq == seq }
+    guard let revision, let owner = kept?.owner else { return }
+    for index in outbox.indices
+    where outbox[index].owner == owner && outbox[index].seq > seq && !outbox[index].ownRevisions.contains(revision) {
+      outbox[index].ownRevisions.append(revision)
+    }
+  }
+
   public func erase() async throws {
     kept = nil
     outbox = []

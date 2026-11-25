@@ -124,6 +124,8 @@ extension TaskRow: ListRow {
 public actor SwiftDataWorkspaceStore: WorkspaceStore {
   /// Page and task rows written since the store was opened; tests read it to see which rows a write touched.
   private(set) var rowWrites = 0
+  /// Saves since the store was opened; tests read it to see that a call is one transaction.
+  private(set) var saves = 0
 
   /// Opens the store at `url`, creating its folder if needed; nil keeps it in memory only.
   public static func open(at url: URL?) throws -> SwiftDataWorkspaceStore {
@@ -298,6 +300,21 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
     }
   }
 
+  public func acknowledge(seq: Int, revision: Int?) async throws {
+    try commit {
+      guard let row = try outboxRow(seq: seq) else { return }
+      modelContext.delete(row)
+      guard let revision, let owner = try fetchMeta()?.owner else { return }
+      let later = FetchDescriptor<OutboxRow>(predicate: #Predicate { $0.owner == owner && $0.seq > seq })
+      for entry in try modelContext.fetch(later) {
+        var revisions = try Self.revisions(entry.ownRevisionsJSON)
+        guard !revisions.contains(revision) else { continue }
+        revisions.append(revision)
+        entry.ownRevisionsJSON = Self.write(revisions)
+      }
+    }
+  }
+
   public func erase() async throws {
     try commit {
       for row in try modelContext.fetch(FetchDescriptor<PageRow>()) { modelContext.delete(row) }
@@ -315,6 +332,7 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
     do {
       let result = try body()
       try modelContext.save()
+      saves += 1
       return result
     } catch {
       modelContext.rollback()
@@ -352,17 +370,22 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
     JSON.write(.array(numbers.map { .number(String($0)) }))
   }
 
+  private static func revisions(_ text: String) throws -> [Int] {
+    guard let values = try record(text).arrayValue else { throw StoreError.unreadable }
+    var revisions: [Int] = []
+    for value in values {
+      guard let revision = value.intValue else { throw StoreError.unreadable }
+      revisions.append(revision)
+    }
+    return revisions
+  }
+
   private static func entry(_ row: OutboxRow) throws -> OutboxEntry {
     guard
       let kind = OutboxEntry.Kind(rawValue: row.kind),
-      let state = OutboxEntry.State(rawValue: row.state),
-      let revisions = try record(row.ownRevisionsJSON).arrayValue
+      let state = OutboxEntry.State(rawValue: row.state)
     else { throw StoreError.unreadable }
-    var ownRevisions: [Int] = []
-    for value in revisions {
-      guard let revision = value.intValue else { throw StoreError.unreadable }
-      ownRevisions.append(revision)
-    }
+    let ownRevisions = try revisions(row.ownRevisionsJSON)
     return OutboxEntry(
       seq: row.seq, kind: kind, owner: row.owner, operationId: row.operationId,
       action: try record(row.actionJSON), baseRevision: row.baseRevision,

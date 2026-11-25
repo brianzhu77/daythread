@@ -64,3 +64,8 @@ final class StateBroadcast: Sendable {
     for stream in streams { stream.yield(state) }
   }
 }
+
+public enum SyncError: Error, Equatable, Sendable {
+  /// No workspace is shown, so there is nothing a change could be made to (before the first load, or signed out).
+  case notReady
+}

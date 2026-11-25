@@ -41,6 +41,8 @@ public actor SyncEngine {
   private var finished = 0
   private var loadWanted = false
   var epoch = 0
+  /// Sign-ins completed, so a sign-out can tell that a newer sign-in happened while it waited for the server.
+  private var signIns = 0
 
   // MARK: Store sections
 
@@ -66,13 +68,30 @@ public actor SyncEngine {
 
   // MARK: Public calls
 
-  /// Shows the device's copy before any request, then asks the server who the session is and loads the workspace.
+  /// The owner the Mac's server answers as when it runs with sign-in off.
+  static let localOwner = "local"
+
+  /// Shows the device's copy, then asks the server who the session is and loads the workspace.
+  ///
+  /// Whose copy may be shown before the server answers: the stored copy is published at once only when a stored
+  /// session names the copy's owner, or when the copy is the Mac's (`local`) and there is no session. With a session
+  /// for another owner nothing is shown until the load replaces the copy. With no session over a copy that is not
+  /// `local` (left by a session that expired, or by an erase that failed at sign-out), the copy is erased again and
+  /// sign-in is shown, without any request: a shared device never shows someone's notes with nobody signed in.
   public func start() async {
     await acquire()
     await readCopyIfNeeded()
+    var orphaned = false
+    if let copy, case .success(nil) = readSession(), copy.owner != Self.localOwner {
+      orphaned = true
+      if (try? await store.erase()) != nil { self.copy = nil }
+      phase = .signedOut
+      copyShown = false
+      held = 0
+    }
     publish()
     release()
-    await requestPass(load: true)
+    if !orphaned { await requestPass(load: true) }
   }
 
   /// Asks the server for the workspace, then sends what the outbox holds. For opening, returning to the app and
@@ -81,24 +100,30 @@ public actor SyncEngine {
     await requestPass(load: true)
   }
 
-  /// Writes the change to the outbox, then sends it. Does nothing when no workspace is shown: nothing can be changed
-  /// before something is. If the store refuses the entry, the change is not sent, since nothing could replay it.
-  public func enqueue(action: JSONValue, label: String) async {
+  /// Writes the change to the outbox, then sends it; returns once that pass has run. Throws `SyncError.notReady` when
+  /// no workspace is shown (nothing can be changed before something is), and what the store threw when it refuses
+  /// the entry. Nothing is sent when it throws.
+  public func enqueue(action: JSONValue, label: String) async throws {
     await acquire()
-    var kept = false
-    if copyShown, phase != .signedOut {
-      kept = (try? await append(action: action, label: label)) != nil
+    do {
+      guard copyShown, phase != .signedOut else { throw SyncError.notReady }
+      _ = try await append(action: action, label: label)
+    } catch {
+      release()
+      throw error
     }
     release()
-    if kept { await requestPass(load: false) }
+    await requestPass(load: false)
   }
 
   /// Signs in, then loads. A session of another account than the stored copy's erases the copy and its outbox first;
-  /// the same account's are kept and sent. The transport's errors are thrown unchanged.
+  /// the same account's are kept and sent. The transport's errors are thrown unchanged. If the device cannot erase or
+  /// keep the session after the server accepted it, it ends signed out with nothing shown, and that error is thrown.
   public func signIn(email: String, password: String, timezone: String) async throws {
     let session = try await transport.signIn(email: email, password: password, timezone: timezone)
     await acquire()
     epoch += 1
+    signIns += 1
     running?.cancel()
     do {
       await readCopyIfNeeded()
@@ -110,6 +135,10 @@ public actor SyncEngine {
       }
       try tokens.write(session)
     } catch {
+      try? tokens.clear()
+      phase = .signedOut
+      copyShown = false
+      held = 0
       publish()
       release()
       throw error
@@ -124,11 +153,12 @@ public actor SyncEngine {
   }
 
   /// Tells the server, then erases the copy, the outbox and the session whatever it answered: a shared device must not
-  /// keep someone's notes.
+  /// keep someone's notes. The last action wins: a sign-in that completes while the server is being told is kept.
   public func signOut() async {
     await acquire()
     epoch += 1
     running?.cancel()
+    let signInsBefore = signIns
     let session = try? tokens.read()
     release()
 
@@ -143,8 +173,11 @@ public actor SyncEngine {
     }
 
     await acquire()
+    defer { release() }
+    guard signIns == signInsBefore else { return }
     epoch += 1
     running?.cancel()
+    // If the erase fails, the copy stays hidden: `start` shows no copy without its session and erases it again.
     try? await store.erase()
     try? tokens.clear()
     copy = nil
@@ -154,7 +187,6 @@ public actor SyncEngine {
     held = 0
     if let reachedServer { offline = !reachedServer }
     publish()
-    release()
   }
 
   // MARK: Passes
@@ -325,14 +357,18 @@ public actor SyncEngine {
     // An unreadable copy shows nothing; the server's next reply replaces it.
     copy = try? await store.load()
     if let copy {
-      // A copy is shown before the server answers only when no session names another account.
-      switch Result(catching: { try tokens.read() }) {
+      // See `start` for whose copy may be shown before the server answers.
+      switch readSession() {
       case .success(let session?): copyShown = session.owner == copy.owner
-      case .success(nil): copyShown = true
+      case .success(nil): copyShown = copy.owner == Self.localOwner
       case .failure: copyShown = false
       }
     }
     held = await heldCount()
+  }
+
+  private func readSession() -> Result<Session?, any Error> {
+    Result { try tokens.read() }
   }
 
   func heldCount() async -> Int {
