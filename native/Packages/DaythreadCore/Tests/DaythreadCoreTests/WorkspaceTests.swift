@@ -146,6 +146,15 @@ import Testing
     #expect(Workspace(.array([])) == nil)
   }
 
+  @Test func a_task_dated_before_the_year_100_still_reads_as_the_server_stored_it() throws {
+    let task = #"{"id":"t2","title":"T","status":"open","paused":false,"deadlineOn":"0026-10-22","attentionOn":"0000-01-01"}"#
+    let original = try Self.workspace(tasks: "[\(Self.task),\(task)]")
+    let workspace = try #require(Workspace(original))
+    #expect(workspace.task("t2")?.deadlineOn?.value == "0026-10-22")
+    #expect(workspace.task("t2")?.attentionOn?.value == "0000-01-01")
+    #expect(workspace.json() == original)
+  }
+
   @Test func audit_finds_no_page_that_fails_to_round_trip_in_the_shared_cases() throws {
     for original in try Fixtures.workspaces() {
       let workspace = try #require(Workspace(original))

@@ -668,6 +668,162 @@
   {
     "content": [
       {
+        "type": "text",
+        "text": "a",
+        "styles": {}
+      },
+      {
+        "type": "dateMention",
+        "props": {
+          "eventId": "e",
+          "date": "0026-10-22",
+          "time": ""
+        }
+      },
+      {
+        "type": "text",
+        "text": "b",
+        "styles": {}
+      }
+    ],
+    "pageDate": null,
+    "text": "ab"
+  },
+  {
+    "content": [
+      {
+        "type": "text",
+        "text": "a",
+        "styles": {}
+      },
+      {
+        "type": "dateMention",
+        "props": {
+          "eventId": "e",
+          "date": "0026-10-22",
+          "time": ""
+        }
+      },
+      {
+        "type": "text",
+        "text": "b",
+        "styles": {}
+      }
+    ],
+    "pageDate": "2026-10-22",
+    "text": "ab"
+  },
+  {
+    "content": [
+      {
+        "type": "text",
+        "text": "a",
+        "styles": {}
+      },
+      {
+        "type": "dateMention",
+        "props": {
+          "eventId": "e",
+          "date": "0026-10-22",
+          "time": ""
+        }
+      },
+      {
+        "type": "text",
+        "text": "b",
+        "styles": {}
+      }
+    ],
+    "pageDate": "2025-06-01",
+    "text": "ab"
+  },
+  {
+    "content": [
+      {
+        "type": "dateMention",
+        "props": {
+          "eventId": "e",
+          "date": "0099-12-31",
+          "time": "09:00"
+        }
+      }
+    ],
+    "pageDate": null,
+    "text": ""
+  },
+  {
+    "content": [
+      {
+        "type": "dateMention",
+        "props": {
+          "eventId": "e",
+          "date": "0099-12-31",
+          "time": "09:00"
+        }
+      }
+    ],
+    "pageDate": "2026-10-22",
+    "text": ""
+  },
+  {
+    "content": [
+      {
+        "type": "dateMention",
+        "props": {
+          "eventId": "e",
+          "date": "0099-12-31",
+          "time": "09:00"
+        }
+      }
+    ],
+    "pageDate": "2025-06-01",
+    "text": ""
+  },
+  {
+    "content": [
+      {
+        "type": "dateMention",
+        "props": {
+          "eventId": "e",
+          "date": "0100-01-01",
+          "time": ""
+        }
+      }
+    ],
+    "pageDate": null,
+    "text": "@Jan 1, 100"
+  },
+  {
+    "content": [
+      {
+        "type": "dateMention",
+        "props": {
+          "eventId": "e",
+          "date": "0100-01-01",
+          "time": ""
+        }
+      }
+    ],
+    "pageDate": "2026-10-22",
+    "text": "@Jan 1, 100"
+  },
+  {
+    "content": [
+      {
+        "type": "dateMention",
+        "props": {
+          "eventId": "e",
+          "date": "0100-01-01",
+          "time": ""
+        }
+      }
+    ],
+    "pageDate": "2025-06-01",
+    "text": "@Jan 1, 100"
+  },
+  {
+    "content": [
+      {
         "type": "dateMention",
         "props": {
           "eventId": "e",

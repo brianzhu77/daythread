@@ -129,6 +129,8 @@ for (const [name, nodes] of documents) put(`documents/${name}.json`, { document:
     [{ type: 'link', href: 'https://example.com', content: [text('a '), styled('styled', { bold: true }), text(' link')] }],
     [chip('e', day)], [chip('e', day, '09:30')], [chip('e', day, '14:05')], [chip('e', '2025-03-04', '00:00')], [chip('e', '2026-01-01', '23:59')],
     [text('At '), chip('e', day, '12:00'), text(' sharp')],
+    // A chip's date must be a year from 100 on (validDate); stored dates are not held to that.
+    [text('a'), chip('e', '0026-10-22'), text('b')], [chip('e', '0099-12-31', '09:00')], [chip('e', '0100-01-01')],
     // Every month's name, with and without a time; the day is also the month number so a mix-up shows.
     Array.from({ length: 12 }, (_, i) => { const n = String(i + 1).padStart(2, '0'); return chip('e', `2026-${n}-${n}`, i % 2 ? '08:05' : null) }),
     [pageRef('doc-a', 'r1')], [text('a'), pageRef('doc-a', 'r1', { newTitle: 'New' }), text('b')],
