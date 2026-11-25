@@ -16,7 +16,7 @@ import type { ResetResult, SignUpResult, VerifyResult } from './supabase.ts'
 
 /** Reachable without a session: the sign-in and sign-up screens and the calls they make; build assets are public code. */
 // /api/push/tick is the scheduler's, let in by CRON_SECRET; /sw.js is the service worker, fetched by the browser itself.
-const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out', '/api/auth/recover', '/api/auth/resend', '/api/auth/reset-password', '/api/auth/confirm', '/api/push/tick'])
+const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/v1/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out', '/api/auth/recover', '/api/auth/resend', '/api/auth/reset-password', '/api/auth/confirm', '/api/push/tick'])
 const isPublic = (path: string) => publicPaths.has(path) || path.startsWith('/assets/') || path.startsWith('/splash/') || /^\/[\w-]+\.(ico|png|svg|webmanifest|js|html)$/.test(path)
 
 let store: SessionStore | undefined
@@ -58,8 +58,18 @@ export function sessionCookie(request: Request, token: string, expiresAt: Date |
   const maxAge = expiresAt ? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)) : 0
   return `${cookieName(request)}=${expiresAt ? token : ''}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure(request) ? '; Secure' : ''}`
 }
-/** The session token a request carries: the one reader of the cookie, for the gate and for everything behind it. */
-function tokenOf(request: Request): string | undefined {
+/** The native app's paths: it sends its session token as a bearer token, and these paths honour no cookie. */
+export const isAppPath = (path: string): boolean => path.startsWith('/api/v1/')
+/**
+ * The session token a request carries: the one reader of it, for the gate and for everything behind it. An app path
+ * reads `Authorization: Bearer` only and every other path the cookie only, so a cookie can never act on an app path
+ * (nor a bearer token on the web's), and the account the gate names is the one the handler acts for.
+ */
+export function tokenOf(request: Request): string | undefined {
+  if (isAppPath(new URL(request.url).pathname)) {
+    const match = /^bearer\s+(.*)$/i.exec(request.headers.get('authorization') ?? '')
+    return match?.[1]?.trim() || undefined
+  }
   const name = cookieName(request)
   for (const part of (request.headers.get('cookie') ?? '').split(';')) {
     const [key, ...value] = part.trim().split('=')
@@ -71,10 +81,14 @@ function tokenOf(request: Request): string | undefined {
 /**
  * Writes only from this site: a browser always sends Sec-Fetch-Site or Origin on a POST, so a write with neither, or
  * from another site, is refused. SameSite=Lax already keeps the cookie off cross-site POSTs; this is the second lock.
+ * An app path may pass with neither: a browser always sends one on a write, so a request with neither is not a
+ * browser, and an app path honours no cookie, so a browser has no credential there to be tricked into using. With
+ * either header present, the rule is the same as everywhere else.
  */
 export function sameOrigin(request: Request): boolean {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return true
   const site = request.headers.get('sec-fetch-site')
+  if (site === null && request.headers.get('origin') === null && isAppPath(new URL(request.url).pathname)) return true
   if (site !== null) return site === 'same-origin'
   const origin = request.headers.get('origin')
   return origin !== null && origin === new URL(request.url).origin
@@ -101,7 +115,7 @@ export async function checkRequest(request: Request, handlerType: 'serverFn' | '
   if (isPublic(url.pathname)) return {}
   const session = await ownerSession(tokenOf(request))
   if (session) {
-    if (session.renewed) appendResponseHeader('set-cookie', sessionCookie(request, tokenOf(request)!, session.expiresAt))
+    if (session.renewed && !isAppPath(url.pathname)) appendResponseHeader('set-cookie', sessionCookie(request, tokenOf(request)!, session.expiresAt))
     return { owner: session.userId }
   }
   if (handlerType === 'serverFn' || url.pathname.startsWith('/api/') || request.method !== 'GET')
