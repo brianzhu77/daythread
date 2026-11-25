@@ -1,6 +1,8 @@
 // Commands from outside the editor that change an open page (the morning card) must not land on top of unsaved
 // typing: the editor would then refuse the outside change ("Page changed elsewhere"). The open editor registers its
 // save here; such a command first saves what was typed and does nothing if that save fails (Lead 5f3615d0).
+import type { Receipt } from '../domain/types'
+
 const flushers = new Map<string, () => Promise<boolean>>()
 
 // B40: an editor that is mounting has read (or is about to read) this tab's draft for its page, so a background save
@@ -35,6 +37,30 @@ export function trackLeaveSave(save: Promise<unknown>): void {
 export const openEditorPages = (): Set<string> => new Set([...flushers.keys(), ...mounting])
 /** True while a closing editor's save is still on its way (its draft isn't "kept" yet). */
 export const leaveSavesPending = (): boolean => leaving.size > 0
+
+/** An open editor's way to take a command from outside it that rewrites its page: save what was typed, hold typing, run `send`, show the server's page. */
+export type EditorHold = (send: () => Promise<Receipt | null>) => Promise<Receipt | null>
+// A tick on a repeating to-do writes the next one's line on another day's page (repeating-to-dos.md §6): when that page
+// is open with unsaved words, the tick goes the way a row action does, through the open editor.
+const holders = new Map<string, EditorHold>()
+export function registerEditorHold(pageId: string, hold: EditorHold): () => void {
+  holders.set(pageId, hold)
+  return () => { if (holders.get(pageId) === hold) holders.delete(pageId) }
+}
+
+/** Runs `send` exactly once, inside the hold of every open editor among `pageIds`, outermost first. With no page it is `send()` itself, called at once. */
+export async function sendHolding(pageIds: readonly string[], send: () => Promise<Receipt | null>): Promise<Receipt | null> {
+  if (!pageIds.length) return send()
+  // A closing editor's save of that page lands first, so the command is stored on the revision after it.
+  await Promise.all([...leaving])
+  const holds = [...new Set(pageIds)].flatMap(id => { const hold = holders.get(id); return hold ? [hold] : [] })
+  let sent: Promise<Receipt | null> | null = null
+  const once = () => (sent ??= send())
+  try {
+    await holds.reduceRight<() => Promise<Receipt | null>>((inner, hold) => () => hold(inner), once)()
+  } catch { /* An editor that couldn't save, hold or show its page never costs the command: it goes below if it hasn't. */ }
+  return once()
+}
 
 /** Saves every open editor and waits for closing ones to finish; true when no open editor is left unsaved. */
 export async function flushAllEditors(): Promise<boolean> {

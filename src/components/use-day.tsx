@@ -2,21 +2,22 @@
 // (src/server/functions.ts). getDayView is a pure read of the loaded workspace.
 import { Button, toast } from '@heroui/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Action, DayView, LocalDate, Receipt, Task, Workspace } from '../domain/types'
+import type { Action, Command, DayView, LocalDate, Receipt, Task, Workspace } from '../domain/types'
 import { applyCommand, getDayView } from '../domain/workspace'
 import { rawOf, type Json, type RowEdit } from '../domain/database'
 import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand, runOutboxCommand } from '../server/functions'
 import { appWrites, capture, draftDecisions, drainQueue, idbOutboxStore, outboxCounts, schedule, type DraftDecision, type DrainResult, type OutboxEntry, type OutboxStore, type SendAnswer } from './outbox'
 import { isNetworkFailure } from './offline-copy'
-import { drawRule, drawsAhead, takenBackText } from './draw-ahead'
+import { drawRule, drawnWorkspace, drawsAhead, takenBackText } from './draw-ahead'
 import { justPressed, markWorking } from './press'
 import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
 import { openAutomations } from './automation-sheet'
-import { flushAllEditors } from './editor-flush'
+import { flushAllEditors, sendHolding } from './editor-flush'
+import { noticeWithNext, repeatPages, undoHoldPages } from './todo-repeat-view'
 import { offlineCopy } from './offline-copy'
 import { setDraftOwner } from './draft-slots'
 import { HOLD_MS, heldWorkspace, isSaving, settleTick, shownStatus, tapTarget, withTick, type Tick, type Ticks, type TickStatus } from './task-ticks'
@@ -153,6 +154,8 @@ export function isConflict(message: string | null): boolean {
 export interface Notice {
   text: string
   undoOperationId?: string
+  /** The pages its Undo holds, as the command was held (a repeat's next to-do made or taken back on an open page). */
+  undoHolds?: readonly string[]
   extra?: { label: string; run: () => void }
 }
 
@@ -200,6 +203,8 @@ type RunOptions = {
    * after the run returned (kept for later, then held on a later send). After a reload the generic notice says it.
    */
   onTakenBack?: (entry: OutboxEntry) => boolean
+  /** The pages this run was held for (`runHeld`), for its notice's Undo. */
+  held?: readonly string[]
 }
 
 export type ActionSource = Action | ((workspace: Workspace) => Action | null)
@@ -215,6 +220,8 @@ interface WorkspaceContextValue {
   failedAction: Action['type'] | null
   /** A function builds the action inside the queue, from the workspace every earlier command has landed on; null sends nothing. */
   run(action: ActionSource, notice?: NoticeArg, operationId?: string, options?: RunOptions): Promise<Receipt | null>
+  /** `run`, held: when the action makes or takes back a repeat's next to-do on a page open in an editor, that editor saves, holds and shows the server's page (repeating-to-dos.md §6). Anything else is `run` exactly. */
+  runHeld: WorkspaceContextValue['run']
   /** The workspace as of the last command or load, before React re-renders: what a command just did. */
   latest(): Workspace | null
   retry(): void
@@ -299,7 +306,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     if (!ws) return null
     for (const e of entries.current) {
       if (e.state !== 'pending' || e.action.type === 'undo' || (shown && !drawn(e.seq))) continue
-      try { ws = applyCommand(ws, { operationId: e.operationId, expectedRevision: ws.revision, action: e.action }).workspace } catch { /* the server will say */ }
+      try {
+        const command: Command = { operationId: e.operationId, expectedRevision: ws.revision, action: e.action }
+        ws = shown ? drawnWorkspace(ws, command) : applyCommand(ws, command).workspace
+      } catch { /* the server will say */ }
     }
     return ws
   }, [])
@@ -597,14 +607,14 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
 
   const runRef = useRef<WorkspaceContextValue['run'] | null>(null)
   const push = useCallback((spec: Notice) => {
-    const { text, undoOperationId, extra } = spec
+    const { text, undoOperationId, undoHolds, extra } = spec
     const close = () => toast.close(key)
     const undo = undoOperationId && {
       children: 'Undo',
       onPress: () => {
         close()
         if (wsRef.current?.undo?.operationId === undoOperationId)
-          void runRef.current?.({ type: 'undo', targetOperationId: undoOperationId }, { text: 'Undone' }, undefined, { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
+          void sendHolding(undoHolds ?? [], () => runRef.current?.({ type: 'undo', targetOperationId: undoOperationId }, { text: 'Undone' }, undefined, { stale: 'outcome', inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) }) ?? Promise.resolve(null))
       },
     }
     const other = extra && { children: extra.label, onPress: () => { close(); extra.run() } }
@@ -689,7 +699,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           setSaveError(null)
           setLastFailed(null)
           commandFailedOut = false
-          const spec = typeof notice === 'function' ? notice(result.receipt) : notice
+          const made = typeof notice === 'function' ? notice(result.receipt) : notice
+          const holds = made ? undoHoldPages(result.workspace, result.receipt, options.held ?? []) : []
+          const spec = made && (result.receipt.nextTodos?.length || holds.length)
+            ? { ...made, text: noticeWithNext(made.text, result.receipt, todayIso()), ...(holds.length ? { undoHolds: holds } : {}) }
+            : made
           const rules = result.receipt.automations
           // What rules did goes on the notice his change already has, with its one Undo: "Moved to Done · Log finish · Undo" (automations.md §5).
           if (rules?.scheduled) { if (rules.paused.length) push(scheduledFailure(rules)); else if (spec) push(spec) }
@@ -771,6 +785,14 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     [transport, adopt, push, refresh, retireStaleUndo, predicted, sendOwn, showOutbox, handOff],
   )
   runRef.current = run
+  const runHeld = useCallback<WorkspaceContextValue['run']>((source, notice, operationId, options) => {
+    // No repeating to-do: nothing here can be held, and replaying the outbox through the reducer would only slow a tick.
+    if (!wsRef.current?.todoRepeats?.length) return run(source, notice, operationId, options)
+    const ws = typeof source === 'function' ? null : predicted() ?? wsRef.current
+    const pages = ws && typeof source !== 'function' ? repeatPages(ws, source) : []
+    if (!pages.length) return run(source, notice, operationId, options)
+    return sendHolding(pages, () => run(source, notice, operationId, { ...options, held: pages }))
+  }, [run, predicted])
 
   const [ticks, setTicks] = useState<Ticks>(() => new Map())
   // The guard reads the ref, so a second tap before React re-renders is still ignored.
@@ -790,13 +812,13 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     lastTap.current.set(taskId, now)
     const tick: Tick = { to: action.status, phase: 'saving', token: ++tickToken.current }
     updateTicks(t => withTick(t, taskId, tick))
-    void run(action, notice, operationId).then(receipt => {
+    void runHeld(action, notice, operationId).then(receipt => {
       // A failed save shows the stored state again, and the header's error says why.
       if (!receipt) return updateTicks(t => settleTick(t, taskId, tick.token, null))
       updateTicks(t => settleTick(t, taskId, tick.token, { ...tick, phase: 'holding' }))
       setTimeout(() => updateTicks(t => settleTick(t, taskId, tick.token, null)), HOLD_MS)
     })
-  }, [run, updateTicks])
+  }, [runHeld, updateTicks])
   const toggleTask = useCallback((taskId: string, notice: (to: Task['status'], r: Receipt) => NoticeSpec) => {
     // B98 (Bumblebee ec4ab466): a tick kept on the device and shown is what the next tap undoes, so it queues the reverse.
     // Built on what the screen shows: every change of this tab still on its way, in flight or kept (B98 item 2).
@@ -813,8 +835,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     if (entries.current.some(e => e.operationId === operationId)) { setLastFailed(null); setSaveState('idle'); void drain(); return }
     // B72 (Ratchet 4bae2184): a retried tick is a tick too, same operation id, so it gets the same guard and hold.
     if (action.type === 'task-status' && (action.status === 'done' || action.status === 'open')) runTick({ ...action, status: action.status }, notice, operationId)
-    else void run(action, notice, operationId)
-  }, [lastFailed, run, runTick])
+    else void runHeld(action, notice, operationId)
+  }, [lastFailed, runHeld, runTick])
 
   const addSampleData = useCallback(async () => {
     for (const action of sampleActions(todayIso())) if (!(await run(action))) return
@@ -884,6 +906,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       saveError,
       failedAction: lastFailed?.action.type ?? null,
       run,
+      runHeld,
       retry,
       reload,
       refresh,
@@ -896,7 +919,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       settleOutbox,
       clearOutbox,
     }),
-    [workspace, latest, loadError, offline, saveState, saveError, lastFailed, run, retry, reload, refresh, addSampleData, ticks, toggleTask, outbox, discardHeld, keepMine, settleOutbox, clearOutbox],
+    [workspace, latest, loadError, offline, saveState, saveError, lastFailed, run, runHeld, retry, reload, refresh, addSampleData, ticks, toggleTask, outbox, discardHeld, keepMine, settleOutbox, clearOutbox],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

@@ -11,7 +11,7 @@ import { todayIn, type ServerRepository } from './repository.ts'
 import type { SqlClient } from './db/sql.ts'
 import { commandLogFields, debugLog } from './debug-log.ts'
 import { currentOwner } from './auth/request-owner.ts'
-import { applyDiff, planWrites, rowsOf, threadOptional, workspaceOf, type DeletedRow, type LinkRow, type ThreadRow, type PageRow, type RowDiff, type Rows, type TaskRow } from './workspace-rows.ts'
+import { applyDiff, planWrites, rowsOf, threadOptional, workspaceOf, type DeletedRow, type LinkRow, type TodoRepeatRow, type ThreadRow, type PageRow, type RowDiff, type Rows, type TaskRow } from './workspace-rows.ts'
 import { OutboxHeld, conflictKeys, readsBeyondApplied, rebuildable, replayRule, rowConflicts, trackedAfter, type OutboxBasis, type RowTracking } from './outbox-replay.ts'
 
 export function schemaName(value = process.env.DAYTHREAD_PG_SCHEMA ?? 'daythread'): string {
@@ -30,6 +30,7 @@ interface Scope extends WorkspaceInfo { userId: string | null }
 const upsertBatch = 500
 const threadColumns = ['id', 'page_id', 'version', 'created_at', 'resolved_at', 'comments', 'anchor', 'property'] as const
 const linkColumns = ['id', 'blocked_id', 'blocker_id', 'created_at'] as const
+const repeatColumns = ['id', 'task_id', 'slot', 'previous_task_id', 'previous_slot', 'starts_on', 'every_unit', 'every_count', 'weekdays', 'counts_from', 'ends_on', 'finished_on', 'created_at'] as const
 const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved', 'database_json', 'row_values', 'created_at', 'edited_at', 'icon', 'cover', 'cover_position'] as const
 /** Columns added to `pages` after its first release (databases): added on start when missing, before any build writes them. */
 const addedPageColumns = ['database_json', 'row_values', 'created_at', 'edited_at', 'icon', 'cover', 'cover_position'] as const
@@ -40,9 +41,9 @@ const deletedColumns = ['id', 'position', 'data'] as const
  * last revision this build stamped, where an older build wrote unstamped, and the newest pruned operation. Additive and
  * nullable, no backfill: null reads as "not written since the column came".
  */
-const outboxRowTables = ['pages', 'tasks', 'deleted_tasks', 'comment_threads', 'task_links'] as const
+const outboxRowTables = ['pages', 'tasks', 'deleted_tasks', 'comment_threads', 'task_links', 'todo_repeats'] as const
 const outboxWorkspaceColumns = ['settings_revision', 'rows_tracked_through', 'rows_untracked_until', 'receipts_forgotten_through', 'parts_tracked_through'] as const
-const rowTableOf: Record<string, (typeof outboxRowTables)[number]> = { page: 'pages', task: 'tasks', deleted: 'deleted_tasks', thread: 'comment_threads', link: 'task_links' }
+const rowTableOf: Record<string, (typeof outboxRowTables)[number]> = { page: 'pages', task: 'tasks', deleted: 'deleted_tasks', thread: 'comment_threads', link: 'task_links', repeat: 'todo_repeats' }
 
 export class PostgresWorkspaceRepository implements ServerRepository {
   private ready?: Promise<void>
@@ -72,7 +73,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
         where n.nspname = $1 and c.relname = $2 and a.attnum > 0 and not a.attisdropped`, [this.schema, table])).map(r => r.attname)
     const complete = async (sql: SqlClient) => {
       const have = await tables(sql)
-      if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations', 'comment_threads', 'task_links', 'part_revisions'].every(t => have.includes(t)) || have.includes('workspace')) return false
+      if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations', 'comment_threads', 'task_links', 'todo_repeats', 'part_revisions'].every(t => have.includes(t)) || have.includes('workspace')) return false
       const columns = await columnsOf(sql, 'pages'), threadColumnsNow = await columnsOf(sql, 'comment_threads')
       const workspaceColumns = await columnsOf(sql, 'workspaces')
       if (!columns.includes('row_revision') || !outboxWorkspaceColumns.every(c => workspaceColumns.includes(c))) return false
@@ -129,6 +130,14 @@ export class PostgresWorkspaceRepository implements ServerRepository {
             primary key (workspace_id, id)
           );
           alter table ${s}.task_links enable row level security;
+          create table if not exists ${s}.todo_repeats (
+            workspace_id uuid not null references ${s}.workspaces (id) on delete cascade,
+            id text not null, task_id text not null, slot text not null, previous_task_id text, previous_slot text,
+            starts_on text not null, every_unit text not null, every_count integer not null, weekdays text,
+            counts_from text not null, ends_on text, finished_on text, created_at text not null,
+            primary key (workspace_id, id)
+          );
+          alter table ${s}.todo_repeats enable row level security;
           create table if not exists ${s}.operations (
             workspace_id uuid not null references ${s}.workspaces (id) on delete cascade,
             operation_id text not null, revision integer not null, type text not null, receipt json not null, inverse json,
@@ -249,14 +258,15 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     return { ...row, userId: owner }
   }
   private async readRows(tx: SqlClient, scope: Scope): Promise<Rows> {
-    const [pages, tasks, deleted, threads, links] = await Promise.all([
+    const [pages, tasks, deleted, threads, links, repeats] = await Promise.all([
       tx.query<PageRow>(`select ${pageColumns.join(', ')} from ${this.t('pages')} where workspace_id = $1::uuid order by position`, [scope.id]),
       tx.query<TaskRow>(`select ${taskColumns.join(', ')} from ${this.t('tasks')} where workspace_id = $1::uuid order by position`, [scope.id]),
       tx.query<DeletedRow>(`select id, position, data::text as data from ${this.t('deleted_tasks')} where workspace_id = $1::uuid order by position`, [scope.id]),
       tx.query<ThreadRow>(`select ${threadColumns.join(', ')} from ${this.t('comment_threads')} where workspace_id = $1::uuid`, [scope.id]),
       tx.query<LinkRow>(`select ${linkColumns.join(', ')} from ${this.t('task_links')} where workspace_id = $1::uuid`, [scope.id]),
+      tx.query<TodoRepeatRow>(`select ${repeatColumns.join(', ')} from ${this.t('todo_repeats')} where workspace_id = $1::uuid`, [scope.id]),
     ])
-    return { revision: scope.revision, timezone: scope.timezone, weekStart: scope.weekStart, todoAutomations: scope.todoAutomations ?? null, pages, tasks, deleted, threads, links }
+    return { revision: scope.revision, timezone: scope.timezone, weekStart: scope.weekStart, todoAutomations: scope.todoAutomations ?? null, pages, tasks, deleted, threads, links, repeats }
   }
   /** The Undo marker: the newest operation, when it has an inverse and nothing but notes came after it. A build without comments looks only at the very newest, so it offers none past a note. */
   private async undoMarker(tx: SqlClient, scope: Scope): Promise<Workspace['undo']> {
@@ -303,6 +313,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       await remove('comment_threads', diff.threads.remove)
     }
     if (diff.links) { await upsert('task_links', linkColumns, diff.links.upsert); await remove('task_links', diff.links.remove) }
+    if (diff.repeats) { await upsert('todo_repeats', repeatColumns, diff.repeats.upsert); await remove('todo_repeats', diff.repeats.remove) }
   }
   /** Operations older than `operationKeepMs` go, except the newest of the workspace (the Undo marker). */
   async pruneOperations(tx: SqlClient, workspaceId: string, now: Date): Promise<void> {

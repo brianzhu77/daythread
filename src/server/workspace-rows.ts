@@ -7,6 +7,7 @@ import { expandedWorkspace, storedDocument, type SyncedRecord } from '../domain/
 import type { CommentThread, CommentAnchor, CommentProperty } from '../domain/comments.ts'
 import type { Automation } from '../domain/automations.ts'
 import { linkId, type TaskLink } from '../domain/task-links.ts'
+import type { TodoRepeat } from '../domain/todo-repeats.ts'
 import type { Page, Task, Workspace, WeekStart } from '../domain/types.ts'
 
 export interface PageRow {
@@ -26,11 +27,13 @@ export interface ThreadRow { id: string; page_id: string; version: number; creat
 
 /** A to-do blocked by another: its own table, keyed on both tasks, which an older build never reads, so its saves and deletes leave it alone (todo-dependency.md §4). */
 export interface LinkRow { id: string; blocked_id: string; blocker_id: string; created_at: string }
+/** A repeating to-do's rule: its own table, which an older build never reads, so its saves and Undo leave it alone. */
+export interface TodoRepeatRow { id: string; task_id: string; slot: string; previous_task_id: string | null; previous_slot: string | null; starts_on: string; every_unit: TodoRepeat['every']; every_count: number; /** JSON, "[1,4]"; null when absent. */ weekdays: string | null; counts_from: TodoRepeat['from']; ends_on: string | null; finished_on: string | null; created_at: string }
 
-export interface Rows { revision: number; timezone: string; /** Absent or 0: Sunday. */ weekStart?: WeekStart; /** To-dos' rules as JSON, on the workspace's row, which an older build never writes; null with none. */ todoAutomations?: string | null; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[]; threads: ThreadRow[]; /** Absent from a store before links. */ links?: LinkRow[] }
+export interface Rows { revision: number; timezone: string; /** Absent or 0: Sunday. */ weekStart?: WeekStart; /** To-dos' rules as JSON, on the workspace's row, which an older build never writes; null with none. */ todoAutomations?: string | null; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[]; threads: ThreadRow[]; /** Absent from a store before links. */ links?: LinkRow[]; /** Absent from a store before repeating to-dos. */ repeats?: TodoRepeatRow[] }
 export interface RowSet<R extends { id: string }> { upsert: R[]; remove: string[] }
 /** What a save writes, or what an Undo puts back: rows whole, by id, plus the time zone when it changed. */
-export interface RowDiff { timezone?: string; weekStart?: WeekStart; /** When they changed; absent in an older build's inverse, which then leaves them. */ todoAutomations?: string | null; pages: RowSet<PageRow>; tasks: RowSet<TaskRow>; deleted: RowSet<DeletedRow>; /** Absent in an inverse written by a build before comments. */ threads?: RowSet<ThreadRow>; /** Absent in one written before links, which then leaves them as they are. */ links?: RowSet<LinkRow> }
+export interface RowDiff { timezone?: string; weekStart?: WeekStart; /** When they changed; absent in an older build's inverse, which then leaves them. */ todoAutomations?: string | null; pages: RowSet<PageRow>; tasks: RowSet<TaskRow>; deleted: RowSet<DeletedRow>; /** Absent in an inverse written by a build before comments. */ threads?: RowSet<ThreadRow>; /** Absent in one written before links, which then leaves them as they are. */ links?: RowSet<LinkRow>; /** Absent in one written before repeating to-dos, which then leaves them as they are. */ repeats?: RowSet<TodoRepeatRow> }
 
 /** A text column refuses U+0000; the domain drops it on the way in, and rows written from older data drop it here. */
 const clean = (s: string): string => s.includes('\u0000') ? s.replace(/\u0000/g, '') : s
@@ -91,6 +94,17 @@ const unreadable = new Set<string>()
 const readableRules = (stored: string | null | undefined): boolean => !stored || readRules(stored) !== null
 const linkRow = (l: TaskLink): LinkRow => ({ id: linkId(l), blocked_id: l.blockedId, blocker_id: l.blockerId, created_at: l.createdAt })
 const linkOf = (r: LinkRow): TaskLink => ({ blockedId: r.blocked_id, blockerId: r.blocker_id, createdAt: r.created_at })
+const repeatRow = (r: TodoRepeat): TodoRepeatRow => ({
+  id: r.id, task_id: r.taskId, slot: r.slot, previous_task_id: r.previous?.taskId ?? null, previous_slot: r.previous?.slot ?? null, starts_on: r.start,
+  every_unit: r.every, every_count: r.interval, weekdays: r.weekdays ? JSON.stringify(r.weekdays) : null, counts_from: r.from, ends_on: r.until ?? null, finished_on: r.finishedOn ?? null, created_at: r.createdAt,
+})
+const repeatOfRow = (r: TodoRepeatRow): TodoRepeat => ({
+  id: r.id, taskId: r.task_id, slot: r.slot,
+  ...(r.previous_task_id !== null && r.previous_slot !== null ? { previous: { taskId: r.previous_task_id, slot: r.previous_slot } } : {}),
+  start: r.starts_on, every: r.every_unit, interval: r.every_count,
+  ...(r.weekdays !== null ? { weekdays: JSON.parse(r.weekdays) as number[] } : {}),
+  from: r.counts_from, ...(r.ends_on !== null ? { until: r.ends_on } : {}), ...(r.finished_on !== null ? { finishedOn: r.finished_on } : {}), createdAt: r.created_at,
+})
 export function workspaceOf(rows: Rows): Workspace {
   const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)
   const smartNotes = sorted.filter(r => r.type === 'smart').flatMap(r => smartOf(r) ?? [])
@@ -103,6 +117,7 @@ export function workspaceOf(rows: Rows): Workspace {
     deletedTasks: byPosition(rows.deleted).map(r => JSON.parse(r.data) as Task), receipts: {},
     ...(rows.threads.length ? { threads: [...rows.threads].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(threadOf) } : {}),
     ...(rows.links?.length ? { links: [...rows.links].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(linkOf) } : {}),
+    ...(rows.repeats?.length ? { todoRepeats: [...rows.repeats].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(repeatOfRow) } : {}),
   })
 }
 
@@ -188,7 +203,7 @@ export function rowsOf(ws: Workspace): Rows {
   return {
     revision: ws.revision, timezone: ws.timezone, weekStart: ws.weekStart ?? 0, todoAutomations: rulesJson(ws),
     pages: pageEntities(ws).map((e, i) => e.row(i)), tasks: ws.tasks.map((t, i) => taskRow(t, i)), deleted: ws.deletedTasks.map((t, i) => deletedRow(t, i)),
-    threads: (ws.threads ?? []).map(threadRow), links: (ws.links ?? []).map(linkRow),
+    threads: (ws.threads ?? []).map(threadRow), links: (ws.links ?? []).map(linkRow), repeats: (ws.todoRepeats ?? []).map(repeatRow),
   }
 }
 
@@ -234,16 +249,16 @@ export function planWrites(before: Rows, after: Workspace, restored: PageRow[] =
   }
   const rows: Rows = {
     revision: after.revision, timezone: after.timezone, weekStart: after.weekStart ?? 0, todoAutomations: readableRules(before.todoAutomations) || rulesJson(after) !== null ? rulesJson(after) : before.todoAutomations ?? null,
-    pages: positions(pageEntities(after, before.pages, restored), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow), threads: (after.threads ?? []).map(threadRow), links: (after.links ?? []).map(linkRow),
+    pages: positions(pageEntities(after, before.pages, restored), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow), threads: (after.threads ?? []).map(threadRow), links: (after.links ?? []).map(linkRow), repeats: (after.todoRepeats ?? []).map(repeatRow),
   }
-  const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted), threads = diffSet(before.threads, rows.threads), links = diffSet(before.links ?? [], rows.links ?? [])
+  const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted), threads = diffSet(before.threads, rows.threads), links = diffSet(before.links ?? [], rows.links ?? []), repeats = diffSet(before.repeats ?? [], rows.repeats ?? [])
   const timezone = before.timezone !== after.timezone
   const weekStart = (before.weekStart ?? 0) !== (after.weekStart ?? 0)
   // An unreadable value is only replaced once he makes a rule; until then it's kept as it was.
   const rules = readableRules(before.todoAutomations) ? (before.todoAutomations ?? null) !== rulesJson(after) : rulesJson(after) !== null
   return {
-    write: { ...(timezone ? { timezone: after.timezone } : {}), ...(weekStart ? { weekStart: after.weekStart ?? 0 } : {}), ...(rules ? { todoAutomations: rulesJson(after) } : {}), pages: pages.write, tasks: tasks.write, deleted: deleted.write, threads: threads.write, links: links.write },
-    inverse: { ...(timezone ? { timezone: before.timezone } : {}), ...(weekStart ? { weekStart: before.weekStart ?? 0 } : {}), ...(rules ? { todoAutomations: before.todoAutomations ?? null } : {}), pages: pages.inverse, tasks: tasks.inverse, deleted: deleted.inverse, threads: threads.inverse, links: links.inverse },
+    write: { ...(timezone ? { timezone: after.timezone } : {}), ...(weekStart ? { weekStart: after.weekStart ?? 0 } : {}), ...(rules ? { todoAutomations: rulesJson(after) } : {}), pages: pages.write, tasks: tasks.write, deleted: deleted.write, threads: threads.write, links: links.write, repeats: repeats.write },
+    inverse: { ...(timezone ? { timezone: before.timezone } : {}), ...(weekStart ? { weekStart: before.weekStart ?? 0 } : {}), ...(rules ? { todoAutomations: before.todoAutomations ?? null } : {}), pages: pages.inverse, tasks: tasks.inverse, deleted: deleted.inverse, threads: threads.inverse, links: links.inverse, repeats: repeats.inverse },
     rows,
   }
 }
@@ -258,6 +273,7 @@ export function applyDiff(rows: Rows, diff: RowDiff): Rows {
   return {
     revision: rows.revision, timezone: diff.timezone ?? rows.timezone, weekStart: diff.weekStart ?? rows.weekStart ?? 0, todoAutomations: diff.todoAutomations !== undefined ? diff.todoAutomations : rows.todoAutomations ?? null,
     pages: applySet(rows.pages, diff.pages), tasks: applySet(rows.tasks, diff.tasks), deleted: applySet(rows.deleted, diff.deleted), threads: diff.threads ? applySet(rows.threads, { ...diff.threads, upsert: diff.threads.upsert.map((t) => keepUnknown(t, rows.threads.find((held) => held.id === t.id))) }) : rows.threads,
-    links: diff.links ? applySet(rows.links ?? [], diff.links) : rows.links ?? []
+    links: diff.links ? applySet(rows.links ?? [], diff.links) : rows.links ?? [],
+    repeats: diff.repeats ? applySet(rows.repeats ?? [], diff.repeats) : rows.repeats ?? []
   }
 }

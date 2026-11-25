@@ -28,7 +28,7 @@ export function loopsFor(ws: Workspace, taskId: string): Map<string, string> {
 export const blockedByLabel = (ws: Workspace, taskId: string): string => { const n = linkedBlockers(ws, taskId).length; return n ? `Blocked by ${n}…` : 'Blocked by…' }
 
 // A tap is only a tap: it mustn't put the caret in the line, or raise the phone's keyboard.
-const noCaret = { onMouseDown: (e: React.MouseEvent) => e.preventDefault(), onPointerDown: (e: React.PointerEvent) => e.preventDefault() }
+export const noCaret = { onMouseDown: (e: React.MouseEvent) => e.preventDefault(), onPointerDown: (e: React.PointerEvent) => e.preventDefault() }
 
 /**
  * "Blocked by {title}" on its own line under the words, or "Blocked by 2" with a menu naming them. Once it goes, its line keeps

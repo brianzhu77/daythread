@@ -30,6 +30,7 @@ export function predictedWrites(before: Workspace, after: Workspace): string[] {
   }
   diff('task', before.tasks, after.tasks); diff('deleted', before.deletedTasks, after.deletedTasks)
   diff('thread', before.threads, after.threads); diff('link', (before.links ?? []).map(l => ({ ...l, id: linkId(l) })), (after.links ?? []).map(l => ({ ...l, id: linkId(l) })))
+  diff('repeat', before.todoRepeats, after.todoRepeats)
   if (before.timezone !== after.timezone || (before.weekStart ?? 0) !== (after.weekStart ?? 0) || JSON.stringify(before.todoAutomations ?? null) !== JSON.stringify(after.todoAutomations ?? null)) keys.push('settings')
   return keys
 }

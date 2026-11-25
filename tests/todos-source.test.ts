@@ -61,7 +61,7 @@ test('R2-9: an edit is the task command, with its notice', () => {
   assert.deepEqual(change(open, 'status', 'done'), { action: { type: 'task-status', taskId: open, status: 'done', today }, notice: 'Done' })
   assert.deepEqual(change(done, 'status', 'open'), { action: { type: 'task-status', taskId: done, status: 'open' }, notice: 'Reopened' })
   assert.deepEqual(change(cancelled, 'status', 'open'), { action: { type: 'task-status', taskId: cancelled, status: 'open' }, notice: 'Restored' })
-  assert.deepEqual(change(open, 'status', 'cancelled'), { action: { type: 'task-status', taskId: open, status: 'cancelled' }, notice: 'Cancelled' })
+  assert.deepEqual(change(open, 'status', 'cancelled'), { action: { type: 'task-status', taskId: open, status: 'cancelled', today }, notice: 'Cancelled' })
   // Moving a card to Paused means Not today; out of it, back on today.
   assert.deepEqual(change(open, 'status', 'paused'), { action: { type: 'not-today', taskId: open, date: today }, notice: 'Not today' })
   assert.deepEqual(change(paused, 'status', 'open'), { action: { type: 'plan-task', taskId: paused, date: today, today }, notice: 'On today' })

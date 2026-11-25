@@ -1098,6 +1098,13 @@ body.is-line-held .continuous-editor, body.is-line-held .continuous-editor * { -
 .editor-date-tag .app-tag { font-size:var(--text-caption); }
 /* B92: the app noting how long it has waited, in the margin: plain Ink-soft words, no fill, so it never reads as something he set (Jazz 535b6fff). */
 .editor-since { align-self:center; color:var(--ink-2); font-size:var(--text-meta); line-height:20px; white-space:nowrap; }
+/* Repeating to-dos: the mark at a line's end, with the deadline and Since. An icon alone: it takes its width at the line's end like any tag there. */
+.repeat-mark { position:relative; flex:none; display:inline-grid; place-content:center; width:24px; height:24px; min-height:0; padding:0; border:0; border-radius:var(--radius-control); background:transparent; color:var(--ink-3); cursor:pointer; }
+@media (hover:hover) { .repeat-mark:hover { background:var(--app-surface); color:var(--ink); } }
+/* A finger's target without a taller row: 44 wide and the line's own 32 high, so it never reaches into the next line. */
+@media (hover:none) { .repeat-mark::before { content:''; position:absolute; inset:-4px -10px; } }
+.task-row .repeat-mark { margin-top:10px; }
+@media (hover:none) { .task-row .repeat-mark::before { inset:-10px; } }
 /* Desktop: + sits just outside the content column so it never covers right-aligned date tags; the phone tab bar owns + below 900px. */
 @media(max-width:899px) { .desktop-capture-plus { display:none; } }
 @media(min-width:900px) {
@@ -2211,9 +2218,9 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu-quiet { margin: 0; padding: 6px 10px; color: var(--ink-3); font-size: var(--text-meta); }
 .database-menu-chevron { color: var(--ink-3); }
 /* Fields and pickers inside the menu: the editors' field look, smaller. */
-.database-menu input:not([type=checkbox]), .database-menu select { box-sizing: border-box; min-width: 0; min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--fill-soft); color: var(--ink); font: inherit; font-size: var(--text-ui); outline: none; }
-.database-menu input:not([type=checkbox]):focus, .database-menu select:focus { border-color: var(--blue); }
-.database-menu select { padding-right: 4px; }
+:is(.database-menu, .todo-repeat-editor) input:not([type=checkbox]), :is(.database-menu, .todo-repeat-editor) select { box-sizing: border-box; min-width: 0; min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--fill-soft); color: var(--ink); font: inherit; font-size: var(--text-ui); outline: none; }
+:is(.database-menu, .todo-repeat-editor) input:not([type=checkbox]):focus, :is(.database-menu, .todo-repeat-editor) select:focus { border-color: var(--blue); }
+:is(.database-menu, .todo-repeat-editor) select { padding-right: 4px; }
 .database-menu input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--ink); }
 .database-menu-field, .database-menu > input { margin: 2px 6px 6px; }
 /* Sub-items: an indent that stops growing at 4 levels, so 390 stays readable (design §2). */
@@ -2310,18 +2317,20 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .formula-doc-name { font-weight: 600; }
 .formula-doc code { color: var(--ink-3); overflow-wrap: anywhere; }
 .database-menu-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; color: var(--ink); }
+/* A to-do's repeat (todo-repeat.tsx): the database Repeat menu's fields, one under another. */
+.todo-repeat-editor { display: grid; }
 /* A repeat's fields share one column, so their left edges line up. */
 .database-repeat-field > select, .database-repeat-field > input, .database-repeat-every { flex: none; width: 164px; }
 .database-repeat-every { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
 .database-repeat-every input { width: 64px; flex: none; }
 .database-repeat-days { display: grid; flex: none; grid-template-columns: repeat(7, 30px); gap: 2px; }
-.database-menu .database-repeat-days button { display: flex; align-items: center; justify-content: center; min-height: 30px; padding: 0; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
-.database-menu .database-repeat-days button:hover { background: var(--hover-dim); }
-.database-menu .database-repeat-days button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-.database-menu .database-repeat-days button:disabled { opacity: 1; cursor: default; }
+:is(.database-menu, .todo-repeat-editor) .database-repeat-days button { display: flex; align-items: center; justify-content: center; min-height: 30px; padding: 0; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
+:is(.database-menu, .todo-repeat-editor) .database-repeat-days button:hover { background: var(--hover-dim); }
+:is(.database-menu, .todo-repeat-editor) .database-repeat-days button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+:is(.database-menu, .todo-repeat-editor) .database-repeat-days button:disabled { opacity: 1; cursor: default; }
 @media (max-width: 899px) {
   .database-repeat-days { grid-template-columns: repeat(7, 38px); }
-  .database-menu .database-repeat-days button { min-height: 44px; }
+  :is(.database-menu, .todo-repeat-editor) .database-repeat-days button { min-height: 44px; }
 }
 /* A filter or sort rule: property → condition → value on one line when it fits, then wrapping. */
 .database-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 6px 6px 10px; border-radius: var(--radius-row); }
@@ -2539,7 +2548,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: var(--scrim); }
   .database-menu::before { content: ''; flex: none; align-self: center; width: 36px; height: 5px; margin-bottom: 6px; border-radius: 3px; background: var(--check); }
   .database-menu > button[role=menuitem], .database-menu > button[role=menuitemcheckbox], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
-  .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
+  :is(.database-menu, .todo-repeat-editor) input:not([type=checkbox]), :is(.database-menu, .todo-repeat-editor) select { min-height: 40px; font-size: 16px; }
   /* A finger's width of toggle, drawn back into the cell's padding so a top row's words stay on "Name". */
   .database-sub-lead { --sub-step: 12px; --sub-pull: 15px; }
   .database-sub-lead .database-sub-toggle { justify-content: flex-end; width: 32px; height: 44px; min-height: 44px; padding-right: 3px; }

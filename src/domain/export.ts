@@ -6,6 +6,7 @@ import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
 import { clockIn } from './formula.ts'
 import { withLinks } from './relations.ts'
+import { repeatOf, repeatWords } from './todo-repeats.ts'
 import { blockedNow, type Blocked } from './task-links.ts'
 import { liveTaskIds } from './workspace.ts'
 import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, localWall, valueText, type Database, type FileValue } from './database.ts'
@@ -118,7 +119,8 @@ function blockLines(n: EditorNode, ws: Workspace, names: Map<string, string>, as
       const mark = task?.status === 'done' ? 'x' : task?.status === 'cancelled' ? '-' : ' '
       // As the mark on the page reads, with every blocker named (todo-dependency.md §3).
       const by = task ? blockedIn(ws).get(task.id)?.by.map(t => t.title.trim()).filter(Boolean) : undefined
-      return [`- [${mark}] ${text || task!.title.trim()}${by?.length ? ` · Blocked by ${by.join(', ')}` : ''}`]
+      const repeat = task?.status === 'open' ? repeatOf(ws, task.id) : undefined
+      return [`- [${mark}] ${text || task!.title.trim()}${by?.length ? ` · Blocked by ${by.join(', ')}` : ''}${repeat ? ` · Repeats ${repeatWords(repeat)}` : ''}`]
     }
     case 'checkListItem':
     case 'sourceChecklist':
@@ -244,7 +246,7 @@ function readme(day: string, timezone: string, leftOut: string[]): string {
 - \`templates/\`: one Markdown file per template; \`template-for: days\` marks the one new day pages start from.
 - \`workspace.json\`: every fact behind the pages (pages with their documents, tasks, trashed pages), format \`daythread-export\` version ${exportFormatVersion}. A page's \`document\` is BlockNote JSON; \`markdownFile\` names its Markdown file.
 
-To-dos are \`- [ ]\` open, \`- [x]\` done, \`- [-]\` cancelled. One waiting on others ends with \`· Blocked by\` and their names. Nested lines are indented one tab per level.
+To-dos are \`- [ ]\` open, \`- [x]\` done, \`- [-]\` cancelled. One waiting on others ends with \`· Blocked by\` and their names. A repeating one ends with \`· Repeats\` and its rule. Nested lines are indented one tab per level.
 ${leftOut.length ? `
 ## Files are not in this export
 

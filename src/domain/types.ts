@@ -68,6 +68,8 @@ export interface Receipt {
   automations?: { databaseId: string; ran: string[]; paused: { name: string; reason: string }[]; /** From catching up on opening: says nothing unless one failed, and has no Undo (§6). */ scheduled?: true };
   /** run-repeats: what it left out, for one notice. */
   skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>;
+  /** The to-dos a repeat made in this command, for the notice. */
+  nextTodos?: Array<{ taskId: string; on: LocalDate }>;
   /** save-editor: lines left a synced block shown on this many pages. */
   linesRemovedFrom?: number;
   /** A cell edit that moved the rows it blocks: which ones. */
@@ -98,6 +100,8 @@ export interface Workspace {
   todoAutomationsUnreadable?: true;
   /** To-dos blocked by others (task-links.ts), in a table of their own. Absent until there's one. */
   links?: import("./task-links.ts").TaskLink[];
+  /** Repeating to-dos (todo-repeats.ts), in a table of their own. Absent until there's one. */
+  todoRepeats?: import("./todo-repeats.ts").TodoRepeat[];
   receipts: Record<string, Receipt>;
   undo?: {
     operationId: string;
@@ -133,6 +137,8 @@ export type Action =
   | { type: "answer-form"; databaseId: string; viewId: string; pageId: string; title: string; values: Record<string, import("./database.ts").Json>; at: string }
   /** Blockers added to and taken off one to-do, as one change with one Undo (todo-dependency.md §4). */
   | { type: "link-tasks"; taskId: string; add: string[]; remove: string[]; at: string }
+  /** A to-do's repeat set, changed or turned off (repeating-to-dos.md). */
+  | { type: "set-todo-repeat"; taskId: string; repeat: import("./todo-repeats.ts").TodoRepeatRule | null; today: LocalDate; at: string }
   /** New words for a to-do: its title and every line of it, on any page. */
   | { type: "rename-task"; taskId: string; title: string }
   /** Synced blocks: this place, or every place on the original, becomes ordinary lines. */

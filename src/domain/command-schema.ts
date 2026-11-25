@@ -90,6 +90,8 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("add-task"), pageId: id, title: title.min(1), plannedOn: day.nullable().optional(), attentionOn: day.nullable().optional(), deadlineOn: day.nullable().optional() }),
   z.object({ type: z.literal("task-status"), taskId: id, status, today: day.optional() }),
   z.object({ type: z.literal("link-tasks"), taskId: id, add: z.array(id).max(linkLimits.perTask), remove: z.array(id).max(linkLimits.perTask), at: z.string().max(40) }),
+  z.object({ type: z.literal("set-todo-repeat"), taskId: id, today: day, at: z.string().max(40),
+    repeat: z.object({ every: z.enum(["day", "week", "month", "year"]), interval: z.number().int().min(1).max(999), weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7).optional(), from: z.enum(["schedule", "done"]), until: day.optional() }).nullable() }),
   z.object({ type: z.literal("rename-task"), taskId: id, title: z.string().max(1000) }),
   z.object({ type: z.literal("unsync-block"), pageId: id, blockId: id, all: z.literal(true).optional() }),
   z.object({ type: z.literal("delete-synced-place"), pageId: id, blockId: id }),

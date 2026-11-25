@@ -66,10 +66,12 @@ import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './da
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
 import { endOfLineAbove, rowArrows } from './row-arrows'
-import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
+import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, registerEditorHold, rememberLeaveSave, sendHolding, trackLeaveSave } from './editor-flush'
+import { noticeWithNext, repeatMenuLabel, repeatPages, repeatsIn, undoHoldPages } from './todo-repeat-view'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { BlockedMark, blockedByLabel, openBlockerPicker } from './blockers'
+import { RepeatMark, openRepeatEditor } from './todo-repeat'
 import { databaseRows, isDatabase } from '../domain/database'
 import { openedByTurnover } from './use-screen-today'
 import { openedByMove } from './new-build'
@@ -267,6 +269,7 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const seen = t && shown && shown !== t.status ? { ...t, status: shown } : t
   // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
   const planned = t && workspace ? plannedOn(workspace, t.id) : null
+  const repeat = workspace && seen?.status === 'open' ? repeatsIn(workspace).get(seen.id) : undefined
   const model = seen && rows ? rowMenu(seen, role, planned, rows.pageDate, rows.today) : null
   // A11: last, under a divider, after the task's own actions (Jazz line-links-states §1).
   const copy = model ? rows!.copyLink(blockId) : null
@@ -285,11 +288,12 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {role === 'plan' && seen?.status === 'open' && planned && planDate && planned !== planDate && <span contentEditable={false} className="editor-reference-tag">Moved to {shortLabel(planned)}</span>}
     {/* A done or cancelled task keeps the button's space, hidden, so a long title doesn't reflow when it's ticked (#9). */}
     {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(seen?.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: todayIso(), today: todayIso() }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
-    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(t!.status === 'open' && workspace ? [{ items: [{ label: blockedByLabel(workspace, t!.id), onSelect: () => openBlockerPicker(t!.id, taskLine.current) }] }] : []), { items: [{ label: 'Copy', onSelect: () => rows!.copyRow(blockId) }, ...(copy ? [{ label: 'Copy link to line', onSelect: copy }] : [])] }]} onEscape={() => rows!.focusRow(blockId)} /></span>}
+    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(t!.status === 'open' && workspace ? [{ items: [{ label: blockedByLabel(workspace, t!.id), onSelect: () => openBlockerPicker(t!.id, taskLine.current) }, ...(repeat || t!.title.trim() ? [{ label: repeatMenuLabel(repeat), onSelect: () => openRepeatEditor(t!.id, taskLine.current) }] : [])] }] : []), { items: [{ label: 'Copy', onSelect: () => rows!.copyRow(blockId) }, ...(copy ? [{ label: 'Copy link to line', onSelect: copy }] : [])] }]} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {/* One group at the line's end, so a deadline and "Since" sit together rather than one wrapping under the other at 390. */}
-    {seen && seen.status === 'open' && (hasDateFacts(seen) || since) && <span contentEditable={false} className="editor-date-tag">
+    {seen && seen.status === 'open' && (hasDateFacts(seen) || since || repeat) && <span contentEditable={false} className="editor-date-tag">
       {hasDateFacts(seen) && <DateTag task={seen} today={todayIso()} pageDate={planDate || todayIso()} />}
       {since && <span className="editor-since is-since">Since {sinceLabel(since, todayIso())}</span>}
+      {repeat && <RepeatMark taskId={seen.id} rule={repeat} focusRow={rows ? () => rows.focusRow(blockId) : undefined} />}
     </span>}
     {t && <BlockedMark taskId={t.id} />}
   </div>
@@ -487,7 +491,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const scroller = useContext(EditorScrollerContext)
   // B70: a page made inside the day template would be copied into every day, so the template makes none (Jazz §2).
   const onTemplate = isTemplate(page)
-  const { run, refresh, latest } = useWorkspace()
+  const { run, runHeld, refresh, latest } = useWorkspace()
   const smartNotesOn = useSmartNotesOn()
   const copyBlockRef = useRef<(blockId: string) => void>(() => undefined)
   const endPlaceRef = useRef<(action: Extract<Action, { type: 'unsync-block' | 'delete-synced-place' }>) => Promise<void>>(async () => undefined)
@@ -1110,6 +1114,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     } finally { settled() }
   }, [editor, key, latest, page.id, run])
   flushRef.current = flush
+  const heldRef = useRef(held)
+  heldRef.current = held
   // B35 part 2: keep this tab's slot marked alive, mark it closed when the tab goes, and on coming back check whether
   // another tab claimed it meanwhile.
   useEffect(() => {
@@ -1169,6 +1175,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (dirty.current) await flushRef.current()
     for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
     return !dirty.current
+  }), [page.id])
+  useEffect(() => registerEditorHold(page.id, async send => {
+    // Closed after the command found it (an outer hold was still saving): nothing is set on a dead editor, and its own leaving save carries his words.
+    if (left.current) return send()
+    const taken = await heldRef.current(send, 'Saving…')
+    // Busy with a change of its own, or what he typed can't be saved now: the command still goes, and this page's next save meets the state it already has for a change made elsewhere.
+    return taken.sent ? taken.receipt : send()
   }), [page.id])
   useEffect(() => editor.onBeforeChange(({ getChanges, tr }) => {
     if (!isHistoryTransaction(tr)) return
@@ -2506,29 +2519,33 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * runs, so no autosave races the server's rewrite; then show the server's page. A failure releases the editor with
    * the draft as it was (Ratchet 980d5695).
    */
-  const rowNotice = useRef<{ key: string; operationId: string; fingerprint: string } | null>(null)
+  const rowNotice = useRef<{ key: string; operationId: string; fingerprint: string; holds: readonly string[] } | null>(null)
   const menuReturn = useRef<{ blockId: string; selection: ReturnType<Selection['toJSON']> } | null>(null)
   const closeRowNotice = () => { if (rowNotice.current) toast.close(rowNotice.current.key); rowNotice.current = null }
   useEffect(() => () => closeRowNotice(), [])
   async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }, notice: Parameters<typeof run>[1] = null, alwaysShow = false): Promise<Receipt | null> {
-    if (historyPending.current) return null
+    const word = action.type === 'unsync-block' ? 'Unsyncing…' : action.type === 'delete-synced-place' ? 'Deleting…' : action.type === 'undo' ? 'Undoing…' : 'Saving…'
+    return (await held(() => runHeld(action, notice, operationId, options), word, alwaysShow)).receipt
+  }
+  /** Flush → hold → `send` → show the server's page. `sent: false`: another server change is on its way here, or what he typed can't be saved, and `send` was not called. */
+  async function held(send: () => Promise<Receipt | null>, word: string, alwaysShow = false): Promise<{ sent: boolean; receipt: Receipt | null }> {
+    if (historyPending.current) return { sent: false, receipt: null }
     historyPending.current = true; setHistoryBusy(true)
     const letGo = holdEditor()
     clearTimeout(timer.current)
-    const word = action.type === 'unsync-block' ? 'Unsyncing…' : action.type === 'delete-synced-place' ? 'Deleting…' : action.type === 'undo' ? 'Undoing…' : 'Saving…'
     const showPaused = setTimeout(() => setPausedFor(word), pausedAfterMs)
     try {
       for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
       if (dirty.current) await flushRef.current()
       for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
-      if (dirty.current || sending.current) return null
-      const receipt = await run(action, notice, operationId, options)
+      if (dirty.current || sending.current) return { sent: false, receipt: null }
+      const receipt = await send()
       // Closed meanwhile (a peek): there's no view left to show it in.
-      if (left.current) return receipt
+      if (left.current) return { sent: true, receipt }
       const ws = latest()
       const p = ws?.pages.find(x => x.id === page.id)
       if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; if (alwaysShow || pageContentKey(p) !== base.current) applyServerPage(p, ws) }
-      return receipt
+      return { sent: true, receipt }
     } finally {
       clearTimeout(showPaused); setPausedFor(null)
       historyPending.current = false; setHistoryBusy(false)
@@ -2543,13 +2560,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       intent.kind === 'move' ? { type: 'plan-task', taskId: t.id, date: intent.date, from: day, today }
       : intent.kind === 'bring-today' ? { type: 'plan-task', taskId: t.id, date: today, today }
       : intent.kind === 'not-today' ? { type: 'not-today', taskId: t.id, date: day, onlyThisDay: true }
-      : { type: 'task-status', taskId: t.id, status: intent.kind === 'cancel' ? 'cancelled' : 'open' }
+      : { type: 'task-status', taskId: t.id, status: intent.kind === 'cancel' ? 'cancelled' : 'open', today }
     // The caret leaves a row that goes: to the end of the line above (Jazz §3).
     const index = nodes().findIndex(n => n.id === blockId)
     const above = index > 0 ? nodes()[index - 1]!.id : null
     const caretHere = editor.getTextCursorPosition().block.id === blockId
     closeRowNotice()
     const operationId = newOperationId()
+    const holds = repeatPages(latest() ?? latestWorkspace.current, action)
     const receipt = await onServer(action, operationId)
     if (!receipt) { notDone('Not done · your text is kept'); return }
     // The menu took focus; give it back to the row (or the line above, if the row left) so ⌘Z and typing go on.
@@ -2559,19 +2577,20 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       intent.kind === 'move' ? `Moved to ${noticeDate(intent.date)}`
       : intent.kind === 'bring-today' ? 'On today'
       : intent.kind === 'not-today' ? (receipt.message.startsWith('Removed from') ? `Removed from ${weekday(day)} · still planned for ${weekday(plannedOn(latestWorkspace.current, t.id) ?? day)}` : notTodayText(t, day, today))
-      : intent.kind === 'cancel' ? 'Cancelled' : 'Restored'
+      : intent.kind === 'cancel' ? noticeWithNext('Cancelled', receipt, today) : 'Restored'
+    const undoHolds = undoHoldPages(latest() ?? latestWorkspace.current, receipt, holds)
     const key: string = toast(text, {
       timeout: 8000,
-      actionProps: { children: 'Undo', onPress: () => void undoRowAction(operationId) },
+      actionProps: { children: 'Undo', onPress: () => void undoRowAction(operationId, undoHolds) },
       onClose: () => { if (rowNotice.current?.key === key) rowNotice.current = null },
     })
-    rowNotice.current = { key, operationId, fingerprint: JSON.stringify(editor.document) }
+    rowNotice.current = { key, operationId, fingerprint: JSON.stringify(editor.document), holds: undoHolds }
   }
   /** The notice's Undo, and ⌘Z while it shows: the server's undo of that action, run like the action itself. */
-  async function undoRowAction(operationId: string) {
+  async function undoRowAction(operationId: string, holds: readonly string[] = []) {
     closeRowNotice()
     let refused = ''
-    const receipt = await onServer({ type: 'undo', targetOperationId: operationId }, newOperationId(), { inlineRefusal: /Cannot undo after later changes/, onRefused: m => { refused = m } })
+    const receipt = await sendHolding(holds.filter(id => id !== page.id), () => onServer({ type: 'undo', targetOperationId: operationId }, newOperationId(), { inlineRefusal: /Cannot undo after later changes/, onRefused: m => { refused = m } }))
     if (receipt) toast('Undone', { timeout: 4000 })
     else notDone(refused ? "Can't undo · changed since" : "Couldn't undo · your text is kept")
   }
@@ -2596,8 +2615,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!model) return null
     const choose = (intent: RowIntent) => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, intent) }
     const keep = (e: { preventDefault(): void }) => e.preventDefault()
+    const taskLine = () => document.querySelector<HTMLElement>(`.bn-block-outer[data-id="${CSS.escape(id)}"] .editor-task`)
+    const repeat = repeatsIn(latestWorkspace.current).get(t.id)
     const [tomorrow, ...rest] = model.primary[0]?.label === 'Tomorrow' ? model.primary : [null, ...model.primary]
-    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), { items: [{ label: blockedByLabel(latestWorkspace.current, t.id), onSelect: () => { selected.current = []; setSelectionLabel(''); openBlockerPicker(t.id, document.querySelector(`.bn-block-outer[data-id="${CSS.escape(id)}"] .editor-task`)) } }] }, { items: [{ label: 'Comment', onSelect: () => commentOn(id) }, { label: 'Copy', onSelect: () => { selected.current = []; setSelectionLabel(''); copyRow(id) } }, ...(lineLinkTarget(id) ? [{ label: 'Copy link to line', onSelect: () => { selected.current = []; setSelectionLabel(''); copyLineLink(id) } }] : [])] }, { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
+    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), { items: [{ label: blockedByLabel(latestWorkspace.current, t.id), onSelect: () => { selected.current = []; setSelectionLabel(''); openBlockerPicker(t.id, taskLine()) } }, ...(repeat || t.title.trim() ? [{ label: repeatMenuLabel(repeat), onSelect: () => { selected.current = []; setSelectionLabel(''); openRepeatEditor(t.id, taskLine()) } }] : [])] }, { items: [{ label: 'Comment', onSelect: () => commentOn(id) }, { label: 'Copy', onSelect: () => { selected.current = []; setSelectionLabel(''); copyRow(id) } }, ...(lineLinkTarget(id) ? [{ label: 'Copy link to line', onSelect: () => { selected.current = []; setSelectionLabel(''); copyLineLink(id) } }] : [])] }, { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
     return <div className="editor-selection-bar is-row-actions" onPointerDown={keep}>
       {tomorrow && <button type="button" onClick={() => choose(tomorrow.intent)}>{tomorrow.label}</button>}
       {model.anotherDay && <RowMenu label="Another day" triggerClass="editor-bar-button" trigger="Another day" groups={menuGroups({ ...model, groups: model.groups.filter(g => g.title === 'Another day') }, todayIso(), choose)} />}
@@ -2921,7 +2942,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         if (!e.shiftKey && last && last.fingerprint === JSON.stringify(editor.document)) { void undoLinkPaste(last.operationId); return }
         // A12 §3: while a row action's notice shows and nothing was edited since, ⌘Z is that notice's Undo.
         const row = rowNotice.current
-        if (!e.shiftKey && row && row.fingerprint === JSON.stringify(editor.document)) { void undoRowAction(row.operationId); return }
+        if (!e.shiftKey && row && row.fingerprint === JSON.stringify(editor.document)) { void undoRowAction(row.operationId, row.holds); return }
         void performHistory(e.shiftKey ? 'redo' : 'undo'); return
       }
       if (e.key === ' ' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && /^(?:#{1,3}|[-*>]|1\.|\[\])$/.test(editor.prosemirrorState.selection.$from.parent.textBetween(0, editor.prosemirrorState.selection.$from.parentOffset))) { e.preventDefault(); editor.insertInlineContent(' '); return }

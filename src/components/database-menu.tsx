@@ -30,6 +30,7 @@ import { flushAllEditors } from './editor-flush'
 import { ChevronDownIcon } from './icons'
 import { useKeyboardTop } from './keyboard'
 import { useSaveOnHide, useWide } from './property-editors'
+import { everyNames, inWeekOrder, RepeatEvery, RepeatWeekdays, weekdayNames } from './repeat-fields'
 import { useWorkspace } from './use-day'
 
 type Panel = 'name' | 'root' | 'colour' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { insertBefore: string } | { formula: string } | 'export' | 'more' | 'new-property' | 'views' | 'templates' | { template: string }
@@ -1009,40 +1010,16 @@ function TemplatePanel({ db, view, templateId, go, close }: { db: DatabasePage; 
   </>
 }
 
-const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const inWeekOrder = (days: readonly number[], weekStart: number) => [...days].sort((a, b) => (a - weekStart + 7) % 7 - (b - weekStart + 7) % 7)
-const repeatWords = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' } as const
 const periods = (repeat: Repeat) => `${repeat.every}${repeat.interval === 1 ? '' : 's'}`
 /** What a template's line in the list says about its repeat, so he needn't open each one to find out. */
 const repeatSummary = (repeat: Repeat, weekStart: number) => {
   if (repeat.paused) return 'Paused'
-  const every = repeat.interval === 1 ? repeatWords[repeat.every] : `Every ${repeat.interval} ${periods(repeat)}`
+  const every = repeat.interval === 1 ? everyNames[repeat.every] : `Every ${repeat.interval} ${periods(repeat)}`
   return repeat.every === 'week' && repeat.weekdays?.length ? `${every} on ${inWeekOrder(repeat.weekdays, weekStart).map(d => weekdayNames[d]!.slice(0, 3)).join(', ')}` : every
-}
-/** Lets the box be empty while he types, which a value held to 1–999 wouldn't: from 1, typing 2 would give 12. Empty or out of range on leaving goes back to what's stored. */
-function RepeatEvery({ repeat, set }: { repeat: Repeat; set: (next: Partial<Repeat>) => void }) {
-  const [draft, setDraft] = useState<string | null>(null)
-  return <input aria-label="Every how many" type="number" min={1} max={999} value={draft ?? repeat.interval}
-    onFocus={e => e.target.select()}
-    onBlur={() => setDraft(null)}
-    onChange={e => { const text = e.target.value, interval = Number(text); setDraft(text); if (Number.isInteger(interval) && interval >= 1 && interval <= 999) set({ interval }) }} />
 }
 const nextRowText = (date: string, time: string) => {
   const when = new Date(`${date}T${time}`)
   return when.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' as const }), hour: 'numeric', minute: '2-digit' })
-}
-/** Weekly's days, the week's first day first. The last one on can't be turned off: a weekly repeat always has a day. */
-function RepeatWeekdays({ repeat, weekStart, set }: { repeat: Repeat; weekStart: number; set: (days: number[]) => void }) {
-  const on = repeat.weekdays?.length ? repeat.weekdays : [new Date(`${repeat.start}T12:00:00Z`).getUTCDay()]
-  return <div className="database-menu-row">On
-    <span className="database-repeat-days" role="group" aria-label="On these days">
-      {inWeekOrder([0, 1, 2, 3, 4, 5, 6], weekStart).map(day => {
-        const pressed = on.includes(day)
-        return <button key={day} type="button" aria-label={weekdayNames[day]} aria-pressed={pressed} disabled={pressed && on.length === 1}
-          onClick={() => set(pressed ? on.filter(d => d !== day) : [...on, day])}>{weekdayNames[day]![0]}</button>
-      })}
-    </span>
-  </div>
 }
 /** Repeat (R4-6): makes a row each period, from when he next opens the app. Off keeps every row it made. */
 function RepeatSettings({ db, templateId, change }: { db: DatabasePage; templateId: string; change: ReturnType<typeof useChange> }) {
@@ -1061,7 +1038,7 @@ function RepeatSettings({ db, templateId, change }: { db: DatabasePage; template
     <label className="database-menu-row database-repeat-field">Repeat
       <select aria-label="Repeat" value={repeat?.every ?? 'off'} onChange={e => { const v = e.target.value; set(v === 'off' ? null : { every: v as Repeat['every'] }) }}>
         <option value="off">Off</option>
-        {(Object.keys(repeatWords) as Array<keyof typeof repeatWords>).map(k => <option key={k} value={k}>{repeatWords[k]}</option>)}
+        {(Object.keys(everyNames) as Array<keyof typeof everyNames>).map(k => <option key={k} value={k}>{everyNames[k]}</option>)}
       </select>
     </label>
     {repeat && <>

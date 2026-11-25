@@ -11,6 +11,8 @@ import { useMemo, useRef } from 'react'
 import { TagText } from './tag-text'
 import { ParentLine, treeIndent, useTaskTree } from './task-tree'
 import { BlockedMark, blockedByLabel, openBlockerPicker } from './blockers'
+import { RepeatMark, openRepeatEditor } from './todo-repeat'
+import { repeatMenuLabel, repeatsIn } from './todo-repeat-view'
 
 export const taskViews = ['today', 'upcoming', 'open', 'paused'] as const
 export type TaskView = (typeof taskViews)[number]
@@ -107,6 +109,7 @@ function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Ta
   // Ticked, the row stays a moment (B72) and reads as done, like a done row elsewhere.
   const done = useTaskTick(task.id).status === 'done'
   const row = useRef<HTMLDivElement>(null)
+  const repeat = workspace ? repeatsIn(workspace).get(task.id) : undefined
   return (
     <div ref={row} className={`task-row list ${paused ? 'is-paused' : ''} ${done ? 'is-done' : ''}`} data-task-id={task.id}>
       <input type="checkbox" className="check" checked={done} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
@@ -114,6 +117,7 @@ function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Ta
       <DateTag task={task} today={today} label={label} />
       {/* Upcoming keeps set-aside rows' dates (02 Not today) but they must not read as commitments; the Not today tab needs no marker. */}
       {paused && label !== undefined && <span className="app-tag paused">Not today</span>}
+      {!done && repeat && <RepeatMark taskId={task.id} rule={repeat} />}
       <RowMenu
         label={`Actions for ${task.title}`}
         groups={[
@@ -124,7 +128,11 @@ function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Ta
             ],
           },
           { title: 'Another day', items: anotherDayItems(task, today, (t, d) => planOn(t, d)) },
-          ...(workspace ? [{ items: [{ label: blockedByLabel(workspace, task.id), onSelect: () => openBlockerPicker(task.id, row.current) }] }] : []),
+          ...(workspace ? [{ items: [
+            { label: blockedByLabel(workspace, task.id), onSelect: () => openBlockerPicker(task.id, row.current) },
+            // A to-do with no words can't repeat.
+            ...(repeat || task.title.trim() ? [{ label: repeatMenuLabel(repeat), onSelect: () => openRepeatEditor(task.id, row.current) }] : []),
+          ] }] : []),
         ]}
       />
     </div>

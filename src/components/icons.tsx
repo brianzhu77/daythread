@@ -300,3 +300,12 @@ export const SeparatorIcon = () => (
 )
 /** H1, H2, H3 in the icon's place: a heading's level is the thing to read. */
 export const HeadingIcon = ({ level }: { level: 1 | 2 | 3 }) => <span className="slash-heading-icon" aria-hidden="true">H{level}</span>
+/** Two arrows round a loop: a to-do that repeats. */
+export const RepeatIcon = () => (
+  <Icon size={14}>
+    <path d="m17 2 4 4-4 4" />
+    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="m7 22-4-4 4-4" />
+    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+  </Icon>
+)
