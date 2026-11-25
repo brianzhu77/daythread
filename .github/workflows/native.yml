@@ -1,7 +1,7 @@
 # The native app (native/): the Swift packages' tests and the app's, against the shared cases in fixtures/core (made from
 # the TypeScript domain by scripts/export-core-fixtures.ts; ci.yml checks they are current). Every step is guarded by the
 # folder it needs, so this passes while native/ does not exist yet or holds only some of it.
-# If the image's newest Xcode cannot build for iOS 26, only the two `swift test` steps can run until the image catches up.
+# If the image's newest Xcode cannot build for iOS 26, only the `swift test` steps can run until the image catches up.
 name: Native
 
 on:
@@ -37,12 +37,25 @@ jobs:
       - name: swift test (DaythreadSync)
         run: |
           if [ -d native/Packages/DaythreadSync ]; then cd native/Packages/DaythreadSync && swift test; else echo "native/Packages/DaythreadSync does not exist yet"; fi
-      - name: xcodebuild test (iOS Simulator)
+      - name: swift test (DaythreadEditor)
+        run: |
+          if [ -d native/Packages/DaythreadEditor ]; then cd native/Packages/DaythreadEditor && swift test; else echo "native/Packages/DaythreadEditor does not exist yet"; fi
+      # The editor's UIKit suite (a row whose kind changes, and the drawn text) runs only on a simulator.
+      - name: xcodebuild test (DaythreadEditor, iOS Simulator)
+        run: |
+          if [ -d native/Packages/DaythreadEditor ]; then
+            cd native/Packages/DaythreadEditor
+            xcodebuild test -scheme DaythreadEditor -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest'
+          else echo "native/Packages/DaythreadEditor does not exist yet"; fi
+      # Only the unit tests hosted in the app: the UI tests need the Node servers that native/scripts/ui-test.sh starts.
+      # Signed for the simulator without a team (no CODE_SIGNING_ALLOWED=NO), so the host app keeps its entitlements and
+      # the Keychain tests can run.
+      - name: xcodebuild test (app unit tests, iOS Simulator)
         run: |
           if [ -d native/Daythread.xcodeproj ]; then
             cd native
-            device=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [^(]*' | sed 's/ *$//')
-            xcodebuild test -project Daythread.xcodeproj -scheme Daythread -destination "platform=iOS Simulator,name=$device" CODE_SIGNING_ALLOWED=NO
+            xcodebuild test -project Daythread.xcodeproj -scheme Daythread -only-testing:DaythreadTests \
+              -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest'
           else echo "native/Daythread.xcodeproj does not exist yet"; fi
       - name: xcodebuild build (Mac Catalyst)
         run: |
