@@ -741,3 +741,46 @@ Needs from Brian: his Apple Developer team id, set as the target's team (design 
   follow 7. Task 10 needs only 5 and 6, so it can run beside 7 to 9. Task 11 needs all of them.
 - After Task 11, phase 1's design is written against what exists: the editor's editing, prediction, the save path
   and the day draft.
+
+## Carried to phase 1 (from the reviews, 2026-11-25)
+
+Every task was reviewed on its own, then the whole branch once. What those reviews found and did not fix here, by
+the point at which it has to be settled. Nothing on this list is needed for phase 0 to be safe to merge.
+
+**Before the app sends a page save**
+- `/api/v1/saves` has no `expectedOwner`; a save made under one account and sent under another is stopped only by
+  the content and revision checks.
+- A block key the app adds lands after `children`; the web's order is id, type, props, content, children.
+
+**Before the app can make an edit**
+- Sign-out with unsent changes erases them without draining or warning.
+- A copy without its session is hidden and kept. With an empty outbox there is nothing to protect, and erasing on
+  a definite signed-out answer would suit a shared device better.
+- A store that cannot open falls back to memory with only a log line, so the outbox would not survive a relaunch.
+- No test forces a failure inside a store transaction to prove the rollback.
+- A held `ensure-day` is never asked again that day, and nothing on screen shows a held change.
+- A new value in a server enum (a task status, say) makes the whole workspace unreadable on an installed app.
+  Either enums never grow, or the readers become lenient per row.
+
+**With phase 1's screens**
+- Rows on a page are 44 pt apart; date chips and page references draw as plain text.
+- The engine does not publish the account's address, so the menu shows it only after a sign-in on that launch.
+- The account menu is rebuilt on every state change; two fast phase changes overlap their dissolves.
+- Cell polish: the hairline's height, markers and right-to-left, the marker column past "99.", an empty paragraph's
+  height, the divider and quote bar against safe-area margins.
+- The day-change refresh follows the device's midnight, not the account's.
+- A time zone name the server accepts and Foundation does not (lower case, "+05:30") reads as GMT.
+
+**With the next route or the next fixtures change**
+- The test that every v1 route uses `appRoute` should call each handler with a non-app path, not scan the source.
+- `workspaceReply` loads the whole workspace to answer "unchanged".
+- `write(_:changed:)` serialises every row on each acknowledged command although it writes only the named ones.
+- The fixtures script's own check compares pages only; its README says "no undo copy" where the marker is present.
+- The server origin's slug can make two contrived origins collide (`localhost:3741`, `localhost-3741`).
+
+**Cannot be known until it happens**
+- `native.yml` has never run on a hosted runner: the runner's Xcode, a simulator named iPhone 17, and signing for
+  the simulator with no team are unverified.
+- Production with the new routes: after the deploy, a cookie alone on `/api/v1/account` must get 401, a foreign
+  `Origin` on a v1 write 403, and a v1 write without `Content-Type: application/json` 415.
+- Whether every row of Brian's real workspace reads: Task 12. A row that does not is named in the sync log.
