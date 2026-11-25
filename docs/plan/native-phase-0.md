@@ -765,8 +765,10 @@ the point at which it has to be settled. Nothing on this list is needed for phas
 **With phase 1's screens**
 - Rows on a page are 44 pt apart; date chips and page references draw as plain text.
 - The engine does not publish the account's address, so the menu shows it only after a sign-in on that launch.
-- The account menu is rebuilt on every state change; two fast phase changes overlap their dissolves. Seen while
-  taking the screenshots: for a few seconds after signing in, a tap on the account button does not open its menu.
+- The account menu is rebuilt on every state change; two fast phase changes overlap their dissolves. (A tap on
+  the account button "not opening its menu" right after sign-in, seen while taking the screenshots, was looked
+  into and is not this: the system's "Save Password?" sheet is over the app then. No state change arrives
+  during those taps, and with the sheet answered the menu opens on the first tap, three times out of three.)
 - Cell polish: the hairline's height, markers and right-to-left, the marker column past "99.", an empty paragraph's
   height, the divider and quote bar against safe-area margins.
 - The day-change refresh follows the device's midnight, not the account's.
@@ -780,8 +782,8 @@ the point at which it has to be settled. Nothing on this list is needed for phas
 - The server origin's slug can make two contrived origins collide (`localhost:3741`, `localhost-3741`).
 
 **Cannot be known until it happens**
-- `native.yml` has never run on a hosted runner: the runner's Xcode, a simulator named iPhone 17, and signing for
-  the simulator with no team are unverified.
+- `native.yml` first ran on a hosted runner on the pull request and passed (Xcode 26.6: the three packages, the
+  page view's simulator suite, the app's unit tests, the Mac Catalyst build).
 - Production with the new routes: after the deploy, a cookie alone on `/api/v1/account` must get 401, a foreign
   `Origin` on a v1 write 403, and a v1 write without `Content-Type: application/json` 415.
 - Whether every row of Brian's real workspace reads: Task 12. A row that does not is named in the sync log.
