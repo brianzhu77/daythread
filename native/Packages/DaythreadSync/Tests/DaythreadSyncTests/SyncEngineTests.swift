@@ -62,10 +62,15 @@ private func send(
     basis: OutboxBasis(baseRevision: base, ownRevisions: own, readsBeyond: true))
 }
 
+/// `signedIn` is true unless the phase is signed out, as for every engine here that holds a session; tests of a server
+/// with sign-in off say false.
 private func state(
-  _ phase: SyncState.Phase, _ workspace: Workspace?, offline: Bool = false, held: Int = 0
+  _ phase: SyncState.Phase, _ workspace: Workspace?, offline: Bool = false, held: Int = 0,
+  failure: SyncFailure? = nil, signedIn: Bool? = nil
 ) -> SyncState {
-  SyncState(phase: phase, workspace: workspace, offline: offline, held: held)
+  SyncState(
+    phase: phase, workspace: workspace, offline: offline, held: held, failure: failure,
+    signedIn: signedIn ?? (phase != .signedOut))
 }
 
 /// What an entry looks like to these tests: its operation, its state and what it learned.
@@ -222,7 +227,7 @@ private struct Harness {
     await h.engine.start()
 
     #expect(await h.calls == [.account(token: nil), .workspace(token: nil, have: nil)])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, signedIn: false))
     let kept = try await h.kept
     #expect(kept?.owner == "local")
     #expect(kept?.workspace == served)
@@ -616,8 +621,18 @@ private struct Harness {
       case .server: TransportError.server(status: 503)
       case .unreadable: TransportError.unreadable
       case .wait: TransportError.wait(seconds: 30)
-      case .refused: TransportError.refused(status: 400, reason: nil)
+      // Not 400: a command the server calls a bad request is held (see below).
+      case .refused: TransportError.refused(status: 403, reason: nil)
       case .unlisted: URLError(.badServerResponse)
+      }
+    }
+
+    /// What the state says about a pass that ended this way.
+    var shown: SyncFailure {
+      switch self {
+      case .server, .wait, .refused: .server
+      case .unreadable: .unreadable
+      case .unlisted: .unreachable
       }
     }
   }
@@ -632,7 +647,7 @@ private struct Harness {
 
     await h.engine.start()
 
-    #expect(await current(h.engine) == state(.ready, copy))
+    #expect(await current(h.engine) == state(.ready, copy, failure: failure.shown))
     #expect(try await h.entries == ["op-1 pending base 5 own []"])
     #expect(await h.log == [])
 
@@ -642,6 +657,7 @@ private struct Harness {
     ])
     await h.engine.refresh()
     #expect(await h.transport.sends == [send("op-1", base: 5), send("op-1", base: 5)])
+    #expect(await current(h.engine) == state(.ready, copy, held: 1), "the next answer clears the failure")
   }
 
   @Test(arguments: Failure.allCases)
@@ -655,7 +671,7 @@ private struct Harness {
     #expect(await current(h.engine) == state(.ready, copy, offline: true))
     await h.engine.refresh()
 
-    #expect(await current(h.engine) == state(.ready, copy, offline: true))
+    #expect(await current(h.engine) == state(.ready, copy, offline: true, failure: failure.shown))
     #expect(await h.transport.sends == [])
     #expect(try await h.entries == ["op-1 pending base 5 own []"])
     #expect(await h.log == [])
@@ -775,7 +791,7 @@ private struct Harness {
       seen.append(value)
       if value.phase == .ready { break }
     }
-    #expect(seen == [state(.starting, nil), state(.starting, copy), state(.ready, copy)])
+    #expect(seen == [state(.starting, nil, signedIn: false), state(.starting, copy), state(.ready, copy)])
     #expect(await current(h.engine) == state(.ready, copy))
   }
 
@@ -1020,8 +1036,8 @@ private struct Harness {
 
     await h.engine.start()
 
-    #expect(await seen.first == state(.starting, copy))
-    #expect(await current(h.engine) == state(.ready, copy))
+    #expect(await seen.first == state(.starting, copy, signedIn: false))
+    #expect(await current(h.engine) == state(.ready, copy, signedIn: false))
   }
 
   @Test func a_session_for_another_owner_shows_nothing_until_the_load_replaces_the_copy() async throws {
@@ -1074,6 +1090,94 @@ private struct Harness {
     #expect(try await h.kept?.owner == "user-2")
     #expect(try await h.kept?.workspace == served)
     #expect(await current(h.engine) == state(.ready, served))
+  }
+}
+
+// MARK: - What a pass that fails leaves behind
+
+@Suite struct SyncEngineFailureTests {
+  @Test func a_first_load_that_fails_says_why_with_nothing_shown() async throws {
+    let h = try await Harness([.failure(TransportError.server(status: 502))], session: nil)
+
+    await h.engine.start()
+
+    #expect(await current(h.engine) == state(.starting, nil, failure: .server, signedIn: false))
+  }
+
+  @Test func a_bad_request_holds_the_command_and_the_next_one_still_goes() async throws {
+    let copy = try workspace(5)
+    let applied = try changes(from: 5, to: 6, adding: "new")
+    let h = try await Harness(
+      [
+        .account(firstAccount), .workspace(.unchanged(revision: 5, owner: "user-1")),
+        .failure(TransportError.refused(status: 400, reason: "bad-request")),
+        .outcome(.applied(receipt: .object([:]), changes: applied, owner: "user-1")),
+      ], copy: copy, entries: [pending("op-1", base: 5), pending("op-2", base: 5)])
+
+    await h.engine.start()
+
+    #expect(await h.transport.sends == [send("op-1", base: 5), send("op-2", base: 5)])
+    #expect(try await h.entries == ["op-1 held(bad-request) base 5 own []"])
+    #expect(await current(h.engine) == state(.ready, try required(copy.applying(applied)), held: 1))
+
+    // Held, so no later pass sends it again.
+    await h.transport.add([.workspace(.unchanged(revision: 6, owner: "user-1"))])
+    await h.engine.refresh()
+    #expect(await h.transport.sends.count == 2)
+  }
+
+  @Test func a_sign_in_that_cannot_keep_its_token_does_not_stop_a_waiting_sign_out_from_erasing() async throws {
+    let gate = Gate()
+    let store = RecordingStore()
+    try await store.replace(with: try workspace(5), owner: "user-1")
+    await store.forget()
+    let tokens = try RefusingTokenStore(first)
+    let transport = FakeTransport(opening + [.gated(gate), .session(firstAgain)])
+    let engine = SyncEngine(transport: transport, tokens: tokens, store: store, now: { noon })
+    await engine.start()
+
+    let signingOut = Task { await engine.signOut() }
+    await gate.reached()
+    await #expect(throws: StoreRefused.self) {
+      try await engine.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
+    }
+    await gate.open(.done)
+    await signingOut.value
+
+    #expect(await store.log == ["erase"])
+    #expect(try await store.load() == nil)
+    #expect(try tokens.read() == nil)
+    #expect(await current(engine) == state(.signedOut, nil))
+  }
+
+  @Test func a_zone_the_system_does_not_know_asks_for_no_day() async throws {
+    let served = try workspace(4, timezone: "Mars/Olympus_Mons", days: [])
+    let h = try await Harness([.account(firstAccount), .workspace(.full(served, owner: "user-1"))])
+
+    await h.engine.start()
+
+    #expect(await h.transport.sends == [])
+    #expect(try await h.entries == [])
+    #expect(await current(h.engine) == state(.ready, served))
+  }
+
+  @Test func signed_in_follows_the_stored_session() async throws {
+    let local = try workspace(3)
+    let served = try workspace(4)
+    let h = try await Harness(
+      [
+        .account(localAccount), .workspace(.full(local, owner: "local")), .session(first),
+        .workspace(.full(served, owner: "user-1")), .done,
+      ], session: nil)
+
+    await h.engine.start()
+    #expect(await current(h.engine) == state(.ready, local, signedIn: false))
+
+    try await h.engine.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
+    #expect(await current(h.engine) == state(.ready, served, signedIn: true))
+
+    await h.engine.signOut()
+    #expect(await current(h.engine) == state(.signedOut, nil, signedIn: false))
   }
 }
 

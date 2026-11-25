@@ -40,6 +40,14 @@ import Testing
     #expect(LocalDate.today(in: "", at: at).value == "2026-10-22")
   }
 
+  @Test func a_zone_is_known_only_when_the_system_knows_it() {
+    #expect(LocalDate.isKnown(timezone: "UTC"))
+    #expect(LocalDate.isKnown(timezone: "Pacific/Auckland"))
+    #expect(LocalDate.isKnown(timezone: "America/Vancouver"))
+    #expect(!LocalDate.isKnown(timezone: "Mars/Olympus_Mons"))
+    #expect(!LocalDate.isKnown(timezone: ""))
+  }
+
   @Test func a_year_is_written_with_four_digits() throws {
     #expect(LocalDate.today(in: "UTC", at: Date(timeIntervalSince1970: 0)).value == "1970-01-01")
   }
