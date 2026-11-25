@@ -90,17 +90,28 @@ private func current(_ engine: SyncEngine) async -> SyncState? {
 actor RecordingStore: WorkspaceStore {
   private let inner = MemoryWorkspaceStore()
   private(set) var log: [String] = []
+  private var failing: Set<String> = []
 
   func forget() { log = [] }
+
+  /// Makes the call named `name` throw `StoreRefused` until `heal()`.
+  func fail(_ name: String) { failing.insert(name) }
+  func heal() { failing = [] }
+
+  private func check(_ name: String) throws {
+    if failing.contains(name) { throw StoreRefused() }
+  }
 
   func load() async throws -> (workspace: Workspace, owner: String)? { try await inner.load() }
 
   func replace(with workspace: Workspace, owner: String) async throws {
+    try check("replace")
     log.append("replace \(owner) \(workspace.revision)")
     try await inner.replace(with: workspace, owner: owner)
   }
 
   func write(_ workspace: Workspace, changed: WorkspaceChanges) async throws {
+    try check("write")
     log.append("write \(workspace.revision)")
     try await inner.write(workspace, changed: changed)
   }
@@ -108,24 +119,45 @@ actor RecordingStore: WorkspaceStore {
   func entries() async throws -> [OutboxEntry] { try await inner.entries() }
 
   func append(_ entry: NewOutboxEntry) async throws -> OutboxEntry {
+    try check("append")
     log.append("append \(entry.operationId)")
     return try await inner.append(entry)
   }
 
   func update(_ entry: OutboxEntry) async throws {
+    try check("update")
     log.append("update \(entry.operationId)")
     try await inner.update(entry)
   }
 
   func remove(seq: Int) async throws {
+    try check("remove")
     log.append("remove \(seq)")
     try await inner.remove(seq: seq)
   }
 
+  func acknowledge(seq: Int, revision: Int?) async throws {
+    try check("acknowledge")
+    log.append("acknowledge \(seq) \(revision.map(String.init) ?? "-")")
+    try await inner.acknowledge(seq: seq, revision: revision)
+  }
+
   func erase() async throws {
+    try check("erase")
     log.append("erase")
     try await inner.erase()
   }
+}
+
+struct StoreRefused: Error {}
+
+/// A token store whose writes fail.
+final class RefusingTokenStore: TokenStore {
+  private let inner = MemoryTokenStore()
+  init(_ session: Session?) throws { if let session { try inner.write(session) } }
+  func read() throws -> Session? { try inner.read() }
+  func write(_ session: Session) throws { throw StoreRefused() }
+  func clear() throws { try inner.clear() }
 }
 
 /// An engine over a fake server, a recording store and a memory token store, with what the store holds before.
@@ -223,14 +255,14 @@ private struct Harness {
   @Test func another_owner_replaces_everything_and_drops_their_outbox() async throws {
     let served = try workspace(9)
     let h = try await Harness(
-      [.account(localAccount), .workspace(.full(served, owner: "local"))], session: nil, copy: try workspace(5),
+      [.account(firstAccount), .workspace(.full(served, owner: "user-2"))], copy: try workspace(5),
       entries: [pending("op-1", base: 5)])
 
     await h.engine.start()
 
-    #expect(await h.calls == [.account(token: nil), .workspace(token: nil, have: 5)])
-    #expect(await h.log == ["replace local 9"])
-    #expect(try await h.kept?.owner == "local")
+    #expect(await h.calls == [.account(token: "tok-1"), .workspace(token: "tok-1", have: 5)])
+    #expect(await h.log == ["replace user-2 9"])
+    #expect(try await h.kept?.owner == "user-2")
     #expect(try await h.entries == [])
     #expect(await current(h.engine) == state(.ready, served))
   }
@@ -239,17 +271,17 @@ private struct Harness {
     let served = try workspace(5, tasks: ["theirs"])
     let h = try await Harness(
       [
-        .account(localAccount), .workspace(.unchanged(revision: 5, owner: "local")),
-        .workspace(.full(served, owner: "local")),
-      ], session: nil, copy: try workspace(5))
+        .account(firstAccount), .workspace(.unchanged(revision: 5, owner: "user-2")),
+        .workspace(.full(served, owner: "user-2")),
+      ], copy: try workspace(5))
 
     await h.engine.start()
 
     #expect(
       await h.calls == [
-        .account(token: nil), .workspace(token: nil, have: 5), .workspace(token: nil, have: nil),
+        .account(token: "tok-1"), .workspace(token: "tok-1", have: 5), .workspace(token: "tok-1", have: nil),
       ])
-    #expect(await h.log == ["replace local 5"])
+    #expect(await h.log == ["replace user-2 5"])
     #expect(await current(h.engine) == state(.ready, served))
   }
 
@@ -304,7 +336,7 @@ private struct Harness {
 
     #expect(await h.transport.sends == [send("op-1", base: 5), send("op-2", base: 5, own: [6])])
     #expect(try await h.kept?.workspace == after)
-    #expect(await h.log == ["write 6", "remove 1", "update op-2", "update op-2"])
+    #expect(await h.log == ["write 6", "acknowledge 1 6", "update op-2"])
     #expect(try await h.entries == ["op-2 held(conflict) base 5 own [6]"])
     #expect(await current(h.engine) == state(.ready, after, held: 1))
   }
@@ -325,7 +357,7 @@ private struct Harness {
         .account(token: "tok-1"), .workspace(token: "tok-1", have: 5), send("op-1", base: 5),
         .workspace(token: "tok-1", have: nil),
       ])
-    #expect(await h.log == ["replace user-1 8", "remove 1"])
+    #expect(await h.log == ["replace user-1 8", "acknowledge 1 8"])
     #expect(try await h.entries == [])
     #expect(await current(h.engine) == state(.ready, served))
   }
@@ -530,7 +562,7 @@ private struct Harness {
     ])
     let engine = SyncEngine(transport: dying, tokens: tokens, store: store, now: { noon })
     await engine.start()
-    let change = Task { await engine.enqueue(action: tick("t1"), label: "Tick t1") }
+    let change = Task { try await engine.enqueue(action: tick("t1"), label: "Tick t1") }
     await gate.reached()
     let operationId = try required(await dying.sends.first?.operationId)
 
@@ -545,7 +577,7 @@ private struct Harness {
     #expect(try await store.entries() == [])
 
     await gate.open(.failure(TransportError.offline))
-    await change.value
+    try await change.value
   }
 }
 
@@ -658,7 +690,7 @@ private struct Harness {
 
     // The change's send is cancelled, then a refresh's load is.
     await h.transport.add([.failure(CancellationError()), .failure(CancellationError())])
-    await h.engine.enqueue(action: tick("t1"), label: "Tick t1")
+    try await h.engine.enqueue(action: tick("t1"), label: "Tick t1")
     await h.engine.refresh()
 
     #expect(await current(h.engine) == before)
@@ -679,7 +711,7 @@ private struct Harness {
     let store = h.store
     await h.transport.onCall { _ in await seen.add((try? await store.entries()) ?? []) }
 
-    await h.engine.enqueue(action: tick("t1"), label: "Tick t1")
+    try await h.engine.enqueue(action: tick("t1"), label: "Tick t1")
 
     let sends = await h.transport.sends
     #expect(sends.count == 1)
@@ -704,17 +736,31 @@ private struct Harness {
     #expect(await h.calls.count == 3)  // the change is sent; nothing is loaded for it
   }
 
-  @Test func enqueue_with_nothing_shown_does_nothing() async throws {
+  @Test func enqueue_with_nothing_shown_is_refused() async throws {
     let empty = try await Harness()
-    await empty.engine.enqueue(action: tick("t1"), label: "Tick t1")
+    await #expect(throws: SyncError.notReady) { try await empty.engine.enqueue(action: tick("t1"), label: "Tick t1") }
     #expect(await empty.calls == [])
     #expect(await empty.log == [])
 
     let signedOut = try await Harness([.failure(TransportError.signedOut)], copy: try workspace(5))
     await signedOut.engine.start()
-    await signedOut.engine.enqueue(action: tick("t1"), label: "Tick t1")
+    await #expect(throws: SyncError.notReady) {
+      try await signedOut.engine.enqueue(action: tick("t1"), label: "Tick t1")
+    }
     #expect(await signedOut.calls == [.account(token: "tok-1")])
     #expect(await signedOut.log == [])
+  }
+
+  @Test func a_change_the_store_refuses_is_reported_and_never_sent() async throws {
+    let h = try await Harness(opening, copy: try workspace(5))
+    await h.engine.start()
+    await h.store.fail("append")
+
+    await #expect(throws: StoreRefused.self) { try await h.engine.enqueue(action: tick("t1"), label: "Tick t1") }
+
+    #expect(await h.transport.sends == [])
+    #expect(await h.calls.count == 2)
+    #expect(try await h.entries == [])
   }
 
   @Test func each_read_of_states_starts_with_the_current_state_and_never_repeats_one() async throws {
@@ -810,14 +856,14 @@ private struct Harness {
       ], copy: copy)
     await h.engine.start()
 
-    let firstChange = Task { await h.engine.enqueue(action: tick("a"), label: "Tick a") }
+    let firstChange = Task { try await h.engine.enqueue(action: tick("a"), label: "Tick a") }
     await gate.reached()
-    let secondChange = Task { await h.engine.enqueue(action: tick("b"), label: "Tick b") }
+    let secondChange = Task { try await h.engine.enqueue(action: tick("b"), label: "Tick b") }
     let store = h.store
     await until { ((try? await store.entries().count) ?? 0) == 2 }
     await gate.open(.outcome(.applied(receipt: .object([:]), changes: applied, owner: "user-1")))
-    await firstChange.value
-    await secondChange.value
+    try await firstChange.value
+    try await secondChange.value
 
     let sends = await h.transport.sends
     #expect(sends.count == 2)
@@ -825,6 +871,148 @@ private struct Harness {
     #expect(action == tick("b"))
     #expect(basis == OutboxBasis(baseRevision: 5, ownRevisions: [6], readsBeyond: true))
     #expect(await h.transport.maxInFlight == 1)
+  }
+}
+
+// MARK: - Acknowledging, sessions and copies
+
+@Suite struct SyncEngineSessionTests {
+  @Test func a_failed_acknowledge_keeps_the_entry_and_sends_it_again() async throws {
+    let copy = try workspace(5)
+    let applied = try changes(from: 5, to: 6, adding: "new")
+    let after = try required(copy.applying(applied))
+    let h = try await Harness(
+      opening + [.outcome(.applied(receipt: .object([:]), changes: applied, owner: "user-1"))], copy: copy,
+      entries: [pending("op-1", base: 5)])
+    await h.store.fail("acknowledge")
+
+    await h.engine.start()
+
+    #expect(try await h.entries == ["op-1 pending base 5 own []"])
+    #expect(try await h.kept?.workspace == after)
+
+    // The server answers the replay with the receipt it kept; the copy is already past its base, so it loads whole.
+    await h.store.heal()
+    await h.transport.add([
+      .workspace(.unchanged(revision: 6, owner: "user-1")),
+      .outcome(.applied(receipt: .object([:]), changes: applied, owner: "user-1")),
+      .workspace(.full(after, owner: "user-1")),
+    ])
+    await h.engine.refresh()
+
+    #expect(await h.transport.sends == [send("op-1", base: 5), send("op-1", base: 5)])
+    #expect(try await h.entries == [])
+    #expect(await current(h.engine) == state(.ready, after))
+  }
+
+  @Test func after_a_401_the_next_launch_shows_nothing_and_asks_nothing() async throws {
+    let h = try await Harness([.failure(TransportError.signedOut)], copy: try workspace(5))
+    await h.engine.start()
+
+    let silent = FakeTransport()
+    let next = SyncEngine(transport: silent, tokens: h.tokens, store: h.store, now: { noon })
+    let seen = Seen()
+    let reader = Task { for await value in next.states { await seen.add(value) } }
+    await next.start()
+    reader.cancel()
+
+    #expect(await silent.calls == [])
+    #expect(await current(next) == state(.signedOut, nil))
+    #expect(await !seen.all.contains { $0.workspace != nil })
+  }
+
+  @Test func a_copy_left_by_a_failed_erase_is_never_shown_and_is_erased_at_the_next_start() async throws {
+    let h = try await Harness(opening + [.done], copy: try workspace(5))
+    await h.engine.start()
+    await h.store.fail("erase")
+
+    await h.engine.signOut()
+
+    #expect(await current(h.engine) == state(.signedOut, nil))
+    #expect(try h.tokens.read() == nil)
+    #expect(try await h.kept != nil)
+
+    await h.store.heal()
+    await h.store.forget()
+    let silent = FakeTransport()
+    let next = SyncEngine(transport: silent, tokens: h.tokens, store: h.store, now: { noon })
+    let seen = Seen()
+    let reader = Task { for await value in next.states { await seen.add(value) } }
+    await next.start()
+    reader.cancel()
+
+    #expect(await silent.calls == [])
+    #expect(await h.log == ["erase"])
+    #expect(try await h.kept == nil)
+    #expect(await current(next) == state(.signedOut, nil))
+    #expect(await !seen.all.contains { $0.workspace != nil })
+  }
+
+  @Test func a_local_copy_without_a_session_is_shown_at_once() async throws {
+    let copy = try workspace(5)
+    let h = try await Harness(
+      [.account(localAccount), .workspace(.unchanged(revision: 5, owner: "local"))], session: nil, copy: copy,
+      owner: "local")
+    let seen = Seen()
+    let engine = h.engine
+    await h.transport.onCall { _ in await seen.add(await current(engine)) }
+
+    await h.engine.start()
+
+    #expect(await seen.first == state(.starting, copy))
+    #expect(await current(h.engine) == state(.ready, copy))
+  }
+
+  @Test func a_session_for_another_owner_shows_nothing_until_the_load_replaces_the_copy() async throws {
+    let served = try workspace(2)
+    let h = try await Harness(
+      [.account(Account(owner: "user-2", email: nil, signIn: true)), .workspace(.full(served, owner: "user-2"))],
+      session: second, copy: try workspace(5))
+    let seen = Seen()
+    let engine = h.engine
+    await h.transport.onCall { _ in await seen.add(await current(engine)) }
+
+    await h.engine.start()
+
+    #expect(await seen.all == [state(.starting, nil), state(.ready, nil)])
+    #expect(await current(h.engine) == state(.ready, served))
+    #expect(try await h.kept?.owner == "user-2")
+  }
+
+  @Test func a_token_that_cannot_be_kept_ends_signed_out() async throws {
+    let store = RecordingStore()
+    try await store.replace(with: try workspace(5), owner: "user-1")
+    let tokens = try RefusingTokenStore(first)
+    let transport = FakeTransport(opening + [.session(second)])
+    let engine = SyncEngine(transport: transport, tokens: tokens, store: store, now: { noon })
+    await engine.start()
+
+    await #expect(throws: StoreRefused.self) {
+      try await engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
+    }
+
+    #expect(await current(engine) == state(.signedOut, nil))
+    #expect(try tokens.read() == nil)
+    #expect(await transport.calls.count == 3)
+  }
+
+  @Test func a_sign_in_that_lands_during_a_sign_out_wins() async throws {
+    let gate = Gate()
+    let served = try workspace(2)
+    let h = try await Harness(
+      opening + [.gated(gate), .session(second), .workspace(.full(served, owner: "user-2"))], copy: try workspace(5))
+    await h.engine.start()
+
+    let signingOut = Task { await h.engine.signOut() }
+    await gate.reached()
+    try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
+    await gate.open(.done)
+    await signingOut.value
+
+    #expect(try h.tokens.read() == second)
+    #expect(try await h.kept?.owner == "user-2")
+    #expect(try await h.kept?.workspace == served)
+    #expect(await current(h.engine) == state(.ready, served))
   }
 }
 

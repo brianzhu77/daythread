@@ -28,6 +28,10 @@ enum WorkspaceStoreContract {
     StoreCase(name: "append without a workspace kept is refused", run: appendWithoutWorkspace),
     StoreCase(name: "erase leaves nothing", run: eraseLeavesNothing),
     StoreCase(name: "2,000 pages of 2 KB are replaced and loaded", run: manyPages),
+    StoreCase(name: "acknowledge removes the entry and passes the revision on", run: acknowledgePassesOn),
+    StoreCase(name: "acknowledge does not repeat a revision an entry has", run: acknowledgeDoesNotRepeat),
+    StoreCase(name: "acknowledge of an entry that is not there does nothing", run: acknowledgeOfMissingEntry),
+    StoreCase(name: "acknowledge without a revision only removes", run: acknowledgeWithoutRevision),
   ]
 
   private static let owner = "user-1"
@@ -184,6 +188,61 @@ enum WorkspaceStoreContract {
     #expect(try await store.load() == nil)
     #expect(try await store.entries().isEmpty)
     try await store.erase()
+  }
+
+  private static func entry(_ operationId: String, owner: String = owner, own: [Int] = []) -> NewOutboxEntry {
+    NewOutboxEntry(
+      kind: .command, owner: owner, operationId: operationId, action: .object(["type": .string("tick")]),
+      baseRevision: 5, ownRevisions: own, label: operationId, createdAt: Date(timeIntervalSince1970: 0),
+      state: .pending, reason: nil)
+  }
+
+  static func acknowledgePassesOn(_ store: any WorkspaceStore) async throws {
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    let earlier = try await store.append(entry("op-earlier", own: [3]))
+    let acknowledged = try await store.append(entry("op-acknowledged"))
+    let theirs = try await store.append(entry("op-theirs", owner: "user-2"))
+    var later = try await store.append(entry("op-later", own: [6]))
+
+    try await store.acknowledge(seq: acknowledged.seq, revision: 7)
+
+    later.ownRevisions = [6, 7]
+    #expect(try await store.entries() == [earlier, later])
+    // Another owner's entry is left as it was.
+    try await store.replace(with: try firstWorkspace(), owner: "user-2")
+    #expect(try await store.entries() == [theirs])
+  }
+
+  static func acknowledgeDoesNotRepeat(_ store: any WorkspaceStore) async throws {
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    let acknowledged = try await store.append(entry("op-acknowledged"))
+    let later = try await store.append(entry("op-later", own: [7]))
+
+    try await store.acknowledge(seq: acknowledged.seq, revision: 7)
+
+    #expect(try await store.entries() == [later])
+  }
+
+  static func acknowledgeOfMissingEntry(_ store: any WorkspaceStore) async throws {
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    let gone = try await store.append(entry("op-gone"))
+    let later = try await store.append(entry("op-later"))
+    try await store.remove(seq: gone.seq)
+
+    try await store.acknowledge(seq: gone.seq, revision: 7)
+    try await store.acknowledge(seq: later.seq + 100, revision: 8)
+
+    #expect(try await store.entries() == [later])
+  }
+
+  static func acknowledgeWithoutRevision(_ store: any WorkspaceStore) async throws {
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    let acknowledged = try await store.append(entry("op-acknowledged"))
+    let later = try await store.append(entry("op-later", own: [4]))
+
+    try await store.acknowledge(seq: acknowledged.seq, revision: nil)
+
+    #expect(try await store.entries() == [later])
   }
 
   static func manyPages(_ store: any WorkspaceStore) async throws {

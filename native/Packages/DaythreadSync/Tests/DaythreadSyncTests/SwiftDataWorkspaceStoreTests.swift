@@ -91,6 +91,20 @@ import Testing
     #expect(rewritten <= after.pages.count + change.changes.upsertedTaskIds.count)
   }
 
+  @Test func acknowledgeIsOneSave() async throws {
+    let store = try SwiftDataWorkspaceStore.open(at: nil)
+    try await store.replace(with: try required(StoreFixtures.workspaces().first), owner: "user-1")
+    let acknowledged = try await store.append(newEntry(operationId: "op-1"))
+    _ = try await store.append(newEntry(operationId: "op-2"))
+    _ = try await store.append(newEntry(operationId: "op-3"))
+    let before = await store.saves
+
+    try await store.acknowledge(seq: acknowledged.seq, revision: 9)
+
+    #expect(await store.saves - before == 1)
+    #expect(try await store.entries().map(\.ownRevisions) == [[9], [9]])
+  }
+
   @Test func storedRowsThatCannotBeReadAreNotLoadedPartly() async throws {
     let store = try SwiftDataWorkspaceStore.open(at: nil)
     try await store.replace(with: try required(StoreFixtures.workspaces().first), owner: "user-1")
