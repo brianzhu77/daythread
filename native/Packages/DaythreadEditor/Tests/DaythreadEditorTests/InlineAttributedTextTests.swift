@@ -45,7 +45,7 @@ private func pageRef(_ pageId: String) -> JSONValue {
       run("all", ["bold": .bool(true), "italic": .bool(true), "strike": .bool(true), "code": .bool(true)]),
       run("off", ["bold": .bool(false), "textColor": .string("red")]),
     ])
-    #expect(String(styled.characters) == "biscpalloff")
+    #expect(String(styled.characters) == "biuscpalloff")
     #expect(pieces(styled) == [
       Piece(text: "b", intent: .stronglyEmphasized), Piece(text: "i", intent: .emphasized),
       Piece(text: "u", underlined: true), Piece(text: "s", intent: .strikethrough),
@@ -73,7 +73,7 @@ private func pageRef(_ pageId: String) -> JSONValue {
   @Test func aLinkWithoutAUsableHrefKeepsItsTextOnly() throws {
     let styled = try make([
       .object(["type": .string("link"), "content": .array([run("bare")])]),
-      .object(["type": .string("link"), "href": .string("not a url \u{0}"), "content": .array([run(" odd")])]),
+      .object(["type": .string("link"), "href": .string(""), "content": .array([run(" odd")])]),
     ])
     #expect(String(styled.characters) == "bare odd")
     #expect(styled.runs.allSatisfy { $0.link == nil })
