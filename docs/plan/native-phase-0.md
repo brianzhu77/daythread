@@ -765,7 +765,8 @@ the point at which it has to be settled. Nothing on this list is needed for phas
 **With phase 1's screens**
 - Rows on a page are 44 pt apart; date chips and page references draw as plain text.
 - The engine does not publish the account's address, so the menu shows it only after a sign-in on that launch.
-- The account menu is rebuilt on every state change; two fast phase changes overlap their dissolves.
+- The account menu is rebuilt on every state change; two fast phase changes overlap their dissolves. Seen while
+  taking the screenshots: for a few seconds after signing in, a tap on the account button does not open its menu.
 - Cell polish: the hairline's height, markers and right-to-left, the marker column past "99.", an empty paragraph's
   height, the divider and quote bar against safe-area margins.
 - The day-change refresh follows the device's midnight, not the account's.
