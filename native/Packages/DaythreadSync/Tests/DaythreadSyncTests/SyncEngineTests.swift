@@ -18,6 +18,10 @@ private let firstAgain = Session(
 
 private let firstAccount = Account(owner: "user-1", email: "one@example.com", signIn: true)
 private let localAccount = Account(owner: "local", email: nil, signIn: false)
+/// What the server answers an engine that opens on a copy at revision 5 it still holds.
+private let opening: [FakeTransport.Reply] = [
+  .account(firstAccount), .workspace(.unchanged(revision: 5, owner: "user-1")),
+]
 
 /// A workspace at `revision` holding a day page for each of `days`.
 private func workspace(
@@ -26,7 +30,8 @@ private func workspace(
   let pages = days.map { #"{"id":"day:\#($0)","type":"day","date":"\#($0)","title":"\#($0)","document":"[]"}"# }
   let rows = tasks.map { #"{"id":"\#($0)","title":"\#($0)","status":"open","paused":false}"# }
   let text =
-    #"{"revision":\#(revision),"timezone":"\#(timezone)","pages":[\#(pages.joined(separator: ","))],"tasks":[\#(rows.joined(separator: ","))]}"#
+    #"{"revision":\#(revision),"timezone":"\#(timezone)","pages":[\#(pages.joined(separator: ","))],"#
+    + #""tasks":[\#(rows.joined(separator: ","))]}"#
   return try required(Workspace(try JSON.parse(text)))
 }
 
@@ -34,7 +39,8 @@ private func workspace(
 private func changes(from: Int, to revision: Int, adding added: String) throws -> WorkspaceChanges {
   let task = #"{"id":"\#(added)","title":"\#(added)","status":"open","paused":false}"#
   let text =
-    #"{"from":\#(from),"revision":\#(revision),"timezone":"UTC","pages":{"upsert":[],"remove":[]},"tasks":{"upsert":[\#(task)],"remove":[]}}"#
+    #"{"from":\#(from),"revision":\#(revision),"timezone":"UTC","pages":{"upsert":[],"remove":[]},"#
+    + #""tasks":{"upsert":[\#(task)],"remove":[]}}"#
   return try required(WorkspaceChanges(try JSON.parse(text)))
 }
 
@@ -152,7 +158,7 @@ private struct Harness {
 @Suite struct SyncEngineTests {
   @Test func shows_the_stored_copy_before_the_first_request() async throws {
     let copy = try workspace(5)
-    let h = try await Harness([.account(firstAccount), .workspace(.unchanged(revision: 5, owner: "user-1"))], copy: copy)
+    let h = try await Harness(opening, copy: copy)
     let seen = Seen()
     let engine = h.engine
     await h.transport.onCall { _ in await seen.add(await current(engine)) }
@@ -205,7 +211,7 @@ private struct Harness {
 
   @Test func unchanged_reply_writes_nothing() async throws {
     let copy = try workspace(5)
-    let h = try await Harness([.account(firstAccount), .workspace(.unchanged(revision: 5, owner: "user-1"))], copy: copy)
+    let h = try await Harness(opening, copy: copy)
 
     await h.engine.start()
 
@@ -713,7 +719,7 @@ private struct Harness {
 
   @Test func each_read_of_states_starts_with_the_current_state_and_never_repeats_one() async throws {
     let copy = try workspace(5)
-    let h = try await Harness([.account(firstAccount), .workspace(.unchanged(revision: 5, owner: "user-1"))], copy: copy)
+    let h = try await Harness(opening, copy: copy)
     let early = h.engine.states
 
     await h.engine.start()
