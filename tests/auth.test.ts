@@ -628,3 +628,37 @@ test('the gate on an app path: a bearer is let in as its owner; a cookie alone i
     assert.ok((await h.sessions.check(old.token))!.expiresAt.getTime() > old.expiresAt.getTime(), 'renewed')
   } finally { await h.close() }
 })
+
+test('no spelling of a v1 path reaches an app handler under a cookie', async () => {
+  const { isAppPath, tokenOf } = await import('../src/server/auth/server.ts')
+  const cookie = { cookie: '__Host-daythread_session=fromcookie' }
+  assert.equal(isAppPath('/api/%761/account'), true, 'the router decodes the path before it matches')
+  assert.equal(isAppPath('/API/%76%31/account'), true)
+  assert.equal(tokenOf(new Request('https://daythread.test/api/%761/account', { headers: cookie })), undefined)
+  assert.doesNotThrow(() => isAppPath('/api/v1/%E0%A4%A'))
+  assert.equal(isAppPath('/api/v1/%E0%A4%A'), true, 'a malformed escape falls back to the raw path')
+  assert.equal(isAppPath('/api/%E0%A4%A/x'), false)
+
+  const h = await handlers()
+  try {
+    const { appRoute } = h.server
+    h.supabase.verified.set('owner@example.com', A); await h.accounts.invite('owner@example.com')
+    const body = { email: 'owner@example.com', password: 'right' }
+    const cookieValue = h.cookieOf(await h.server.handleSignIn(h.post('/api/auth/sign-in', body)))!
+    const { token } = await (await h.server.handleAppSignIn(new Request('https://daythread.test/api/v1/auth/sign-in', { method: 'POST', body: JSON.stringify(body) }))).json() as { token: string }
+    const withCookie = { cookie: `__Host-daythread_session=${cookieValue}` }
+    let ran = 0
+    const account = appRoute(async request => { ran++; return h.server.handleAppAccount(request) })
+    const run = (handler: ReturnType<typeof appRoute>, path: string, headers: Record<string, string>, method = 'GET') => handler({ request: new Request(`https://daythread.test${path}`, { method, headers }) })
+    const doubled = await run(account, '/api//v1/account', withCookie)
+    assert.equal(doubled.status, 404); assert.equal(ran, 0, 'the handler did not run')
+    const ok = await run(account, '/api/v1/account', { authorization: `Bearer ${token}` })
+    assert.equal(ok.status, 200); assert.deepEqual(await ok.json(), { owner: A, email: 'owner@example.com', signIn: true })
+    const encoded = await run(account, '/api/%761/account', withCookie)
+    assert.notEqual(encoded.status, 200, 'a cookie is not an account on an app path, however it is spelled')
+    const signOut = appRoute(h.server.handleAppSignOut)
+    assert.equal((await run(signOut, '/api//v1/auth/sign-out', withCookie, 'POST')).status, 404)
+    assert.equal((await run(signOut, '/api/%761/auth/sign-out', withCookie, 'POST')).status, 200, 'an app path with no bearer ends nothing')
+    assert.ok(await h.server.ownerSession(cookieValue), 'the cookie\'s session still exists')
+  } finally { await h.close() }
+})
