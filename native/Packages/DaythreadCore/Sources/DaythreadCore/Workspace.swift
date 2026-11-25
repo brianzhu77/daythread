@@ -81,12 +81,25 @@ public struct TodoTask: Hashable, Sendable, Identifiable {
 
 /// The workspace in the form the server sends it. Like `Block`, it is written back through the
 /// object it was read from, so what this package does not name is never lost.
+///
+/// Invariant: `raw` is always exactly what `json()` returns, and `revision`, `timezone`, `pages` and
+/// `tasks` always agree with it. Every change to one of those four writes `raw` at once, and the
+/// initialisers start from a `raw` that agrees, so the synthesised `==` and `hash` follow the JSON:
+/// a workspace equals the workspace read back from its own `json()`.
 public struct Workspace: Hashable, Sendable {
-  public var revision: Int
-  public var timezone: String
-  public var pages: [Page]
-  public var tasks: [TodoTask]
-  /// The object as read; its four named fields are written from the properties above.
+  public var revision: Int {
+    didSet { if raw["revision"]?.intValue != revision { raw["revision"] = .number(String(revision)) } }
+  }
+  public var timezone: String {
+    didSet {
+      if !(raw["timezone"]?.stringValue?.hasSameCodeUnits(as: timezone) ?? false) {
+        raw["timezone"] = .string(timezone)
+      }
+    }
+  }
+  public var pages: [Page] { didSet { raw["pages"] = .array(pages.map { .object($0.raw) }) } }
+  public var tasks: [TodoTask] { didSet { raw["tasks"] = .array(tasks.map { .object($0.raw) }) } }
+  /// The whole object, kept current (see the invariant above).
   private var raw: JSONObject
 
   private static let named = ["revision", "timezone", "pages", "tasks"]
@@ -130,16 +143,7 @@ public struct Workspace: Hashable, Sendable {
   }
 
   /// The workspace as the server would send it: unchanged fields come out as they went in.
-  public func json() -> JSONValue {
-    var object = raw
-    if object["revision"]?.intValue != revision { object["revision"] = .number(String(revision)) }
-    if !(object["timezone"]?.stringValue?.hasSameCodeUnits(as: timezone) ?? false) {
-      object["timezone"] = .string(timezone)
-    }
-    object["pages"] = .array(pages.map { .object($0.raw) })
-    object["tasks"] = .array(tasks.map { .object($0.raw) })
-    return .object(object)
-  }
+  public func json() -> JSONValue { .object(raw) }
 
   /// A copy whose top-level field `key` is set, or removed when `value` is nil (internal: `applying`).
   func setting(_ key: String, to value: JSONValue?) -> Workspace {
