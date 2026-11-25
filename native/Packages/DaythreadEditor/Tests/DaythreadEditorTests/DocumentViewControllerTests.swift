@@ -102,5 +102,98 @@
       #expect(nested.indentationLevel == 2)
       #expect(nested.indentationWidth == 20)
     }
+
+    // MARK: a row that changes
+
+    private func collection(_ controller: DocumentViewController) throws -> UICollectionView {
+      let collection = try #require(controller.view as? UICollectionView)
+      collection.layoutIfNeeded()
+      return collection
+    }
+
+    private func cell(_ controller: DocumentViewController, _ item: Int) throws -> UICollectionViewCell {
+      try #require(try collection(controller).cellForItem(at: IndexPath(item: item, section: 0)))
+    }
+
+    private func text(of cell: UICollectionViewCell) -> NSAttributedString? {
+      (cell.contentConfiguration as? UIListContentConfiguration)?.attributedText
+    }
+
+    @Test(arguments: [
+      ("paragraph", "task"), ("task", "paragraph"), ("paragraph", "divider"), ("paragraph", "database"),
+      ("divider", "paragraph"), ("database", "task"),
+    ])
+    func aRowWhoseBlockChangesTypeUnderTheSameIdIsRedrawnAsTheNewKind(from: String, to: String) throws {
+      func blocks(_ type: String) -> [Block] {
+        let props: JSONObject = type == "task" ? ["taskId": .string("k")] : JSONObject()
+        return [
+          block("first", "paragraph", text: "first"),
+          block("changing", type, props, text: ["divider", "database"].contains(type) ? nil : "changing"),
+          block("last", "paragraph", text: "last"),
+        ]
+      }
+      let controller = hosted()
+      let workspace = try makeWorkspace(tasks: [taskJSON("k", status: "open")])
+      controller.show(page: try makePage(blocks(from)), in: workspace)
+      _ = try collection(controller)
+      controller.show(page: try makePage(blocks(to)), in: workspace)
+      let list = try collection(controller)
+      #expect(controller.itemCount == 3)
+      let changed = try cell(controller, 1)
+      switch to {
+      case "task": #expect(changed is TodoBlockCell)
+      case "paragraph": #expect(changed is TextBlockCell)
+      case "divider": #expect(changed is SeparatorBlockCell)
+      default: #expect(changed is PlaceholderBlockCell)
+      }
+      switch to {
+      case "task", "paragraph": #expect(changed.accessibilityLabel == "changing")
+      case "database": #expect(changed.accessibilityLabel == "Database")
+      default: break
+      }
+      #expect(list.numberOfItems(inSection: 0) == 3)
+    }
+
+    @Test func aChangedToDoIsRedrawnAndAnUntouchedRowIsLeftAlone() throws {
+      let controller = hosted()
+      let page = try EditorFixtures.dayPage()
+      var workspace = try EditorFixtures.workspace()
+      controller.show(page: page, in: workspace)
+      let before = try #require(try cell(controller, 2) as? TodoBlockCell)
+      let untouched = try cell(controller, 0)
+      #expect(before.accessibilityValue == "not done")
+      #expect(before.symbolName == "circle")
+
+      let index = try #require(workspace.tasks.firstIndex { $0.id == "editor-task:d3" })
+      var raw = try #require(workspace.tasks[index].raw["status"] != nil ? workspace.tasks[index].raw : nil)
+      raw["status"] = .string("done")
+      workspace.tasks[index] = try #require(TodoTask(.object(raw)))
+      controller.show(page: page, in: workspace)
+
+      let after = try #require(try cell(controller, 2) as? TodoBlockCell)
+      #expect(after.accessibilityValue == "done")
+      #expect(after.symbolName == "checkmark.circle.fill")
+      let drawn = try #require(text(of: after))
+      #expect(drawn.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) != nil)
+      #expect(try cell(controller, 0) === untouched)
+    }
+
+    @Test func aRowWhoseTextChangedButNotItsKindIsReconfiguredInPlace() throws {
+      let controller = hosted()
+      let workspace = try makeWorkspace()
+      controller.show(
+        page: try makePage([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")]),
+        in: workspace)
+      let first = try cell(controller, 0)
+      let second = try cell(controller, 1)
+      controller.show(
+        page: try makePage([block("a", "paragraph", text: "one, changed"), block("b", "paragraph", text: "two")]),
+        in: workspace)
+      let after = try cell(controller, 0)
+      #expect(after === first)
+      #expect(try cell(controller, 1) === second)
+      #expect(text(of: after)?.string == "one, changed")
+      #expect(after.accessibilityLabel == "one, changed")
+    }
   }
 #endif
