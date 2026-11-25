@@ -10,6 +10,21 @@
 
     private enum Section { case main }
 
+    /// Which cell registration draws a row. The one place a row kind is mapped to a cell, so the cell
+    /// provider and the choice between reconfiguring and reloading cannot disagree.
+    private enum CellKind {
+      case text, todo, separator, placeholder
+
+      init(_ kind: BlockRow.Kind) {
+        switch kind {
+        case .text: self = .text
+        case .todo: self = .todo
+        case .separator: self = .separator
+        case .placeholder: self = .placeholder
+        }
+      }
+    }
+
     private var rowsByID: [String: BlockRow] = [:]
     private var orderedIDs: [String] = []
     private var drawn: [String: AttributedString] = [:]
@@ -58,13 +73,20 @@
       let changed = ids.filter { rowsByID[$0] != nil && (rowsByID[$0] != newRows[$0] || drawn[$0] != newDrawn[$0]) }
       if hasShownAPage, changed.isEmpty, ids == orderedIDs { return }
 
+      let oldRows = rowsByID
       rowsByID = newRows
       drawn = newDrawn
       orderedIDs = ids
       var snapshot = NSDiffableDataSourceSnapshot<Section, String>()
       snapshot.appendSections([.main])
       snapshot.appendItems(ids)
-      snapshot.reconfigureItems(changed)
+      // A reconfigure must get the same kind of cell back; a row that now needs another gets a fresh one.
+      let (reloaded, reconfigured) = changed.reduce(into: ([String](), [String]())) { split, id in
+        let sameCell = oldRows[id].map { CellKind($0.kind) } == newRows[id].map { CellKind($0.kind) }
+        if sameCell { split.1.append(id) } else { split.0.append(id) }
+      }
+      snapshot.reconfigureItems(reconfigured)
+      snapshot.reloadItems(reloaded)
       let animated = hasShownAPage
       hasShownAPage = true
       appliedSnapshots += 1
@@ -91,7 +113,7 @@
         cell.configure(name: name, depth: row.depth)
       }
       return UICollectionViewDiffableDataSource(collectionView: collectionView) { [weak self] collectionView, indexPath, id in
-        switch self?.rowsByID[id]?.kind {
+        switch self?.rowsByID[id].map({ CellKind($0.kind) }) {
         case .text: collectionView.dequeueConfiguredReusableCell(using: text, for: indexPath, item: id)
         case .todo: collectionView.dequeueConfiguredReusableCell(using: todo, for: indexPath, item: id)
         case .placeholder: collectionView.dequeueConfiguredReusableCell(using: placeholder, for: indexPath, item: id)
