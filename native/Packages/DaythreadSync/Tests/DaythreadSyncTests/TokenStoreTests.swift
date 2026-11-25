@@ -33,19 +33,22 @@ private func exercise(_ store: some TokenStore) throws {
 }
 
 @Suite struct KeychainTokenStoreTests {
-  /// The status the Keychain answers a first probe with, or nil when it is usable here. A test
-  /// process that is not signed with the app's entitlements may be refused (-34018) or asked to
-  /// interact; those tests are skipped, saying which status came back.
+  /// The status the Keychain answers a first write with, or nil when it is usable here. A test
+  /// process that is not signed with the app's entitlements is refused (-34018) or asked to
+  /// interact; those tests are skipped, saying which status came back. A read cannot tell: it answers
+  /// "not found" whatever the entitlements, so the probe adds an item and removes it again.
   private static func unavailability(service: String) -> OSStatus? {
-    let query: [String: Any] = [
+    let item: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
       kSecAttrAccount as String: "probe",
       kSecUseDataProtectionKeychain as String: true,
-      kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
+      kSecValueData as String: Data("probe".utf8),
     ]
-    let status = SecItemCopyMatching(query as CFDictionary, nil)
-    return status == errSecSuccess || status == errSecItemNotFound ? nil : status
+    let status = SecItemAdd(item as CFDictionary, nil)
+    guard status == errSecSuccess else { return status }
+    SecItemDelete(item as CFDictionary)
+    return nil
   }
 
   private func withStore(_ body: (KeychainTokenStore) throws -> Void) throws {
