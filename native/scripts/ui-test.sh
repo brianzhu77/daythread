@@ -32,7 +32,7 @@ clean_up() {
   for pid in $pids; do wait "$pid" 2>/dev/null || true; done
   rm -rf "$work"
   container=$(xcrun simctl get_app_container "$simulator" app.daythread.Daythread data 2>/dev/null || true)
-  if [ -n "$container" ]; then rm -f "$container/Library/Application Support/Daythread/ui-test-"*; fi
+  if [ -n "$container" ]; then rm -f "$container/Library/Application Support/Daythread/test-"*; fi
   exit $status
 }
 trap clean_up EXIT

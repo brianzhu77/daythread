@@ -26,5 +26,5 @@ enum Wrapper {
   }
 
   /// A store name of its own for each run; the wrapper removes stores named this way when it finishes.
-  static func storeName() -> String { "ui-test-\(UUID().uuidString)" }
+  static func storeName() -> String { "test-\(UUID().uuidString)" }
 }
