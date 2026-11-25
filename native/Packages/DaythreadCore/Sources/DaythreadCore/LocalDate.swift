@@ -4,8 +4,9 @@ import Foundation
 public struct LocalDate: Hashable, Comparable, Sendable {
   public let value: String
 
-  /// Nil unless `value` is a real calendar date in that shape. Years before 100 are refused, as the
-  /// domain's `validDate` does (`Date.UTC` reads them as 19xx).
+  /// Nil unless `value` is a real calendar date in that shape. Mirrors `date()` in
+  /// `src/domain/workspace.ts`, which stores `deadlineOn`, `attentionOn` and the like: any four-digit
+  /// year, 0000 included. (A `@date` chip is stricter; see `DateMention`.)
   public init?(_ value: String) {
     let digits = Array(value.utf8)
     guard digits.count == 10, digits[4] == UInt8(ascii: "-"), digits[7] == UInt8(ascii: "-") else { return nil }
@@ -18,7 +19,7 @@ public struct LocalDate: Hashable, Comparable, Sendable {
       return n
     }
     guard let year = number(0..<4), let month = number(5..<7), let day = number(8..<10),
-      year >= 100, (1...12).contains(month), day >= 1, day <= Self.daysIn(month: month, year: year)
+      (1...12).contains(month), day >= 1, day <= Self.daysIn(month: month, year: year)
     else { return nil }
     self.value = value
   }

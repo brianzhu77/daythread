@@ -9,7 +9,10 @@ struct DateMention {
     guard
       let object = item.objectValue, object["type"]?.stringValue == "dateMention",
       let eventId = object["props"]?.objectValue?["eventId"]?.stringValue, !eventId.isEmpty,
-      let date = object["props"]?.objectValue?["date"]?.stringValue.flatMap({ LocalDate($0) })
+      let date = object["props"]?.objectValue?["date"]?.stringValue.flatMap({ LocalDate($0) }),
+      // `validDate` in `src/domain/date-chip.ts` builds the day with `Date.UTC`, which reads years
+      // 0 to 99 as 19xx, so a chip dated before the year 100 is not a chip.
+      !date.value.hasPrefix("00")
     else { return nil }
     self.date = date
     time = object["props"]?.objectValue?["time"]?.stringValue.flatMap { Self.validTime($0) ? $0 : nil }
