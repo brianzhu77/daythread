@@ -198,6 +198,8 @@ private func until(_ condition: () -> Bool, sourceLocation: SourceLocation = #_s
     try await until { [model = h.model] in model.state.phase == .signedOut }
     await h.engine.settled()
     #expect(h.model.workspace == nil)
+    // The tick may have gone to the server under its own account before the sign-out; nothing goes after it.
+    let sentBefore = await h.server.sent.count
 
     // Another account whose copy has a to-do with the same id, open.
     await h.server.add([.session(two), .workspace(.full(try copy(), owner: "two"))])
@@ -209,7 +211,7 @@ private func until(_ condition: () -> Bool, sourceLocation: SourceLocation = #_s
     #expect(h.model.workspace == h.model.state.workspace)
     #expect(h.model.state.pending == 0)
     #expect(h.model.state.held.isEmpty)
-    #expect(await h.server.sent.isEmpty)
+    #expect(await h.server.sent.count == sentBefore)
   }
 
   @Test func the_tick_is_dated_the_accounts_day() async throws {

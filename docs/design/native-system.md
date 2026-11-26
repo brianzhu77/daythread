@@ -23,6 +23,8 @@
 | Text | Where |
 | --- | --- |
 | Offline · showing what was last loaded | The prompt over Today, when the device is offline and a copy is shown |
+| Offline · showing what was last loaded · 1 change will be sent (· N changes will be sent) | The same prompt, with changes waiting to be sent; the web's words |
+| Changes aren't kept on this device | The prompt over Today when the store on the device could not be opened; it comes before offline and a failed update |
 | Couldn't update · showing what was last loaded | The same prompt, when a pass failed for any other reason |
 | Couldn't load, Retry | The whole screen, when a pass failed and there is no copy to show |
 | Daythread | The sign-in screen's title |
@@ -34,6 +36,15 @@
 | Couldn't sign in · Try again | Under "Sign in", offline or any other failure |
 | Account | The account button's accessibility label (an icon, no text) |
 | Sign out | The account menu, while a session is stored |
+| 1 change not sent (N changes not sent), Sign out and discard, Cancel | The alert after "Sign out" when changes are still not sent after one try |
+| Not saved | The held button's accessibility label (`exclamationmark.triangle` in the system's red, no text), shown while a change is held |
+| Not saved — ticked "…" was changed elsewhere | The held menu's section title, held because the row changed elsewhere; the web's sentence, with the change's label |
+| Not saved — "…" was deleted elsewhere | The same, for a to-do that is gone ("it" when the label names nothing) |
+| Not saved — ticked "…" · changed since | The same, held because something changed since |
+| Not saved? — ticked "…" may already be in | The same, held because it may already be applied |
+| Not saved — can't do this now: ticked "…" | The same, refused for any other reason |
+| Keep mine, Discard | Each held change's actions; "Keep mine" only when it was held, not refused; "Discard" destructive |
+| 1 later change waiting (N later changes waiting) | The held menu's last line, disabled, while changes wait behind a held one; the web's words |
 | Round trip · N of M pages fail | The account menu, Debug builds only, when any page's document does not write back |
 | Untitled | A page reference whose page has no title |
 | Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |

@@ -4,38 +4,36 @@
   import DaythreadSync
   import UIKit
 
-  /// The account's today: its title, its page, and the account menu.
+  /// The account's today: its title, its page, the changes not saved, and the account menu.
   @MainActor
   final class TodayViewController: UIViewController {
-    static let offlineLine = "Offline · showing what was last loaded"
-    static let failedLine = "Couldn't update · showing what was last loaded"
-
-    /// What the prompt says over the copy: offline first, then a pass that failed otherwise.
-    static func prompt(for state: SyncState) -> String? {
-      if state.offline { return offlineLine }
-      if state.failure != nil { return failedLine }
-      return nil
-    }
-
     enum AccountRow: Equatable {
       case roundTrip(failing: Int, total: Int)
       case address(String)
       case signOut
     }
 
-    /// The account menu's rows; "Sign out" only while a session is stored. No rows, no account button.
-    static func accountRows(state: SyncState, address: String?, roundTrip: AppModel.RoundTrip?) -> [AccountRow] {
+    /// The account menu's rows; the address the engine last published, and "Sign out" only while a session is stored
+    /// (from a hidden copy the engine's count of unsent changes means nothing). No rows, no account button.
+    static func accountRows(state: SyncState, roundTrip: AppModel.RoundTrip?) -> [AccountRow] {
       var rows: [AccountRow] = []
       if let roundTrip { rows.append(.roundTrip(failing: roundTrip.failing, total: roundTrip.total)) }
-      if let address { rows.append(.address(address)) }
+      if let address = state.address { rows.append(.address(address)) }
       if state.signedIn { rows.append(.signOut) }
       return rows
+    }
+
+    /// The sign-out alert's title.
+    static func unsentTitle(_ count: Int) -> String {
+      count == 1 ? "1 change not sent" : "\(count) changes not sent"
     }
 
     private let model: AppModel
     private let document = DocumentViewController()
     private let refreshControl = UIRefreshControl()
     private let accountButton = UIBarButtonItem(image: UIImage(systemName: "person.crop.circle"))
+    private let heldButton = UIBarButtonItem(image: UIImage(systemName: "exclamationmark.triangle"))
+    private lazy var tickFeedback = UIImpactFeedbackGenerator(style: .light, view: view)
 
     init(model: AppModel) {
       self.model = model
@@ -50,6 +48,16 @@
       view.backgroundColor = .systemBackground
       navigationItem.largeTitleDisplayMode = .always
       accountButton.accessibilityLabel = "Account"
+      // Both menus are built when opened, from the state of that moment.
+      accountButton.menu = UIMenu(children: [
+        UIDeferredMenuElement.uncached { [weak self] completion in completion(self?.accountMenu() ?? []) }
+      ])
+      heldButton.tintColor = .systemRed
+      heldButton.accessibilityLabel = "Not saved"
+      heldButton.menu = UIMenu(children: [
+        UIDeferredMenuElement.uncached { [weak self] completion in completion(self?.heldMenu() ?? []) }
+      ])
+      document.onTick = { [weak self] taskId in self?.tick(taskId) }
 
       addChild(document)
       document.view.frame = view.bounds
@@ -70,31 +78,76 @@
     override func updateProperties() {
       super.updateProperties()
       let state = model.state
-      let workspace = state.workspace
-      let today = LocalDate.today(in: workspace?.timezone ?? TimeZone.current.identifier, at: Date())
-      title = DayTitle.text(for: today)
-      navigationItem.prompt = Self.prompt(for: state)
-      if let workspace {
-        // Until the engine has made today's page, an empty one stands in for it.
-        if let page = workspace.dayPage(today) ?? Self.emptyPage(on: today) {
-          document.show(page: page, in: workspace)
-        }
-      }
-      let rows = Self.accountRows(state: state, address: model.address, roundTrip: model.roundTrip)
-      accountButton.menu = UIMenu(children: rows.map(menuElement))
-      navigationItem.rightBarButtonItem = rows.isEmpty ? nil : accountButton
+      title = DayTitle.text(for: model.today)
+      navigationItem.prompt = StatusLine.text(state: state, keepsChanges: model.keepsChanges)
+      showPage()
+      let rows = Self.accountRows(state: state, roundTrip: model.roundTrip)
+      navigationItem.rightBarButtonItems =
+        (rows.isEmpty ? [] : [accountButton]) + (state.held.isEmpty ? [] : [heldButton])
     }
 
-    private func menuElement(_ row: AccountRow) -> UIMenuElement {
-      switch row {
-      case .roundTrip(let failing, let total):
-        UIAction(title: "Round trip · \(failing) of \(total) pages fail", attributes: .disabled) { _ in }
-      case .address(let address):
-        UIAction(title: address, attributes: .disabled) { _ in }
-      case .signOut:
-        UIAction(title: "Sign out", attributes: .destructive) { [model] _ in
-          Task { await model.signOut() }
+    /// Draws today's page from what the model draws.
+    private func showPage() {
+      guard let workspace = model.workspace else { return }
+      let today = model.today
+      // Until the engine has made today's page, an empty one stands in for it.
+      if let page = workspace.dayPage(today) ?? Self.emptyPage(on: today) {
+        document.show(page: page, in: workspace)
+      }
+    }
+
+    /// Draws the tap before returning, so the circle changes in the frame it is tapped.
+    private func tick(_ taskId: String) {
+      guard model.tick(taskId: taskId) else { return }
+      tickFeedback.impactOccurred()
+      showPage()
+    }
+
+    // MARK: Menus
+
+    private func accountMenu() -> [UIMenuElement] {
+      Self.accountRows(state: model.state, roundTrip: model.roundTrip).map { row in
+        switch row {
+        case .roundTrip(let failing, let total):
+          UIAction(title: "Round trip · \(failing) of \(total) pages fail", attributes: .disabled) { _ in }
+        case .address(let address):
+          UIAction(title: address, attributes: .disabled) { _ in }
+        case .signOut:
+          UIAction(title: "Sign out", attributes: .destructive) { [weak self] _ in self?.signOut() }
         }
+      }
+    }
+
+    private func heldMenu() -> [UIMenuElement] {
+      let state = model.state
+      var elements: [UIMenuElement] = HeldMenu.sections(state.held).map { section in
+        var actions: [UIMenuElement] = []
+        if section.canKeep {
+          actions.append(UIAction(title: "Keep mine") { [model] _ in Task { await model.keep(section.id) } })
+        }
+        actions.append(
+          UIAction(title: "Discard", attributes: .destructive) { [model] _ in Task { await model.discard(section.id) } })
+        return UIMenu(title: section.title, options: .displayInline, children: actions)
+      }
+      if let line = HeldMenu.waitingLine(state.waiting) {
+        elements.append(UIAction(title: line, attributes: .disabled) { _ in })
+      }
+      return elements
+    }
+
+    // MARK: Signing out
+
+    /// Tries to send what is waiting first; when changes are still not sent, asks before erasing them.
+    private func signOut() {
+      Task {
+        guard case .unsent(let count) = await model.signOut(discardingUnsent: false) else { return }
+        let alert = UIAlertController(title: Self.unsentTitle(count), message: nil, preferredStyle: .alert)
+        alert.addAction(
+          UIAlertAction(title: "Sign out and discard", style: .destructive) { [model] _ in
+            Task { _ = await model.signOut(discardingUnsent: true) }
+          })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
       }
     }
 

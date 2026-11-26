@@ -23,33 +23,69 @@ public enum SignInFailure: Equatable, Sendable {
   }
 }
 
-/// What the screens draw from: the engine's latest state, followed for as long as the model lives.
+/// What the screens draw from: the engine's latest state, followed for as long as the model lives, with the ticks this
+/// model has made and the engine has not yet drawn replayed over it.
+///
+/// The record of a tick: the engine's answer cannot come in the frame of the tap, since it is an actor that writes to
+/// disk first. So `tick` records the action and draws it at once, and the record goes only when the engine draws it
+/// too: once `enqueue` has returned its ticket and a state with `enqueued` at or past that ticket has arrived, in
+/// either order. A record whose entry the engine could not store goes at once. Every record goes when the account
+/// changes, so nothing of one account is drawn under another.
 @MainActor
 @Observable
 public final class AppModel {
   /// The engine's latest state; until its first arrives (it sends one as soon as it is asked), the state of an engine
   /// that has not started.
   public private(set) var state = SyncState()
-  /// The address that signed in on this launch; the engine does not publish one.
-  private(set) var address: String?
   /// Pages whose document does not write back byte for byte (Debug builds only); nil when every page does.
   private(set) var roundTrip: RoundTrip?
+  /// False when the device's store could not be opened and changes live in memory for this launch only.
+  public let keepsChanges: Bool
 
   struct RoundTrip: Equatable {
     let failing: Int
     let total: Int
   }
 
+  /// An action handed to the engine and not yet drawn by it; `ticket` once `enqueue` has returned it.
+  private struct Record {
+    let id: Int
+    let action: JSONValue
+    var ticket: Int?
+  }
+
+  /// In the order made, which is the order the engine is handed them.
+  private var records: [Record] = []
+  @ObservationIgnored private var nextRecord = 0
+  /// When each to-do was last ticked, for the double-tap guard.
+  @ObservationIgnored private var lastTicks: [String: Date] = [:]
   @ObservationIgnored private let engine: SyncEngine
+  @ObservationIgnored private let now: () -> Date
   @ObservationIgnored private var following: Task<Void, Never>?
   @ObservationIgnored private var auditedRevision: Int?
 
-  public init(engine: SyncEngine) {
+  /// The web drops a second tap on the same to-do this soon after the first.
+  private static let doubleTap: TimeInterval = 0.5
+
+  public init(engine: SyncEngine, keepsChanges: Bool = true, now: @escaping () -> Date = Date.init) {
     self.engine = engine
+    self.keepsChanges = keepsChanges
+    self.now = now
   }
 
   isolated deinit {
     following?.cancel()
+  }
+
+  /// What screens draw: the engine's workspace with this model's not-yet-accepted actions replayed over it. Replaying
+  /// one the engine already draws changes nothing a screen shows: it sets the same status again.
+  public var workspace: Workspace? {
+    records.reduce(state.workspace) { $0?.predicting($1.action) }
+  }
+
+  /// The account's day: today in the workspace's zone, or the device's before there is a workspace.
+  public var today: LocalDate {
+    LocalDate.today(in: state.workspace?.timezone ?? TimeZone.current.identifier, at: now())
   }
 
   /// Follows the engine's states, then shows the device's copy and asks the server. Calling it again does nothing.
@@ -70,24 +106,107 @@ public final class AppModel {
   public func signIn(email: String, password: String) async -> SignInFailure? {
     do {
       try await engine.signIn(email: email, password: password, timezone: TimeZone.current.identifier)
-      address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+      forgetTicks()
       return nil
     } catch {
       return SignInFailure(error)
     }
   }
 
-  public func signOut() async {
-    await engine.signOut(discardingUnsent: true)
-    address = nil
+  public enum SignOutAnswer: Equatable, Sendable {
+    case signedOut
+    /// Nobody was signed out: this many changes are not sent yet, and he is asked before they are erased.
+    case unsent(Int)
+  }
+
+  /// Without `discardingUnsent`, tries once to send what is waiting, and signs out only when nothing is left unsent.
+  public func signOut(discardingUnsent: Bool) async -> SignOutAnswer {
+    let unsent = await engine.signOut(discardingUnsent: discardingUnsent)
+    guard unsent == 0 else { return .unsent(unsent) }
+    forgetTicks()
+    return .signedOut
   }
 
   public func refresh() async {
     await engine.refresh()
   }
 
+  // MARK: Changes
+
+  /// Works out the status from what is drawn, records the action, and hands it to the engine.
+  /// Returns false when nothing was done: the to-do cannot be ticked, or the same to-do was tapped under 500 ms ago.
+  @discardableResult
+  public func tick(taskId: String) -> Bool {
+    guard let drawn = workspace, let task = drawn.task(taskId) else { return false }
+    let status: TodoTask.Status
+    switch task.status {
+    case .open: status = .done
+    case .done: status = .open
+    case .cancelled, .other: return false
+    }
+    let time = now()
+    if let last = lastTicks[taskId], time.timeIntervalSince(last) < Self.doubleTap { return false }
+    lastTicks[taskId] = time
+
+    let action = Command.taskStatus(taskId: taskId, status: status, today: today)
+    let label = ChangeLabel.text(for: action, in: drawn)
+    let id = nextRecord
+    nextRecord += 1
+    records.append(Record(id: id, action: action))
+    let engine = engine
+    Task { [weak self] in
+      // An account change between the tap and this turn dropped the record; its action is not that account's.
+      guard self?.records.contains(where: { $0.id == id }) == true else { return }
+      let ticket = try? await engine.enqueue(action: action, label: label)
+      self?.accepted(id, ticket: ticket)
+    }
+    return true
+  }
+
+  public func keep(_ id: Int) async {
+    await engine.keep(id)
+  }
+
+  public func discard(_ id: Int) async {
+    await engine.discard(id)
+  }
+
+  /// Sends `action` and waits for the server; nothing is stored, so nothing is sent later.
+  public func perform(_ action: JSONValue) async -> Performed {
+    await engine.perform(action: action)
+  }
+
+  /// `enqueue` returned; a nil ticket means nothing was stored, and the circle goes back to what the copy has.
+  private func accepted(_ id: Int, ticket: Int?) {
+    guard let index = records.firstIndex(where: { $0.id == id }) else { return }
+    guard let ticket else {
+      records.remove(at: index)
+      return
+    }
+    records[index].ticket = ticket
+    dropDrawnRecords()
+  }
+
+  /// Drops the records the engine's latest state draws.
+  private func dropDrawnRecords() {
+    let enqueued = state.enqueued
+    if records.contains(where: { $0.ticket.map { $0 <= enqueued } ?? false }) {
+      records.removeAll { $0.ticket.map { $0 <= enqueued } ?? false }
+    }
+  }
+
+  private func forgetTicks() {
+    if !records.isEmpty { records = [] }
+    lastTicks = [:]
+  }
+
   private func receive(_ state: SyncState) {
     self.state = state
+    if state.phase == .signedOut {
+      forgetTicks()
+    } else {
+      dropDrawnRecords()
+    }
     #if DEBUG
       if let workspace = state.workspace { audit(workspace) }
     #endif
