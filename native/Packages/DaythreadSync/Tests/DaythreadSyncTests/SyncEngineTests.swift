@@ -391,6 +391,7 @@ private struct Harness {
         .outcome(.held(reason: "conflict", rows: ["task:a"], stale: false, owner: "user-1")),
         .outcome(.refused(message: "Not found", owner: "user-1")),
         .outcome(.applied(receipt: .object([:]), changes: applied, owner: "user-1")),
+        .workspace(.unchanged(revision: 6, owner: "user-1")),
       ], copy: copy, entries: [pending("op-1", base: 5), pending("op-2", base: 5), pending("op-3", base: 5)])
 
     await h.engine.start()
@@ -404,6 +405,8 @@ private struct Harness {
         == state(
           .ready, try required(copy.applying(applied)),
           held: [heldTick(1, "op-1", .conflict), heldTick(2, "op-2", .gone)], address: one))
+    #expect(await h.calls.last == .workspace(token: "tok-1", have: 6), "two held answers, one load")
+    #expect(await h.transport.unscripted == [])
   }
 
   @Test func already_applied_removes_the_entry_and_loads_whole() async throws {
@@ -1265,6 +1268,7 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
     #expect(task("t1", in: drawn?.workspace)?.status == .done)
     #expect(await h.transport.answered.allSatisfy { $0.operationId == nil })
 
+    await h.transport.add([.workspace(.unchanged(revision: 5, owner: "user-1"))])
     await gate.open(.outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")))
     await h.engine.settled()
   }
@@ -1368,7 +1372,10 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
   @Test func a_tick_says_it_reads_nothing_beyond_its_row() async throws {
     let held: FakeTransport.Reply = .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1"))
     let h = try await Harness(
-      [.account(firstAccount), .workspace(.full(try board(5, days: [], rows: [row("t1")]), owner: "user-1")), held, held])
+      [
+        .account(firstAccount), .workspace(.full(try board(5, days: [], rows: [row("t1")]), owner: "user-1")), held,
+        held, .workspace(.unchanged(revision: 5, owner: "user-1")),
+      ])
     await h.engine.start()
 
     try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
@@ -1408,7 +1415,10 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
     #expect(await current(empty.engine)?.enqueued == 0)
 
     let h = try await Harness(
-      opening + [.outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")), .done],
+      opening + [
+        .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")),
+        .workspace(.unchanged(revision: 5, owner: "user-1")), .done,
+      ],
       copy: try board(5, rows: [row("t1")]))
     await h.engine.start()
     #expect(try await h.engine.enqueue(action: done("t1"), label: "t1") == 1)
@@ -1470,6 +1480,12 @@ struct Answer: Sendable, CustomTestStringConvertible {
   let reason: HeldChange.Reason
   var testDescription: String { name }
 
+  /// The server's own held or refused outcome is followed by a load; a 400 and a stored hold are not.
+  var loads: Bool {
+    guard case .outcome? = reply else { return false }
+    return true
+  }
+
   static let all: [Answer] = [
     Answer(name: "held: conflict", reply: held("conflict"), stored: nil, reason: .conflict),
     Answer(name: "held: changed-since", reply: held("changed-since"), stored: nil, reason: .changedSince),
@@ -1495,24 +1511,90 @@ struct Answer: Sendable, CustomTestStringConvertible {
 @Suite struct SyncEngineHeldTests {
   @Test func a_held_tick_shows_the_servers_state_and_is_named() async throws {
     let copy = try board(5, rows: [row("t1", title: "Water the plants")])
-    let h = try await Harness(opening + [conflict], copy: copy)
+    // Someone else wrote the row after revision 5: that is why the server held the tick.
+    let served = try board(6, rows: [row("t1", title: "Water the plants twice", version: 3)])
+    let h = try await Harness(opening + [conflict, .workspace(.full(served, owner: "user-1"))], copy: copy)
     await h.engine.start()
 
     try await h.engine.enqueue(action: done("t1"), label: #"ticked "Water the plants""#)
     await h.engine.settled()
 
     let shown = await current(h.engine)
-    #expect(shown?.workspace == copy)
+    #expect(await h.calls.last == .workspace(token: "tok-1", have: 5), "loaded in the same pass")
+    #expect(shown?.workspace == served)
     #expect(task("t1", in: shown?.workspace)?.status == .open)
     #expect(shown?.held == [HeldChange(id: 1, label: #"ticked "Water the plants""#, reason: .conflict)])
     #expect(shown?.pending == 0)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func keep_after_a_held_tick_is_sent_on_the_loaded_revision() async throws {
+    let copy = try board(5, rows: [row("t1")])
+    let served = try board(6, rows: [row("t1", title: "t1 renamed", version: 3)])
+    let answer = try upserting(from: 6, to: 7, [row("t1", title: "t1 renamed", status: "done", version: 4)])
+    let h = try await Harness(opening + [conflict, .workspace(.full(served, owner: "user-1"))], copy: copy)
+    await h.engine.start()
+    try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
+    await h.engine.settled()
+
+    await h.transport.add([applied(answer)])
+    await h.engine.keep(1)
+    await h.engine.settled()
+
+    guard case .send(_, _, _, _, let basis)? = await h.transport.sends.last else {
+      Issue.record("Keep mine sent nothing")
+      return
+    }
+    #expect(basis == OutboxBasis(baseRevision: 6, ownRevisions: [], readsBeyond: false))
+    #expect(await current(h.engine)?.held == [])
+    #expect(await current(h.engine)?.workspace == served.applying(answer))
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func two_held_answers_in_one_pass_load_once() async throws {
+    let h = try await Harness(
+      opening + [conflict, conflict, .workspace(.unchanged(revision: 5, owner: "user-1"))],
+      copy: try board(5, rows: [row("a"), row("b")]),
+      entries: [stored("op-a", done("a"), label: #"ticked "a""#), stored("op-b", done("b"), label: #"ticked "b""#)])
+
+    await h.engine.start()
+
+    let loads = await h.calls.filter { if case .workspace = $0 { true } else { false } }
+    #expect(loads == [.workspace(token: "tok-1", have: 5), .workspace(token: "tok-1", have: 5)])
+    #expect(await h.transport.sends.count == 2)
+    #expect(await current(h.engine)?.held.map(\.id) == [1, 2])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_load_after_a_held_tick_that_finds_no_page_for_today_asks_for_it_in_the_same_pass() async throws {
+    let copy = try board(5, rows: [row("t1")])
+    // Today's page was deleted elsewhere since revision 5.
+    let served = try board(6, days: [], rows: [row("t1")])
+    let h = try await Harness(
+      opening + [
+        conflict, .workspace(.full(served, owner: "user-1")), applied(try addingDay(from: 6, to: 7, "2026-11-25")),
+      ], copy: copy)
+    await h.engine.start()
+
+    try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
+    await h.engine.settled()
+
+    let sent = await h.transport.sends.compactMap { call -> String? in
+      guard case .send(_, _, let action, _, _) = call else { return nil }
+      return Command.type(of: action)
+    }
+    #expect(sent == ["task-status", "ensure-day"])
+    #expect(await current(h.engine)?.workspace?.dayPage(try required(today)) != nil)
+    #expect(try await h.store.entries().map(\.state) == [.held])
+    #expect(await h.transport.unscripted == [])
   }
 
   @Test(arguments: Answer.all)
   func each_answer_reads_as_its_reason(_ answer: Answer) async throws {
     let tick = stored("op-1", done("t1"), label: #"ticked "t1""#, heldFor: answer.stored)
     let h = try await Harness(
-      opening + (answer.reply.map { [$0] } ?? []), copy: try board(5, rows: [row("t1")]), entries: [tick])
+      opening + (answer.reply.map { [$0] } ?? []) + (answer.loads ? [.workspace(.unchanged(revision: 5, owner: "user-1"))] : []),
+      copy: try board(5, rows: [row("t1")]), entries: [tick])
 
     await h.engine.start()
 
@@ -1560,7 +1642,10 @@ struct Answer: Sendable, CustomTestStringConvertible {
     await h.engine.start()
     #expect(await h.transport.sends == [], "the later tick waits")
 
-    await h.transport.add([.outcome(.applied(receipt: .object([:]), changes: answer, owner: "user-1")), conflict])
+    await h.transport.add([
+      .outcome(.applied(receipt: .object([:]), changes: answer, owner: "user-1")), conflict,
+      .workspace(.unchanged(revision: 8, owner: "user-1")),
+    ])
     await h.engine.keep(1)
     await h.engine.settled()
 
@@ -1569,6 +1654,7 @@ struct Answer: Sendable, CustomTestStringConvertible {
     guard case .send(_, _, _, _, let basis)? = sends.first else { return }
     #expect(basis == OutboxBasis(baseRevision: 7, ownRevisions: [], readsBeyond: false))
     #expect(await current(h.engine)?.held.map(\.id) == [2])
+    #expect(await h.transport.unscripted == [])
   }
 
   @Test func keep_does_nothing_for_a_change_that_cannot_be_kept() async throws {
@@ -1616,7 +1702,10 @@ struct Answer: Sendable, CustomTestStringConvertible {
     #expect(await current(h.engine)?.workspace == emptied, "nothing is drawn for a to-do that is gone")
     #expect(await current(h.engine)?.waiting == 1)
 
-    await h.transport.add([.outcome(.refused(message: "Task not found", owner: "user-1"))])
+    await h.transport.add([
+      .outcome(.refused(message: "Task not found", owner: "user-1")),
+      .workspace(.unchanged(revision: 6, owner: "user-1")),
+    ])
     await h.engine.discard(1)
     await h.engine.settled()
 
@@ -1635,6 +1724,7 @@ struct Answer: Sendable, CustomTestStringConvertible {
     #expect(await h.transport.sends.count == 1)
     #expect(await current(h.engine)?.held == [])
     #expect(try await h.entries == [])
+    #expect(await h.transport.unscripted == [], "a held request for today's page asks for no load")
 
     // Asked again after the next load, while today still has no page.
     await h.transport.add([.workspace(.unchanged(revision: 4, owner: "user-1")), conflict])
