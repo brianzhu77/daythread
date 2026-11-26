@@ -21,10 +21,23 @@ private func trashedPage(_ date: LocalDate, trashId: String?) -> String {
     + #""trashedAt":"2026-11-24T20:00:00.000Z"\#(batch)}"#
 }
 
+/// The day's page holding one line of text, so the list has a first row.
+private func pageWithALine(_ date: LocalDate) -> String {
+  let block = Block(
+    id: "line-\(date.value)", type: "paragraph", props: [:],
+    content: .array([.object(["type": .string("text"), "text": .string("A line"), "styles": .object([:])])]),
+    children: [])
+  let page: JSONValue = .object([
+    "id": .string("day:\(date.value)"), "type": .string("daily"), "date": .string(date.value), "title": .string(""),
+    "document": .string(Document.write([block])),
+  ])
+  return JSON.write(page)
+}
+
 /// Today's page and an open to-do, and `others` pages; nothing for yesterday unless `others` has it.
-private func copy(revision: Int = 1, others: [String] = []) throws -> Workspace {
+private func copy(revision: Int = 1, others: [String] = [], todayHasALine: Bool = false) throws -> Workspace {
   let task = #"{"id":"t-open","title":"Water the plants","status":"open","paused":false,"doneOn":null,"version":1}"#
-  let pages = ([dayPage(today)] + others).joined(separator: ",")
+  let pages = ([todayHasALine ? pageWithALine(today) : dayPage(today)] + others).joined(separator: ",")
   let text = #"{"revision":\#(revision),"timezone":"UTC","pages":[\#(pages)],"tasks":[\#(task)]}"#
   return try #require(Workspace(try JSON.parse(text)))
 }
@@ -88,8 +101,8 @@ extension UIBarButtonItem {
 
 /// The screen in a phone-sized window in its navigation controller, laid out.
 @MainActor
-private func onScreen(_ screen: DayViewController) -> UIWindow {
-  let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+private func onScreen(_ screen: DayViewController) throws -> UIWindow {
+  let window = try testWindow(width: 402)
   window.rootViewController = UINavigationController(rootViewController: screen)
   window.makeKeyAndVisible()
   screen.updatePropertiesIfNeeded()
@@ -203,6 +216,9 @@ private func heldTick(on h: Harness) async throws {
 
     screen.tap("Previous day")
     #expect(screen.trailingButtons == ["Today", "Previous day", "Next day", "More"])
+    let todayItem = try #require(screen.item("Today"))
+    #expect(todayItem.hidesSharedBackground, "Today has no capsule")
+    #expect(todayItem.tintColor == .secondaryLabel, "Today is quiet")
 
     screen.tap("Today")
     #expect(screen.date == today)
@@ -261,7 +277,7 @@ private func heldTick(on h: Harness) async throws {
   @Test func the_title_opens_the_day_picker_anchored_to_it() async throws {
     let h = try await Harness(copy: try copy())
     let screen = DayViewController(model: h.model)
-    let window = onScreen(screen)
+    let window = try onScreen(screen)
 
     screen.headerView.titleButton.sendActions(for: .primaryActionTriggered)
 
@@ -271,10 +287,57 @@ private func heldTick(on h: Harness) async throws {
     window.isHidden = true
   }
 
+  @Test func the_list_measures_the_header_again_when_it_grows_and_shrinks() async throws {
+    let twoBack = try #require(yesterday.adding(days: -1))
+    let h = try await Harness(copy: try copy(others: [pageWithALine(twoBack)], todayHasALine: true))
+    let screen = DayViewController(model: h.model)
+    let window = try onScreen(screen)
+    let list = try #require(screen.list)
+    /// The header's height, and the space between it and the first row, as drawn now.
+    func drawn() throws -> (height: CGFloat, gap: CGFloat) {
+      screen.updatePropertiesIfNeeded()
+      // A self-sized supplementary settles over two passes.
+      window.layoutIfNeeded()
+      window.layoutIfNeeded()
+      let first = try #require(list.cellForItem(at: IndexPath(item: 0, section: 0)), "the page's first row")
+      let header = screen.headerView.convert(screen.headerView.bounds, to: list)
+      return (header.height, first.frame.minY - header.maxY)
+    }
+    let resting = try drawn()
+    #expect(resting.gap >= -0.5)
+
+    // The status line appears under the title: the header grows, and the rows move down with it.
+    await h.model.refresh()
+    try await until { h.model.state.offline }
+    let offline = try drawn()
+    #expect(offline.height > resting.height + 1, "taller: \(offline.height) after \(resting.height)")
+    #expect(abs(offline.gap - resting.gap) < 0.5, "the first row below the header: gap \(offline.gap)")
+
+    // Back online the line goes, and no gap is left behind.
+    await h.server.add([.workspace(.unchanged(revision: 1, owner: "one"))])
+    await h.model.refresh()
+    try await until { !h.model.state.offline }
+    let online = try drawn()
+    #expect(abs(online.height - resting.height) < 0.5)
+    #expect(abs(online.gap - resting.gap) < 0.5, "no gap left: \(online.gap)")
+
+    // A day with no relative word has a shorter header; again the rows follow it.
+    screen.open(twoBack)
+    let plain = try drawn()
+    #expect(plain.height < resting.height - 1, "shorter: \(plain.height) after \(resting.height)")
+    #expect(abs(plain.gap - resting.gap) < 0.5, "no gap left: \(plain.gap)")
+
+    screen.open(nil)
+    let back = try drawn()
+    #expect(abs(back.height - resting.height) < 0.5)
+    #expect(abs(back.gap - resting.gap) < 0.5)
+    window.isHidden = true
+  }
+
   @Test func the_header_is_the_lists_first_row_and_stays_on_a_day_without_a_page() async throws {
     let h = try await Harness(copy: try copy())
     let screen = DayViewController(model: h.model)
-    let window = onScreen(screen)
+    let window = try onScreen(screen)
     let list = try #require(screen.list)
 
     // The header is drawn in the list, above its rows, and scrolls with them.

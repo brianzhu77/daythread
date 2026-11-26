@@ -88,6 +88,30 @@ private func copy() throws -> Workspace {
     #expect(day.date == today)
   }
 
+  @Test func the_today_tab_tapped_again_on_today_scrolls_to_the_top() async throws {
+    let h = try await Harness(copy: try copy())
+    let root = RootViewController(model: h.model)
+    let window = try testWindow(width: 402)
+    window.rootViewController = root
+    window.makeKeyAndVisible()
+    root.updatePropertiesIfNeeded()
+    window.layoutIfNeeded()
+    let tabs = try #require(root.children.first as? AppTabBarController)
+    let day = tabs.dayScreen
+    day.updatePropertiesIfNeeded()
+    window.layoutIfNeeded()
+    let list = try #require(day.list)
+    let top = -list.adjustedContentInset.top
+    list.setContentOffset(CGPoint(x: 0, y: 300), animated: false)
+    #expect(tabs.selectedTab === tabs.tabs.first)
+
+    #expect(tabs.delegate?.tabBarController?(tabs, shouldSelectTab: try #require(tabs.tabs.first)) == true)
+
+    try await until { abs(list.contentOffset.y - top) < 0.5 }
+    #expect(day.date == today, "still today")
+    window.isHidden = true
+  }
+
   @Test func the_today_tab_shows_the_day_of_the_month_and_moves_at_midnight() async throws {
     let clock = Clock()
     let h = try await Harness(copy: try copy(), clock: clock)

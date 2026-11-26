@@ -10,8 +10,8 @@ import UIKit
 @MainActor
 @Suite struct DayHeaderViewTests {
   /// A header showing `date` in a window `width` points wide at `size`, laid out.
-  private func header(_ date: String, width: CGFloat, size: UIContentSizeCategory) -> (DayHeaderView, UIWindow) {
-    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+  private func header(_ date: String, width: CGFloat, size: UIContentSizeCategory) throws -> (DayHeaderView, UIWindow) {
+    let window = try testWindow(width: width)
     let host = UIViewController()
     host.traitOverrides.preferredContentSizeCategory = size
     window.rootViewController = host
@@ -69,7 +69,7 @@ import UIKit
   }
 
   @Test func at_the_largest_size_every_date_of_a_year_is_one_whole_line_on_an_iphone_17() throws {
-    let (header, window) = header("2026-09-30", width: 402, size: .accessibilityExtraExtraExtraLarge)
+    let (header, window) = try header("2026-09-30", width: 402, size: .accessibilityExtraExtraExtraLarge)
     try check(header, oneLine: true)
     var day = LocalDate("2026-01-01")
     while let date = day, date.value.hasPrefix("2026") {
@@ -83,7 +83,7 @@ import UIKit
   }
 
   @Test func on_a_narrow_screen_at_the_largest_size_the_title_wraps_without_clipping() throws {
-    let (header, window) = header("2026-11-26", width: 320, size: .accessibilityExtraExtraExtraLarge)
+    let (header, window) = try header("2026-11-26", width: 320, size: .accessibilityExtraExtraExtraLarge)
     try check(header, oneLine: false)
     window.isHidden = true
   }
