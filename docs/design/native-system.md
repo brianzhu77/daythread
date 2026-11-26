@@ -22,15 +22,18 @@
 
 | Text | Where |
 | --- | --- |
-| Offline · showing what was last loaded | The prompt over the day screen, when the device is offline and a copy is shown |
-| Offline · showing what was last loaded · 1 change will be sent (· N changes will be sent) | The same prompt, with changes waiting to be sent; the web's words |
-| Changes aren't kept on this device | The prompt over the day screen when the store on the device could not be opened; it comes before offline and a failed update |
-| Couldn't update · showing what was last loaded | The same prompt, when a pass failed for any other reason |
+| Offline · showing what was last loaded | The status line, in the day's header under the title (footnote, secondary colour), when the device is offline and a copy is shown |
+| Offline · showing what was last loaded · 1 change will be sent (· N changes will be sent) | The same line, with changes waiting to be sent; the web's words |
+| Changes aren't kept on this device | The status line when the store on the device could not be opened; it comes before offline and a failed update |
+| Couldn't update · showing what was last loaded | The same line, when a pass failed for any other reason |
 | Couldn't load, Retry | The whole screen, when a pass failed and there is no copy to show |
-| Tuesday, Nov 3 | The day screen's title: weekday, month and day in the reader's language, no year; `<day>` below is this text |
-| Previous day, Next day | The accessibility labels of the toolbar's first and last buttons (`chevron.left`, `chevron.right`, no text), at its two ends; Next is disabled from today on |
-| Calendar | The accessibility label of the toolbar's middle button (`calendar`, no text); it opens the system's calendar, a dot on each day with something written, in a popover anchored to that button (a sheet on the phone) |
-| Today | A toolbar button beside Next, shown only while another day is open |
+| Today, Yesterday, Tomorrow | The small word above the day's title when the day is one of these (subheadline, semibold; `Today` in the app's tint, the others in the secondary colour). The day's header is the page's first row and scrolls with it; the navigation bar has no title |
+| Tue, Nov 3 | The day's title, the web's `longLabel`: short weekday, month and day in the reader's language, no year (large title, bold; it grows with the text size up to accessibility extra large and no further, as the system caps its own large titles, so every date of a year stays one line on an iPhone 17), with a small `chevron.down` in the secondary colour after it. It is one plain button; it opens the system's calendar, a dot on each day with something written, in a popover anchored to it (a sheet on the phone) |
+| Today, Tue, Nov 3. Choose a date | The title button's accessibility label, the web's; the relative word only when there is one |
+| Tuesday, Nov 3 | The long form, used only inside sentences; `<day>` below is this text |
+| Previous day, Next day | The accessibility labels of the navigation bar's trailing chevrons (`chevron.left`, `chevron.right`, no text): bar buttons with no glass capsule (`hidesSharedBackground`), tinted the secondary label colour. Next is disabled from today on |
+| Today | On a regular-width screen only (iPad, Mac): a plain text item before the chevrons, the same quiet look, while another day is open. On the phone the Today tab does it |
+| More | The accessibility label of the navigation bar's last item (`ellipsis`, no text, the same quiet look); its menu holds the address and "Sign out". Not shown when its menu would be empty |
 | No page for <day>, Add page | A past day with no page, in place of the page |
 | <day> hasn't happened yet, Create page | A future day with no page, in place of the page |
 | Today's page is in Trash. (The page for <day> is in Trash.), Restore, Add a new page | A day whose page is in Trash; "Restore" only when the page names its trash entry |
@@ -44,10 +47,9 @@
 | This address isn't on the invite list yet | Under "Sign in", not invited |
 | Too many tries · Try again in 30 s (or in 4 min) | Under "Sign in", when asked to wait |
 | Couldn't sign in · Try again | Under "Sign in", offline or any other failure |
-| Account | The account button's accessibility label (an icon, no text), the navigation bar's trailing button |
-| Sign out | The account menu, while a session is stored |
+| Sign out | The More menu, while a session is stored; the address the server last gave is above it, disabled |
 | 1 change not sent (N changes not sent), Sign out and discard, Cancel | The alert after "Sign out" when changes are still not sent after one try |
-| Not saved | The held button's accessibility label (`exclamationmark.triangle` in the system's red, no text), in the navigation bar beside the account button, shown while a change is held. The app merges a held tick itself (dropped when the server has it, sent again when only something else about the to-do changed) and shows this only when both sides changed the to-do's status differently, or the to-do is gone. A tick the server says may already be in is asked about unless the server already has it |
+| Not saved | The held button's accessibility label (`exclamationmark.triangle` in the system's red, no text, no capsule), in the navigation bar between Next day and More, shown while a change is held. The app merges a held tick itself (dropped when the server has it, sent again when only something else about the to-do changed) and shows this only when both sides changed the to-do's status differently, or the to-do is gone. A tick the server says may already be in is asked about unless the server already has it |
 | Not saved — ticked "…" was changed elsewhere | The held menu's section title, held because the row changed elsewhere; the web's sentence, with the change's label |
 | Not saved — "…" was deleted elsewhere | The same, for a to-do that is gone ("it" when the label names nothing) |
 | Not saved — ticked "…" · changed since | The same, held because something changed since |
@@ -55,10 +57,13 @@
 | Not saved — can't do this now: ticked "…" | The same, refused for any other reason; the web's sentence with a straight apostrophe (the web's source writes a typographic one; the app keeps straight apostrophes, as its other strings do) |
 | Keep mine, Discard | Each held change's actions; "Keep mine" only when it was held, not refused; "Discard" destructive |
 | 1 later change waiting (N later changes waiting) | The held menu's last line, disabled, while changes wait behind a held one; the web's words |
-| Round trip · N of M pages fail | The account menu, Debug builds only, when any page's document does not write back |
+| Round trip · N of M pages fail | The More menu, Debug builds only, when any page's document does not write back |
 | Untitled | A page reference whose page has no title |
 | Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
+| Today, Tasks, Calendar, Pages | The tab bar's tabs, the web's places in its order: the system's tab bar with its default appearance (the floating glass capsule on iOS 26). Symbols: `<day of month>.calendar` for Today (the account's today, `26.calendar` on the 26th; it changes at the account's midnight), `checkmark.square`, `calendar`, `doc.text` |
+| Search | The system's search tab (`UISearchTab`), its own title and symbol, after the four; the system draws it apart, as the round button at the end of the bar |
+| <place>, Not in the app yet | A tab whose place is not built yet: its symbol, its name and this line, centred, nothing to press |
 
 The sign-in lines are the web's (`src/routes/sign-in.tsx`).
 
@@ -81,4 +86,6 @@ Phase 1 must settle:
 
 - Row spacing on a page.
 - How date chips and page references are drawn (today they are plain text).
-- The tab bar: whether the five places and Search fit the system's bar (`docs/design/native-app.md` section 9).
+- Which of the web's five places has no tab on the phone. A phone's tab bar holds five items, the search tab
+  included, and a sixth puts Tags and Search behind the system's More tab (seen on the simulator, 2026-11-26). Until
+  Brian chooses, Tags has no tab (`docs/design/native-phase-1.md` section 6).

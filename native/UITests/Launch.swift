@@ -63,6 +63,20 @@ func dayTitle(_ today: Date, adding days: Int = 0) -> String {
   return day.formatted(style)
 }
 
+/// The day header's title button as VoiceOver reads it in English for the United States, `days` after `today`: the
+/// relative word when there is one, the web's short title ("Wed, Nov 25"), and what the button does.
+func dayHeader(_ today: Date, adding days: Int = 0) -> String {
+  var calendar = Calendar(identifier: .gregorian)
+  calendar.timeZone = .gmt
+  let day = calendar.date(byAdding: .day, value: days, to: today)!
+  let style = Date.FormatStyle(
+    date: .omitted, time: .omitted, locale: Locale(identifier: "en_US"), calendar: calendar, timeZone: .gmt
+  )
+  .weekday(.abbreviated).month(.abbreviated).day()
+  let relative = [-1: "Yesterday, ", 0: "Today, ", 1: "Tomorrow, "][days] ?? ""
+  return "\(relative)\(day.formatted(style)). Choose a date"
+}
+
 /// The seeded server read the way any client reads it; sign-in is off there, so no session is needed.
 struct SeededServer {
   let base: String

@@ -39,18 +39,46 @@
     private(set) var appliedAnimated: [Bool] = []
     var appliedSnapshots: Int { appliedAnimated.count }
 
+    /// A view the host puts above the rows, as the page's first line: it scrolls with them and is not a row, so the
+    /// rows keep their indices.
+    public var headerView: UIView? {
+      didSet {
+        guard headerView !== oldValue else { return }
+        oldValue?.removeFromSuperview()
+        collectionView.setCollectionViewLayout(Self.layout(withHeader: headerView != nil), animated: false)
+      }
+    }
+
     private lazy var collectionView: UICollectionView = {
-      var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
-      configuration.showsSeparators = false
-      // The section's own background lies over the list's background view, where a day without a page says so; the
-      // list itself is the page's background.
-      configuration.backgroundColor = .clear
-      let view = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
+      let view = UICollectionView(frame: .zero, collectionViewLayout: Self.layout(withHeader: false))
       view.backgroundColor = .systemBackground
       view.allowsSelection = false
       view.alwaysBounceVertical = true
       return view
     }()
+
+    private static func layout(withHeader: Bool) -> UICollectionViewLayout {
+      var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
+      configuration.showsSeparators = false
+      // The section's own background lies over the list's background view, where a day without a page says so; the
+      // list itself is the page's background.
+      configuration.backgroundColor = .clear
+      configuration.headerMode = withHeader ? .supplementary : .none
+      // The header is the page's first line, not a section title: no gap above it beyond its own margins.
+      configuration.headerTopPadding = 0
+      return UICollectionViewCompositionalLayout { _, environment in
+        let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
+        // A plain list pins its header to the top; this one is the page's first line and scrolls away with it.
+        for header in section.boundarySupplementaryItems { header.pinToVisibleBounds = false }
+        return section
+      }
+    }
+
+    /// Lays the header out again after the host changed what it holds, which may change its height.
+    public func headerDidChange() {
+      guard headerView != nil else { return }
+      collectionView.collectionViewLayout.invalidateLayout()
+    }
 
     private lazy var dataSource = makeDataSource()
 
@@ -127,7 +155,8 @@
         guard let self, let row = self.rowsByID[id], case .placeholder(let name) = row.kind else { return }
         cell.configure(name: name, depth: row.depth)
       }
-      return UICollectionViewDiffableDataSource(collectionView: collectionView) { [weak self] collectionView, indexPath, id in
+      let dataSource = UICollectionViewDiffableDataSource<Section, String>(collectionView: collectionView) {
+        [weak self] collectionView, indexPath, id in
         switch self?.rowsByID[id].map({ CellKind($0.kind) }) {
         case .text: collectionView.dequeueConfiguredReusableCell(using: text, for: indexPath, item: id)
         case .todo: collectionView.dequeueConfiguredReusableCell(using: todo, for: indexPath, item: id)
@@ -135,6 +164,41 @@
         case .separator, nil: collectionView.dequeueConfiguredReusableCell(using: separator, for: indexPath, item: id)
         }
       }
+      let header = UICollectionView.SupplementaryRegistration<HeaderContainer>(
+        elementKind: UICollectionView.elementKindSectionHeader
+      ) { [weak self] container, _, _ in
+        container.hold(self?.headerView)
+      }
+      dataSource.supplementaryViewProvider = { collectionView, _, indexPath in
+        collectionView.dequeueConfiguredReusableSupplementary(using: header, for: indexPath)
+      }
+      return dataSource
+    }
+  }
+
+  /// Holds the host's header view edge to edge, passing the list's margins on so the header lines up with the rows.
+  private final class HeaderContainer: UICollectionReusableView {
+    override init(frame: CGRect) {
+      super.init(frame: frame)
+      preservesSuperviewLayoutMargins = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func hold(_ view: UIView?) {
+      for subview in subviews where subview !== view { subview.removeFromSuperview() }
+      guard let view, view.superview !== self else { return }
+      view.removeFromSuperview()
+      view.translatesAutoresizingMaskIntoConstraints = false
+      view.preservesSuperviewLayoutMargins = true
+      addSubview(view)
+      NSLayoutConstraint.activate([
+        view.topAnchor.constraint(equalTo: topAnchor),
+        view.leadingAnchor.constraint(equalTo: leadingAnchor),
+        view.trailingAnchor.constraint(equalTo: trailingAnchor),
+        view.bottomAnchor.constraint(equalTo: bottomAnchor),
+      ])
     }
   }
 #endif

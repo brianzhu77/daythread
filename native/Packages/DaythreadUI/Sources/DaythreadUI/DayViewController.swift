@@ -4,8 +4,9 @@
   import DaythreadSync
   import UIKit
 
-  /// One day: its title, its page or what a day without one says, the controls to reach other days, the changes not
-  /// saved, and the account menu. Changing the day replaces the page in place; nothing is pushed.
+  /// One day: its header (the page's first row), its page or what a day without one says, the quiet controls to reach
+  /// other days, the changes not saved, and the More menu. Changing the day replaces the page in place; nothing is
+  /// pushed.
   @MainActor
   final class DayViewController: UIViewController {
     enum AccountRow: Equatable {
@@ -14,8 +15,8 @@
       case signOut
     }
 
-    /// The account menu's rows; the address the engine last published, and "Sign out" only while a session is stored
-    /// (from a hidden copy the engine's count of unsent changes means nothing). No rows, no account button.
+    /// The More menu's rows, the account's: the address the engine last published, and "Sign out" only while a session
+    /// is stored (from a hidden copy the engine's count of unsent changes means nothing). No rows, no More button.
     static func accountRows(state: SyncState, roundTrip: AppModel.RoundTrip?) -> [AccountRow] {
       var rows: [AccountRow] = []
       if let roundTrip { rows.append(.roundTrip(failing: roundTrip.failing, total: roundTrip.total)) }
@@ -70,16 +71,18 @@
 
     private let document = DocumentViewController()
     private let refreshControl = UIRefreshControl()
-    private let emptyView = UIContentUnavailableView(configuration: UIContentUnavailableConfiguration.empty())
-    private let accountButton = UIBarButtonItem(image: UIImage(systemName: "person.crop.circle"))
+    let emptyView = UIContentUnavailableView(configuration: UIContentUnavailableConfiguration.empty())
+    /// The list's background on a day without a page: the empty state, in the space under the header.
+    private lazy var emptyBackground = UnderHeaderView(content: emptyView) { [weak self] in
+      self?.spaceUnderHeader ?? .zero
+    }
+    private(set) lazy var headerView = DayHeaderView { [weak self] in self?.pickDay() }
     private let heldButton = UIBarButtonItem(image: UIImage(systemName: "exclamationmark.triangle"))
+    private let moreButton = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
     private lazy var previousButton = symbolButton("chevron.left", label: "Previous day") { $0.step(by: -1) }
     private lazy var nextButton = symbolButton("chevron.right", label: "Next day") { $0.step(by: 1) }
-    private lazy var calendarButton = symbolButton("calendar", label: "Calendar") { $0.pickDay() }
     private lazy var todayButton = UIBarButtonItem(
       primaryAction: UIAction(title: "Today") { [weak self] _ in self?.open(nil) })
-    /// The toolbar's flexible spaces: an item can stand in a bar only once.
-    private let spaces = [UIBarButtonItem.flexibleSpace(), UIBarButtonItem.flexibleSpace()]
     private lazy var tickFeedback = UIImpactFeedbackGenerator(style: .light, view: view)
 
     /// The day shown.
@@ -100,18 +103,28 @@
     override func viewDidLoad() {
       super.viewDidLoad()
       view.backgroundColor = .systemBackground
-      navigationItem.largeTitleDisplayMode = .always
-      accountButton.accessibilityLabel = "Account"
+      // The day's title is the page's first row; the bar holds only the quiet controls.
+      navigationItem.largeTitleDisplayMode = .never
+      moreButton.accessibilityLabel = "More"
       // Both menus are built when opened, from the state of that moment.
-      accountButton.menu = UIMenu(children: [
+      moreButton.menu = UIMenu(children: [
         UIDeferredMenuElement.uncached { [weak self] completion in completion(self?.accountMenu() ?? []) }
       ])
-      heldButton.tintColor = .systemRed
       heldButton.accessibilityLabel = "Not saved"
       heldButton.menu = UIMenu(children: [
         UIDeferredMenuElement.uncached { [weak self] completion in completion(self?.heldMenu() ?? []) }
       ])
+      // Ghost buttons, as the web's phone app has them: no glass capsule, the secondary colour. Not saved keeps the
+      // system's red.
+      for item in [todayButton, previousButton, nextButton, moreButton, heldButton] {
+        item.hidesSharedBackground = true
+        item.tintColor = .secondaryLabel
+      }
+      heldButton.tintColor = .systemRed
       document.onTick = { [weak self] taskId in self?.tick(taskId) }
+      document.headerView = headerView
+      headerView.onResize = { [weak self] in self?.emptyBackground.setNeedsLayout() }
+      registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (self: Self, _) in self.setNeedsUpdateProperties() }
 
       addChild(document)
       document.view.frame = view.bounds
@@ -140,24 +153,42 @@
       if shownDate == model.today { shownDate = nil }
       let state = model.state
       let date = date
-      title = DayTitle.text(for: date)
-      navigationItem.prompt = StatusLine.text(state: state, keepsChanges: model.keepsChanges)
+      let status = StatusLine.text(state: state, keepsChanges: model.keepsChanges)
+      if headerView.show(DayHeading(for: date, today: model.today), status: status) { document.headerDidChange() }
       showDay()
 
       let controls = DayControls.controls(
-        for: date, today: model.today, hasAccount: !Self.accountRows(state: state, roundTrip: model.roundTrip).isEmpty,
-        hasHeld: !state.held.isEmpty)
+        for: date, today: model.today, regularWidth: traitCollection.horizontalSizeClass == .regular,
+        hasHeld: !state.held.isEmpty, hasMore: !Self.accountRows(state: state, roundTrip: model.roundTrip).isEmpty)
       previousButton.isEnabled = date.adding(days: -1) != nil
       nextButton.isEnabled = controls.canGoNext
-      // Set only when they change, so a state change that moves nothing does not lay the bars out again.
-      let navigationBar = buttons(controls.navigationBar)
+      // Set only when they change, so a state change that moves nothing does not lay the bar out again. The bar
+      // takes its trailing items from the trailing edge.
+      let navigationBar = Array(buttons(controls.navigationBar).reversed())
       if navigationItem.rightBarButtonItems ?? [] != navigationBar { navigationItem.rightBarButtonItems = navigationBar }
-      let toolbar = buttons(controls.toolbar)
-      if toolbarItems ?? [] != toolbar { setToolbarItems(toolbar, animated: false) }
       scheduleDayChange()
     }
 
-    private var list: UICollectionView? { document.view as? UICollectionView }
+    var list: UICollectionView? { document.view as? UICollectionView }
+
+    /// The space left for the empty state in the list's background: under the header with the list at rest, and over
+    /// the tab bar.
+    private var spaceUnderHeader: UIEdgeInsets {
+      guard let list else { return .zero }
+      let header =
+        headerView.superview != nil
+        ? headerView.convert(headerView.bounds, to: list)
+        : list.layoutAttributesForSupplementaryElement(
+          ofKind: UICollectionView.elementKindSectionHeader, at: IndexPath(item: 0, section: 0))?.frame ?? .zero
+      return UIEdgeInsets(
+        top: header.maxY + list.adjustedContentInset.top, left: 0, bottom: list.adjustedContentInset.bottom, right: 0)
+    }
+
+    /// The Today tab tapped again while today is shown: the page's top, as the system's tabs do.
+    func scrollToTop() {
+      guard let list else { return }
+      list.setContentOffset(CGPoint(x: 0, y: -list.adjustedContentInset.top), animated: true)
+    }
 
     /// Draws the day from what the model draws: its page, or an empty one under what the day says instead.
     private func showDay() {
@@ -173,7 +204,7 @@
 
       emptyState = emptyState(for: content, on: date)
       if let emptyState { emptyView.configuration = emptyState }
-      list?.backgroundView = emptyState == nil ? nil : emptyView
+      list?.backgroundView = emptyState == nil ? nil : emptyBackground
       if drawnDate != date {
         if drawnDate != nil, let list {
           list.setContentOffset(CGPoint(x: 0, y: -list.adjustedContentInset.top), animated: false)
@@ -192,16 +223,13 @@
     // MARK: Other days
 
     private func buttons(_ items: [DayControls.Item]) -> [UIBarButtonItem] {
-      var spaces = self.spaces.makeIterator()
-      return items.map { item in
+      items.map { item in
         switch item {
-        case .account: accountButton
-        case .held: heldButton
-        case .previousDay: previousButton
-        case .calendar: calendarButton
         case .today: todayButton
+        case .previousDay: previousButton
         case .nextDay: nextButton
-        case .space: spaces.next() ?? .flexibleSpace()
+        case .held: heldButton
+        case .more: moreButton
         }
       }
     }
@@ -242,7 +270,7 @@
       }
       picker.modalPresentationStyle = .popover
       if let popover = picker.popoverPresentationController {
-        popover.sourceItem = calendarButton
+        popover.sourceItem = headerView.titleButton
         // On the phone the popover becomes a sheet; the calendar needs about half the screen, not all of it.
         let sheet = popover.adaptiveSheetPresentationController
         sheet.detents = [.medium(), .large()]
@@ -319,6 +347,7 @@
 
     // MARK: Menus
 
+    /// The More menu: the account's rows.
     private func accountMenu() -> [UIMenuElement] {
       Self.accountRows(state: model.state, roundTrip: model.roundTrip).map { row in
         switch row {
@@ -407,6 +436,32 @@
       scheduledChange = nil
       setNeedsUpdateProperties()
       Task { await model.refresh() }
+    }
+  }
+
+  /// Lays `content` out in the space under the header at rest, so a day's empty state is centred below its header.
+  /// It is the list's background view, which does not scroll.
+  @MainActor
+  final class UnderHeaderView: UIView {
+    private let content: UIView
+    private let insets: () -> UIEdgeInsets
+
+    init(content: UIView, insets: @escaping () -> UIEdgeInsets) {
+      self.content = content
+      self.insets = insets
+      super.init(frame: .zero)
+      addSubview(content)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func layoutSubviews() {
+      super.layoutSubviews()
+      let insets = insets()
+      let top = min(max(insets.top, 0), bounds.height)
+      let height = max(bounds.height - top - max(insets.bottom, 0), 0)
+      content.frame = CGRect(x: 0, y: top, width: bounds.width, height: height)
     }
   }
 #endif
