@@ -1339,6 +1339,19 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
     #expect(ids.allSatisfy { task($0, in: drawnOffline)?.status == .done })
     let made = try await h.store.entries().map(\.operationId)
 
+    // A new engine on the same store draws all twenty before any reply.
+    let gate = Gate()
+    let relaunched = FakeTransport([.gated(gate)])
+    let next = SyncEngine(transport: relaunched, tokens: h.tokens, store: h.store, now: { noon })
+    let starting = Task { await next.start() }
+    await gate.reached()
+    let drawnAfterRelaunch = await current(next)?.workspace
+    #expect(await relaunched.answered == [])
+    #expect(ids.allSatisfy { task($0, in: drawnAfterRelaunch)?.status == .done })
+    #expect(await current(next)?.pending == 20)
+    await gate.open(offline)
+    await starting.value
+
     let answers = try ids.enumerated().map { index, id in
       FakeTransport.Reply.outcome(
         .applied(
@@ -2245,17 +2258,23 @@ private func applied(_ changes: WorkspaceChanges) -> FakeTransport.Reply {
     #expect(await current(h.engine) == state(.signedOut, nil))
   }
 
-  @Test func signing_out_with_changes_not_sent_asks_first() async throws {
+  /// A change not sent is pending (nil) or held for a reason.
+  @Test(arguments: [nil, "conflict"])
+  func signing_out_with_changes_not_sent_asks_first(heldFor reason: String?) async throws {
     let h = try await Harness(
-      opening + [offline], copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"))])
+      opening + (reason == nil ? [offline] : []), copy: try board(5, rows: [row("t1")]),
+      entries: [stored("op-1", done("t1"), heldFor: reason)])
     await h.engine.start()
     await h.transport.goOffline()
 
     #expect(await h.engine.signOut(discardingUnsent: false) == 1)
     #expect(try h.tokens.read() == first)
-    #expect(try await h.entries == ["op-1 pending base 5 own []"])
+    let left = try await h.store.entries()
+    #expect(left.map(\.operationId) == ["op-1"])
+    #expect(left.map(\.state) == [reason == nil ? .pending : .held])
     #expect(await current(h.engine)?.phase == .ready)
-    #expect(await current(h.engine)?.pending == 1)
+    #expect(await current(h.engine)?.pending == (reason == nil ? 1 : 0))
+    #expect(await current(h.engine)?.held.count == (reason == nil ? 0 : 1))
 
     #expect(await h.engine.signOut(discardingUnsent: true) == 0)
     #expect(try h.tokens.read() == nil)
@@ -2271,7 +2290,7 @@ private func applied(_ changes: WorkspaceChanges) -> FakeTransport.Reply {
     await h.waits.elapse()
     await h.engine.settled()
 
-    #expect(await current(h.engine) == state(.ready, served, address: two))
+    #expect(await current(h.engine) == state(.ready, served, address: two), "nothing of the first held or pending")
     #expect(await h.transport.sends.count == sentBefore)
     #expect(try await h.entries == [])
     #expect(try await h.kept?.owner == "user-2")
