@@ -131,8 +131,9 @@
           line.tokenizer.position(from: line.beginningOfDocument, toBoundary: .line, inDirection: .storage(.forward)))
         let offset = line.offset(from: line.beginningOfDocument, to: lineEnd)
         #expect(offset < (long as NSString).length, "the row does not wrap")
-        let secondLine = try #require(line.tokenizer.position(from: lineEnd, toBoundary: .line, inDirection: .storage(.forward)))
-        #expect(line.offset(from: line.beginningOfDocument, to: secondLine) == (long as NSString).length, "more than two lines")
+        // The same offset with the forward affinity is the start of the second visual line, which is the last.
+        let secondLine = try #require(line.position(from: line.beginningOfDocument, offset: offset))
+        #expect(abs(line.caretRect(for: secondLine).midY - line.caretRect(for: line.endOfDocument).midY) < 1, "not two lines")
 
         line.selectedTextRange = line.textRange(from: lineEnd, to: lineEnd)
         let drawn = line.caretRect(for: try #require(line.selectedTextRange).start)
@@ -140,7 +141,11 @@
         #expect(try !screen.takesKey(line, UIKeyCommand.inputDownArrow), "Down left a row of two lines from its first")
         #expect(try screen.takesKey(line, UIKeyCommand.inputUpArrow))
 
-        line.selectedRange = NSRange(location: offset, length: 0)
+        // (Set from elsewhere: at the same offset the text view keeps the affinity it had.)
+        line.selectedRange = NSRange(location: 0, length: 0)
+        line.selectedTextRange = line.textRange(from: secondLine, to: secondLine)
+        let atSecond = line.caretRect(for: try #require(line.selectedTextRange).start)
+        #expect(abs(atSecond.midY - line.caretRect(for: line.endOfDocument).midY) < 1, "not drawn on the second line")
         #expect(try screen.takesKey(line, UIKeyCommand.inputDownArrow))
         #expect(try !screen.takesKey(line, UIKeyCommand.inputUpArrow))
       }

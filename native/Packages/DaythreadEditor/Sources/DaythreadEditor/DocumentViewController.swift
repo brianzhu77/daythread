@@ -75,6 +75,9 @@
     private let keyboardEdge = UIView()
     private lazy var lineInput = LineInput(self)
     private lazy var tapsUnderLines = TapsUnderLines(self)
+    /// While set, a change is not reported but noted (`holdingReports`).
+    private var reportsHeld = false
+    private var reportWasHeld = false
 
     /// A view the host puts above the rows, as the page's first line: it scrolls with them and is not a row, so the
     /// rows keep their indices.
@@ -313,13 +316,34 @@
 
     private func holdKeyboard(from line: LineTextView) {
       guard line.isFirstResponder else { return }
-      // The same keyboard, so it does not change while it is held.
-      keyboardHolder.keyboardType = line.keyboardType
-      keyboardHolder.autocorrectionType = line.autocorrectionType
-      keyboardHolder.autocapitalizationType = line.autocapitalizationType
-      keyboardHolder.smartDashesType = line.smartDashesType
-      keyboardHolder.inputView = line.inputView
+      // Where the line is, so a list that scrolls its first responder into view has nothing to scroll to.
+      keyboardHolder.frame = line.convert(line.bounds, to: collectionView)
+      Self.takeKeyboard(of: line, to: keyboardHolder)
       keyboardHolder.becomeFirstResponder()
+    }
+
+    /// Everything that decides which keyboard a text view shows, from `line` to `holder`, so the keyboard does not
+    /// change while it is held.
+    private static func takeKeyboard(of line: UITextView, to holder: UITextView) {
+      holder.autocapitalizationType = line.autocapitalizationType
+      holder.autocorrectionType = line.autocorrectionType
+      holder.spellCheckingType = line.spellCheckingType
+      holder.smartQuotesType = line.smartQuotesType
+      holder.smartDashesType = line.smartDashesType
+      holder.smartInsertDeleteType = line.smartInsertDeleteType
+      holder.inlinePredictionType = line.inlinePredictionType
+      holder.mathExpressionCompletionType = line.mathExpressionCompletionType
+      holder.writingToolsBehavior = line.writingToolsBehavior
+      holder.allowedWritingToolsResultOptions = line.allowedWritingToolsResultOptions
+      holder.keyboardType = line.keyboardType
+      holder.keyboardAppearance = line.keyboardAppearance
+      holder.returnKeyType = line.returnKeyType
+      holder.enablesReturnKeyAutomatically = line.enablesReturnKeyAutomatically
+      holder.isSecureTextEntry = line.isSecureTextEntry
+      holder.textContentType = line.textContentType
+      holder.passwordRules = line.passwordRules
+      holder.inputView = line.inputView
+      holder.inputAccessoryView = line.inputAccessoryView
     }
 
     /// The hold ends: a line has taken the keyboard, or, when none could, it goes down.
@@ -481,8 +505,10 @@
       guard line.markedTextRange == nil, line.isEditable, let id = line.rowID, editableIDs.contains(id) else {
         return taken
       }
-      // Words on screen the page has not read yet (an autocorrection, say) are its before the key is.
-      let read = absorb(line) != nil
+      // Words pasted and waiting for the run loop's next turn, and words on screen the page has not read yet (an
+      // autocorrection, say), are the page's before the key is; with it, they are one change.
+      let pasted = holdingReports { line.applyPendingReplacement() }
+      let read = absorb(line) != nil || pasted
       guard var page = editedPage, let workspace, let pageID = shownPageID else { return taken }
       var selection = line.selectedRange
       if key == .returnKey, selection.length > 0 {
@@ -534,7 +560,20 @@
 
     private func report() {
       guard let editedPage else { return }
+      if reportsHeld {
+        reportWasHeld = true
+        return
+      }
       onChange?(editedPage.document, editedPage.singleDeleteIds)
+    }
+
+    /// Runs `body` without reporting a change; true when it made one, for the caller to report with its own.
+    private func holdingReports(_ body: () -> Void) -> Bool {
+      reportsHeld = true
+      reportWasHeld = false
+      defer { reportsHeld = false }
+      body()
+      return reportWasHeld
     }
 
     /// A line that loses the keyboard is no longer composing. Its commit is read here when the text view did not
@@ -596,22 +635,54 @@
     /// as it was when the first of them arrived, and that is merged with the latest: neither replaces the other. A
     /// row the outside change removed gets his words back by the merge's rule for a line deleted on the server and
     /// changed by him. Reported once, when he committed anything.
+    ///
+    /// The caret follows his words: after what he committed, in the row that holds them. That is his row when the
+    /// merge kept his words there; when it put them in a row of their own (the server changed that row's words too,
+    /// or deleted the to-do he wrote in), it is that row, and the keyboard goes with it.
     private func commitHeld(_ line: LineTextView, in id: String, held: (base: String, document: String, workspace: Workspace)) {
       var mine = EditablePage(document: held.base, pageDate: pageDate)
-      var committed = false
+      var committed: EditablePage.Caret?
       if let change = InlineTextStorage.change(
         from: line.syncedText, to: line.text, caret: NSMaxRange(line.selectedRange)),
         let words = mine.content(of: id), Array(words.plain.utf16) == Array(line.syncedText.utf16),
         !LineTextView.holdsObjectReplacement(change.text)
       {
-        _ = mine.replaceText(in: id, range: change.range, with: LineTextView.cleaned(change.text))
-        committed = true
+        committed = mine.replaceText(in: id, range: change.range, with: LineTextView.cleaned(change.text))
       }
       let merged = PageMerge.merge(base: held.base, mine: mine.document, theirs: held.document).document
       // The page shown meanwhile carries the rows he removed; the merged one goes on naming them.
       editedPage = editedPage.map { replacing($0, with: merged) } ?? EditablePage(document: merged, pageDate: pageDate)
-      if let pageID = shownPageID { redraw(pageID: pageID, pageDate: pageDate, in: held.workspace) }
-      if committed { report() }
+      guard let pageID = shownPageID else { return }
+      guard let committed else {
+        redraw(pageID: pageID, pageDate: pageDate, in: held.workspace)
+        return
+      }
+      let caret = rowHolding(wordsOf: id, in: mine, theirs: held.document).map {
+        EditablePage.Caret(block: $0, offset: committed.offset)
+      }
+      if let caret, caret.block != id {
+        restructure(from: line, caret: caret, selectionLength: 0, pageID: pageID, workspace: held.workspace)
+      } else {
+        redraw(pageID: pageID, pageDate: pageDate, in: held.workspace)
+      }
+      report()
+    }
+
+    /// The row of the page that holds `id`'s words as he has them in `mine`: `id` itself when it still does,
+    /// otherwise a row the merge made for them (in neither `mine` nor `theirs`) with exactly those words.
+    private func rowHolding(wordsOf id: String, in mine: EditablePage, theirs: String) -> String? {
+      guard let page = editedPage, let words = mine.content(of: id)?.plain else { return nil }
+      if page.content(of: id)?.plain == words { return id }
+      var known: Set<String> = []
+      func collect(_ blocks: [Block]) {
+        for block in blocks {
+          known.insert(block.id)
+          collect(block.children)
+        }
+      }
+      collect(mine.blocks)
+      collect(Document.blocks(theirs))
+      return page.textBlocks.first { !known.contains($0) && page.content(of: $0)?.plain == words }
     }
 
     /// Draws what the page made of a change typed in `line`. When only that line's words changed, the text view

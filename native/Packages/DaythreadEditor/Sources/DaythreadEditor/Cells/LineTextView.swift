@@ -126,6 +126,13 @@
 
     private var pendingReplacement: (range: NSRange, words: String, rowID: String?, text: String)?
 
+    /// What is waiting for the run loop's next turn goes in now: a key that comes first acts after the words.
+    func applyPendingReplacement() {
+      guard pendingReplacement != nil else { return }
+      NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(replacePending), object: nil)
+      replacePending()
+    }
+
     @objc private func replacePending() {
       guard let pending = pendingReplacement else { return }
       pendingReplacement = nil
@@ -136,6 +143,8 @@
         let replaced = textRange(from: start, to: end)
       else { return }
       replace(replaced, withText: pending.words)
+      // The caret goes after the words, as it does after typing them.
+      selectedRange = NSRange(location: pending.range.location + (pending.words as NSString).length, length: 0)
     }
 
     /// Return is a key of the page's, not a character of the line; while text is marked it only commits it. A tab is
