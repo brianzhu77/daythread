@@ -5,6 +5,13 @@
 
   @testable import DaythreadEditor
 
+  /// A date chip, and the words it is drawn with on a page with no date.
+  private let chipJSON: JSONValue = .object([
+    "type": .string("dateMention"),
+    "props": .object(["eventId": .string("e"), "date": .string("2026-10-22"), "time": .string("")]),
+  ])
+  private let chipWords = InlineText.plain(.array([chipJSON]), pageDate: nil)
+
   /// A page being edited, in a window, as he sees it.
   @MainActor
   private struct Screen {
@@ -111,7 +118,8 @@
         var reports: [String] = []
         screen.controller.onChange = { document, _ in reports.append(document) }
         let line = try focus(screen, 0)
-        line.insertText("\n")
+        // Return as a keyboard sends it, in any of its spellings, is a key: nothing goes in, not even a space.
+        for key in ["\n", "\r", "\r\n"] { line.insertText(key) }
         #expect(line.text == "one")
         #expect(reports.isEmpty)
         #expect(screen.controller.itemCount == 2)
@@ -120,6 +128,58 @@
         #expect(line.text == "one a b c")
         #expect(reports.count == 1)
         #expect(InlineContent(try blocks(of: reports.last)[0].content).plain == "one a b c")
+
+        // Words that reach the text view by its delegate's path are made one line too.
+        let range = NSRange(location: (line.text as NSString).length, length: 0)
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: range, replacementText: " d\ne") == false)
+        #expect(screen.wait { line.text == "one a b c d e" })
+        #expect(InlineContent(try blocks(of: reports.last)[0].content).plain == "one a b c d e")
+      }
+
+      /// A software keyboard's Tab (iPad) arrives as a tab character: it is the Tab key, and a tab in pasted words is
+      /// a space.
+      @Test func a_tab_is_a_key_and_a_tab_in_pasted_words_is_a_space() throws {
+        let screen = try editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        var reports: [String] = []
+        screen.controller.onChange = { document, _ in reports.append(document) }
+        let line = try focus(screen, 1)
+        line.insertText("\t")
+        let end = NSRange(location: (line.text as NSString).length, length: 0)
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: end, replacementText: "\t") == false)
+        #expect(screen.controller.pressedKeys == [.tab, .tab])
+        #expect(line.text == "two")
+        #expect(reports.isEmpty)
+
+        line.replace(try #require(line.selectedTextRange), withText: " a\tb")
+        #expect(line.text == "two a b")
+        #expect(InlineContent(try blocks(of: reports.last)[1].content).plain == "two a b")
+      }
+
+      /// The object replacement character stands for a chip; typed, pasted or dropped it is nothing, so no chip is
+      /// lost and none is written as a character.
+      @Test func an_object_replacement_character_never_enters_a_line() throws {
+        let screen = try editing([Block(id: "a", type: "paragraph", content: .array([run("Meet "), chipJSON, run(" ok")]))])
+        let line = try focus(screen, 0)
+        let marker = String(Character(Unicode.Scalar(0xFFFC)!))
+        line.insertText("x" + marker + "y")
+        line.selectedRange = NSRange(location: 0, length: 0)
+        line.replace(try #require(line.selectedTextRange), withText: marker)
+        let end = NSRange(location: (line.text as NSString).length, length: 0)
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: end, replacementText: "z" + marker) == false)
+        #expect(screen.wait { line.text.hasSuffix("z") })
+        let items = words(try blocks(of: screen.controller.document)[0])
+        #expect(items.filter { if case .token = $0 { true } else { false } }.count == 1)
+        #expect(InlineContent(try blocks(of: screen.controller.document)[0].content).plain == "Meet \u{FFFC} okxyz")
+      }
+
+      /// A chip copied or cut goes to the pasteboard as its words. (Read from what `copy` would write; the shared
+      /// simulator's pasteboard is not touched.)
+      @Test func a_chip_is_copied_as_its_words() throws {
+        let screen = try editing([Block(id: "a", type: "paragraph", content: .array([run("Meet "), chipJSON, run(" ok")]))])
+        let line = try screen.line(0)
+        let words = line.pasteboardWords(in: NSRange(location: 0, length: (line.text as NSString).length))
+        #expect(words == "Meet " + chipWords + " ok")
+        #expect(line.pasteboardWords(in: NSRange(location: 0, length: 4)) == "Meet")
       }
 
       @Test func typing_reconfigures_no_row() throws {
@@ -170,6 +230,13 @@
         line.deleteBackward()
         #expect(screen.wait { (try? screen.cell(0).frame.height) ?? 0 <= rowHeight + 0.5 }, "it shrinks back")
         #expect(try screen.cell(0) === cell)
+
+        // Words set in the system's fallback fonts (Chinese, emoji) fit the row their label gives them too.
+        line.insertText("，今天买菜然后去公园散步，看看花开了没有 🌳🌸🌼 再回家做饭，吃完饭再写一会儿日记")
+        #expect(screen.wait { (try? screen.cell(0).frame.height) ?? 0 > rowHeight + lineHeight / 2 })
+        _ = screen.list
+        let fallback = line.sizeThatFits(CGSize(width: line.bounds.width, height: .greatestFiniteMagnitude)).height
+        #expect(fallback <= line.bounds.height + 0.5, "the words need \(fallback), the line is \(line.bounds.height)")
       }
 
       @Test func styles_are_drawn_and_kept() throws {
@@ -368,10 +435,11 @@
           [
             block("a", "bulletListItem", text: long), block("b", "task", ["taskId": .string("k")], text: long),
             block("c", "numberedListItem", text: "Short"),
+            block("d", "bulletListItem", text: "今天买菜然后去公园散步，看看花开了没有 🌳🌸🌼 再回家做饭，吃完饭再写一会儿日记"),
           ], tasks: [taskJSON("k", status: "open")], width: width, safeArea: safeArea, category: category)
         let list = screen.list
         let visible = list.bounds.inset(by: list.safeAreaInsets)
-        for item in 0..<3 {
+        for item in 0..<4 {
           list.scrollToItem(at: IndexPath(item: item, section: 0), at: .top, animated: false)
           list.layoutIfNeeded()
           let cell = try screen.cell(item)
@@ -403,14 +471,21 @@
             guard let cell = list.cellForItem(at: IndexPath(item: item, section: 0)) else { return false }
             return cell.frame.maxY <= list.bounds.maxY - list.adjustedContentInset.bottom
           })
-        let line = try focus(screen, lowest)
-        defer { line.resignFirstResponder() }
+        // An input view of a known height stands for the keyboard, whatever the simulator's keyboard setting is.
+        let keyboardHeight: CGFloat = 300
+        let line = try screen.line(lowest)
+        line.inputView = UIView(frame: CGRect(x: 0, y: 0, width: 390, height: keyboardHeight))
+        defer {
+          line.resignFirstResponder()
+          line.inputView = nil
+        }
+        _ = try focus(screen, lowest)
         let guide = list.keyboardLayoutGuide
         let up = screen.wait {
           screen.window.layoutIfNeeded()
-          return list.convert(guide.layoutFrame, to: screen.window).height > 100
+          return abs(list.convert(guide.layoutFrame, to: screen.window).height - keyboardHeight) <= 1
         }
-        try #require(up, "no software keyboard came up")
+        try #require(up, "the keyboard layout guide is \(guide.layoutFrame.height) high, not the input view's height")
         func caret() -> CGRect {
           let rect = line.caretRect(for: line.selectedTextRange?.end ?? line.endOfDocument)
           return line.convert(rect, to: screen.window)
@@ -421,6 +496,204 @@
         let shown = list.convert(list.bounds.inset(by: list.adjustedContentInset), to: screen.window)
         #expect(shown.contains(caret()), "the caret \(caret()) is outside the list's visible area \(shown)")
         #expect(list.keyboardDismissMode == .interactive)
+      }
+
+      // MARK: a line never speaks for another row or another page
+
+      /// Another page while he composes: what he composed is committed into the page he composed it in, and reported
+      /// for that page, before the other page is drawn; nothing of it reaches the new page.
+      @Test(arguments: ["edit", "show"])
+      func another_page_while_composing_commits_the_words_to_the_page_they_were_composed_in(by call: String) throws {
+        let monday = try makePage([block("a", "paragraph", text: "one")], id: "day:2026-11-23")
+        let tuesday = try makePage([block("a", "paragraph", text: "rest")], id: "day:2026-11-24")
+        let screen = try editing([])
+        screen.controller.edit(page: monday, in: try makeWorkspace())
+        var reports: [String] = []
+        screen.controller.onChange = { document, _ in reports.append(document) }
+        let line = try focus(screen, 0)
+        line.setMarkedText("今天", selectedRange: NSRange(location: 2, length: 0))
+        #expect(screen.controller.isComposing)
+
+        if call == "edit" {
+          screen.controller.edit(page: tuesday, in: try makeWorkspace())
+        } else {
+          screen.controller.show(page: tuesday, in: try makeWorkspace())
+        }
+        _ = screen.list
+
+        #expect(reports.count == 1)
+        #expect(InlineContent(try blocks(of: reports.first)[0].content).plain == "one今天")
+        #expect(!screen.controller.isComposing)
+        #expect(try screen.line(0).text == "rest")
+        #expect(try screen.line(0).markedTextRange == nil)
+        if call == "edit" { #expect(screen.controller.document == tuesday.document) }
+        // Typing goes on into the new page only.
+        if call == "edit" {
+          let next = try focus(screen, 0)
+          next.insertText("!")
+          #expect(InlineContent(try blocks(of: reports.last)[0].content).plain == "rest!")
+        }
+        #expect(reports.count == (call == "edit" ? 2 : 1))
+      }
+
+      /// Words that were to go in on the run loop's next turn are dropped when the line was changed from outside in
+      /// between: they belonged to words that are no longer there.
+      @Test func a_deferred_change_to_a_line_replaced_in_between_is_dropped() throws {
+        let screen = try editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try focus(screen, 1)
+        let end = NSRange(location: 3, length: 0)
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: end, replacementText: " x\ny") == false)
+        let outside = Document.write([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "changed")])
+        screen.controller.replace(document: outside, in: try makeWorkspace())
+        _ = screen.list
+        _ = screen.wait(0.3) { false }
+        #expect(line.text == "changed")
+        #expect(screen.controller.document == outside)
+        #expect(reports == 0)
+      }
+
+      /// A text view that still shows words the page no longer holds (a change from outside it has not drawn yet) is
+      /// drawn again from the page; what it showed is not written over the page.
+      @Test func a_line_shown_stale_is_redrawn_from_the_page_and_not_written() throws {
+        let screen = try editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try focus(screen, 1)
+        let outside = Document.write([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "changed")])
+        screen.controller.replace(document: outside, in: try makeWorkspace())
+        // Before the list lays out again, the line still shows "two".
+        #expect(line.text == "two")
+        line.insertText("!")
+        #expect(reports == 0)
+        #expect(screen.controller.document == outside)
+        _ = screen.list
+        #expect(line.text == "changed")
+        line.insertText("?")
+        #expect(reports == 1)
+        #expect(InlineContent(try blocks(of: screen.controller.document)[1].content).plain == "changed?")
+      }
+
+      /// The row holding the caret scrolled far off a long page: typing then either has no line to go to (the
+      /// keyboard is gone) or goes to that row. It never goes to a row the cell was given meanwhile.
+      @Test func typing_after_the_caret_s_row_scrolled_away_goes_to_that_row_or_nowhere() throws {
+        let screen = try editing((0..<200).map { block("p\($0)", "paragraph", text: "Line \($0)") })
+        let before = try blocks(of: screen.controller.document)
+        _ = try focus(screen, 0)
+        let list = screen.list
+        list.setContentOffset(CGPoint(x: 0, y: list.contentSize.height - list.bounds.height), animated: false)
+        list.layoutIfNeeded()
+        list.setContentOffset(CGPoint(x: 0, y: list.contentSize.height / 2), animated: false)
+        list.layoutIfNeeded()
+        let typing = allSubviews(list).compactMap { $0 as? LineTextView }.filter(\.isFirstResponder)
+        #expect(typing.count <= 1)
+        if let line = typing.first {
+          #expect(line.rowID == "p0", "the keyboard is with \(line.rowID ?? "no row")")
+          line.insertText("!")
+          let after = try blocks(of: screen.controller.document)
+          #expect(InlineContent(after[0].content).plain == "Line 0!")
+          #expect(Array(after.dropFirst()) == Array(before.dropFirst()))
+        } else {
+          #expect(try blocks(of: screen.controller.document) == before)
+        }
+      }
+
+      /// A change from outside that gives the caret's row another kind of cell: the new cell's line has the caret, with
+      /// the selection it had.
+      @Test func a_row_redrawn_as_another_kind_keeps_the_caret() throws {
+        let workspace = try makeWorkspace(tasks: [taskJSON("k", status: "open")])
+        let screen = try editing([block("a", "paragraph", text: "Water the plants"), block("b", "paragraph", text: "x")])
+        let line = try focus(screen, 0)
+        line.selectedRange = NSRange(location: 2, length: 3)
+        let outside = Document.write([
+          block("a", "task", ["taskId": .string("k")], text: "Water the plants"), block("b", "paragraph", text: "x"),
+        ])
+        screen.controller.replace(document: outside, in: workspace)
+        _ = screen.list
+        let cell = try #require(try screen.cell(0) as? TodoBlockCell)
+        #expect(cell.line.isFirstResponder)
+        #expect(cell.line.selectedRange == NSRange(location: 2, length: 3))
+        #expect(screen.controller.redrawnRows == ["a"])
+      }
+
+      // MARK: chips
+
+      /// A page that is only shown draws its words as 1a did: a chip is words among words, not an attachment.
+      @Test func a_chip_on_a_shown_page_is_drawn_as_1a_drew_it() throws {
+        let content: JSONValue = .array([run("Meet "), chipJSON, run(" ok")])
+        let screen = try editing([])
+        let workspace = try makeWorkspace()
+        screen.controller.show(page: try makePage([Block(id: "a", type: "paragraph", content: content)]), in: workspace)
+        let line = try screen.line(0)
+        let cell = try screen.cell(0)
+        let expected = InlineAttributedText.display(
+          InlineAttributedText.make(content, pageDate: nil, in: workspace), textStyle: .body,
+          compatibleWith: cell.traitCollection)
+        #expect(line.text == expected.string)
+        #expect(line.text == "Meet " + chipWords + " ok")
+        var attachments = 0
+        line.attributedText.enumerateAttribute(.attachment, in: NSRange(location: 0, length: line.attributedText.length)) {
+          value, _, _ in if value != nil { attachments += 1 }
+        }
+        #expect(attachments == 0)
+        let font = line.attributedText.attribute(.font, at: 0, effectiveRange: nil) as? UIFont
+        #expect(font == expected.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+      }
+
+      /// A chip whose words are longer than the line is drawn at most as wide as the line, its words cut at the end.
+      @Test func a_long_chip_fits_its_line_at_the_largest_text_size() throws {
+        let title = "A page whose title runs on and on, far longer than any line on a phone could hold at this size"
+        let target = try #require(
+          Page(.object([
+            "id": .string("doc-a"), "type": .string("document"), "date": .null, "title": .string(title),
+            "document": .string("[]"),
+          ])))
+        let reference: JSONValue = .object([
+          "type": .string("pageRef"), "props": .object(["pageId": .string("doc-a"), "refId": .string("r")]),
+        ])
+        let controller = DocumentViewController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        controller.view.layoutIfNeeded()
+        controller.edit(
+          page: try makePage([Block(id: "a", type: "paragraph", content: .array([run("See "), reference]))]),
+          in: try makeWorkspace(pages: [target]))
+        let screen = Screen(window: window, controller: controller)
+        _ = screen.list
+        let line = try screen.line(0)
+        line.superview?.layoutIfNeeded()
+        _ = screen.list
+        var widest: CGFloat = 0
+        line.attributedText.enumerateAttribute(.attachment, in: NSRange(location: 0, length: line.attributedText.length)) {
+          value, _, _ in widest = max(widest, (value as? NSTextAttachment)?.bounds.width ?? 0)
+        }
+        #expect(widest > 0, "the chip is not an attachment")
+        #expect(widest <= line.bounds.width + 0.5, "the chip is \(widest) wide, the line \(line.bounds.width)")
+        let fitted = line.sizeThatFits(CGSize(width: line.bounds.width, height: .greatestFiniteMagnitude)).height
+        #expect(fitted <= line.bounds.height + 0.5)
+      }
+
+      // MARK: accessibility
+
+      /// A shown page's line reads as a text view that is not edited does; an edited one as one that is.
+      @Test func a_lines_traits_are_its_text_views_own_and_a_headings_header() throws {
+        func reference(editable: Bool) -> UIAccessibilityTraits {
+          let view = UITextView()
+          view.isEditable = editable
+          view.isSelectable = editable
+          return view.accessibilityTraits
+        }
+        let blocks = [block("a", "paragraph", text: "one"), block("h", "heading", ["level": .number("2")], text: "Plan")]
+        let screen = try editing(blocks)
+        #expect(try screen.line(0).accessibilityTraits == reference(editable: true))
+        #expect(try screen.line(1).accessibilityTraits == reference(editable: true).union(.header))
+        screen.controller.show(page: try makePage(blocks), in: try makeWorkspace())
+        _ = screen.list
+        #expect(try screen.line(0).accessibilityTraits == reference(editable: false))
+        #expect(try screen.line(1).accessibilityTraits == reference(editable: false).union(.header))
       }
 
       private func allSubviews(_ view: UIView) -> [UIView] {
