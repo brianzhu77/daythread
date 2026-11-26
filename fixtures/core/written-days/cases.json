@@ -1,0 +1,314 @@
+[
+  {
+    "name": "todo-row-with-a-task",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 3,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-10-20",
+          "type": "daily",
+          "date": "2026-10-20",
+          "title": "2026-10-20",
+          "document": "[{\"id\":\"4ab621dd-0d0c-4c9c-ad24-eb69ff8e43be\",\"type\":\"task\",\"props\":{\"taskId\":\"d964c0e6-fdf7-4933-99c3-cda6f5bbbd2f\",\"role\":\"plan\",\"planDate\":\"2026-10-20\"},\"content\":[{\"type\":\"text\",\"text\":\"Pay rent\",\"styles\":{}}],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-21",
+          "type": "daily",
+          "date": "2026-10-21",
+          "title": "2026-10-21",
+          "document": "[{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[],\"children\":[]}]"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "d964c0e6-fdf7-4933-99c3-cda6f5bbbd2f",
+          "title": "Pay rent",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-20",
+          "sourcePageId": "day:2026-10-20"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "add",
+        "revision": 3
+      }
+    },
+    "days": [
+      "2026-10-20"
+    ]
+  },
+  {
+    "name": "todo-row-editor-id-without-words",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-10-20",
+          "type": "daily",
+          "date": "2026-10-20",
+          "title": "2026-10-20",
+          "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Words\",\"styles\":{}}],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-21",
+          "type": "daily",
+          "date": "2026-10-21",
+          "title": "2026-10-21",
+          "document": "[{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {}
+    },
+    "days": [
+      "2026-10-20"
+    ]
+  },
+  {
+    "name": "file-block-with-a-url",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-10-20",
+          "type": "daily",
+          "date": "2026-10-20",
+          "title": "2026-10-20",
+          "document": "[{\"id\":\"f1\",\"type\":\"file\",\"props\":{\"url\":\"https://example.com/a.pdf\",\"name\":\"a.pdf\",\"caption\":\"\"},\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-21",
+          "type": "daily",
+          "date": "2026-10-21",
+          "title": "2026-10-21",
+          "document": "[{\"id\":\"f2\",\"type\":\"file\",\"props\":{\"url\":\"\",\"name\":\"\",\"caption\":\"\"},\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {}
+    },
+    "days": [
+      "2026-10-20"
+    ]
+  },
+  {
+    "name": "smart-note",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-10-20",
+          "type": "daily",
+          "date": "2026-10-20",
+          "title": "2026-10-20",
+          "document": "[{\"id\":\"s1\",\"type\":\"smartNote\",\"props\":{\"noteId\":\"note-1\"},\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-21",
+          "type": "daily",
+          "date": "2026-10-21",
+          "title": "2026-10-21",
+          "document": "[]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {}
+    },
+    "days": [
+      "2026-10-20"
+    ]
+  },
+  {
+    "name": "line-with-words",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-10-20",
+          "type": "daily",
+          "date": "2026-10-20",
+          "title": "2026-10-20",
+          "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Went for a run\",\"styles\":{}}],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-21",
+          "type": "daily",
+          "date": "2026-10-21",
+          "title": "2026-10-21",
+          "document": "[{\"id\":\"p2\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"   \",\"styles\":{}}],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {}
+    },
+    "days": [
+      "2026-10-20"
+    ]
+  },
+  {
+    "name": "heading-only",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-10-20",
+          "type": "daily",
+          "date": "2026-10-20",
+          "title": "2026-10-20",
+          "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Words\",\"styles\":{}}],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-21",
+          "type": "daily",
+          "date": "2026-10-21",
+          "title": "2026-10-21",
+          "document": "[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {}
+    },
+    "days": [
+      "2026-10-20"
+    ]
+  },
+  {
+    "name": "day-in-trash-with-words",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 3,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-10-20",
+          "type": "daily",
+          "date": "2026-10-20",
+          "title": "2026-10-20",
+          "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Words\",\"styles\":{}}],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-21",
+          "type": "daily",
+          "date": "2026-10-21",
+          "title": "2026-10-21",
+          "document": "[{\"id\":\"p2\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Words\",\"styles\":{}}],\"children\":[]}]",
+          "trashedAt": "2026-10-22T09:10:00.000Z",
+          "trashId": "trash-b"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "trash-b",
+        "revision": 3
+      }
+    },
+    "days": [
+      "2026-10-20"
+    ]
+  },
+  {
+    "name": "empty-day-with-a-page-under-it",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 3,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-10-20",
+          "type": "daily",
+          "date": "2026-10-20",
+          "title": "2026-10-20",
+          "document": "[]"
+        },
+        {
+          "id": "day:2026-10-21",
+          "type": "daily",
+          "date": "2026-10-21",
+          "title": "2026-10-21",
+          "document": "[]"
+        },
+        {
+          "id": "doc-under",
+          "type": "document",
+          "date": null,
+          "title": "Notes",
+          "parentId": "day:2026-10-20",
+          "document": "[{\"id\":\"5559296f-3492-4205-8fd6-e9be97c05257\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "make-under",
+        "revision": 3
+      }
+    },
+    "days": [
+      "2026-10-20"
+    ]
+  },
+  {
+    "name": "empty-day-with-only-its-draft",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-10-20",
+          "type": "daily",
+          "date": "2026-10-20",
+          "title": "2026-10-20",
+          "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Words\",\"styles\":{}}],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-21",
+          "type": "daily",
+          "date": "2026-10-21",
+          "title": "2026-10-21",
+          "document": "[]"
+        },
+        {
+          "id": "draft:day:2026-10-21",
+          "type": "draft",
+          "date": null,
+          "title": "",
+          "parentId": "day:2026-10-21",
+          "document": "{\"status\":\"ready\",\"items\":[],\"moreOpen\":false}"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {}
+    },
+    "days": [
+      "2026-10-20"
+    ]
+  }
+]

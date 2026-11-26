@@ -1,0 +1,179 @@
+[
+  {
+    "name": "live",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"day:2026-10-22:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-10-22:r0\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {}
+    },
+    "date": "2026-10-22",
+    "live": "day:2026-10-22",
+    "trashed": null
+  },
+  {
+    "name": "none",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 1,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "make-a",
+        "revision": 1
+      }
+    },
+    "date": "2026-10-22",
+    "live": null,
+    "trashed": null
+  },
+  {
+    "name": "only-in-trash",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 3,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"day:2026-10-22:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-10-22:r0\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "trashedAt": "2026-10-22T09:10:00.000Z",
+          "trashId": "trash-10"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "trash-10",
+        "revision": 3
+      }
+    },
+    "date": "2026-10-22",
+    "live": null,
+    "trashed": "day:2026-10-22"
+  },
+  {
+    "name": "trashed-and-new",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"day:2026-10-22:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-10-22:r0\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "trashedAt": "2026-10-22T09:10:00.000Z",
+          "trashId": "trash-10"
+        },
+        {
+          "id": "day:2026-10-22:2",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"day:2026-10-22:2:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:2:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-10-22:2:r0\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:2:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:2:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:2:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:2:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:2:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:2:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {}
+    },
+    "date": "2026-10-22",
+    "live": "day:2026-10-22:2",
+    "trashed": "day:2026-10-22"
+  },
+  {
+    "name": "two-in-trash",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"day:2026-10-22:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-10-22:r0\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "trashedAt": "2026-10-22T09:10:00.000Z",
+          "trashId": "trash-10"
+        },
+        {
+          "id": "day:2026-10-22:2",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"day:2026-10-22:2:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:2:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-10-22:2:r0\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:2:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:2:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:2:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:2:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-10-22:2:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-22:2:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "trashedAt": "2026-10-22T09:20:00.000Z",
+          "trashId": "trash-20"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "trash-20",
+        "revision": 5
+      }
+    },
+    "date": "2026-10-22",
+    "live": null,
+    "trashed": "day:2026-10-22:2"
+  }
+]

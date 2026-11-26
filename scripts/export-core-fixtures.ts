@@ -6,13 +6,16 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { harness, todo, bullet, para, heading, chip, pageRef, card, text } from '../tests/v2-helpers.ts'
+import { harness, dayId, todo, bullet, para, heading, chip, pageRef, card, text } from '../tests/v2-helpers.ts'
 import { inlineText, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
 import { forBrowser } from '../src/server/browser-workspace.ts'
 import { strippedWorkspace } from '../src/domain/synced.ts'
 import { localDayIn } from '../src/domain/workspace.ts'
-import type { Page, Workspace } from '../src/domain/types.ts'
+import { writtenDays } from '../src/domain/page-tree.ts'
+import { draftPageId } from '../src/domain/day-draft.ts'
+import { labelFor } from '../src/components/outbox.ts'
+import type { Action, Page, Workspace } from '../src/domain/types.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dir = join(root, 'fixtures', 'core')
@@ -190,6 +193,121 @@ if (!JSON.parse(files.get('changes/page-removed.json')!).changes.pages.remove.le
   ])
 }
 
+// ---- commands ----------------------------------------------------------------------------------------------------------
+// What the native app predicts for a command before the server answers. `rows.tasks` is the expectation, written here
+// and then held against what the domain did, so a case cannot quietly say something the domain does not.
+const dayPageId = `day:${day}`
+const plain = (name: string, h: ReturnType<typeof harness>, action: Action, rows: string[], repeating = false) => {
+  const before = forBrowser(h.ws)
+  let after = before
+  try { after = forBrowser(h.run(action, `cmd-${name}`).workspace) } catch (e) { if (rows.length) throw e }
+  const byId = <E extends { id: string }>(list: readonly E[]) => new Map(list.map(e => [e.id, JSON.stringify(e)]))
+  const changed = <E extends { id: string }>(was: readonly E[], now: readonly E[]) => [...new Set([...was.map(e => e.id), ...now.map(e => e.id)])].filter(id => byId(was).get(id) !== byId(now).get(id))
+  const tasks = changed(before.tasks, after.tasks), pages = changed(before.pages, after.pages)
+  if (JSON.stringify([...rows].sort()) !== JSON.stringify([...tasks].sort()) && !(repeating && rows.every(id => tasks.includes(id)))) throw new Error(`${name}: rows.tasks ${JSON.stringify(rows)} but the domain changed ${JSON.stringify(tasks)}`)
+  if (!repeating && pages.length) throw new Error(`${name}: the domain also changed pages ${JSON.stringify(pages)}`)
+  put(`commands/${name}.json`, { before, action, rows: { tasks: rows }, after })
+}
+{
+  const idOf = (h: ReturnType<typeof harness>) => h.task('Write the report').id
+  const status = (h: ReturnType<typeof harness>, status: 'open' | 'done' | 'cancelled', extra: Record<string, string> = {}): Action => ({ type: 'task-status', taskId: idOf(h), status, ...extra } as Action)
+  const ticked = () => { const h = world(); h.run({ type: 'task-status', taskId: idOf(h), status: 'done', today: day }, 'tick-first'); return h }
+  { const h = world(); plain('tick', h, status(h, 'done', { today: day }), [idOf(h)]) }
+  { const h = ticked(); plain('reopen', h, status(h, 'open'), [idOf(h)]) }
+  { const h = world(); plain('tick-open-again', h, status(h, 'open'), [idOf(h)]) }
+  { const h = world(); plain('cancel', h, status(h, 'cancelled', { today: day }), [idOf(h)]) }
+  { const h = world(); plain('task-missing', h, { type: 'task-status', taskId: 'no-such-task', status: 'done', today: day }, []) }
+  {
+    const h = world()
+    h.run({ type: 'set-todo-repeat', taskId: idOf(h), repeat: { every: 'day', interval: 1, from: 'schedule' }, today: day, at: stamp(2) }, 'repeat-daily')
+    plain('tick-repeating', h, status(h, 'done', { today: day }), [idOf(h)], true)
+    const f = JSON.parse(files.get('commands/tick-repeating.json')!)
+    if (f.after.tasks.length !== f.before.tasks.length + 1) throw new Error('tick-repeating must make the next to-do')
+  }
+}
+
+// ---- a day's page ------------------------------------------------------------------------------------------------------
+// `live` is the rule of dayPage in src/domain/workspace.ts (not exported): a daily page of that date, not trashed.
+{
+  const isLive = (p: Page, date: string) => p.type === 'daily' && p.date === date && !p.trashedAt
+  const lookup = (name: string, ws: Workspace) => {
+    const days = ws.pages.filter(p => p.type === 'daily' && p.date === day)
+    const trashed = days.filter(p => p.trashedAt).sort((a, b) => b.trashedAt!.localeCompare(a.trashedAt!))[0]
+    return { name, workspace: forBrowser(ws), date: day, live: days.find(p => isLive(p, day))?.id ?? null, trashed: trashed?.id ?? null }
+  }
+  const fresh = () => { const h = harness(); h.run({ type: 'create-document', title: 'First', body: '', pageId: 'doc-a' }, 'make-a'); return h }
+  const trash = (h: ReturnType<typeof harness>, id: string, n: number) => h.run({ type: 'delete-page', pageId: id, at: stamp(n) }, `trash-${n}`)
+  const cases = []
+  { const h = fresh(); h.run({ type: 'ensure-day', date: day }, 'make-day'); cases.push(lookup('live', h.ws)) }
+  { const h = fresh(); cases.push(lookup('none', h.ws)) }
+  { const h = fresh(); h.run({ type: 'ensure-day', date: day }, 'make-day'); trash(h, dayPageId, 10); cases.push(lookup('only-in-trash', h.ws)) }
+  { const h = fresh(); h.run({ type: 'ensure-day', date: day }, 'make-day'); trash(h, dayPageId, 10); h.run({ type: 'ensure-day', date: day }, 'make-day-again'); cases.push(lookup('trashed-and-new', h.ws)) }
+  {
+    const h = fresh(); h.run({ type: 'ensure-day', date: day }, 'make-day'); trash(h, dayPageId, 10)
+    h.run({ type: 'ensure-day', date: day }, 'make-day-again'); trash(h, `${dayPageId}:2`, 20)
+    cases.push(lookup('two-in-trash', h.ws))
+  }
+  const byName = new Map(cases.map(c => [c.name, c]))
+  if (byName.get('trashed-and-new')!.live !== `${dayPageId}:2`) throw new Error('trashed-and-new: the new page must be day:<date>:2')
+  if (byName.get('two-in-trash')!.trashed !== `${dayPageId}:2`) throw new Error('two-in-trash: the later trashedAt must be day:<date>:2')
+  put('day-page/cases.json', cases)
+}
+
+// ---- written days ------------------------------------------------------------------------------------------------------
+// Each workspace has a day that counts and one that does not, for one rule of hasContent (src/domain/page-tree.ts).
+// Days are made by ensure-day; the rows and lines are set on the page's document directly, since the commands that
+// make them also add a template's lines.
+{
+  const [first, second] = ['2026-10-20', '2026-10-21']
+  // `h.page` is read afresh in each step: a command replaces the workspace's pages.
+  const build = (name: string, set: (h: ReturnType<typeof harness>, counts: string, doesNot: string) => void) => {
+    const h = harness()
+    for (const d of [first, second]) { h.day(d); h.page(dayId(d)).document = JSON.stringify([]) }
+    set(h, dayId(first), dayId(second))
+    const written = [...writtenDays(h.ws)].sort()
+    if (JSON.stringify(written) !== JSON.stringify([first])) throw new Error(`written-days ${name}: expected only ${first}, got ${written}`)
+    return { name, workspace: forBrowser(h.ws), days: written }
+  }
+  const doc = (h: ReturnType<typeof harness>, id: string, ...nodes: EditorNode[]) => { h.page(id).document = JSON.stringify(nodes) }
+  const row = (id: string, taskId: string, ...content: unknown[]): EditorNode => block(id, 'task', { taskId, role: 'plan', planDate: '' }, content)
+  const cases = [
+    // A real to-do from add-task, so the row's task exists; its template lines are cleared to leave the row alone.
+    build('todo-row-with-a-task', (h, a, b) => { h.run({ type: 'add-task', pageId: a, title: 'Pay rent', plannedOn: first }, 'add'); doc(h, a, ...pageNodes(h.page(a)).filter(n => n.type === 'task')); doc(h, b, row('r2', 'editor-task:r2')) }),
+    build('todo-row-editor-id-without-words', (h, a, b) => { doc(h, a, para('p1', text('Words'))); doc(h, b, row('r1', 'editor-task:r1')) }),
+    build('file-block-with-a-url', (h, a, b) => { doc(h, a, block('f1', 'file', { url: 'https://example.com/a.pdf', name: 'a.pdf', caption: '' })); doc(h, b, block('f2', 'file', { url: '', name: '', caption: '' })) }),
+    build('smart-note', (h, a) => { doc(h, a, block('s1', 'smartNote', { noteId: 'note-1' })) }),
+    build('line-with-words', (h, a, b) => { doc(h, a, para('p1', text('Went for a run'))); doc(h, b, para('p2', text('   '))) }),
+    build('heading-only', (h, a, b) => { doc(h, a, para('p1', text('Words'))); doc(h, b, heading('h1', 'Plan')) }),
+    build('day-in-trash-with-words', (h, a, b) => { doc(h, a, para('p1', text('Words'))); doc(h, b, para('p2', text('Words'))); h.run({ type: 'delete-page', pageId: b, at: stamp(10) }, 'trash-b') }),
+    build('empty-day-with-a-page-under-it', (h, a) => { h.run({ type: 'create-document', title: 'Notes', body: '', pageId: 'doc-under', parentId: a }, 'make-under') }),
+    // No command makes a draft page without the model's answer, so this one page is built by hand (day-draft.ts).
+    build('empty-day-with-only-its-draft', (h, a, b) => {
+      doc(h, a, para('p1', text('Words')))
+      h.ws.pages.push({ id: draftPageId(b), type: 'draft', date: null, title: '', parentId: b, document: JSON.stringify({ status: 'ready', items: [], moreOpen: false }) })
+    }),
+  ]
+  put('written-days/cases.json', cases)
+}
+
+// ---- labels ------------------------------------------------------------------------------------------------------------
+{
+  const longTitle = 'A to-do whose title runs well past the forty characters the banner keeps'
+  const cases: unknown[] = []
+  const label = (name: string, action: Action, h = world()) => {
+    const workspace = forBrowser(h.ws)
+    cases.push({ name, workspace, action, label: labelFor(action, workspace) })
+  }
+  const withTask = (title: string) => { const h = world(); h.run({ type: 'add-task', pageId: dayPageId, title, plannedOn: day }, `add-${title.length}`); return h }
+  const status = (h: ReturnType<typeof harness>, title: string, to: 'open' | 'done' | 'cancelled'): Action => ({ type: 'task-status', taskId: h.task(title).id, status: to, today: day })
+  { const h = world(); label('task-status-done', status(h, 'Write the report', 'done'), h); label('task-status-open', status(h, 'Write the report', 'open'), h); label('task-status-cancelled', status(h, 'Write the report', 'cancelled'), h) }
+  { const h = withTask(longTitle); label('title-longer-than-40', status(h, longTitle, 'done'), h) }
+  { const h = withTask('Call "Sam" back'); label('title-with-a-quote', status(h, 'Call "Sam" back', 'done'), h) }
+  { const h = withTask('给妈妈打电话'); label('title-in-chinese', status(h, '给妈妈打电话', 'done'), h) }
+  label('ensure-day', { type: 'ensure-day', date: day })
+  label('restore-batch', { type: 'restore-batch', trashId: 'trash-1' })
+  put('labels/cases.json', cases)
+}
+
 // ---- README ------------------------------------------------------------------------------------------------------------
 files.set('README.md', `# Core cases
 
@@ -199,6 +317,10 @@ The cases the native app (\`native/\`) is held to, made from the TypeScript doma
 - \`workspaces/\`: the workspace around a document, as the app holds it (what the server sends: no receipts, no undo copy, pages without their synced lines).
 - \`inline-text/cases.json\`: \`{ content, pageDate, text }\`, what \`inlineText\` reads from inline content.
 - \`changes/\`: \`{ before, changes, after }\`, a workspace, the changes a command made, and the workspace they give (\`null\` when \`changes.from\` is not \`before.revision\`).
+- \`commands/\`: \`{ before, action, rows: { tasks }, after }\`, a workspace, a command, the tasks it is predicted to change, and the workspace after it (\`after\` is \`before\` when the server refuses it).
+- \`day-page/cases.json\`: \`{ name, workspace, date, live, trashed }\`, the id of a date's live day page and of its latest page in Trash (\`null\` for none).
+- \`written-days/cases.json\`: \`{ name, workspace, days }\`, the days \`writtenDays\` counts, sorted.
+- \`labels/cases.json\`: \`{ name, workspace, action, label }\`, what the outbox's \`labelFor\` says of a change.
 - \`today/cases.json\`: \`{ timezone, at, day }\`, the local day of an instant in a time zone.
 
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:
