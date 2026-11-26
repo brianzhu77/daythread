@@ -12,36 +12,6 @@
   ])
   private let chipWords = InlineText.plain(.array([chipJSON]), pageDate: nil)
 
-  /// A page being edited, in a window, as he sees it.
-  @MainActor
-  private struct Screen {
-    let window: UIWindow
-    let controller: DocumentViewController
-
-    var list: UICollectionView {
-      let list = controller.view as! UICollectionView
-      list.layoutIfNeeded()
-      return list
-    }
-
-    func cell(_ item: Int) throws -> UICollectionViewCell {
-      try #require(list.cellForItem(at: IndexPath(item: item, section: 0)))
-    }
-
-    /// The text view that holds a row's words.
-    func line(_ item: Int) throws -> LineTextView {
-      try #require((try cell(item) as? LineBlockCell)?.line, "row \(item) has no text view")
-    }
-
-    /// Lets the run loop turn until `condition` holds, for what the system does after a turn (the keyboard, an
-    /// animated scroll). Synchronous, so no other test runs on the main actor meanwhile.
-    func wait(_ seconds: TimeInterval = 5, until condition: () -> Bool) -> Bool {
-      let end = Date().addingTimeInterval(seconds)
-      while !condition(), Date() < end { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
-      return condition()
-    }
-  }
-
   extension OnScreen {
     @MainActor
     @Suite struct EditingTests {
@@ -49,23 +19,12 @@
         _ blocks: [Block], tasks: [JSONValue] = [], width: CGFloat = 390, safeArea: CGFloat = 0,
         category: UIContentSizeCategory = .large
       ) throws -> Screen {
-        let controller = DocumentViewController()
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 844))
-        window.traitOverrides.preferredContentSizeCategory = category
-        window.rootViewController = controller
-        window.makeKeyAndVisible()
-        controller.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: safeArea, bottom: 0, right: safeArea)
-        controller.view.layoutIfNeeded()
-        controller.edit(page: try makePage(blocks), in: try makeWorkspace(tasks: tasks))
-        return Screen(window: window, controller: controller)
+        try Screen.editing(blocks, tasks: tasks, width: width, safeArea: safeArea, category: category)
       }
 
       /// Puts the caret in a row's line at `offset` (its end when nil).
       private func focus(_ screen: Screen, _ item: Int, at offset: Int? = nil) throws -> LineTextView {
-        let line = try screen.line(item)
-        #expect(line.becomeFirstResponder())
-        line.selectedRange = NSRange(location: offset ?? (line.text as NSString).length, length: 0)
-        return line
+        try screen.focus(item, at: offset)
       }
 
       private func blocks(of document: String?) throws -> [Block] {
@@ -117,16 +76,20 @@
         let screen = try editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
         var reports: [String] = []
         screen.controller.onChange = { document, _ in reports.append(document) }
-        let line = try focus(screen, 0)
-        // Return as a keyboard sends it, in any of its spellings, is a key: nothing goes in, not even a space.
-        for key in ["\n", "\r", "\r\n"] { line.insertText(key) }
-        #expect(line.text == "one")
-        #expect(reports.isEmpty)
-        #expect(screen.controller.itemCount == 2)
+        // Return as a keyboard sends it, in any of its spellings, is the key: the line splits, and nothing goes in,
+        // not even a space.
+        _ = try focus(screen, 0)
+        for (index, key) in ["\n", "\r", "\r\n"].enumerated() {
+          try #require(screen.controller.focusedLine).insertText(key)
+          #expect(screen.controller.itemCount == 3 + index)
+        }
+        #expect(try screen.words() == ["one", "", "", "", "two"])
+        #expect(reports.count == 3)
 
+        let line = try focus(screen, 0)
         line.replace(try #require(line.selectedTextRange), withText: " a\nb\r\nc")
         #expect(line.text == "one a b c")
-        #expect(reports.count == 1)
+        #expect(reports.count == 4)
         #expect(InlineContent(try blocks(of: reports.last)[0].content).plain == "one a b c")
 
         // Words that reach the text view by its delegate's path are made one line too.
@@ -142,17 +105,18 @@
         let screen = try editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
         var reports: [String] = []
         screen.controller.onChange = { document, _ in reports.append(document) }
-        let line = try focus(screen, 1)
-        line.insertText("\t")
+        try focus(screen, 1).insertText("\t")
+        #expect(try screen.blocks()[0].children.map(\.id) == ["b"], "Tab nested the line")
+        // Nested, the line is the first of its group: a second Tab, by the delegate's path, does nothing.
+        let line = try #require(screen.controller.focusedLine)
         let end = NSRange(location: (line.text as NSString).length, length: 0)
         #expect(line.delegate?.textView?(line, shouldChangeTextIn: end, replacementText: "\t") == false)
-        #expect(screen.controller.pressedKeys == [.tab, .tab])
         #expect(line.text == "two")
-        #expect(reports.isEmpty)
+        #expect(reports.count == 1)
 
         line.replace(try #require(line.selectedTextRange), withText: " a\tb")
         #expect(line.text == "two a b")
-        #expect(InlineContent(try blocks(of: reports.last)[1].content).plain == "two a b")
+        #expect(InlineContent(try blocks(of: reports.last)[0].children[0].content).plain == "two a b")
       }
 
       /// The object replacement character stands for a chip; typed, pasted or dropped it is nothing, so no chip is
@@ -699,6 +663,77 @@
         _ = screen.list
         #expect(try screen.line(0).accessibilityTraits == reference(editable: false))
         #expect(try screen.line(1).accessibilityTraits == reference(editable: false).union(.header))
+      }
+
+      // MARK: what Task 11's review found
+
+      /// Pasted words deferred to the run loop's next turn do not land once editing has ended: not in the line that
+      /// is now only shown, and not in the page when it is edited again.
+      @Test func a_deferred_change_is_dropped_when_editing_ends() throws {
+        let page = try makePage([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        let screen = try editing([])
+        screen.controller.edit(page: page, in: try makeWorkspace())
+        var reports: [String] = []
+        screen.controller.onChange = { document, _ in reports.append(document) }
+        let line = try focus(screen, 1)
+        let end = NSRange(location: 3, length: 0)
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: end, replacementText: " x\ny") == false)
+        screen.controller.show(page: page, in: try makeWorkspace())
+        _ = screen.wait(0.3) { false }
+        #expect(try screen.line(1).text == "two")
+
+        screen.controller.edit(page: page, in: try makeWorkspace())
+        _ = screen.list
+        try focus(screen, 1).insertText("!")
+        #expect(try screen.words() == ["one", "two!"])
+        #expect(reports.count == 1)
+      }
+
+      /// Typing after a chip at the end of a line is words, not part of the chip, before the caret has been placed.
+      @Test func typing_after_a_chip_does_not_carry_the_chip() throws {
+        let screen = try editing([Block(id: "a", type: "paragraph", content: .array([run("Meet "), chipJSON]))])
+        let line = try screen.line(0)
+        #expect(line.typingAttributes[InlineTextStorage.tokenWords] == nil)
+        #expect(line.typingAttributes[.attachment] == nil)
+      }
+
+      /// Each chip is copied as its words, two the same side by side as well, and a character beside a chip is copied
+      /// as itself even if it carries the chip's words.
+      @Test func each_chip_is_copied_as_its_words_and_each_character_as_itself() throws {
+        let screen = try editing([
+          Block(id: "a", type: "paragraph", content: .array([run("Meet "), chipJSON, chipJSON, run(" ok")]))
+        ])
+        let line = try screen.line(0)
+        let all = NSRange(location: 0, length: (line.text as NSString).length)
+        #expect(line.pasteboardWords(in: all) == "Meet " + chipWords + chipWords + " ok")
+
+        let carried = NSMutableAttributedString(attributedString: line.attributedText)
+        carried.append(
+          NSAttributedString(string: "x", attributes: [InlineTextStorage.tokenWords: chipWords]))
+        line.attributedText = carried
+        let withX = NSRange(location: 0, length: carried.length)
+        #expect(line.pasteboardWords(in: withX) == "Meet " + chipWords + chipWords + " okx")
+      }
+
+      /// A tab or an object replacement character followed by a combining mark is one character to Swift; it is
+      /// still a tab, or still not a character of the line.
+      @Test func a_tab_or_an_object_replacement_with_a_combining_mark_is_cleaned() throws {
+        let screen = try editing([block("a", "paragraph", text: "one")])
+        let line = try focus(screen, 0)
+        let combining = Unicode.Scalar(0x0301)!
+        let tab = String(String.UnicodeScalarView([Unicode.Scalar(0x09)!, combining]))
+        let marker = String(String.UnicodeScalarView([Unicode.Scalar(0xFFFC)!, combining]))
+        let forbidden: Set<Unicode.Scalar> = [Unicode.Scalar(0x09)!, Unicode.Scalar(0xFFFC)!]
+        #expect(LineTextView.needsCleaning(tab) && LineTextView.needsCleaning(marker))
+        #expect(!LineTextView.cleaned(tab + marker).unicodeScalars.contains { forbidden.contains($0) })
+
+        line.insertText("x" + tab + "y" + marker)
+        let range = NSRange(location: (line.text as NSString).length, length: 0)
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: range, replacementText: "z" + tab) == false)
+        #expect(screen.wait { line.text.hasPrefix("onex") && line.text.contains("z") })
+        let written = try screen.words()[0]
+        #expect(!written.unicodeScalars.contains { forbidden.contains($0) }, "the line holds \(written.debugDescription)")
+        #expect(!line.text.unicodeScalars.contains { forbidden.contains($0) })
       }
 
       private func allSubviews(_ view: UIView) -> [UIView] {
