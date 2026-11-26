@@ -295,12 +295,20 @@ extension SyncEngine {
   /// Sends `performance`, sends it once more when the server held it only because the copy was behind, and answers
   /// it. Every hold or refusal is followed by a load before the answer, so a second tap is built on what the server
   /// has, as the web resyncs before a retry. Throws, with the command answered, when the pass cannot go on.
+  ///
+  /// The command has left the queue, so nothing else can answer it: every throw below answers it first, exactly once.
   private func answer(_ performance: Performance, _ pass: Pass) async throws {
     // One operation for both sends: a held command wrote nothing on the server, so it has no receipt to replay.
     let operationId = UUID().uuidString.lowercased()
     var sentAgain = false
     while true {
-      try await enter(pass)
+      do {
+        try await enter(pass)
+      } catch {
+        // A sign-out or sign-in took the section first, or the pass was cancelled.
+        performance.answer.resume(returning: interrupted(error, pass) ?? Performed(error))
+        throw error
+      }
       let revision = copy?.workspace.revision
       release()
       guard let revision else {
@@ -311,7 +319,7 @@ extension SyncEngine {
       do {
         step = try await send(performance, operationId: operationId, on: revision, pass)
       } catch {
-        performance.answer.resume(returning: Performed(error))
+        performance.answer.resume(returning: interrupted(error, pass) ?? Performed(error))
         throw error
       }
       let performed: Performed
@@ -330,8 +338,9 @@ extension SyncEngine {
       do {
         try await loadWorkspace(pass, have: have)
       } catch {
-        // The server's answer stands; only the copy is behind, and the pass's failure says so.
-        performance.answer.resume(returning: performed)
+        // The server's answer stands, only the copy is behind, and the pass's failure says so; unless the account
+        // changed meanwhile, when the answer belongs to an account no longer shown.
+        performance.answer.resume(returning: interrupted(error, pass) ?? performed)
         throw error
       }
       guard case .loadThenSendAgain = step, !sentAgain, copy?.owner == performance.owner else {
@@ -340,6 +349,13 @@ extension SyncEngine {
       }
       sentAgain = true
     }
+  }
+
+  /// What a command reads when its pass was cut off rather than answered: signed out when the account changed or a
+  /// sign-out has begun since the pass began, offline when the pass was only cancelled. Nil for any other error.
+  func interrupted(_ error: any Error, _ pass: Pass) -> Performed? {
+    guard error is CancellationError || error is Superseded else { return nil }
+    return pass.epoch != epoch || leaving ? .signedOut : .offline
   }
 
   private enum PerformStep {

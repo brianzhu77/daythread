@@ -407,7 +407,11 @@ public actor SyncEngine {
   private func end(_ pass: Pass, after error: any Error) async {
     // A refusal here was the answer to something else; these commands were never sent.
     let unsent: Performed =
-      if case TransportError.refused? = error as? TransportError { .offline } else { Performed(error) }
+      if case TransportError.refused? = error as? TransportError {
+        .offline
+      } else {
+        interrupted(error, pass) ?? Performed(error)
+      }
     answerPerformances(of: pass, with: unsent)
     if error is CancellationError || error is Superseded {
       SyncLog.logger.info("Pass dropped: \(SyncLog.describe(error), privacy: .public)")
