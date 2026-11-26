@@ -225,24 +225,32 @@ date replaces the page in place; nothing is pushed, so there is no Back.
 the account's zone, and a check whenever the app becomes active. While the screen shows today it follows today;
 while it shows another day it stays there. Carried from phase 0.
 
-**Controls (native wins; Brian, 2026-11-26: "我们应该用 Toolbar 吧？尽量简洁，不要一大堆常驻按钮").** Moving between days is in
-the system's toolbar at the bottom of the screen, and the navigation bar is left to the title. As first built,
-six buttons sat in the navigation bar around the title.
+**Controls: the web phone app's arrangement, in the system's components (Brian, 2026-11-26).** He saw two
+arrangements of mine and corrected both. Six glass buttons around the title: "尽量简洁，不要一大堆常驻按钮". Then
+Previous, Calendar and Next in a bottom toolbar: "前/后一天还是要在顶部的，但是不需要用一个显著的按钮，而是类似 ghost
+按钮这种低打扰的就好了。底部的 toolbar 基本上维持和当前移动端一样的布局。整体上还是和现在的 web mobile 差不多，但是使用
+原生组件". So where a control goes is the web phone app's answer, and how it looks and behaves is the system's
+(`native-app.md` §9 is about the second, not the first).
 
-- The navigation bar: the title is the day ("Wednesday, Nov 25"), as now. One button stays there, the account
-  button. The "Not saved" button of §7 appears beside it only while a change is held.
-- The toolbar, always: `chevron.left` (Previous day), the calendar button, `chevron.right` (Next day), spread
-  across it. Next is disabled from today on, as on the web, where a future day is reached only from the calendar.
-- The toolbar, only while another day is open: "Today", between the calendar and Next.
-- The calendar button (to VoiceOver, "Calendar") opens `UICalendarView` in a popover (a sheet on the phone, which
-  is what the system makes of a popover there), with a dot on each day that has something written and the week
-  starting as the account has it. A day picked there opens; future days too.
-- Three buttons are always on screen for moving between days, and one for the account. If he wants it barer
-  still, Previous and Next are the ones to go: the calendar reaches every day.
-- When 1e brings the tab bar, the toolbar goes: a tab bar and a toolbar stacked is what he asked not to have,
-  and the Calendar tab then does this work.
+- **The bottom bar is the system tab bar**: Today, Tasks, Calendar, Pages, and the system's search tab, which the
+  system draws as the round button at the end, where the web has its round Search button. The web's fifth place, Tags,
+  has no tab yet: on a phone the system's bar holds five items, the search tab included, and a sixth puts Tags and
+  Search behind a More tab of the system's (tried on the simulator, 2026-11-26). Which place gives way is Brian's to
+  say; until he does it is Tags, the place a search reaches most easily. Until a place is built its tab shows the
+  place's name and `Not in the app yet`. This replaces §2's "the tab bar waits for 1e": the bar is there from now, and
+  each slice fills a tab.
+- **The day's header is the first row of the page**, as on the web: the word `Today`, `Yesterday` or `Tomorrow`
+  above the title when it applies; the title ("Wed, Nov 25", the web's wording) with a small chevron, which
+  opens the day picker (`UICalendarView`, a dot on each day with something written, the week starting as the
+  account has it; future days too); the status line under it when there is one.
+- **Previous day and Next day are at the top right, quiet**: two plain chevrons with no capsule around them, in
+  the secondary colour. Next is disabled from today on, as on the web. After them, only while a change is held,
+  "Not saved"; then a More button (`ellipsis`) whose menu holds the address and "Sign out". There is no account
+  button.
+- **No Today button on the phone**: the Today tab goes back to today, as the web's does. On a wide screen a plain
+  `Today` shows before the chevrons while another day is open, as on the web from 600 px up.
 - No swipe between days. The web has none, a horizontal swipe is the system's Back and will be a row's actions in
-  1c, and the calendar already reaches any day. My call.
+  1c, and the picker already reaches any day. My call.
 
 **Which page is a day's.** The web's rule (`dayPage` in `src/domain/workspace.ts`): the page of type `daily` with
 that date that is not in Trash. Phase 0 looks for the id `day:<date>`, which is wrong twice: it finds a page that

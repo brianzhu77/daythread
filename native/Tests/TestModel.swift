@@ -2,8 +2,20 @@ import DaythreadCore
 import DaythreadSync
 import Foundation
 import Testing
+import UIKit
 
 @testable import DaythreadUI
+
+/// A window `width` points wide and a phone's height, in the test host's scene, for a screen that must be laid out
+/// and presented as on a device.
+@MainActor
+func testWindow(width: CGFloat, height: CGFloat = 874) throws -> UIWindow {
+  let scene = try #require(
+    UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first, "the test host has a scene")
+  let window = UIWindow(windowScene: scene)
+  window.frame = CGRect(x: 0, y: 0, width: width, height: height)
+  return window
+}
 
 /// Noon UTC on Wednesday, Nov 25 2026.
 let noon = Date(timeIntervalSince1970: 1_795_608_000)

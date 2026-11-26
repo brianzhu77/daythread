@@ -66,7 +66,7 @@ final class TickUITests: XCTestCase {
     back.launch()
     XCTAssertTrue(back.circle(title).waitForValue("done"), "ticked when the server is back")
     try await server.waitForStatus(of: title, "done", timeout: 30)
-    let line = back.navigationBars.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Offline")).firstMatch
+    let line = back.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Offline")).firstMatch
     XCTAssertTrue(line.waitForNonExistence(timeout: 10), "no line once sent")
     XCTAssertEqual(back.circle(title).value as? String, "done")
     back.terminate()

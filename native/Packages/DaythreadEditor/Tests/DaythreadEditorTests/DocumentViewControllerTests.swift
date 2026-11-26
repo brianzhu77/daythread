@@ -25,6 +25,37 @@
       #expect(controller.itemCount == 26)
     }
 
+    @Test func theHostsHeaderIsDrawnAboveTheRowsAndScrollsWithThem() throws {
+      let controller = hosted()
+      let header = UILabel()
+      header.text = "A header"
+      controller.headerView = header
+      controller.show(page: try EditorFixtures.dayPage(), in: try EditorFixtures.workspace())
+      let list = try collection(controller)
+
+      #expect(controller.itemCount == 26, "the header is not a row")
+      #expect(header.isDescendant(of: list))
+      let top = header.convert(header.bounds, to: list)
+      let first = try cell(controller, 0).frame
+      #expect(top.height > 0)
+      #expect(top.maxY <= first.minY + 0.5, "above the first row")
+
+      list.setContentOffset(CGPoint(x: 0, y: 8), animated: false)
+      list.layoutIfNeeded()
+      #expect(abs(header.convert(header.bounds, to: list).minY - top.minY) < 0.5, "not pinned: it scrolls away")
+    }
+
+    @Test func aPageWithNoRowsStillDrawsTheHeader() throws {
+      let controller = hosted()
+      let header = UILabel()
+      header.text = "A header"
+      controller.headerView = header
+      controller.show(page: try makePage([]), in: try makeWorkspace())
+      let list = try collection(controller)
+      #expect(controller.itemCount == 0)
+      #expect(header.isDescendant(of: list))
+    }
+
     @Test func showingTheSameInputTwiceAppliesNoChange() throws {
       let controller = hosted()
       let page = try EditorFixtures.dayPage()

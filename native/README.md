@@ -114,7 +114,8 @@ xcrun simctl spawn <simulator> log show --last 1h --info \
   --predicate 'subsystem == "app.daythread.Daythread" AND category == "audit"'
 ```
 
-When any page fails, the account menu gains a first row, "Round trip · N of M pages fail".
+When any page fails, the More menu (`ellipsis`, the navigation bar's last item) gains a first row, "Round trip · N
+of M pages fail".
 
-The account menu offers "Sign out" only while a session is stored (never against a server with sign-in off); with
-nothing to put in it, the account button is not shown.
+The More menu offers "Sign out" only while a session is stored (never against a server with sign-in off); with
+nothing to put in it, the More button is not shown.
