@@ -18,7 +18,9 @@ Observation, Swift Testing, XCTest; the fixtures script is TypeScript on the web
 **Spec:** `docs/design/native-phase-1.md` §3 to §8 (slice 1a), under `docs/design/native-app.md`. Executors read
 the first in full and the second's §5 to §9.
 
-**Status (2026-11-25):** tasks 1 to 10 built and reviewed, seen on the simulator against the seeded local servers (`tests/evidence/native-phase-1a/`). Task 11, the check on his own data, is Brian's.
+**Status (2026-11-25):** tasks 1 to 10 built and reviewed one by one, then the whole slice reviewed once and its
+findings fixed (below, "Decisions made while building"). Seen on the simulator against the seeded local servers
+(`tests/evidence/native-phase-1a/`). Task 11, the check on his own data, is Brian's.
 
 ## Global Constraints
 
@@ -43,7 +45,14 @@ the first in full and the second's §5 to §9.
 
 ## Corrections to the spec made by this plan
 
-- None yet. A correction found while building is written here with its reason before the code that follows it.
+Each is now in the spec itself (`docs/design/native-phase-1.md`), added when it was found:
+
+- After the server holds a change, the engine loads the workspace once in that pass. Without it the page showed
+  what was last loaded and Keep mine was held again every time. Found by the review of the whole slice.
+- A waited command the server says is behind is followed by a load and sent once more; any other refusal is
+  followed by a load. Without it "try again" failed the same way on a copy another device had changed.
+- The network coming back asks for one load when the last pass ended offline, whether or not anything waits.
+- The to-do circle's VoiceOver label (`Complete <words>`), and the labels "Calendar" and "Not saved".
 
 ## Review Focus
 
@@ -604,6 +613,38 @@ Nothing in this task is code, and Brian does the tapping: the app writes to his 
   yesterday and comes back to today.
 - [ ] The sync log shows no held entry and no failed pass; the audit still reports "0 of N pages fail".
 - [ ] Record the results under this task and set the plan's status line.
+
+## Decisions made while building (2026-11-25)
+
+Brian had not read the design when building began, and asked not to be stopped for what could be settled. These
+are the calls made on his behalf while building, in the order made, each with what it costs if wrong. Any of them
+can be reversed.
+
+| Decision | If wrong |
+|---|---|
+| Task 1 has no failing-test commit of its own: its files are the expectations Tasks 2 and 3 fail against | One task's history lacks a red commit |
+| `labelFor` is imported from `src/components/outbox.ts` by the fixtures script as it stands; nothing under `src/` was moved | The script breaks if that module ever needs a browser |
+| The task that changed `TodoTask.Status` also fixed its callers in the other packages | None; they had to compile |
+| After a lost reply (`already-applied`), the entry stays pending until the whole load is in the copy | One more send of the same entry |
+| The store refuses a write that names a row the workspace it was given lacks | A reply is refused if `applying` ever drops a row it was told to keep |
+| Keep mine sends the same operation again, as the web does | None known; it is the web's behaviour |
+| `signOut(discardingUnsent: true)` tries no pass first; the screen always calls `false` first | A caller that skips `false` discards without one last try |
+| A launch always asks the server once, whatever is stored; the "ask nothing" shortcut needs this launch's own answer that sign-in is required | One account request per launch with a hidden copy |
+| Once a sign-out that will erase has begun, nothing is sent and nothing new is accepted | A tick tapped in that instant is refused |
+| After the server holds a change the engine loads once in that pass | One more load per held change |
+| A waited command is sent once more after the server says the copy is behind | One more request per stale tap |
+| The fix pass after the whole-slice review took everything a person would notice and left three things out: `writtenDays()` on the main actor, a kept entry's revisions, and sign-out showing nothing while it waits | The calendar lags on a very large workspace; recorded in the design's §9 |
+| Straight apostrophes in every string of the app, though the web's source has one typographic | A typographic nit |
+| One finding that the fix pass itself introduced (a waited command left unanswered when a sign-out won a race) was sent back for a second, small fix, where the process would have stopped and asked | One more round of work |
+| The bar's trailing order is Today, Calendar, Not saved, Account, so Today appearing moves no icon; the design listed Calendar first | A matter of taste; one line to change |
+| The calendar sheet opens at half height and at full height when text is at an accessibility size | The last week is cut off at some size in between |
+| A past day with no page is not created by opening it (the web creates it) | He taps "Start this page" where the web would not ask |
+
+What the reviews found and left, with the reason for each, is in the design's §9. The first run on the simulator
+found six defects no unit test had caught (a tap on the circle did nothing; the calendar marked the wrong day as
+today; the calendar sheet cut off its last week at the largest text size; a held tick left a line through the
+words; the states for a day without a page were not drawn; one more was withdrawn as an artefact of the test
+host). Each fixed one has a test now.
 
 ## Order and independence
 
