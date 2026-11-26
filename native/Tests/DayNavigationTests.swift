@@ -47,20 +47,19 @@ private func yesterdayStarted() throws -> WorkspaceChanges {
 
 @MainActor
 extension DayViewController {
-  /// The button with this accessibility label or title, in the navigation bar or the toolbar.
+  /// The navigation bar's button with this accessibility label or title.
   fileprivate func item(_ name: String) -> UIBarButtonItem? {
-    // The bars are filled when the screen is first drawn, as before any tap.
+    // The bar is filled when the screen is first drawn, as before any tap.
     updatePropertiesIfNeeded()
-    let items =
-      (navigationItem.leftBarButtonItems ?? []) + (navigationItem.rightBarButtonItems ?? []) + (toolbarItems ?? [])
+    let items = (navigationItem.leftBarButtonItems ?? []) + (navigationItem.rightBarButtonItems ?? [])
     return items.first { $0.accessibilityLabel == name || $0.title == name }
   }
 
-  /// The navigation bar's trailing buttons from the trailing edge, by what VoiceOver says.
-  fileprivate var trailingButtons: [String] { (navigationItem.rightBarButtonItems ?? []).compactMap(\.name) }
+  /// The navigation bar's trailing buttons from the leading edge to the trailing edge, by what VoiceOver says.
+  fileprivate var trailingButtons: [String] { (navigationItem.rightBarButtonItems ?? []).reversed().compactMap(\.name) }
 
-  /// The toolbar's buttons from the leading edge, by what VoiceOver says; its spaces are not buttons.
-  fileprivate var toolbarButtons: [String] { (toolbarItems ?? []).compactMap(\.name) }
+  /// The day's title as the header's button shows it.
+  fileprivate var shownTitle: String? { headerView.titleButton.configuration?.title }
 
   fileprivate func tap(_ name: String) {
     guard let item = item(name) else {
@@ -85,6 +84,17 @@ extension DayViewController {
 
 extension UIBarButtonItem {
   fileprivate var name: String? { accessibilityLabel ?? title }
+}
+
+/// The screen in a phone-sized window in its navigation controller, laid out.
+@MainActor
+private func onScreen(_ screen: DayViewController) -> UIWindow {
+  let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+  window.rootViewController = UINavigationController(rootViewController: screen)
+  window.makeKeyAndVisible()
+  screen.updatePropertiesIfNeeded()
+  window.layoutIfNeeded()
+  return window
 }
 
 /// A held tick, answered by a server that holds it and then has the to-do cancelled elsewhere.
@@ -116,86 +126,176 @@ private func heldTick(on h: Harness) async throws {
     #expect(DayNavigation.bar(for: tomorrow, today: today) == DayNavigation(canGoNext: false, showsToday: true))
   }
 
-  @Test func on_today_the_bar_has_the_account_and_the_toolbar_the_three_day_controls() {
+  @Test func on_today_the_bar_holds_previous_next_and_more() {
     #expect(
-      DayControls.controls(for: today, today: today, hasAccount: true, hasHeld: false)
-        == DayControls(
-          navigationBar: [.account], toolbar: [.previousDay, .space, .calendar, .space, .nextDay], canGoNext: false))
+      DayControls.controls(for: today, today: today, regularWidth: false, hasHeld: false, hasMore: true)
+        == DayControls(navigationBar: [.previousDay, .nextDay, .more], canGoNext: false))
   }
 
-  @Test func on_yesterday_the_toolbar_adds_today_before_next() {
+  @Test func on_yesterday_the_phone_has_no_today_button_and_next_is_on() {
     #expect(
-      DayControls.controls(for: yesterday, today: today, hasAccount: true, hasHeld: false)
-        == DayControls(
-          navigationBar: [.account], toolbar: [.previousDay, .space, .calendar, .space, .today, .nextDay],
-          canGoNext: true))
+      DayControls.controls(for: yesterday, today: today, regularWidth: false, hasHeld: false, hasMore: true)
+        == DayControls(navigationBar: [.previousDay, .nextDay, .more], canGoNext: true))
   }
 
-  @Test func on_tomorrow_the_toolbar_adds_today_and_next_is_off() {
+  @Test func at_regular_width_today_comes_before_the_chevrons_while_another_day_is_open() {
     #expect(
-      DayControls.controls(for: tomorrow, today: today, hasAccount: true, hasHeld: false)
-        == DayControls(
-          navigationBar: [.account], toolbar: [.previousDay, .space, .calendar, .space, .today, .nextDay],
-          canGoNext: false))
+      DayControls.controls(for: yesterday, today: today, regularWidth: true, hasHeld: false, hasMore: true)
+        == DayControls(navigationBar: [.today, .previousDay, .nextDay, .more], canGoNext: true))
+    #expect(
+      DayControls.controls(for: tomorrow, today: today, regularWidth: true, hasHeld: false, hasMore: true)
+        == DayControls(navigationBar: [.today, .previousDay, .nextDay, .more], canGoNext: false))
+    #expect(
+      DayControls.controls(for: today, today: today, regularWidth: true, hasHeld: false, hasMore: true).navigationBar
+        == [.previousDay, .nextDay, .more])
   }
 
-  @Test func not_saved_sits_beside_the_account_only_while_a_change_is_held() {
-    let held = DayControls.controls(for: today, today: today, hasAccount: true, hasHeld: true)
-    #expect(held.navigationBar == [.account, .held])
-    #expect(DayControls.controls(for: today, today: today, hasAccount: false, hasHeld: true).navigationBar == [.held])
-    #expect(DayControls.controls(for: today, today: today, hasAccount: false, hasHeld: false).navigationBar == [])
+  @Test func not_saved_comes_before_more_only_while_a_change_is_held_and_more_only_with_something_in_it() {
+    func bar(held: Bool, more: Bool) -> [DayControls.Item] {
+      DayControls.controls(for: today, today: today, regularWidth: false, hasHeld: held, hasMore: more).navigationBar
+    }
+    #expect(bar(held: true, more: true) == [.previousDay, .nextDay, .held, .more])
+    #expect(bar(held: true, more: false) == [.previousDay, .nextDay, .held])
+    #expect(bar(held: false, more: false) == [.previousDay, .nextDay])
   }
 
-  @Test func the_day_controls_are_in_the_toolbar_and_the_account_in_the_navigation_bar() async throws {
+  @Test func the_quiet_controls_are_in_the_navigation_bar_with_no_title_and_no_toolbar() async throws {
     let h = try await Harness(copy: try copy())
     let screen = DayViewController(model: h.model)
     screen.loadViewIfNeeded()
     screen.updatePropertiesIfNeeded()
 
+    #expect(screen.title == nil)
+    #expect(screen.navigationItem.title == nil)
+    #expect(screen.navigationItem.prompt == nil)
     #expect(screen.navigationItem.leftBarButtonItems ?? [] == [])
-    #expect(screen.trailingButtons == ["Account"])
-    #expect(screen.toolbarButtons == ["Previous day", "Calendar", "Next day"])
+    #expect(screen.toolbarItems ?? [] == [])
+    #expect(screen.trailingButtons == ["Previous day", "Next day", "More"])
     #expect(screen.item("Next day")?.isEnabled == false)
+    for name in ["Previous day", "Next day", "More"] {
+      let item = try #require(screen.item(name))
+      #expect(item.hidesSharedBackground, "\(name) has no capsule")
+      #expect(item.tintColor == .secondaryLabel, "\(name) is quiet")
+    }
+    #expect(screen.item("Previous day")?.image == UIImage(systemName: "chevron.left"))
+    #expect(screen.item("Next day")?.image == UIImage(systemName: "chevron.right"))
+    #expect(screen.item("More")?.image == UIImage(systemName: "ellipsis"))
 
     screen.tap("Previous day")
-    #expect(screen.trailingButtons == ["Account"])
-    #expect(screen.toolbarButtons == ["Previous day", "Calendar", "Today", "Next day"])
+    #expect(screen.date == yesterday)
+    #expect(screen.shownTitle == DayTitle.short(for: yesterday))
+    #expect(screen.trailingButtons == ["Previous day", "Next day", "More"])
     #expect(screen.item("Next day")?.isEnabled == true)
 
-    screen.tap("Today")
-    #expect(screen.toolbarButtons == ["Previous day", "Calendar", "Next day"])
+    screen.tap("Next day")
+    #expect(screen.date == today)
+    #expect(screen.shownTitle == DayTitle.short(for: today))
+    #expect(screen.item("Next day")?.isEnabled == false)
   }
 
-  @Test func not_saved_appears_beside_the_account_while_a_change_is_held() async throws {
+  @Test func at_regular_width_a_today_button_shows_while_another_day_is_open() async throws {
+    let h = try await Harness(copy: try copy())
+    let screen = DayViewController(model: h.model)
+    screen.traitOverrides.horizontalSizeClass = .regular
+    screen.loadViewIfNeeded()
+    screen.updatePropertiesIfNeeded()
+    #expect(screen.trailingButtons == ["Previous day", "Next day", "More"])
+
+    screen.tap("Previous day")
+    #expect(screen.trailingButtons == ["Today", "Previous day", "Next day", "More"])
+
+    screen.tap("Today")
+    #expect(screen.date == today)
+    #expect(screen.trailingButtons == ["Previous day", "Next day", "More"])
+  }
+
+  @Test func not_saved_appears_before_more_while_a_change_is_held() async throws {
     let h = try await Harness(copy: try copy())
     let screen = DayViewController(model: h.model)
     screen.loadViewIfNeeded()
 
     try await heldTick(on: h)
 
-    #expect(screen.drawn().trailingButtons == ["Account", "Not saved"])
-    #expect(screen.toolbarButtons == ["Previous day", "Calendar", "Next day"])
+    #expect(screen.drawn().trailingButtons == ["Previous day", "Next day", "Not saved", "More"])
+    #expect(screen.item("Not saved")?.tintColor == .systemRed)
+    #expect(screen.item("Not saved")?.hidesSharedBackground == true)
   }
 
-  @Test func the_bar_steps_back_a_day_and_returns_to_today() async throws {
+  @Test func the_header_names_the_day_and_moves_with_it() async throws {
     let h = try await Harness(copy: try copy())
     let screen = DayViewController(model: h.model)
     screen.loadViewIfNeeded()
     screen.updatePropertiesIfNeeded()
 
-    #expect(screen.title == DayTitle.text(for: today))
-    #expect(screen.item("Next day")?.isEnabled == false)
-    #expect(screen.item("Today") == nil)
-    #expect(screen.item("Calendar") != nil)
+    let header = screen.headerView
+    #expect(screen.shownTitle == DayTitle.short(for: today))
+    #expect(header.relativeLabel.text == "Today")
+    #expect(!header.relativeLabel.isHidden)
+    #expect(header.titleButton.accessibilityLabel == DayHeading(for: today, today: today).accessibilityLabel)
+    #expect(header.statusLabel.isHidden, "nothing to say")
 
     screen.tap("Previous day")
-    #expect(screen.title == DayTitle.text(for: yesterday))
-    #expect(screen.item("Next day")?.isEnabled == true)
-    #expect(screen.item("Today") != nil)
+    #expect(screen.shownTitle == DayTitle.short(for: yesterday))
+    #expect(header.relativeLabel.text == "Yesterday")
 
-    screen.tap("Today")
-    #expect(screen.title == DayTitle.text(for: today))
-    #expect(screen.item("Today") == nil)
+    screen.tap("Previous day")
+    let twoBack = try #require(yesterday.adding(days: -1))
+    #expect(header.relativeLabel.isHidden, "two days back has no word")
+    #expect(header.titleButton.accessibilityLabel == DayHeading(for: twoBack, today: today).accessibilityLabel)
+  }
+
+  @Test func the_status_line_is_in_the_header_and_not_the_prompt() async throws {
+    let h = try await Harness(copy: try copy())
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+
+    // The server has no reply scripted: the pass fails for lack of network.
+    await h.model.refresh()
+    try await until { h.model.state.offline }
+
+    #expect(screen.drawn().headerView.statusLabel.text == "Offline · showing what was last loaded")
+    #expect(!screen.headerView.statusLabel.isHidden)
+    #expect(screen.navigationItem.prompt == nil)
+  }
+
+  @Test func the_title_opens_the_day_picker_anchored_to_it() async throws {
+    let h = try await Harness(copy: try copy())
+    let screen = DayViewController(model: h.model)
+    let window = onScreen(screen)
+
+    screen.headerView.titleButton.sendActions(for: .primaryActionTriggered)
+
+    let picker = try #require(screen.presentedViewController as? DayPickerViewController)
+    #expect(picker.popoverPresentationController?.sourceItem === screen.headerView.titleButton)
+    screen.dismiss(animated: false)
+    window.isHidden = true
+  }
+
+  @Test func the_header_is_the_lists_first_row_and_stays_on_a_day_without_a_page() async throws {
+    let h = try await Harness(copy: try copy())
+    let screen = DayViewController(model: h.model)
+    let window = onScreen(screen)
+    let list = try #require(screen.list)
+
+    // The header is drawn in the list, above its rows, and scrolls with them.
+    #expect(screen.headerView.isDescendant(of: list))
+    let header = screen.headerView.convert(screen.headerView.bounds, to: list)
+    #expect(header.minY >= 0)
+    #expect(header.height > 0)
+    #expect(list.backgroundView == nil)
+
+    screen.tap("Previous day")
+    window.layoutIfNeeded()
+    #expect(screen.emptyState?.text == "No page for \(DayTitle.text(for: yesterday))")
+    #expect(screen.headerView.isDescendant(of: list), "the header is how he leaves the day")
+    let background = try #require(list.backgroundView)
+    background.layoutIfNeeded()
+    #expect(screen.emptyView.isDescendant(of: background))
+    let headerBottom = screen.headerView.convert(screen.headerView.bounds, to: background).maxY
+    let empty = screen.emptyView.convert(screen.emptyView.bounds, to: background)
+    #expect(empty.minY >= headerBottom - 0.5, "the empty state is under the header")
+    #expect(empty.height > 0)
+    window.isHidden = true
   }
 
   @Test func today_follows_the_day_and_another_day_stays() async throws {
@@ -206,8 +306,8 @@ private func heldTick(on h: Harness) async throws {
     following.loadViewIfNeeded()
     staying.loadViewIfNeeded()
     staying.tap("Previous day")
-    #expect(following.drawn().title == DayTitle.text(for: today))
-    #expect(staying.drawn().title == DayTitle.text(for: yesterday))
+    #expect(following.drawn().shownTitle == DayTitle.short(for: today))
+    #expect(staying.drawn().shownTitle == DayTitle.short(for: yesterday))
 
     await h.server.hold()
     #expect(h.model.tick(taskId: "t-open"))
@@ -217,8 +317,8 @@ private func heldTick(on h: Harness) async throws {
     h.model.checkToday()
 
     #expect(h.model.today == tomorrow)
-    #expect(following.drawn().title == DayTitle.text(for: tomorrow))
-    #expect(staying.drawn().title == DayTitle.text(for: yesterday))
+    #expect(following.drawn().shownTitle == DayTitle.short(for: tomorrow))
+    #expect(staying.drawn().shownTitle == DayTitle.short(for: yesterday))
     let sent = await h.server.sent
     #expect(sent.count == 1)
     #expect(sent.first?.objectValue?["today"]?.stringValue == today.value)
@@ -248,7 +348,7 @@ private func heldTick(on h: Harness) async throws {
 
     try await until { screen.drawn().content == h.model.workspace?.dayPage(yesterday).map(DayContent.page) }
     #expect(screen.emptyState == nil)
-    #expect(screen.title == DayTitle.text(for: yesterday))
+    #expect(screen.shownTitle == DayTitle.short(for: yesterday))
     #expect(await h.server.sent == [Command.ensureDay(yesterday)])
   }
 
@@ -279,16 +379,16 @@ private func heldTick(on h: Harness) async throws {
     let screen = DayViewController(model: h.model)
     screen.loadViewIfNeeded()
     screen.open(tomorrow)
-    #expect(screen.drawn().title == DayTitle.text(for: tomorrow))
+    #expect(screen.drawn().shownTitle == DayTitle.short(for: tomorrow))
 
     clock.date = Date(timeIntervalSince1970: 1_795_651_201)  // 2026-11-26T00:00:01Z
     h.model.checkToday()
-    #expect(screen.drawn().title == DayTitle.text(for: tomorrow))
-    #expect(screen.item("Today") == nil, "the day shown is today")
+    #expect(screen.drawn().shownTitle == DayTitle.short(for: tomorrow))
+    #expect(screen.headerView.relativeLabel.text == "Today", "the day shown is today")
 
     clock.date = Date(timeIntervalSince1970: 1_795_737_601)  // 2026-11-27T00:00:01Z
     h.model.checkToday()
-    #expect(screen.drawn().title == DayTitle.text(for: LocalDate("2026-11-27")!))
+    #expect(screen.drawn().shownTitle == DayTitle.short(for: LocalDate("2026-11-27")!))
   }
 
   @Test func the_day_timer_is_set_again_when_the_scene_becomes_active() async throws {
@@ -318,7 +418,7 @@ private func heldTick(on h: Harness) async throws {
     screen.tapEmptyStateButton()
     try await until { screen.drawn().emptyState?.secondaryText == "Couldn't add a page · try again" }
 
-    screen.tap("Today")
+    screen.open(nil)
     screen.tap("Previous day")
     let empty = try #require(screen.emptyState)
     #expect(empty.text == "No page for \(DayTitle.text(for: yesterday))")
