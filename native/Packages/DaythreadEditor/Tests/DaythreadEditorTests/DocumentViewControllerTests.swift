@@ -179,7 +179,7 @@
       #expect(after.circle.accessibilityValue == "done")
       #expect(after.symbolName == "checkmark.circle.fill")
       let drawn = try #require(text(of: after))
-      #expect(drawn.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) != nil)
+      #expect(drawn.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int == NSUnderlineStyle.single.rawValue)
       #expect(try cell(controller, 0) === untouched)
     }
 
@@ -223,10 +223,38 @@
       RunLoop.main.run(until: Date().addingTimeInterval(1))
       let cell = try #require(try self.cell(controller, 0) as? TodoBlockCell)
       #expect(cell.symbolName == "circle")
+      // The text says "no line" outright: a label given text without the attribute keeps the line it drew.
+      let drawn = try #require(text(of: cell))
+      #expect(drawn.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int == 0)
       let labels = allSubviews(cell).compactMap { $0 as? UILabel }.filter { $0.text == "Call the bank" }
       #expect(labels.count == 1)
       for label in labels {
-        let style = label.attributedText?.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int ?? 0
+        let style = label.attributedText?.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int
+        #expect(style == 0, "the label draws a line through the words")
+      }
+    }
+
+    /// One answer brings a to-do back to open and a new row: the to-do's words still lose the line through them.
+    @Test func a_to_do_drawn_open_again_beside_a_new_row_has_no_line_through_its_words() throws {
+      let controller = DocumentViewController()
+      let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+      window.rootViewController = controller
+      window.makeKeyAndVisible()
+      controller.view.layoutIfNeeded()
+      let todo = block("a", "task", ["taskId": .string("k")], text: "Call the bank")
+      controller.show(page: try makePage([todo]), in: try makeWorkspace(tasks: [taskJSON("k", status: "done")]))
+      _ = try collection(controller)
+      controller.show(
+        page: try makePage([todo, block("b", "paragraph", text: "A new line")]),
+        in: try makeWorkspace(tasks: [taskJSON("k", status: "open")]))
+      RunLoop.main.run(until: Date().addingTimeInterval(1))
+      #expect(controller.itemCount == 2)
+      let cell = try #require(try self.cell(controller, 0) as? TodoBlockCell)
+      #expect(cell.symbolName == "circle")
+      let labels = allSubviews(cell).compactMap { $0 as? UILabel }.filter { $0.text == "Call the bank" }
+      #expect(labels.count == 1)
+      for label in labels {
+        let style = label.attributedText?.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int
         #expect(style == 0, "the label draws a line through the words")
       }
     }
