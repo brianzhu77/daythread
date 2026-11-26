@@ -4,7 +4,8 @@
   import UIKit
 
   /// The window's root: nothing while the app starts with no copy to show, "Couldn't load" when there is none to show
-  /// after a pass failed, sign-in when signed out, the day screen otherwise. Its child changes, with a cross-dissolve,
+  /// after a pass failed, sign-in when signed out, otherwise the tab bar with the day screen in its Today tab (the
+  /// first two have no tab bar). Its child changes, with a cross-dissolve,
   /// only when that choice does; an ordinary state change never rebuilds it. It checks the day and refreshes whenever
   /// its scene becomes active, whatever it shows.
   @MainActor
@@ -93,11 +94,7 @@
       case .signIn:
         return UIHostingController(rootView: SignInView(model: model))
       case .day:
-        let navigation = UINavigationController(rootViewController: DayViewController(model: model))
-        navigation.navigationBar.prefersLargeTitles = true
-        // Moving between days is in the system's toolbar, on every day and in every state of one.
-        navigation.isToolbarHidden = false
-        return navigation
+        return AppTabBarController(model: model)
       }
     }
 

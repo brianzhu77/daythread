@@ -34,29 +34,27 @@ struct DayNavigation: Equatable {
   }
 }
 
-/// Where the day screen's controls are (`native-phase-1.md` §6): the navigation bar is left to the title, the account
-/// and the held changes; moving between days is in the system's toolbar.
+/// The day screen's quiet controls, all trailing in the navigation bar (`native-phase-1.md` §6), as the web's phone app
+/// places them. The day's title is the page's first row, and the tab bar is at the bottom.
 struct DayControls: Equatable {
   enum Item: Equatable {
-    case account, held, previousDay, calendar, today, nextDay
-    /// A flexible space.
-    case space
+    case today, previousDay, nextDay, held, more
   }
 
-  /// The navigation bar's trailing items, from the trailing edge.
+  /// The navigation bar's trailing items, from the leading edge to the trailing edge.
   let navigationBar: [Item]
-  /// The toolbar's items, from the leading edge.
-  let toolbar: [Item]
   /// Whether Next day is enabled.
   let canGoNext: Bool
 
-  static func controls(for date: LocalDate, today: LocalDate, hasAccount: Bool, hasHeld: Bool) -> DayControls {
+  /// "Today" only at regular width (the web shows it from 600 px up); on the phone the Today tab does it. "More" only
+  /// when its menu would hold something.
+  static func controls(for date: LocalDate, today: LocalDate, regularWidth: Bool, hasHeld: Bool, hasMore: Bool)
+    -> DayControls
+  {
     let navigation = DayNavigation.bar(for: date, today: today)
-    // "Today" sits beside Next with no space between, so its coming and going leaves Previous and Next at the edges
-    // and moves the calendar by half its width, not by a third of the bar.
     return DayControls(
-      navigationBar: (hasAccount ? [.account] : []) + (hasHeld ? [.held] : []),
-      toolbar: [.previousDay, .space, .calendar, .space] + (navigation.showsToday ? [.today] : []) + [.nextDay],
+      navigationBar: (regularWidth && navigation.showsToday ? [.today] : []) + [.previousDay, .nextDay]
+        + (hasHeld ? [.held] : []) + (hasMore ? [.more] : []),
       canGoNext: navigation.canGoNext)
   }
 }

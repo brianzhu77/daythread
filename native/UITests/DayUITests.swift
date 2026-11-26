@@ -21,7 +21,7 @@ final class DayUITests: XCTestCase {
     XCTAssertTrue(online.buttons[title].waitForExistence(timeout: 30), "today's title")
     XCTAssertTrue(online.cells["Water the plants"].waitForExistence(timeout: 30), "the seeded to-do")
     XCTAssertFalse(online.staticTexts[Self.offlineLine].exists)
-    XCTAssertFalse(online.buttons["More"].exists, "a server with sign-in off has no one to sign out")
+    XCTAssertFalse(online.navigationBars.buttons["More"].exists, "a server with sign-in off has no one to sign out")
     online.terminate()
 
     let offline = XCUIApplication.daythread(server: Self.noServer, store: store)
