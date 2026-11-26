@@ -36,6 +36,7 @@
 | Sign out | The account menu, while a session is stored |
 | Round trip · N of M pages fail | The account menu, Debug builds only, when any page's document does not write back |
 | Untitled | A page reference whose page has no title |
+| Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
 
 The sign-in lines are the web's (`src/routes/sign-in.tsx`).

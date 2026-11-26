@@ -91,7 +91,7 @@
 
       // The text starts where it did when the glyph was the content's image; the button is centered on that
       // glyph and reaches past it to its touch target.
-      let glyph = symbol?.withConfiguration(symbolConfiguration).size ?? .zero
+      let glyph = symbol?.withConfiguration(symbolConfiguration.withTraitCollection(state.traitCollection)).size ?? .zero
       // A list row gave its image a box 4 points wider than the glyph (measured: 24 for the 20-point glyph at
       // the default text size), and the text started after it.
       glyphSlotWidth = glyph.width.rounded(.up) + 4
