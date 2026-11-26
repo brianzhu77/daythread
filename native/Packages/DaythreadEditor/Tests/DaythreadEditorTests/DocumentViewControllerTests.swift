@@ -194,14 +194,16 @@
       controller.show(page: page, in: try makeWorkspace(tasks: [taskJSON("k", status: "done")]))
       _ = try collection(controller)
       controller.show(page: page, in: try makeWorkspace(tasks: [taskJSON("k", status: "open")]))
-      let list = try collection(controller)
+      // Whatever the redraw does over time, what is left on screen is what counts.
+      RunLoop.main.run(until: Date().addingTimeInterval(1))
       let cell = try #require(try self.cell(controller, 0) as? TodoBlockCell)
-      cell.layoutIfNeeded()
       #expect(cell.symbolName == "circle")
-      let label = try #require(allSubviews(list).compactMap { $0 as? UILabel }.first { $0.text == "Call the bank" })
-      let drawn = try #require(label.attributedText)
-      let style = drawn.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int ?? 0
-      #expect(style == 0, "the label draws a line through the words")
+      let labels = allSubviews(cell).compactMap { $0 as? UILabel }.filter { $0.text == "Call the bank" }
+      #expect(labels.count == 1)
+      for label in labels {
+        let style = label.attributedText?.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int ?? 0
+        #expect(style == 0, "the label draws a line through the words")
+      }
     }
 
     @Test func aRowWhoseTextChangedButNotItsKindIsReconfiguredInPlace() throws {
