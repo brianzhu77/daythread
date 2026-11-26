@@ -49,6 +49,8 @@ private func yesterdayStarted() throws -> WorkspaceChanges {
 extension DayViewController {
   /// The button with this accessibility label or title, in the navigation bar or the toolbar.
   fileprivate func item(_ name: String) -> UIBarButtonItem? {
+    // The bars are filled when the screen is first drawn, as before any tap.
+    updatePropertiesIfNeeded()
     let items =
       (navigationItem.leftBarButtonItems ?? []) + (navigationItem.rightBarButtonItems ?? []) + (toolbarItems ?? [])
     return items.first { $0.accessibilityLabel == name || $0.title == name }

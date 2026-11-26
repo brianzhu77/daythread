@@ -78,6 +78,8 @@
     private lazy var calendarButton = symbolButton("calendar", label: "Calendar") { $0.pickDay() }
     private lazy var todayButton = UIBarButtonItem(
       primaryAction: UIAction(title: "Today") { [weak self] _ in self?.open(nil) })
+    /// The toolbar's flexible spaces: an item can stand in a bar only once.
+    private let spaces = [UIBarButtonItem.flexibleSpace(), UIBarButtonItem.flexibleSpace()]
     private lazy var tickFeedback = UIImpactFeedbackGenerator(style: .light, view: view)
 
     /// The day shown.
@@ -99,7 +101,6 @@
       super.viewDidLoad()
       view.backgroundColor = .systemBackground
       navigationItem.largeTitleDisplayMode = .always
-      navigationItem.leftBarButtonItems = [previousButton, nextButton]
       accountButton.accessibilityLabel = "Account"
       // Both menus are built when opened, from the state of that moment.
       accountButton.menu = UIMenu(children: [
@@ -143,15 +144,16 @@
       navigationItem.prompt = StatusLine.text(state: state, keepsChanges: model.keepsChanges)
       showDay()
 
-      let bar = DayNavigation.bar(for: date, today: model.today)
+      let controls = DayControls.controls(
+        for: date, today: model.today, hasAccount: !Self.accountRows(state: state, roundTrip: model.roundTrip).isEmpty,
+        hasHeld: !state.held.isEmpty)
       previousButton.isEnabled = date.adding(days: -1) != nil
-      nextButton.isEnabled = bar.canGoNext
-      let rows = Self.accountRows(state: state, roundTrip: model.roundTrip)
-      // From the trailing edge: the account, the held changes, the calendar, then "Today", so that "Today" coming
-      // and going moves nothing else.
-      navigationItem.rightBarButtonItems =
-        (rows.isEmpty ? [] : [accountButton]) + (state.held.isEmpty ? [] : [heldButton]) + [calendarButton]
-        + (bar.showsToday ? [todayButton] : [])
+      nextButton.isEnabled = controls.canGoNext
+      // Set only when they change, so a state change that moves nothing does not lay the bars out again.
+      let navigationBar = buttons(controls.navigationBar)
+      if navigationItem.rightBarButtonItems ?? [] != navigationBar { navigationItem.rightBarButtonItems = navigationBar }
+      let toolbar = buttons(controls.toolbar)
+      if toolbarItems ?? [] != toolbar { setToolbarItems(toolbar, animated: false) }
       scheduleDayChange()
     }
 
@@ -188,6 +190,21 @@
     }
 
     // MARK: Other days
+
+    private func buttons(_ items: [DayControls.Item]) -> [UIBarButtonItem] {
+      var spaces = self.spaces.makeIterator()
+      return items.map { item in
+        switch item {
+        case .account: accountButton
+        case .held: heldButton
+        case .previousDay: previousButton
+        case .calendar: calendarButton
+        case .today: todayButton
+        case .nextDay: nextButton
+        case .space: spaces.next() ?? .flexibleSpace()
+        }
+      }
+    }
 
     private func symbolButton(_ symbol: String, label: String, action: @escaping (DayViewController) -> Void)
       -> UIBarButtonItem

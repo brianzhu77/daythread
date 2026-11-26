@@ -22,7 +22,7 @@ enum DayContent: Equatable {
   }
 }
 
-/// What the navigation bar offers for a date.
+/// Which ways to other days a date offers.
 struct DayNavigation: Equatable {
   /// False from today on: as on the web, a future day is reached only from the calendar.
   let canGoNext: Bool
@@ -31,5 +31,32 @@ struct DayNavigation: Equatable {
 
   static func bar(for date: LocalDate, today: LocalDate) -> DayNavigation {
     DayNavigation(canGoNext: date < today, showsToday: date != today)
+  }
+}
+
+/// Where the day screen's controls are (`native-phase-1.md` §6): the navigation bar is left to the title, the account
+/// and the held changes; moving between days is in the system's toolbar.
+struct DayControls: Equatable {
+  enum Item: Equatable {
+    case account, held, previousDay, calendar, today, nextDay
+    /// A flexible space.
+    case space
+  }
+
+  /// The navigation bar's trailing items, from the trailing edge.
+  let navigationBar: [Item]
+  /// The toolbar's items, from the leading edge.
+  let toolbar: [Item]
+  /// Whether Next day is enabled.
+  let canGoNext: Bool
+
+  static func controls(for date: LocalDate, today: LocalDate, hasAccount: Bool, hasHeld: Bool) -> DayControls {
+    let navigation = DayNavigation.bar(for: date, today: today)
+    // "Today" sits beside Next with no space between, so its coming and going leaves Previous and Next at the edges
+    // and moves the calendar by half its width, not by a third of the bar.
+    return DayControls(
+      navigationBar: (hasAccount ? [.account] : []) + (hasHeld ? [.held] : []),
+      toolbar: [.previousDay, .space, .calendar, .space] + (navigation.showsToday ? [.today] : []) + [.nextDay],
+      canGoNext: navigation.canGoNext)
   }
 }
