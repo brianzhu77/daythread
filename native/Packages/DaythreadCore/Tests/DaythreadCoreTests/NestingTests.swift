@@ -124,6 +124,7 @@ import Testing
       }
       let top = hidden("x")
       let nested = hidden("y")
+      let later = top.replacingOccurrences(of: #""x"#, with: #""w"#)
       let original = Lines.document(
         Lines.line("a", "Before", children: [Lines.line("an", "Nested before")]),
         top,
@@ -133,7 +134,7 @@ import Testing
         Lines.line(
           "l", "bulletListItem", "List",
           children: [Lines.line("f", "First"), nested, Lines.line("u", "Under"), Lines.line("ue", "")]),
-        top.replacingOccurrences(of: #""x"#, with: #""w"#),
+        later,
         Lines.line("last", ""))
       let lines = Lines.editable(original).textBlocks
       #expect(lines == ["a", "an", "b", "e", "t", "l", "f", "u", "ue", "last"], "\(type)")
@@ -147,6 +148,7 @@ import Testing
             let label = "\(type) \(key) at \(line) \(offset)"
             #expect(Lines.written("x", in: page) == top, "\(label)")
             #expect(Lines.written("y", in: page) == nested, "\(label)")
+            #expect(Lines.written("w", in: page) == later, "\(label)")
             if caret == nil { #expect(page.document == original, "\(label)") }
           }
         }

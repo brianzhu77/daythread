@@ -81,6 +81,16 @@ import Testing
     #expect(Lines.outline(words) == ["l paragraph '---x'"])
   }
 
+  @Test func three_dashes_make_a_divider_in_any_line_but_a_to_do() {
+    for kind in ["bulletListItem", "heading", "quote", "numberedListItem"] {
+      let child = Lines.line("c", "Child")
+      var page = Lines.editable(Lines.document(Lines.line("l", kind, "", children: [child])))
+
+      #expect(type("---", into: "l", &page) == Caret(block: "n2", offset: 0), "\(kind)")
+      #expect(Lines.outline(page) == ["n1 divider ''", "  c paragraph 'Child'", "n2 paragraph ''"], "\(kind)")
+    }
+  }
+
   @Test func backspace_straight_after_a_shortcut_puts_the_characters_back() {
     for typed in ["# ", "- ", "7. ", "[] ", "> "] {
       let original = Lines.line("l", "Words")

@@ -160,6 +160,20 @@ import Testing
         Lines.block("d", "divider", props: "{}", children: [Lines.line("f", "First"), Lines.line("s", "Second")])))
     #expect(backspace(&nested, "f") == Caret(block: "f", offset: 0))
     #expect(Lines.outline(nested) == ["a paragraph 'Above'", "f paragraph 'First'", "s paragraph 'Second'"])
+
+    // A divider that is the previous line's last nested line: the line takes its place, with its own nested lines
+    // (BlockNote's "deletes previous block if it contains no content").
+    var deeper = Lines.editable(
+      Lines.document(
+        Lines.line("b", "bulletListItem", "List", children: [Lines.line("k", "Kept"), divider]),
+        Lines.line("w", "Words", children: [Lines.line("c", "Child")]),
+        Lines.line("z", "Next")))
+    #expect(backspace(&deeper, "w") == Caret(block: "w", offset: 0))
+    #expect(
+      Lines.outline(deeper) == [
+        "b bulletListItem 'List'", "  k paragraph 'Kept'", "  w paragraph 'Words'", "    c paragraph 'Child'",
+        "z paragraph 'Next'",
+      ])
   }
 
   @Test func under_a_synced_block_or_a_database_does_nothing() {
@@ -214,6 +228,39 @@ import Testing
     #expect(backspace(&empty, "t") == Caret(block: "t", offset: 0))
     #expect(Lines.outline(empty) == ["t paragraph ''", "z paragraph 'Next'"])
     #expect(empty.singleDeleteIds == ["t"])
+  }
+
+  @Test func the_pages_first_line_is_its_first_line_of_words() {
+    let divider = Lines.block("d", "divider", props: "{}")
+    var page = Lines.editable(Lines.document(divider, Lines.line("t", "task", props: Self.todoProps, "Call")))
+
+    #expect(backspace(&page, "t") == Caret(block: "t", offset: 0))
+    #expect(Lines.outline(page) == ["d divider ''", "t paragraph 'Call'"])
+    #expect(page.singleDeleteIds == ["t"])
+
+    let image = Lines.block("x", "image", props: #"{"url":"https://example.com/a.png"}"#)
+    var empty = Lines.editable(Lines.document(image, Lines.line("t", "task", props: Self.todoProps, "")))
+
+    #expect(backspace(&empty, "t") == Caret(block: "t", offset: 0))
+    #expect(Lines.outline(empty) == ["x image ''", "t paragraph ''"])
+    #expect(empty.singleDeleteIds == ["t"])
+  }
+
+  @Test func a_row_named_twice_is_listed_once() {
+    var page = Lines.editable(Lines.document(Lines.line("t", "task", props: Self.todoProps, "Call")))
+    _ = backspace(&page, "t")
+    #expect(page.singleDeleteIds == ["t"])
+
+    // Made a to-do again under the same id, then let go again.
+    for (offset, character) in "[] ".enumerated() {
+      _ = page.replaceText(in: "t", range: offset..<offset, with: String(character))
+    }
+    _ = page.replaceText(in: "t", range: 0..<0, with: "x")
+    _ = page.replaceText(in: "t", range: 0..<1, with: "")
+    #expect(Lines.written("t", in: page) == Lines.line("t", "task", props: #"{"taskId":"editor-task:t","role":"reference","planDate":""}"#, "Call"))
+
+    #expect(backspace(&page, "t") == Caret(block: "t", offset: 0))
+    #expect(page.singleDeleteIds == ["t"])
   }
 
   @Test func turning_a_later_to_do_into_a_paragraph_names_nothing() {
