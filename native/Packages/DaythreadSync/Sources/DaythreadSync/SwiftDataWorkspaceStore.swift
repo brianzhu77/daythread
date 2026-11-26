@@ -172,10 +172,13 @@ enum SchemaV2: VersionedSchema {
     var singleDeleteIdsJSON: String
     var sentOperationId: String?
     var sentDocument: String?
+    /// The action as first sent, as written text: a retry sends it again unchanged.
+    var sentAction: String?
     var changedAt: Date
     init(
       key: String, pageId: String, owner: String, base: String, baseDocument: String, document: String,
-      singleDeleteIdsJSON: String, sentOperationId: String?, sentDocument: String?, changedAt: Date
+      singleDeleteIdsJSON: String, sentOperationId: String?, sentDocument: String?, sentAction: String?,
+      changedAt: Date
     ) {
       self.key = key
       self.pageId = pageId
@@ -186,6 +189,7 @@ enum SchemaV2: VersionedSchema {
       self.singleDeleteIdsJSON = singleDeleteIdsJSON
       self.sentOperationId = sentOperationId
       self.sentDocument = sentDocument
+      self.sentAction = sentAction
       self.changedAt = changedAt
     }
   }
@@ -449,6 +453,7 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
         row.singleDeleteIdsJSON = ids
         row.sentOperationId = draft.sent?.operationId
         row.sentDocument = draft.sent?.document
+        row.sentAction = draft.sent?.action
         row.changedAt = draft.changedAt
       } else {
         modelContext.insert(
@@ -456,6 +461,7 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
             key: key, pageId: draft.pageId, owner: draft.owner, base: draft.base,
             baseDocument: draft.baseDocument, document: draft.document, singleDeleteIdsJSON: ids,
             sentOperationId: draft.sent?.operationId, sentDocument: draft.sent?.document,
+            sentAction: draft.sent?.action,
             changedAt: draft.changedAt))
       }
     }
@@ -549,8 +555,8 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
       ids.append(id)
     }
     var sent: PageDraft.Sent?
-    if let operationId = row.sentOperationId, let document = row.sentDocument {
-      sent = PageDraft.Sent(operationId: operationId, document: document)
+    if let operationId = row.sentOperationId, let document = row.sentDocument, let action = row.sentAction {
+      sent = PageDraft.Sent(operationId: operationId, document: document, action: action)
     }
     return PageDraft(
       pageId: row.pageId, owner: row.owner, base: row.base, baseDocument: row.baseDocument,

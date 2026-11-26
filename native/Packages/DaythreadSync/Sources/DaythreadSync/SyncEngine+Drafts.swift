@@ -34,16 +34,15 @@ extension SyncEngine {
       stopDraftWait(page.id)
       guard kept != nil else { return }
       try await store.removeDraft(pageId: page.id, owner: copy.owner)
-      await readDrafts()
+      forgetDraft(pageId: page.id, owner: copy.owner)
       publish()
       return
     }
-    try await store.put(
+    try await keep(
       PageDraft(
         pageId: page.id, owner: copy.owner, base: kept?.base ?? ContentKey.of(baseDocument),
         baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds, sent: kept?.sent,
         changedAt: now()))
-    await readDrafts()
     publish()
     waitThenSave(page.id)
   }
@@ -118,11 +117,24 @@ extension SyncEngine {
     }
   }
 
-  /// Reads the drafts again after a store call that may have changed them. Runs inside a store section. Drafts that
-  /// cannot be read keep what was last read.
+  /// Reads the drafts the store holds, when the engine has no account's drafts in step yet (at launch, at sign-in).
+  /// Runs inside a store section. Drafts that cannot be read keep what was last read.
   func readDrafts() async {
     guard let all = try? await store.drafts() else { return }
     drafts = all
+  }
+
+  /// Stores `draft` and holds what was written, not what a read after it would give: a read that fails must not
+  /// leave memory without a `sent` the store has. Runs inside a store section.
+  private func keep(_ draft: PageDraft) async throws {
+    try await store.put(draft)
+    drafts.removeAll { $0.owner == draft.owner && $0.pageId.utf8.elementsEqual(draft.pageId.utf8) }
+    drafts.append(draft)
+    drafts.sort(by: PageDraft.inStoreOrder)
+  }
+
+  private func forgetDraft(pageId: String, owner: String) {
+    drafts.removeAll { $0.owner == owner && $0.pageId.utf8.elementsEqual(pageId.utf8) }
   }
 
   // MARK: The wait after a change
@@ -176,7 +188,8 @@ extension SyncEngine {
   private enum AfterSave {
     case next
     /// The changes start from another revision than the copy's: load whole, then settle the draft against it.
-    case loadWholeThenSettle(revision: Int)
+    /// `revision` is the one the save made, as its receipt says.
+    case loadWholeThenSettle(revision: Int?)
     /// The answer is another account's: nothing more of this owner's is saved; the new owner's workspace is loaded.
     case loadWholeAndStop
   }
@@ -209,7 +222,7 @@ extension SyncEngine {
         defer { release() }
         // After a load under another owner the draft is not this copy's to settle.
         guard copy?.owner == save.owner else { return landed }
-        try await learn(revision)
+        try await learn(revision, savedOn: save.expectedRevision)
         try await settleDraft(save)
         await readOutbox()
         publish()
@@ -222,27 +235,42 @@ extension SyncEngine {
     return landed
   }
 
-  /// The first due draft, marked as sending: a save already on its way is taken as it was recorded; otherwise its
-  /// document is recorded as sent, under a new operation id, before anything leaves.
+  /// The first due draft, marked as sending. A save already on its way goes again as its action was first written;
+  /// otherwise the action is made now and recorded with a new operation id before anything leaves.
   private func nextSave(_ pass: Pass) async throws -> DraftSave? {
     try await enter(pass)
     defer { release() }
-    guard let copy, var draft = accountDrafts.first(where: isDue) else { return nil }
-    if draft.sent == nil {
-      draft.sent = PageDraft.Sent(operationId: UUID().uuidString.lowercased(), document: draft.document)
-      try await store.put(draft)
-      await readDrafts()
+    while let copy, var draft = accountDrafts.first(where: isDue) {
+      let sent: PageDraft.Sent
+      let action: JSONValue
+      if let recorded = draft.sent {
+        guard let parsed = try? JSON.parse(recorded.action) else {
+          // Not the same request any more, so not sent as one: kept for him, as a refusal is.
+          SyncLog.logger.error("A recorded save could not be read; kept, not sent")
+          setAside.insert(draft.pageId)
+          draft.sent = nil
+          try await keep(draft)
+          continue
+        }
+        (sent, action) = (recorded, parsed)
+      } else {
+        let at = now()
+        action = Command.saveEditor(
+          pageId: draft.pageId, expectedContent: draft.base, document: draft.document,
+          singleDeleteIds: draft.singleDeleteIds, today: LocalDate.today(in: copy.workspace.timezone, at: at), at: at)
+        // The document and the action recorded are one value: what the answer is compared with is what was sent.
+        sent = PageDraft.Sent(
+          operationId: UUID().uuidString.lowercased(), document: draft.document, action: JSON.write(action))
+        draft.sent = sent
+        try await keep(draft)
+      }
+      savesInFlight.insert(draft.pageId)
+      publish()
+      return DraftSave(
+        pageId: draft.pageId, owner: copy.owner, operationId: sent.operationId, document: sent.document,
+        expectedRevision: copy.workspace.revision, action: action)
     }
-    guard let sent = draft.sent else { return nil }
-    savesInFlight.insert(draft.pageId)
-    publish()
-    let at = now()
-    return DraftSave(
-      pageId: draft.pageId, owner: copy.owner, operationId: sent.operationId, document: sent.document,
-      expectedRevision: copy.workspace.revision,
-      action: Command.saveEditor(
-        pageId: draft.pageId, expectedContent: draft.base, document: sent.document,
-        singleDeleteIds: draft.singleDeleteIds, today: LocalDate.today(in: copy.workspace.timezone, at: at), at: at))
+    return nil
   }
 
   private func settle(_ outcome: SaveOutcome, of save: DraftSave, _ pass: Pass) async throws -> AfterSave {
@@ -256,7 +284,7 @@ extension SyncEngine {
       return .loadWholeAndStop
     }
     switch outcome {
-    case .applied(_, let changes, let owner):
+    case .applied(let receipt, let changes, let owner):
       // A reply under another owner than the copy's is never applied to it.
       guard owner == copy.owner else {
         try await putAside(save)
@@ -265,14 +293,15 @@ extension SyncEngine {
       }
       guard let updated = copy.workspace.applying(changes) else {
         publish()
-        return .loadWholeThenSettle(revision: changes.revision)
+        return .loadWholeThenSettle(revision: Self.revision(of: receipt))
       }
       SyncLog.logger.info("Save of a page: applied")
       // Two transactions: a death between them leaves the draft as sent, and its replay is answered with the
       // receipt the server kept.
       try await store.write(updated, changed: changes)
       self.copy = (updated, copy.owner)
-      try await learn(changes.revision)
+      // Not `changes.revision`: a replay's changes end at the workspace as it is now, others' writes included.
+      try await learn(Self.revision(of: receipt), savedOn: save.expectedRevision)
       try await settleDraft(save)
     case .refused:
       // The message is the server's words about his page; the log says only that it was refused.
@@ -298,6 +327,7 @@ extension SyncEngine {
     else { return }
     if draft.document.utf8.elementsEqual(sent.document.utf8) {
       try await store.removeDraft(pageId: draft.pageId, owner: draft.owner)
+      forgetDraft(pageId: draft.pageId, owner: draft.owner)
     } else {
       let page = copy?.workspace.page(draft.pageId)?.document
       if let page, ContentKey.storedDocument(page).utf8.elementsEqual(ContentKey.storedDocument(sent.document).utf8) {
@@ -308,9 +338,8 @@ extension SyncEngine {
       }
       draft.base = ContentKey.of(draft.baseDocument)
       draft.sent = nil
-      try await store.put(draft)
+      try await keep(draft)
     }
-    await readDrafts()
   }
 
   private func draft(of save: DraftSave) -> PageDraft? {
@@ -335,18 +364,26 @@ extension SyncEngine {
     guard var draft = draft(of: save), draft.sent?.operationId == save.operationId
     else { return }
     draft.sent = nil
-    try await store.put(draft)
-    await readDrafts()
+    try await keep(draft)
   }
 
-  /// The save at `revision` is his own change: each pending entry built before it learns it, as a command's answer
-  /// teaches the entries after it, so the server does not take it for someone else's. Runs inside a store section.
-  private func learn(_ revision: Int) async throws {
-    guard let owner = copy?.owner else { return }
+  /// The revision a save made, as its receipt says; nil when it does not say.
+  private static func revision(of receipt: JSONValue) -> Int? {
+    receipt.objectValue?["revision"]?.intValue
+  }
+
+  /// The save that made `revision` is his own change, sent on `savedOn`. A pending entry learns it only when every
+  /// revision after its base up to `savedOn` is already its own (the server's rule for `ownRevisions`): then nothing
+  /// another device wrote lies between the entry and the save, and the save is all that changed its rows. An entry
+  /// built further back keeps seeing what came between. Runs inside a store section.
+  private func learn(_ revision: Int?, savedOn: Int) async throws {
+    guard let revision, let owner = copy?.owner else { return }
     for var entry in try await store.entries()
     where entry.owner == owner && entry.state == .pending && entry.baseRevision < revision
       && !entry.ownRevisions.contains(revision)
     {
+      let between = entry.baseRevision < savedOn ? Array(entry.baseRevision + 1...savedOn) : []
+      guard between.allSatisfy(entry.ownRevisions.contains) else { continue }
       entry.ownRevisions.append(revision)
       try await store.update(entry)
     }
