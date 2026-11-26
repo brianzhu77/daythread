@@ -1406,6 +1406,106 @@ private struct DraftHarness {
     #expect(await h.transport.unscripted == [])
   }
 
+  // MARK: Fix round 2
+
+  @Test func a_discarding_sign_out_after_an_owner_mismatch_erases_the_shown_accounts_drafts_only() async throws {
+    let theirs = served(1, document: typed("Theirs"))
+    let h = try await DraftHarness(
+      opening + [.saved(.ownerMismatch(owner: "user-2")), .workspace(.full(theirs, owner: "user-2")), .done])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    await h.engine.saveNow()
+    // The session still names user-1; the copy shown, and the draft he is told about, are user-2's.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Theirs too"), singleDeleteIds: [], startedFrom: typed("Theirs"))
+    #expect(await current(h.engine)?.drafts == waiting())
+
+    #expect(await h.engine.signOut(discardingUnsent: true) == 0)
+
+    let left = try await h.drafts
+    #expect(left.map(\.owner) == ["user-1"], "the drafts discarded are the ones shown")
+    #expect(left.first?.document == typed("Walk"))
+  }
+
+  @Test func discarding_a_draft_whose_save_is_on_its_way_keeps_the_tick_on_the_to_do_it_makes() async throws {
+    let gate = Gate()
+    let h = try await DraftHarness(opening + [.gated(gate)])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
+    await h.engine.settled()
+    let saving = Task { await h.engine.saveNow() }
+    await gate.reached()
+
+    await h.engine.discardDraft(pageId: day)
+
+    #expect(try await h.store.entries().count == 1, "the save on its way makes the to-do")
+    let ticked = try changes(from: 6, to: 7, tasks: [todo("done", version: 2)])
+    await h.transport.add([.outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1"))])
+    await gate.open(try saved(from: 5, to: 6, document: withTodo(planned: true), tasks: [todo("open")]))
+    await saving.value
+    await h.engine.settled()
+
+    guard case .send(_, _, let action, _, let basis)? = await h.transport.sends.last else {
+      Issue.record("the tick was not sent after the answer")
+      return
+    }
+    #expect(action == tick("editor-task:r1"))
+    #expect(basis.ownRevisions == [6])
+    #expect(try await h.store.entries().isEmpty)
+    #expect(await current(h.engine)?.workspace?.task("editor-task:r1")?.status == .done)
+  }
+
+  @Test func discarding_one_pages_draft_keeps_a_tick_on_a_to_do_another_pages_draft_made() async throws {
+    let h = try await DraftHarness(opening, copy: servedWithNotes(5, notesPage(baseDocument)))
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: notes, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
+    await h.engine.settled()
+
+    await h.engine.discardDraft(pageId: day)
+
+    #expect(try await h.store.entries().count == 1, "the notes page's draft still makes the to-do")
+    #expect(await current(h.engine)?.workspace?.task("editor-task:r1")?.status == .done)
+  }
+
+  @Test func a_refusal_of_a_save_whose_draft_was_discarded_does_not_hold_the_next_draft() async throws {
+    let gate = Gate()
+    let h = try await DraftHarness(opening + [.gated(gate)])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    let saving = Task { await h.engine.saveNow() }
+    await gate.reached()
+    await h.engine.discardDraft(pageId: day)
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument)
+
+    await gate.open(.saved(.refused(message: "Invalid editor document")))
+    await saving.value
+    await h.engine.settled()
+
+    #expect(await current(h.engine)?.drafts == waiting(), "that refusal was of words he threw away")
+    await h.transport.add([try saved(from: 5, to: 6, document: typed("Walk on"))])
+    await h.waits.elapse()
+    await until { await h.saves.count == 2 }
+    await h.engine.settled()
+    #expect(try await h.drafts == [])
+  }
+
+  @Test func a_discarding_sign_out_leaves_no_discarded_draft_in_memory_when_the_store_cannot_be_read() async throws {
+    let h = try await DraftHarness(opening + [.done])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    await h.store.fail("drafts")
+
+    #expect(await h.engine.signOut(discardingUnsent: true) == 0)
+
+    #expect(await h.engine.drafts.isEmpty)
+    await h.store.heal()
+    #expect(try await h.drafts == [])
+  }
+
   @Test func two_devices() async throws {
     let server = try PageServer()
     let one = try await Device(server)
