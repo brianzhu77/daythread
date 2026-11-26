@@ -481,11 +481,15 @@
         }
         _ = try focus(screen, lowest)
         let guide = list.keyboardLayoutGuide
+        // The input view sits at the foot of the screen, which is taller than this window: the guide's top is the
+        // input view's top.
+        let inputTop = { line.inputView.map { $0.convert($0.bounds, to: nil).minY } ?? .infinity }
         let up = screen.wait {
           screen.window.layoutIfNeeded()
-          return abs(list.convert(guide.layoutFrame, to: screen.window).height - keyboardHeight) <= 1
+          return abs(list.convert(guide.layoutFrame, to: screen.window).minY - inputTop()) <= 1
+            && abs((line.inputView?.bounds.height ?? 0) - keyboardHeight) <= 1
         }
-        try #require(up, "the keyboard layout guide is \(guide.layoutFrame.height) high, not the input view's height")
+        try #require(up, "the keyboard layout guide starts at \(guide.layoutFrame.minY), the input view at \(inputTop())")
         func caret() -> CGRect {
           let rect = line.caretRect(for: line.selectedTextRange?.end ?? line.endOfDocument)
           return line.convert(rect, to: screen.window)
@@ -563,13 +567,14 @@
         let line = try focus(screen, 1)
         let outside = Document.write([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "changed")])
         screen.controller.replace(document: outside, in: try makeWorkspace())
-        // Before the list lays out again, the line still shows "two".
-        #expect(line.text == "two")
+        _ = screen.list
+        // The line missed that redraw: it shows the words it was drawn with before, as the page then had them.
+        line.show(NSAttributedString(string: "two", attributes: line.typingAttributes))
         line.insertText("!")
         #expect(reports == 0)
         #expect(screen.controller.document == outside)
-        _ = screen.list
         #expect(line.text == "changed")
+        line.selectedRange = NSRange(location: 7, length: 0)
         line.insertText("?")
         #expect(reports == 1)
         #expect(InlineContent(try blocks(of: screen.controller.document)[1].content).plain == "changed?")

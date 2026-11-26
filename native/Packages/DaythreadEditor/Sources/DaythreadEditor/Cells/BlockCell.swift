@@ -44,6 +44,8 @@
       var look: LineLook
       var contentSize: UIContentSizeCategory
       var appearance: UIUserInterfaceStyle
+      /// The widest a chip may be drawn: the line's width when the words hold a chip, else 0.
+      var tokenWidth: CGFloat
     }
     private var shown: Shown?
     private var lineHeight: CGFloat = 0
@@ -63,6 +65,7 @@
     final func setWords(
       _ words: AttributedString, look: LineLook, editable: Bool, rowID: String, delegate: LineTextViewDelegate?
     ) {
+      if let bound = line.rowID, bound != rowID { releaseLine() }
       self.words = words
       self.look = look
       line.rowID = rowID
@@ -81,19 +84,54 @@
       self.words = words
       shown?.words = words
       line.words = String(words.characters)
+      line.syncedText = line.text
       wordsDidChange()
+    }
+
+    /// Draws `words` into the text view whatever it shows now: it showed words the page no longer holds.
+    final func redrawWords(_ words: AttributedString) {
+      self.words = words
+      shown = nil
+      line.words = String(words.characters)
+      wordsDidChange()
+      updateConfiguration(using: configurationState)
+    }
+
+    /// The line is about to speak for another row, or for none: whatever it holds is read into the row it belongs to
+    /// first (marked text is committed), nothing deferred is applied to it later, and it gives up the keyboard.
+    final func releaseLine() {
+      line.cancelPendingReplacement()
+      guard line.isFirstResponder else { return }
+      if line.markedTextRange != nil { line.unmarkText() }
+      line.resignFirstResponder()
+    }
+
+    override func prepareForReuse() {
+      releaseLine()
+      super.prepareForReuse()
     }
 
     /// The text view's text changed, typed or composed: the label follows it, and the list is told the row's
     /// height changed when it did. The cell is not reconfigured and the list does not rebuild it, so the keyboard and
-    /// the caret stay; `selfSizingInvalidation` lets the list size the row again in place.
+    /// the caret stay.
     final func lineTextDidChange() {
       updateConfiguration(using: configurationState)
       let height = fittedLineHeight()
       if abs(height - lineHeight) > 0.5 {
         lineHeight = height
-        invalidateIntrinsicContentSize()
+        invalidateRowHeight()
       }
+    }
+
+    /// Sizes the row again in place. The cell's own self-sizing invalidation (`invalidateIntrinsicContentSize`) is
+    /// not enough: after words set in a fallback font (Chinese, emoji) the list kept the row at a height measured
+    /// before (seen on the simulator), where an invalidation of this one item measures it afresh.
+    private func invalidateRowHeight() {
+      invalidateIntrinsicContentSize()
+      guard let list = superview as? UICollectionView, let indexPath = list.indexPath(for: self) else { return }
+      let context = UICollectionViewLayoutInvalidationContext()
+      context.invalidateItems(at: [indexPath])
+      list.collectionViewLayout.invalidateLayout(with: context)
     }
 
     /// The attributes typing at a place in the line takes: those `probe` (the words with a character typed there)
@@ -114,9 +152,10 @@
     final func applyWords(to content: inout UIListContentConfiguration, traits: UITraitCollection) {
       let next = Shown(
         words: words, look: look, contentSize: traits.preferredContentSizeCategory,
-        appearance: traits.userInterfaceStyle)
+        appearance: traits.userInterfaceStyle, tokenWidth: tokenWidth)
       if next != shown, line.markedTextRange == nil {
-        let drawn = display(words, traits: traits)
+        let widest = tokenWidth > 0 ? tokenWidth : .greatestFiniteMagnitude
+        let drawn = display(words, traits: traits, maxTokenWidth: widest)
         line.show(drawn)
         // Until the screen sets them from the run at the caret, typing looks like the line's last words.
         var typing = drawn.length > 0 ? drawn.attributes(at: drawn.length - 1, effectiveRange: nil) : [:]
@@ -150,6 +189,14 @@
       // The list cell keeps its content view on top; the words must be above it to get the touch.
       bringSubviewToFront(line)
       lineHeight = fittedLineHeight()
+      // A chip is drawn no wider than the line, which is known once the line is laid out.
+      if let shown, shown.tokenWidth != tokenWidth { setNeedsUpdateConfiguration() }
+    }
+
+    /// The widest a chip in these words may be: the line's width, once it has one; 0 when they hold no chip.
+    private var tokenWidth: CGFloat {
+      guard words.runs.contains(where: { $0.attributes[InlineToken.self] != nil }) else { return 0 }
+      return line.bounds.width
     }
 
     /// A touch anywhere in an editable row that is not on a control (the circle) goes to its words, so a tap in the
@@ -160,13 +207,15 @@
       return line
     }
 
-    private func display(_ words: AttributedString, traits: UITraitCollection) -> NSAttributedString {
+    private func display(
+      _ words: AttributedString, traits: UITraitCollection, maxTokenWidth: CGFloat = .greatestFiniteMagnitude
+    ) -> NSAttributedString {
       var drawn = NSAttributedString()
       // A token's attachment is an image of its words, drawn in the colours of these traits.
       traits.performAsCurrent {
         drawn = InlineAttributedText.display(
           words, textStyle: look.textStyle, bold: look.bold, color: look.color, struckThrough: look.struckThrough,
-          compatibleWith: traits)
+          maxTokenWidth: maxTokenWidth, compatibleWith: traits)
       }
       return drawn
     }

@@ -104,10 +104,12 @@ public enum InlineAttributedText {
   extension InlineAttributedText {
     /// What a line shows: the string set in the system's fonts for `textStyle` (in the user's Dynamic Type size)
     /// and the system's colours. A link is drawn as one, but is not tappable: it carries no `.link` attribute. A
-    /// token is one attachment character that draws its words as the words around it are drawn.
+    /// token is one attachment character that draws its words as the words around it are drawn, at most
+    /// `maxTokenWidth` wide.
     static func display(
       _ text: AttributedString, textStyle: UIFont.TextStyle, bold: Bool = false, color: UIColor = .label,
-      struckThrough: Bool = false, compatibleWith traits: UITraitCollection?
+      struckThrough: Bool = false, maxTokenWidth: CGFloat = .greatestFiniteMagnitude,
+      compatibleWith traits: UITraitCollection?
     ) -> NSAttributedString {
       let base = UIFont.preferredFont(forTextStyle: textStyle, compatibleWith: traits)
       let result = NSMutableAttributedString()
@@ -127,7 +129,8 @@ public enum InlineAttributedText {
         attributes[.strikethroughStyle] = struck ? NSUnderlineStyle.single.rawValue : 0
         let words = NSAttributedString(string: String(text[run.range].characters), attributes: attributes)
         if run.attributes[InlineToken.self] != nil {
-          attributes[.attachment] = InlineTextStorage.token(drawing: words)
+          attributes[.attachment] = InlineTextStorage.token(drawing: words, maxWidth: maxTokenWidth)
+          attributes[InlineTextStorage.tokenWords] = words.string
           result.append(NSAttributedString(string: "\u{FFFC}", attributes: attributes))
         } else {
           result.append(words)

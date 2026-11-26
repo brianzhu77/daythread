@@ -10,7 +10,7 @@ public enum BlockRows {
   }
 
   /// The rows of a page's blocks, as `rows(for:in:)` gives them: the page being edited is drawn from its blocks.
-  public static func rows(for blocks: [Block], in workspace: Workspace) -> [BlockRow] {
+  static func rows(for blocks: [Block], in workspace: Workspace) -> [BlockRow] {
     var ids = RowIDs(blocks)
     var rows: [BlockRow] = []
 

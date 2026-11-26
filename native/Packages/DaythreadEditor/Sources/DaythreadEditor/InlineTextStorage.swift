@@ -2,24 +2,29 @@ import Foundation
 
 /// How a line's words on screen are read back into `InlineContent`, and, on UIKit, how they are drawn.
 enum InlineTextStorage {
-  /// The one replacement of UTF-16 units that turns `old` into `new`, read around the caret. The units after the
-  /// caret are kept first, so a character typed beside the same character lands where he typed it, inside the run
-  /// he typed it in. A replacement never starts or ends inside a surrogate pair. Nil when the two are the same.
+  /// The one replacement of UTF-16 units that turns `old` into `new`: the units the two share at the start and at the
+  /// end are kept, so a change made away from the caret (an autocorrection) replaces only what changed. Only where the
+  /// two could share more than the shorter holds (a character typed beside the same character) does the caret say
+  /// where the change was. A replacement never starts or ends inside a surrogate pair. Nil when the two are the same.
   static func change(from old: String, to new: String, caret: Int) -> (range: Range<Int>, text: String)? {
     let before = Array(old.utf16)
     let after = Array(new.utf16)
     if before == after { return nil }
     let shortest = min(before.count, after.count)
+    var prefix = 0
+    while prefix < shortest, before[prefix] == after[prefix] { prefix += 1 }
     var suffix = 0
-    let suffixLimit = min(shortest, max(0, after.count - caret))
-    while suffix < suffixLimit, before[before.count - 1 - suffix] == after[after.count - 1 - suffix] { suffix += 1 }
+    while suffix < shortest, before[before.count - 1 - suffix] == after[after.count - 1 - suffix] { suffix += 1 }
+    if prefix + suffix > shortest {
+      // The changed units could be anywhere in a run of repeats: take the place that ends where the caret is.
+      let inserted = max(0, after.count - before.count)
+      prefix = min(max(caret - inserted, shortest - suffix), prefix)
+      suffix = shortest - prefix
+    }
+    while prefix > 0, splitsPair(before, at: prefix) || splitsPair(after, at: prefix) { prefix -= 1 }
     while suffix > 0, splitsPair(before, at: before.count - suffix) || splitsPair(after, at: after.count - suffix) {
       suffix -= 1
     }
-    var prefix = 0
-    let prefixLimit = shortest - suffix
-    while prefix < prefixLimit, before[prefix] == after[prefix] { prefix += 1 }
-    while prefix > 0, splitsPair(before, at: prefix) || splitsPair(after, at: prefix) { prefix -= 1 }
     let inserted = String(decoding: after[prefix..<(after.count - suffix)], as: UTF16.self)
     return (prefix..<(before.count - suffix), inserted)
   }
@@ -34,14 +39,35 @@ enum InlineTextStorage {
   import UIKit
 
   extension InlineTextStorage {
-    /// A token's attachment: an image of its words, set on the line's baseline as the words around it are.
-    static func token(drawing words: NSAttributedString) -> NSTextAttachment {
+    /// On a token's attachment character: the words the token is drawn with, for the pasteboard.
+    static let tokenWords = NSAttributedString.Key("daythread.tokenWords")
+
+    /// A token's attachment: an image of its words, set on the line's baseline as the words around it are, at most
+    /// `maxWidth` wide, its words cut at the end when they are longer.
+    static func token(drawing words: NSAttributedString, maxWidth: CGFloat = .greatestFiniteMagnitude)
+      -> NSTextAttachment
+    {
       let font = words.length > 0 ? words.attribute(.font, at: 0, effectiveRange: nil) as? UIFont : nil
       let measured = words.size()
-      let size = CGSize(width: max(ceil(measured.width), 1), height: ceil(measured.height))
-      let image = UIGraphicsImageRenderer(size: size).image { _ in words.draw(at: .zero) }
-      let attachment = NSTextAttachment(image: image)
-      attachment.bounds = CGRect(origin: CGPoint(x: 0, y: font?.descender ?? 0), size: size)
+      let size = CGSize(width: max(min(ceil(measured.width), floor(maxWidth)), 1), height: ceil(measured.height))
+      let shown = NSMutableAttributedString(attributedString: words)
+      let paragraph = NSMutableParagraphStyle()
+      paragraph.lineBreakMode = .byTruncatingTail
+      shown.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: shown.length))
+      let image = UIGraphicsImageRenderer(size: size).image { _ in
+        shown.draw(
+          with: CGRect(origin: .zero, size: size), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+          context: nil)
+      }
+      return attachment(image, bounds: CGRect(origin: CGPoint(x: 0, y: font?.descender ?? 0), size: size))
+    }
+
+    /// An attachment that keeps the bounds it is given: the one `NSTextAttachment(image:)` makes keeps none (seen on
+    /// the simulator), so the words would sit on the baseline at the image's own size.
+    private static func attachment(_ image: UIImage, bounds: CGRect) -> NSTextAttachment {
+      let attachment = NSTextAttachment()
+      attachment.image = image
+      attachment.bounds = bounds
       return attachment
     }
 
@@ -55,8 +81,8 @@ enum InlineTextStorage {
       measure.addAttribute(.foregroundColor, value: UIColor.clear, range: whole)
       measure.enumerateAttribute(.attachment, in: whole) { value, range, _ in
         guard let attachment = value as? NSTextAttachment else { return }
-        let blank = NSTextAttachment(image: UIGraphicsImageRenderer(size: attachment.bounds.size).image { _ in })
-        blank.bounds = attachment.bounds
+        let blank = Self.attachment(
+          UIGraphicsImageRenderer(size: attachment.bounds.size).image { _ in }, bounds: attachment.bounds)
         measure.addAttribute(.attachment, value: blank, range: range)
       }
       if measure.length == 0 || measure.string.hasSuffix("\n") {
