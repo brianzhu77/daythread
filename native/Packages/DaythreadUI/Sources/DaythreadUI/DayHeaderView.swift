@@ -22,6 +22,10 @@
     init(onTitle: @escaping () -> Void) {
       var configuration = UIButton.Configuration.plain()
       configuration.contentInsets = .zero
+      // With no insets the letters reach the button's edge, where its default rounded corners cut the first letter's
+      // corner off at large sizes: a plain button has no background to round.
+      configuration.cornerStyle = .fixed
+      configuration.background.cornerRadius = 0
       configuration.baseForegroundColor = .label
       configuration.titleLineBreakMode = .byWordWrapping
       // A wrapped title starts each line at the leading edge, as the text above and below it does.
