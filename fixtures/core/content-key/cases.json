@@ -1,0 +1,27 @@
+[
+  {
+    "name": "empty",
+    "document": "[]",
+    "key": "d:2:6cec00d0556f7072473e37b06d814675"
+  },
+  {
+    "name": "ascii",
+    "document": "[{\"id\":\"k1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Hello, world\",\"styles\":{}}],\"children\":[]}]",
+    "key": "d:119:8a1a3f5d93d0043f04893f747c078208"
+  },
+  {
+    "name": "chinese",
+    "document": "[{\"id\":\"k1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"中文：你好，世界\",\"styles\":{}}],\"children\":[]}]",
+    "key": "d:115:a06f950c3e096213e6e615efefe46084"
+  },
+  {
+    "name": "emoji-outside-the-basic-plane",
+    "document": "[{\"id\":\"k1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A 😀 and a family 👨‍👩‍👧\",\"styles\":{}}],\"children\":[]}]",
+    "key": "d:133:27e95f62619e8e8e40e0c6a57377e978"
+  },
+  {
+    "name": "synced-block",
+    "document": "[{\"id\":\"a3065240-d4d8-448f-bb95-14f3d5b0de58\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Before\",\"styles\":{}}],\"children\":[]},{\"id\":\"s1\",\"type\":\"syncedBlock\",\"props\":{\"syncId\":\"sync-1\",\"roles\":\"\"},\"children\":[]}]",
+    "key": "d:302:d7e1c4319ee97132485a52b6bd2115db"
+  }
+]

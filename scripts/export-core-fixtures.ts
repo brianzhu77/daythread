@@ -7,15 +7,15 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { harness, dayId, todo, bullet, para, heading, chip, pageRef, card, text } from '../tests/v2-helpers.ts'
-import { inlineText, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
+import { inlineText, pageContentKey, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
 import { forBrowser } from '../src/server/browser-workspace.ts'
 import { strippedWorkspace } from '../src/domain/synced.ts'
-import { localDayIn } from '../src/domain/workspace.ts'
+import { applyCommand, DomainError, localDayIn } from '../src/domain/workspace.ts'
 import { writtenDays } from '../src/domain/page-tree.ts'
 import { draftPageId } from '../src/domain/day-draft.ts'
 import { labelFor } from '../src/components/outbox.ts'
-import type { Action, Page, Workspace } from '../src/domain/types.ts'
+import type { Action, Command, Page, Workspace } from '../src/domain/types.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dir = join(root, 'fixtures', 'core')
@@ -308,6 +308,139 @@ const plain = (name: string, h: ReturnType<typeof harness>, action: Action, rows
   put('labels/cases.json', cases)
 }
 
+// ---- the content key ---------------------------------------------------------------------------------------------------
+// `document` is the page's stored string, as a client holds it; the key is `pageContentKey` of it. A synced block is
+// stored without its lines, and the key is of that stored form, so the server's expanded copy gives the same key.
+{
+  const syncedPage = () => {
+    const h = harness()
+    h.run({ type: 'create-document', title: 'Notes', body: '', pageId: 'notes' }, 'make-notes')
+    h.save('notes', d => [...d, para('p1', text('Before')), block('s1', 'syncedBlock', { syncId: 'sync-1', roles: '' }, undefined, [para('l1', text('Shown in two places'))])], { at: stamp(1) })
+    return h
+  }
+  const h = syncedPage()
+  const stored = forBrowser(h.ws).pages.find(p => p.id === 'notes')!
+  const keyOfStored = pageContentKey(stored)
+  if (keyOfStored !== pageContentKey(h.page('notes'))) throw new Error('content-key synced-block: the stored form and the expanded form must give one key')
+  if (JSON.parse(stored.document).some((n: EditorNode) => n.type === 'syncedBlock' && n.children?.length)) throw new Error('content-key synced-block: the stored form must hold no lines')
+  const caseOf = (name: string, document: string) => ({ name, document, key: pageContentKey({ document }) })
+  put('content-key/cases.json', [
+    caseOf('empty', JSON.stringify([])),
+    caseOf('ascii', JSON.stringify([para('k1', text('Hello, world'))])),
+    caseOf('chinese', JSON.stringify([para('k1', text('中文：你好，世界'))])),
+    caseOf('emoji-outside-the-basic-plane', JSON.stringify([para('k1', text('A \u{1F600} and a family \u{1F468}‍\u{1F469}‍\u{1F467}'))])),
+    caseOf('synced-block', stored.document),
+  ])
+}
+
+// ---- saves -------------------------------------------------------------------------------------------------------------
+// A save as the native app sends it (its document is the stored one, edited), and what the server does with it.
+// `{ before, operationId, expectedRevision, action, after, message }` for a save taken and `{ before, operationId,
+// expectedRevision, action, refused }` for one refused; `after` and `before` are workspaces as the browser gets them.
+{
+  const saveAs = (h: ReturnType<typeof harness>, pageId: string, edit: (nodes: EditorNode[]) => EditorNode[], extra: Partial<Extract<Action, { type: 'save-editor' }>> = {}): Extract<Action, { type: 'save-editor' }> => {
+    const page = forBrowser(h.ws).pages.find(p => p.id === pageId)!
+    return { type: 'save-editor', pageId, expectedContent: pageContentKey(page), document: JSON.stringify(edit(structuredClone(pageNodes(page)))), today: day, at: stamp(30), ...extra }
+  }
+  const command = (h: ReturnType<typeof harness>, operationId: string, action: Action, expectedRevision = h.ws.revision): Command => ({ operationId, expectedRevision, action })
+  const taken = (name: string, h: ReturnType<typeof harness>, c: Command, check: (before: Workspace, after: Workspace, message: string) => void) => {
+    const before = forBrowser(h.ws)
+    const result = applyCommand(h.ws, c)
+    h.ws = result.workspace
+    const after = forBrowser(result.workspace)
+    check(before, after, result.receipt.message)
+    put(`saves/${name}.json`, { before, operationId: c.operationId, expectedRevision: c.expectedRevision, action: c.action, after, message: result.receipt.message })
+    return { before, after, result }
+  }
+  const refused = (name: string, h: ReturnType<typeof harness>, c: Command, message: string) => {
+    const before = forBrowser(h.ws)
+    try { applyCommand(h.ws, c) } catch (e) {
+      if (!(e instanceof DomainError) || e.message !== message) throw new Error(`saves ${name}: expected the refusal "${message}", got ${e instanceof Error ? e.message : e}`)
+      put(`saves/${name}.json`, { before, operationId: c.operationId, expectedRevision: c.expectedRevision, action: c.action, refused: message })
+      return
+    }
+    throw new Error(`saves ${name}: the save was not refused`)
+  }
+  const must = (ok: boolean, what: string) => { if (!ok) throw new Error(`saves: ${what}`) }
+  const pageOf = (ws: Workspace, id: string) => ws.pages.find(p => p.id === id)!
+  const wordsOf = (ws: Workspace, id: string) => pageNodes(pageOf(ws, id)).map(n => inlineText(n.content)).join('\n')
+
+  const run = (name: string, build: (h: ReturnType<typeof world>) => Command, check: (before: Workspace, after: Workspace, message: string) => void) => { const h = world(); return taken(name, h, build(h), check) }
+
+  run('typed-words', h => command(h, 'save-typed', saveAs(h, dayPageId, d => [...d, para('typed', text('Went for a run'))])), (_b, after, message) => {
+    must(message === 'Page saved', 'typed-words: message'); must(wordsOf(after, dayPageId).includes('Went for a run'), 'typed-words: the words are in the page')
+  })
+  run('new-to-do', h => command(h, 'save-new-todo', saveAs(h, dayPageId, d => [...d, todo('n1', 'Water the plants', 'plan', day)])), (before, after) => {
+    const made = after.tasks.find(t => t.id === 'editor-task:n1')
+    must(!before.tasks.some(t => t.id === 'editor-task:n1') && made?.title === 'Water the plants', 'new-to-do: the to-do is made under editor-task:n1')
+  })
+  run('new-to-do-without-words', h => command(h, 'save-new-todo-empty', saveAs(h, dayPageId, d => [...d, todo('n2', '', 'plan', day)])), (before, after) => {
+    must(after.tasks.length === before.tasks.length, 'new-to-do-without-words: no to-do is made')
+    must(pageNodes(pageOf(after, dayPageId)).some(n => n.id === 'n2'), 'new-to-do-without-words: the row is kept')
+  })
+  run('to-do-words-deleted', h => command(h, 'save-words-deleted', saveAs(h, dayPageId, d => d.map(n => n.id === 'r1' ? { ...n, content: [] } : n))), (_b, after) => {
+    must(after.tasks.find(t => t.id === 'editor-task:r1')?.title === '', 'to-do-words-deleted: the title becomes ""')
+  })
+  run('row-removed', h => command(h, 'save-row-removed', saveAs(h, dayPageId, d => d.filter(n => n.id !== 'r2'))), (before, after) => {
+    must(before.tasks.some(t => t.id === 'editor-task:r2') && !after.tasks.some(t => t.id === 'editor-task:r2'), 'row-removed: the to-do leaves tasks')
+    must(after.deletedTasks.some(t => t.id === 'editor-task:r2'), 'row-removed: the to-do goes to deletedTasks')
+  })
+  // settleAfterRowsLeft: a removed row only pauses its to-do when it was a plan row removed on its own (singleDeleteIds), on
+  // today's page, planned there, and the to-do still has a row on another page. Here another page holds a reference row.
+  {
+    const h = world()
+    h.run({ type: 'create-document', title: 'Reading', body: '', pageId: 'doc-c' }, 'make-c')
+    const elsewhere = saveAs(h, 'doc-c', d => [...d, block('x1', 'task', { taskId: 'editor-task:r2', role: 'reference', planDate: '' }, [text('Call the dentist')])], { at: stamp(2) })
+    h.run(elsewhere, 'save-elsewhere-row')
+    taken('row-removed-kept-elsewhere', h, command(h, 'save-row-removed-kept', saveAs(h, dayPageId, d => d.filter(n => n.id !== 'r2'), { singleDeleteIds: ['r2'] })), (before, after) => {
+      const t = after.tasks.find(x => x.id === 'editor-task:r2')
+      must(Boolean(t) && !after.deletedTasks.some(x => x.id === 'editor-task:r2'), 'row-removed-kept-elsewhere: the to-do is kept')
+      must(before.tasks.find(x => x.id === 'editor-task:r2')?.paused !== true && t?.paused === true, 'row-removed-kept-elsewhere: the to-do is paused')
+      must(!pageNodes(pageOf(after, dayPageId)).some(n => n.id === 'r2') && pageNodes(pageOf(after, 'doc-c')).some(n => n.id === 'x1'), 'row-removed-kept-elsewhere: the row left today and stays on the other page')
+    })
+  }
+  // A page holding a synced block and a database block, saved from its stored form with one paragraph's words changed.
+  // The stored form carries the synced block without its lines; no detach or adopt field is sent, and none is needed.
+  {
+    const h = harness()
+    h.run({ type: 'create-document', title: 'Books', body: '', pageId: 'books' }, 'make-books')
+    h.save('books', d => [...d, para('p1', text('Hello')), block('s1', 'syncedBlock', { syncId: 'sync-1', roles: '' }, undefined, [para('l1', text('Shown in two places'))]), block('home', 'database', { pageId: 'list', view: '' }), para('p2', text('Tail'))], { at: stamp(1) })
+    h.run({ type: 'create-database', pageId: 'list', parentId: 'books', homeBlockId: 'home', title: 'Reading list' }, 'make-list')
+    const action = saveAs(h, 'books', d => d.map(n => n.id === 'p1' ? { ...n, content: [text('Hello, world')] } : n))
+    if ('detachDatabaseIds' in action || 'adoptDatabaseBlocks' in action) throw new Error('untouched-synced-and-database: the save must not send detach or adopt fields')
+    taken('untouched-synced-and-database', h, command(h, 'save-untouched', action), (before, after, message) => {
+      must(message === 'Page saved', 'untouched-synced-and-database: message')
+      must(JSON.stringify(after.synced) === JSON.stringify(before.synced), 'untouched-synced-and-database: the synced record is unchanged')
+      must(after.pages.some(p => p.id === 'list' && !p.trashedAt && p.parentId === 'books'), 'untouched-synced-and-database: the database stays on the page')
+      const nodes = pageNodes(pageOf(after, 'books'))
+      must(nodes.some(n => n.id === 's1' && n.type === 'syncedBlock') && nodes.some(n => n.id === 'home' && n.type === 'database'), 'untouched-synced-and-database: both blocks are kept')
+      must(wordsOf(after, 'books').includes('Hello, world') && !wordsOf(before, 'books').includes('Hello, world'), 'untouched-synced-and-database: the paragraph\'s words changed')
+    })
+  }
+  // The same operation again is answered with the same receipt and changes nothing; its expected revision is not looked at.
+  {
+    const h = world()
+    const c = command(h, 'save-twice', saveAs(h, dayPageId, d => [...d, para('typed', text('Went for a run'))]))
+    const first = taken('same-operation-twice', h, c, () => {})
+    const again = applyCommand(h.ws, c)
+    must(JSON.stringify(again.receipt) === JSON.stringify(first.result.receipt), 'same-operation-twice: the second answer equals the first')
+    must(JSON.stringify(forBrowser(again.workspace)) === JSON.stringify(first.after), 'same-operation-twice: the workspace is unchanged by the second')
+    const file = JSON.parse(files.get('saves/same-operation-twice.json')!)
+    put('saves/same-operation-twice.json', { ...file, second: { message: again.receipt.message, after: forBrowser(again.workspace) } })
+  }
+  {
+    const h = world()
+    const stale = saveAs(h, dayPageId, d => [...d, para('mine', text('Mine'))])
+    h.save(dayPageId, d => [...d, para('theirs', text('Theirs'))], { at: stamp(3) })
+    refused('page-changed-elsewhere', h, command(h, 'save-stale-page', stale), 'Page changed elsewhere. Your editor draft is kept; reload or copy it before resolving.')
+  }
+  {
+    const h = world()
+    const c = command(h, 'save-stale-revision', saveAs(h, dayPageId, d => [...d, para('mine', text('Mine'))]), h.ws.revision - 1)
+    refused('saved-elsewhere', h, c, 'Saved elsewhere. Reload before applying; your input is kept here.')
+  }
+}
+
 // ---- README ------------------------------------------------------------------------------------------------------------
 files.set('README.md', `# Core cases
 
@@ -321,6 +454,8 @@ The cases the native app (\`native/\`) is held to, made from the TypeScript doma
 - \`day-page/cases.json\`: \`{ name, workspace, date, live, trashed }\`, the id of a date's live day page and of its latest page in Trash (\`null\` for none).
 - \`written-days/cases.json\`: \`{ name, workspace, days }\`, the days \`writtenDays\` counts, sorted.
 - \`labels/cases.json\`: \`{ name, workspace, action, label }\`, what the outbox's \`labelFor\` says of a change.
+- \`content-key/cases.json\`: \`{ name, document, key }\`, a page's stored string and its \`pageContentKey\` (a synced block is stored without its lines, and the key is of that form).
+- \`saves/\`: one file per save. \`{ before, operationId, expectedRevision, action, after, message }\` for a \`save-editor\` the server takes, \`{ before, operationId, expectedRevision, action, refused }\` for one it refuses (the domain's message). \`same-operation-twice.json\` also has \`second: { message, after }\`, the answer to the same command sent again.
 - \`today/cases.json\`: \`{ timezone, at, day }\`, the local day of an instant in a time zone.
 
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:
