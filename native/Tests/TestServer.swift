@@ -23,6 +23,8 @@ actor TestServer: ServerTransport {
   /// The actions sent, in the order they were sent.
   private(set) var sent: [JSONValue] = []
   private(set) var unscripted = 0
+  /// Workspace loads answered, with a reply or a failure.
+  private(set) var loadsAnswered = 0
 
   init(_ script: [Reply] = []) {
     self.script = script
@@ -77,6 +79,7 @@ actor TestServer: ServerTransport {
   }
 
   func workspace(token: String?, have: Int?) async throws -> WorkspaceReply {
+    defer { loadsAnswered += 1 }
     guard case .workspace(let reply) = try await answer() else { throw TransportError.unreadable }
     return reply
   }
@@ -124,8 +127,8 @@ actor TestStore: WorkspaceStore {
   private var holdsPut = false
   private var heldPuts: [CheckedContinuation<Void, Never>] = []
   private var putArrivals: [CheckedContinuation<Void, Never>] = []
-  /// The documents of the drafts stored, in the order stored.
-  private(set) var puts: [String] = []
+  /// The drafts stored, in the order stored.
+  private(set) var puts: [PageDraft] = []
 
   struct Refused: Error {}
 
@@ -207,7 +210,7 @@ actor TestStore: WorkspaceStore {
         for arrival in waiting { arrival.resume() }
       }
     }
-    puts.append(draft.document)
+    puts.append(draft)
     try await memory.put(draft)
   }
   func removeDraft(pageId: String, owner: String) async throws {

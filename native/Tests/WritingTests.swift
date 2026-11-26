@@ -1,6 +1,8 @@
 import DaythreadCore
 import DaythreadSync
 import Foundation
+import Observation
+import Synchronization
 import Testing
 import UIKit
 
@@ -182,9 +184,11 @@ private struct DayScreen {
     try await Harness(copy: try copy(pages: pages ?? [page(today, base)]), sleep: neverEnding)
   }
 
-  /// The server's copy at revision 2, with today's page as another device left it.
+  /// The server's copy at revision 2, with today's page as another device left it and yesterday's as it was.
   private func loaded(_ h: Harness, today document: String) async throws {
-    await h.server.add([.workspace(.full(try copy(revision: 2, pages: [page(today, document)]), owner: "one"))])
+    await h.server.add([
+      .workspace(.full(try copy(revision: 2, pages: [page(today, document), page(yesterday, base)]), owner: "one"))
+    ])
     await h.model.refresh()
   }
 
@@ -233,7 +237,7 @@ private struct DayScreen {
     }
     #expect(day.words == ["Morning", "Walk the"])
     // The two waiting while the first was stored went as one, the last.
-    #expect(await h.store.puts.map { words(of: $0) } == [["Morning", "Walk t"], ["Morning", "Walk the"]])
+    #expect(await h.store.puts.map { words(of: $0.document) } == [["Morning", "Walk t"], ["Morning", "Walk the"]])
     day.close()
   }
 
@@ -260,7 +264,7 @@ private struct DayScreen {
   }
 
   @Test func a_line_both_changed_shows_both_and_says_so() async throws {
-    let h = try await harness()
+    let h = try await harness([page(today, base), page(yesterday, base)])
     let day = try DayScreen(h.model)
     try day.type(" the dog", atEndOf: "Walk")
     try await until { !h.model.state.drafts.isEmpty }
@@ -273,8 +277,15 @@ private struct DayScreen {
     #expect(day.words == merged)
     #expect(words(of: await saves(h.server).last?.document) == merged)
     #expect(day.status == "Latest loaded · your changes are below their lines")
-    try await turns()
+
+    // A new state that changes nothing of this page keeps saying it. (A refresh would wait behind the pass whose save
+    // the server holds; words kept for another day publish a state at once.)
+    h.model.wrote(
+      pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
+      startedFrom: base)
+    try await until { h.model.state.drafts.count == 2 }
     #expect(day.status == "Latest loaded · your changes are below their lines", "until he types again")
+    #expect(day.words == merged)
 
     try day.type("!", atEndOf: "Walk the dog")
     try await until { day.status == nil }
@@ -364,10 +375,12 @@ private struct DayScreen {
     let save = try #require(await saves(h.server).last)
     #expect(save.pageId == yesterdayId)
     #expect(words(of: save.document) == ["Morning", "Walk the dog", "Call mum"])
-    // Once, not again and again: nothing more is stored or sent while the save is on its way.
-    let stored = await h.store.puts.count
+    // Once, not again and again: the keep, then one merged draft (the other put records the save on its way).
     try await turns()
-    #expect(await h.store.puts.count == stored)
+    #expect(
+      await h.store.puts.filter { $0.sent == nil }.map { words(of: $0.document) } == [
+        ["Morning", "Walk the dog"], ["Morning", "Walk the dog", "Call mum"],
+      ])
     #expect(await saves(h.server).count == 1)
     await h.server.release()
   }
@@ -465,6 +478,173 @@ private struct DayScreen {
     day.close()
   }
 
+  @Test func typing_after_a_save_landed_is_not_merged() async throws {
+    let h = try await harness()
+    let day = try DayScreen(h.model)
+    try day.type(" the dog", atEndOf: "Walk")
+    try await until { !h.model.state.drafts.isEmpty }
+    let saved = document([line("a", "Morning"), line("b", "Walk the dog")])
+    await h.server.add([
+      .saved(
+        .applied(
+          receipt: .object(["revision": .number("2")]),
+          changes: try changes(from: 1, to: 2, pages: [page(today, saved)]), owner: "one"))
+    ])
+    await h.model.saveNow().value
+    try await until { h.model.state.drafts.isEmpty }
+    day.drawn()
+
+    // He goes on typing in the same line once the save has landed.
+    await h.server.holdSaves()
+    try day.type(" again", atEndOf: "Walk the dog")
+    try await until { !h.model.state.drafts.isEmpty }
+    #expect(h.model.state.drafts.first?.state != .behind, "the draft starts from the page that was saved")
+    let saving = h.model.saveNow()
+    try await eventually { await h.server.waitingCalls == 1 }
+
+    #expect(day.words == ["Morning", "Walk the dog again"])
+    #expect(day.status == nil)
+    let action = try #require(await h.server.sent.last?.objectValue)
+    #expect(action["expectedContent"]?.stringValue == ContentKey.of(saved))
+    #expect(words(of: action["document"]?.stringValue) == ["Morning", "Walk the dog again"])
+    day.close()
+    await h.server.release()
+    await saving.value
+  }
+
+  @Test func a_state_that_changes_only_his_words_leaves_the_list_alone() async throws {
+    let todoRow =
+      #"{"id":"t","type":"task","props":{"taskId":"t-open"},"content":[{"type":"text","text":"Water the plants","styles":{}}],"children":[]}"#
+    let task: JSONValue = .object([
+      "id": .string("t-open"), "title": .string("Water the plants"), "status": .string("open"),
+      "paused": .bool(false), "doneOn": .null, "version": .number("1"),
+    ])
+    let h = try await Harness(
+      copy: try copy(pages: [page(today, document([line("a", "Morning"), line("b", "Walk"), todoRow]))], tasks: [task]),
+      sleep: neverEnding)
+    let day = try DayScreen(h.model)
+    await h.store.holdPut()
+    let walk = try day.type(" t", atEndOf: "Walk")
+    await h.store.putHeld()
+    walk.insertText("h")
+    let replaced = day.screen.replacedDocuments.count
+
+    // The engine publishes his changes, the first while the second waits: they differ only in his own words.
+    await h.store.releasePut()
+    try await until {
+      h.model.state.workspace?.page(todayId).map { words(of: $0.document) } == ["Morning", "Walk th", "Water the plants"]
+    }
+    day.drawn()
+    #expect(day.screen.replacedDocuments.count == replaced, "the list is not replaced with its own words")
+
+    // A to-do's status changes: the list is redrawn once, with his words.
+    let circle = try #require(day.circle("Complete Water the plants"))
+    circle.sendActions(for: .primaryActionTriggered)
+    try await until { h.model.state.pending == 1 }
+    day.drawn()
+    #expect(day.screen.replacedDocuments.count == replaced + 1)
+    #expect(words(of: day.screen.replacedDocuments.last) == ["Morning", "Walk th", "Water the plants"])
+    day.close()
+  }
+
+  @Test func saving_now_does_not_hold_up_what_he_types_next() async throws {
+    let h = try await harness([page(today, base), page(yesterday, base)])
+    let day = try DayScreen(h.model)
+    try day.type(" the dog", atEndOf: "Walk")
+    try await until { !h.model.state.drafts.isEmpty }
+    await h.server.holdSaves()
+    let saving = h.model.saveNow()
+    try await eventually { await h.server.waitingCalls == 1 }
+
+    // While the save waits for the network, his words on another day are stored at once.
+    h.model.wrote(
+      pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
+      startedFrom: base)
+    try await eventually { await h.store.puts.contains { $0.pageId == yesterdayId } }
+    #expect(await h.server.waitingCalls == 1, "the save is still on its way")
+    day.close()
+    await h.server.release()
+    await saving.value
+  }
+
+  @Test func discarding_the_open_pages_draft_shows_the_servers_page() async throws {
+    let h = try await harness()
+    let day = try DayScreen(h.model)
+    try day.type(" the dog", atEndOf: "Walk")
+    try await until { !h.model.state.drafts.isEmpty }
+
+    await h.model.discardDraft(pageId: todayId)
+
+    try await until { day.words == ["Morning", "Walk"] }
+    try day.type("!", atEndOf: "Walk")
+    try await until { !h.model.state.drafts.isEmpty }
+    #expect(h.model.state.drafts.first?.state != .behind, "the next change starts from the server's page")
+    day.close()
+  }
+
+  @Test func the_screen_hears_when_a_pages_last_call_is_answered() async throws {
+    let h = try await harness()
+    let heard = Heard()
+    withObservationTracking {
+      _ = h.model.answeredWrites
+    } onChange: {
+      heard.value.withLock { $0 = true }
+    }
+
+    h.model.wrote(
+      pageId: todayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
+      startedFrom: base)
+
+    try await until { heard.value.withLock { $0 } }
+    #expect(!h.model.isWriting(todayId))
+  }
+
+  @Test func a_merge_refused_because_the_page_moved_again_keeps_their_lines_on_screen() async throws {
+    let h = try await harness()
+    let day = try DayScreen(h.model)
+    try day.type(" the dog", atEndOf: "Walk")
+    try await until { !h.model.state.drafts.isEmpty }
+    let morning = try day.line("Morning")
+    #expect(morning.becomeFirstResponder())
+    morning.selectedRange = NSRange(location: 7, length: 0)
+    morning.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
+    try await loaded(h, today: document([line("a", "Morning"), line("b", "Walk"), line("c", "Call mum")]))
+    try await until { h.model.state.drafts.first?.state == .behind }
+
+    // The page moves again: that load waits at the server.
+    await h.server.add([
+      .workspace(
+        .full(
+          try copy(
+            revision: 3,
+            pages: [
+              page(today, document([line("a", "Morning"), line("b", "Walk"), line("c", "Call mum"), line("d", "Call dad")]))
+            ]), owner: "one"))
+    ])
+    await h.server.hold()
+    let refreshing = Task { [model = h.model] in await model.refresh() }
+    try await eventually { await h.server.waitingCalls == 1 }
+
+    // His composition ends: its keep waits in the store, and the merge with the first move is handed over behind it.
+    await h.store.holdPut()
+    morning.unmarkText()
+    try await until { day.words == ["Morning今", "Walk the dog", "Call mum"] }
+    await h.server.release()
+    try await eventually { await h.server.loadsAnswered == 3 }
+    try await turns()
+    await h.store.releasePut()
+
+    try await until { day.words == ["Morning今", "Walk the dog", "Call mum", "Call dad"] }
+    await refreshing.value
+    #expect(
+      await !h.store.puts.contains { words(of: $0.document) == ["Morning今", "Walk the dog", "Call mum"] },
+      "the first merge was refused")
+    let merged = day.screen.replacedDocuments.drop { !words(of: $0).contains("Call mum") }
+    #expect(!merged.isEmpty)
+    #expect(merged.allSatisfy { words(of: $0).contains("Call mum") }, "their line never left the screen")
+    day.close()
+  }
+
   @Test func signing_out_with_a_draft_asks_first() async throws {
     let h = try await harness()
     let day = try DayScreen(h.model)
@@ -483,6 +663,11 @@ private struct DayScreen {
     day.screen.dismiss(animated: false)
     day.close()
   }
+}
+
+/// Set from an observation's change handler, which may run on any thread.
+private final class Heard: Sendable {
+  let value = Mutex(false)
 }
 
 /// Background time the test owns: each task it begins is 7, and the test says when time is up.
