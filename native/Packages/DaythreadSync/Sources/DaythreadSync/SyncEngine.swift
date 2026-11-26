@@ -21,7 +21,8 @@ import Foundation
 ///   that pass, or with `signedOut` by the sign-in or sign-out that moved the epoch on. None is ever stored.
 /// - **Trying again.** A pass that fails with an entry it could send still pending schedules another, after the
 ///   web's waits (`retryWaits`, or a 429's own wait when longer), through the injected `sleep`; the network coming back
-///   cuts the wait short. A pass that ends well, a sign-in, a sign-out, or nothing left to send stops it.
+///   cuts the wait short. A pass that ends well, a sign-in, a sign-out, or nothing left to send stops it. The network
+///   coming back after a pass that ended offline also asks for one load, with or without a wait planned.
 /// - **The outbox in memory.** `outbox` is what the store's outbox holds, read again inside the same store section as
 ///   every write to it, so no published state has an entry in neither the outbox (drawn as a prediction) nor the
 ///   copy (applied by the server's answer).
@@ -147,6 +148,7 @@ public actor SyncEngine {
     }
     publish()
     release()
+    listenForTheNetwork()
     if !hidden { await requestPass(load: true) }
   }
 
@@ -544,13 +546,15 @@ public actor SyncEngine {
     }
   }
 
-  /// Cuts a planned wait short; with none planned there is nothing to send.
+  /// Cuts a planned wait short. When the last pass ended for lack of network the pass loads too, whether or not
+  /// anything waits to be sent, so the offline line does not outlast the outage. Signed out with sign-in shown, or
+  /// signing out, there is nothing to ask.
   private func networkReturned() {
-    guard let retry else { return }
-    retry.cancel()
-    self.retry = nil
+    guard phase != .signedOut, !leaving, retry != nil || offline else { return }
+    retry?.cancel()
+    retry = nil
     SyncLog.logger.info("The network is back; trying again now")
-    askForPass(load: false)
+    askForPass(load: offline)
   }
 
   // MARK: Store sections
