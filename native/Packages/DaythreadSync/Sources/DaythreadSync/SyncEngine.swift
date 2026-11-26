@@ -104,7 +104,7 @@ public actor SyncEngine {
   public init(
     transport: any ServerTransport, tokens: any TokenStore, store: any WorkspaceStore,
     reachability: any Reachability = NoReachability(),
-    sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+    sleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep,
     now: @escaping @Sendable () -> Date = Date.init
   ) {
     self.transport = transport
@@ -522,6 +522,14 @@ public actor SyncEngine {
     return outbox.contains { $0.state == .pending && !behind.contains($0.seq) }
   }
 
+  /// The engine's own wait, to the second. It is `Task.sleep(nanoseconds:)` and not `Task.sleep(for:)`: built by
+  /// Xcode 26.6, a retry wait made with the latter and cancelled at once (an engine let go right after a pass failed)
+  /// aborted the process when its task resumed ("freed pointer was not the last allocation", in `swift_task_dealloc`).
+  /// Seen only on the hosted runner, in two tests that do exactly that; never with Xcode 27.
+  public static let sleep: @Sendable (Duration) async throws -> Void = { duration in
+    try await Task.sleep(nanoseconds: UInt64(max(0, duration.components.seconds)) * 1_000_000_000)
+  }
+
   /// Plans the next try after the schedule's wait, or a 429's when longer, replacing any wait in progress.
   private func planRetry(after error: any Error) {
     var wait = Self.retryWaits[min(failedPasses, Self.retryWaits.count - 1)]
@@ -532,11 +540,10 @@ public actor SyncEngine {
     let number = retryNumber
     let sleep = sleep
     SyncLog.logger.info("Trying again in \(wait.components.seconds, privacy: .public) s")
-    // Written with a plain `do`/`catch` and a strong `engine`, not `try? await` in a condition and `await self?.`:
-    // built by Xcode 26.6 that shorter form aborted when this task ended ("freed pointer was not the last
-    // allocation", in `swift_task_dealloc`), on the hosted runner, in two runs of two.
     retry = Task { [weak self] in
-      // A cancelled wait (signed out, the network back, nothing left to send) asks for nothing.
+      // A cancelled wait (signed out, the network back, nothing left to send) asks for nothing. A wait cancelled
+      // before it began is never started: see `SyncEngine.sleep`.
+      guard !Task.isCancelled else { return }
       do { try await sleep(wait) } catch { return }
       guard !Task.isCancelled, let engine = self else { return }
       await engine.retryDue(number)
