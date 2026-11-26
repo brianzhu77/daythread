@@ -23,7 +23,7 @@
 | Search | absent | |
 | Trash (`/pages?view=trash`) | absent | |
 | Account menu | built, minimal | One button. Rows: the account's address as the server last gave it, "Sign out" while a session is stored, and in Debug builds "Round trip · N of M pages fail" when any page fails. "Sign out" tries once to send what is waiting and, when changes are still not sent, asks before discarding them ("2 changes not sent", "Sign out and discard", "Cancel") |
-| Changes not saved (the web's banner) | built, merges first | The app settles a held tick itself before asking: dropped when the server already has the status, sent again on the loaded revision (once) when only something else about the to-do changed, held only when the to-do now has another status or is gone. The web asks (Keep mine) in every case, never automatically. What is held shows as a red `exclamationmark.triangle` button in the navigation bar, beside the account, on every day. Its menu has one section per held change titled with the web's sentence, with "Keep mine" (when the server held it) and "Discard", and a last line "1 later change waiting" when ticks wait behind a held one. The web's link from the name to its row is absent |
+| Changes not saved (the web's banner) | built, merges first | The app settles a held tick itself before asking: dropped when the server already has the status, sent again on the loaded revision (once) when only something else about the to-do changed, held only when the to-do now has another status or is gone. A tick the server says may already be in is held and asked about unless the server already has its status (then dropped): the app cannot tell whether another device undid it. The web asks (Keep mine) in every case, never automatically. What is held shows as a red `exclamationmark.triangle` button in the navigation bar, beside the account, on every day. Its menu has one section per held change titled with the web's sentence, with "Keep mine" (when the server held it) and "Discard", and a last line "1 later change waiting" when ticks wait behind a held one. The web's link from the name to its row is absent |
 | Account settings (time zone, delete account, reminders) | absent | |
 | Sign-in (`/sign-in`) | built | Email, password, "Sign in"; one line under the button for a refusal, in the web's words. The session is kept in the Keychain |
 | Sign-up (`/sign-up`) | absent | |
@@ -76,6 +76,7 @@ app shows any type it does not know as "Block".
   "Keep mine" is sent on it, as the web's resync does. A tick held for `conflict`, `changed-since` or `maybe-applied`
   is merged after that load without asking: dropped when the to-do already has its status, sent again once on the
   loaded revision when the to-do still has the status it was tapped from, held otherwise; it stays drawn meanwhile.
+  One held for `maybe-applied` is only dropped (the server has its status) or held, never sent again.
 - `ensure-day`: the engine asks for today's page when the copy has none and none is in Trash, through the outbox,
   once per load while that holds. "Add page", "Create page" and "Add a new page" send it for their day,
   waiting for the answer, not through the outbox.

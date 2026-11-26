@@ -123,7 +123,9 @@ extension SyncEngine {
   /// Settles each held tick in `unsettled` against the copy just loaded: dropped when the to-do already has the status
   /// he asked for; sent again on the copy's revision with no revisions of its own (Keep mine, unasked) when it still
   /// has the status he tapped it from, so his status and the other change both stand; held for him when the to-do has
-  /// any other status or is gone. Runs inside a store section, before the load is published.
+  /// any other status or is gone. A tick the server says may already be applied is only ever dropped or held: its
+  /// tapped-from status may be another device undoing it after it went in, and sending it again would reverse that.
+  /// Runs inside a store section, before the load is published.
   func settleHeldTicks() async throws {
     guard !unsettled.isEmpty else { return }
     let reasons = unsettled
@@ -134,15 +136,17 @@ extension SyncEngine {
         let wanted = entry.wantedStatus
       else { continue }
       // Ids compare by code units, as they do in the domain.
-      guard let task = copy.workspace.tasks.first(where: { $0.id.utf8.elementsEqual(taskId.utf8) }) else {
+      let task = copy.workspace.tasks.first { $0.id.utf8.elementsEqual(taskId.utf8) }
+      if task == nil, reason != "maybe-applied" {
+        // The app's own word, read as gone; everywhere else the reason field holds the server's.
         try await keepHeld(entry, reason: "gone")
         continue
       }
       let tappedFrom: TodoTask.Status = wanted == .done ? .open : .done
-      if task.status == wanted {
+      if task?.status == wanted {
         SyncLog.logger.notice("Outbox \(entry.operationId, privacy: .public): the server has it already, dropped")
         try await store.remove(seq: entry.seq)
-      } else if task.status == tappedFrom {
+      } else if task?.status == tappedFrom, reason != "maybe-applied" {
         SyncLog.logger.notice("Outbox \(entry.operationId, privacy: .public): merged, sent again")
         var again = entry
         again.baseRevision = copy.workspace.revision

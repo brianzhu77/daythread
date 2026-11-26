@@ -47,7 +47,7 @@
 | Account | The account button's accessibility label (an icon, no text), the navigation bar's trailing button |
 | Sign out | The account menu, while a session is stored |
 | 1 change not sent (N changes not sent), Sign out and discard, Cancel | The alert after "Sign out" when changes are still not sent after one try |
-| Not saved | The held button's accessibility label (`exclamationmark.triangle` in the system's red, no text), in the navigation bar beside the account button, shown while a change is held. The app merges a held tick itself (dropped when the server has it, sent again when only something else about the to-do changed) and shows this only when both sides changed the to-do's status differently, or the to-do is gone |
+| Not saved | The held button's accessibility label (`exclamationmark.triangle` in the system's red, no text), in the navigation bar beside the account button, shown while a change is held. The app merges a held tick itself (dropped when the server has it, sent again when only something else about the to-do changed) and shows this only when both sides changed the to-do's status differently, or the to-do is gone. A tick the server says may already be in is asked about unless the server already has it |
 | Not saved — ticked "…" was changed elsewhere | The held menu's section title, held because the row changed elsewhere; the web's sentence, with the change's label |
 | Not saved — "…" was deleted elsewhere | The same, for a to-do that is gone ("it" when the label names nothing) |
 | Not saved — ticked "…" · changed since | The same, held because something changed since |
