@@ -161,6 +161,33 @@ sent. The server holding it means the copy is behind, so without the load the pa
 not what the server has, and Keep mine would be sent on the same old revision and held again. (Found by the review
 of the whole slice, 2026-11-25.)
 
+**Merging, not overwriting (Brian, 2026-11-26).** "不是直接覆盖 server data，你要看在离线期间有没有新的本地内容，进行交叉合并."
+Neither side replaces the other. What he changed on the device while the server was out of reach is put together
+with what changed on the server, by the app, without asking; he is asked only when both changed the same thing in
+two different ways. This is a rule for every slice, and it differs from the web, whose Keep mine "is never
+automatic" (`outbox.md` §8.3).
+
+- It already holds between rows: a change made offline is sent on the revision it was made on, and the server
+  applies it over whatever else changed, unless someone changed the same row.
+- For the same row, the app now settles it. When the server holds a tick (`conflict`, `changed-since` or
+  `maybe-applied`), the engine loads, as above, and looks at the to-do as the server has it:
+
+  | The to-do on the server | The app |
+  |---|---|
+  | Already has the status he tapped | Drops his change; there is nothing left to do |
+  | Still has the status he tapped it from (so something else about it changed: its words, a date) | Sends his tick again on the loaded revision, once. His status and their change both stand |
+  | Has a third status (he ticked it, someone cancelled it) | Holds it and asks, with the menu of §7. This is the one case with no right answer |
+  | Is gone | Holds it, with Discard only, as now |
+
+  The status he tapped from is read from the tap itself: a tick to done came from a to-do that was not done, a
+  tick to open from one that was done.
+- While this is being settled the tick stays drawn. Nothing is published in which it is undone, unless it ends
+  held.
+- A tick sent again this way and held a second time is held and asked about; the app does not try a third time.
+- Slice 1b applies the same rule to a page's words: lines written on the device and lines changed on the server
+  are merged line by line when the save is refused (the web's `mergeDraft`, run without being asked for), and he
+  is asked nothing.
+
 **A command that is sent and waited for** does not go through the outbox. `perform(action:)` sends it once, after
 anything pending has been sent, on the copy's revision, and returns what happened: applied (the reply's changes
 are in the copy before it returns), no connection, or refused with the reason. Nothing is stored, so a tap made as
@@ -194,15 +221,22 @@ date replaces the page in place; nothing is pushed, so there is no Back.
 the account's zone, and a check whenever the app becomes active. While the screen shows today it follows today;
 while it shows another day it stays there. Carried from phase 0.
 
-**Controls (native wins).** All system components in the navigation bar:
+**Controls (native wins; Brian, 2026-11-26: "我们应该用 Toolbar 吧？尽量简洁，不要一大堆常驻按钮").** Moving between days is in
+the system's toolbar at the bottom of the screen, and the navigation bar is left to the title. As first built,
+six buttons sat in the navigation bar around the title.
 
-- The title is the day ("Wednesday, Nov 25"), as now.
-- Leading: `chevron.left` (Previous day) and `chevron.right` (Next day). Next is disabled from today on, as on the
-  web, where a future day is reached only from the calendar.
-- Trailing: a calendar button (to VoiceOver, "Calendar") opening `UICalendarView` in a popover (a sheet on the phone, which is what the
-  system makes of a popover there), with a dot on each day that has something written and the week starting as
-  the account has it. A day picked there opens; future days too. Then "Today", shown only while another day is
-  open; then the account button.
+- The navigation bar: the title is the day ("Wednesday, Nov 25"), as now. One button stays there, the account
+  button. The "Not saved" button of §7 appears beside it only while a change is held.
+- The toolbar, always: `chevron.left` (Previous day), the calendar button, `chevron.right` (Next day), spread
+  across it. Next is disabled from today on, as on the web, where a future day is reached only from the calendar.
+- The toolbar, only while another day is open: "Today", between the calendar and Next.
+- The calendar button (to VoiceOver, "Calendar") opens `UICalendarView` in a popover (a sheet on the phone, which
+  is what the system makes of a popover there), with a dot on each day that has something written and the week
+  starting as the account has it. A day picked there opens; future days too.
+- Three buttons are always on screen for moving between days, and one for the account. If he wants it barer
+  still, Previous and Next are the ones to go: the calendar reaches every day.
+- When 1e brings the tab bar, the toolbar goes: a tab bar and a toolbar stacked is what he asked not to have,
+  and the Calendar tab then does this work.
 - No swipe between days. The web has none, a horizontal swipe is the system's Back and will be a row's actions in
   1c, and the calendar already reaches any day. My call.
 
@@ -223,15 +257,15 @@ has content or a page under it. Content (`hasContent`) is any of: a to-do row wh
 | The day | The app |
 |---|---|
 | Today, no page and none in Trash | The engine asks the server for it (`ensure-day`), as phase 0 does |
-| A past day, no page | "No page for Tuesday, Nov 3 yet" and a "Start this page" button. **The app does not make the page by opening the day**, which the web does. My call: stepping back through a month should not write a month of pages, and each `ensure-day` also ends the server's Undo |
+| A past day, no page | "No page for Tuesday, Nov 3" and an "Add page" button (Brian, 2026-11-26: a past day is not "started"; it was "No page for … yet" and "Start this page", the web's words). **The app does not make the page by opening the day**, which the web does. My call: stepping back through a month should not write a month of pages, and each `ensure-day` also ends the server's Undo |
 | A future day, no page | "Thursday, Dec 3 hasn't happened yet" and "Create page". The web's lists of what is planned or due that day come with 1e |
-| The day's page is in Trash | "Today's page is in Trash." or "The page for Tuesday, Nov 3 is in Trash.", with "Restore" and "Start a new page" |
+| The day's page is in Trash | "Today's page is in Trash." or "The page for Tuesday, Nov 3 is in Trash.", with "Restore" and "Add a new page" |
 
 - These are `UIContentUnavailableConfiguration`s. The buttons send `ensure-day`, or `restore-batch` with the
   page's `trashId` (what the web's Restore sends for a day), with `perform` (§5): the button shows the system's
   activity indicator until it returns. With no connection, or when the server refuses, the state's second line
-  reads `Couldn't start a page · try again` or `Couldn't restore · try again`, the web's words, and the button
-  works again.
+  reads `Couldn't add a page · try again` (after "Add page" or "Add a new page"), `Couldn't create a page · try
+  again` (after "Create page") or `Couldn't restore · try again`, and the button works again.
 - A draft page is never shown as a day or counted as one (`Page.isDraft`).
 
 ## 7. What he sees
@@ -244,7 +278,7 @@ Every string below goes into `docs/design/native-system.md` in the same change.
 | The circle, to VoiceOver | A button labelled `Complete <the to-do's words>`, the web's label, with the value "done", "cancelled" or "not done" |
 | Offline with changes to send | The line under the title: `Offline · showing what was last loaded · 1 change will be sent` (`2 changes will be sent`), the web's words |
 | Changes waiting behind a held one | A disabled last line in the held menu: `1 later change waiting` (`2 later changes waiting`), the web's words |
-| A held change | A button appears in the navigation bar (`exclamationmark.triangle`, in the system's red; to VoiceOver, "Not saved"). Its menu has one section per held change, titled with the web's sentence, holding "Keep mine" and "Discard" (destructive) |
+| A held change (only what the app could not merge, §5) | A button appears in the navigation bar (`exclamationmark.triangle`, in the system's red; to VoiceOver, "Not saved"). Its menu has one section per held change, titled with the web's sentence, holding "Keep mine" and "Discard" (destructive) |
 | …held because the row changed elsewhere | `Not saved — ticked "Water the plants" was changed elsewhere` · Keep mine · Discard |
 | …held because the to-do is gone | `Not saved — "Water the plants" was deleted elsewhere` · Discard |
 | …held because something changed since | `Not saved — ticked "Water the plants" · changed since` · Keep mine · Discard |
