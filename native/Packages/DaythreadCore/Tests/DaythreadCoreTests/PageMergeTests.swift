@@ -408,8 +408,10 @@ import Testing
   }
 
   @Test func an_untouched_line_is_written_exactly_as_it_was_read() {
+    // An escaped slash, a non-ASCII character written as an escape, a number as written, and the keys out of order.
     let odd =
-      #"{"type":"paragraph","id":"odd","children":[],"props":{"textColor":"default","x":1.50},"content":[{"type":"text","text":"a\/b é","styles":{}}]}"#
+      #"{"type":"paragraph","id":"odd","children":[],"props":{"textColor":"default","x":1.50},"content":"#
+      + #"[{"type":"text","text":"a\/b "# + "\\" + #"u00e9","styles":{}}]}"#
     let base = Lines.document(Lines.line("a", "One"), odd, Lines.line("c", "Three"))
     let mine = Lines.document(Lines.line("a", "One, mine"), odd, Lines.line("c", "Three"))
     let theirs = Lines.document(Lines.line("a", "One"), odd, Lines.line("c", "Three, theirs"))
@@ -470,7 +472,8 @@ import Testing
 
   @Test func he_changed_the_words_and_the_server_the_kind_is_one_line_of_the_servers_kind_with_his_words() {
     let mine = Lines.document(Lines.line("a", "One"), Lines.line("b", "Two, mine"), Lines.line("c", "Three"))
-    let theirs = Lines.document(Lines.line("a", "One"), Lines.line("b", "bulletListItem", "Two"), Lines.line("c", "Three"))
+    let theirs = Lines.document(
+      Lines.line("a", "One"), Lines.line("b", "bulletListItem", "Two"), Lines.line("c", "Three"))
 
     #expect(
       merge(base, mine, theirs)
@@ -501,13 +504,14 @@ import Testing
     let base = Lines.document(
       Lines.line("a", "One"),
       Lines.line(
-        "b", "paragraph", props: #"{"backgroundColor":"default","textColor":"default","textAlignment":"left","x":"1","y":"2"}"#,
-        "Two"))
+        "b", "paragraph",
+        props: #"{"backgroundColor":"default","textColor":"default","textAlignment":"left","x":"1","y":"2"}"#, "Two"))
     // The server removed `x` and changed the colour; he removed `y` and changed the words.
     let theirs = Lines.document(
       Lines.line("a", "One"),
       Lines.line(
-        "b", "paragraph", props: #"{"backgroundColor":"default","textColor":"red","textAlignment":"left","y":"2"}"#, "Two"))
+        "b", "paragraph", props: #"{"backgroundColor":"default","textColor":"red","textAlignment":"left","y":"2"}"#,
+        "Two"))
     let mine = Lines.document(
       Lines.line("a", "One"),
       Lines.line(
@@ -703,8 +707,11 @@ enum Generated {
     let letters = Array("abcdefghijklmnopqrstuvwxyz")
     let han = Array("雨写茶山风")
     func word() -> String {
-      if Int.random(in: 0..<8, using: &random) == 0 { return String(han[Int.random(in: 0..<han.count, using: &random)]) }
-      return String((0..<Int.random(in: 3...7, using: &random)).map { _ in letters[Int.random(in: 0..<26, using: &random)] })
+      if Int.random(in: 0..<8, using: &random) == 0 {
+        return String(han[Int.random(in: 0..<han.count, using: &random)])
+      }
+      let length = Int.random(in: 3...7, using: &random)
+      return String((0..<length).map { _ in letters[Int.random(in: 0..<26, using: &random)] })
     }
     return (0..<Int.random(in: 1...3, using: &random)).map { _ in word() }.joined(separator: " ")
   }

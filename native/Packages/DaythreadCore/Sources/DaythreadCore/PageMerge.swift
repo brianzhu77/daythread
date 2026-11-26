@@ -2,7 +2,7 @@
 ///
 /// Neither side replaces the other, and he is not asked. Three versions are known: the page the draft started from
 /// (`base`), his draft (`mine`), and the page as the server now has it (`theirs`). They are merged line by line, by
-/// line id, at any depth. A line is changed when its written node, without `children`, differs from the base's.
+/// line id, at any depth.
 ///
 /// | The line                            | In the merged page                                                     |
 /// |-------------------------------------|------------------------------------------------------------------------|
@@ -31,19 +31,35 @@
 ///   line's words that either side wrote and the other did not delete are in the result.
 ///
 /// How the rules are read here:
+/// - A line's fields are its `type`, its `content`, each key of its `props` on its own, and any other key of its
+///   node but `id` and `children`. A line is changed when some field differs from the base's. A line both sides
+///   changed is merged field by field: a field only one side changed is that side's, one both set to the same value
+///   is that value, and a key one side added or removed while the other left it is added or removed. Only when some
+///   field was changed by both, differently, is the line "changed by both, differently": the server's line stays and
+///   his whole line as he has it now goes below. Otherwise it is one line, built on the server's node in its key
+///   order with his fields set and his new keys after the server's; when only one side changed anything it is that
+///   side's line exactly as read.
+/// - The server stamps `at` on each `pageRef` in a line's words that has none (`workspace.ts`). A stamp is not a
+///   change of words: when the server's `content` differs from the base's only by stamps and he changed the words,
+///   his words are kept, each `pageRef` of his without `at` taking the server's stamped one that is otherwise the
+///   same (the first not yet taken, in order).
 /// - A line he puts back or adds goes after the nearest earlier line before it at its own level that is still
 ///   there (its last surviving nested line, when the line itself is gone); with none, first under its parent; and
-///   under a parent that is gone, where that parent would go. His line below the server's sits right after the
-///   server's line and what is nested under it, at its depth, with a fresh id and no nested lines.
-/// - A block the app does not draw (a database, a synced block, anything `EditablePage` does not edit) is always the
-///   server's, with everything under it as the server has it; when the server no longer has it, it is gone.
+///   under a parent that is gone, where that parent would go. Keeping its level this way keeps the page order of a
+///   line added after a nested list; when the other side nested the line before it, it is nested with it, which
+///   costs him one Shift-Tab. His line below the server's sits right after the server's line and what is nested
+///   under it, at its depth, with a fresh id and no nested lines.
+/// - A block the app does not draw (a database, a synced block, a page link, anything `EditablePage` does not edit)
+///   is decided by the server's version alone: the server's, with everything under it as the server has it, and
+///   gone when the server no longer has it. A block that is undrawn only in his draft is a line he did not change.
 /// - A side "rearranged" when the lines it shares with the base are in another order, or under another of those
 ///   lines, than in the base. Deleting a line, whose nested lines take its place, is not a rearrangement.
 /// - A page that does not parse is never read as an empty page: an unreadable server page leaves his draft, an
 ///   unreadable draft leaves the server's page, and an unreadable base is merged as if nothing were known of it, so
 ///   every line of either side is kept.
 /// - No block id appears twice in the result: a repeated id is given a fresh one, never one of a block the app does
-///   not draw.
+///   not draw. No `taskId` is on two rows either: the server's row keeps it, and another row carrying it becomes a
+///   plain line with its words.
 public enum PageMerge {
   public struct Merged: Sendable, Equatable {
     public let document: String
@@ -57,24 +73,37 @@ public enum PageMerge {
   ) -> Merged {
     guard let theirsBlocks = Version.read(theirs) else { return Merged(document: mine, bothChanged: false) }
     guard let mineBlocks = Version.read(mine) else { return Merged(document: theirs, bothChanged: false) }
-    let server = Version(theirsBlocks)
-    let draft = Version(mineBlocks)
-    if theirs.hasSameCodeUnits(as: base), !draft.repeatsAnID { return Merged(document: mine, bothChanged: false) }
-    if mine.hasSameCodeUnits(as: base) || mine.hasSameCodeUnits(as: theirs), !server.repeatsAnID {
+    if theirs.hasSameCodeUnits(as: base), !Version(mineBlocks).repeatsAnID {
+      return Merged(document: mine, bothChanged: false)
+    }
+    if mine.hasSameCodeUnits(as: base) || mine.hasSameCodeUnits(as: theirs), !Version(theirsBlocks).repeatsAnID {
       return Merged(document: theirs, bothChanged: false)
     }
+    let merged = mergeLineByLine(base: base, mine: mine, theirs: theirs, makeID: makeID)
+    // A merge that comes to one side's page gives that page as it was stored, not rewritten.
+    if merged.document.hasSameCodeUnits(as: Document.write(theirsBlocks)) {
+      return Merged(document: theirs, bothChanged: false)
+    }
+    if merged.document.hasSameCodeUnits(as: Document.write(mineBlocks)) {
+      return Merged(document: mine, bothChanged: false)
+    }
+    return merged
+  }
 
-    let merged = withoutActuallyEscaping(makeID) { makeID in
-      var merger = Merger(base: Version(Version.read(base) ?? []), mine: draft, theirs: server, makeID: makeID)
+  /// The merge without the short cuts of `merge`, its document as written: what `merge` runs when no short cut
+  /// applies, and what the tests hold to the same rules.
+  static func mergeLineByLine(
+    base: String, mine: String, theirs: String, makeID: @Sendable () -> String
+  ) -> Merged {
+    guard let theirsBlocks = Version.read(theirs) else { return Merged(document: mine, bothChanged: false) }
+    guard let mineBlocks = Version.read(mine) else { return Merged(document: theirs, bothChanged: false) }
+    let result = withoutActuallyEscaping(makeID) { makeID in
+      var merger = Merger(
+        base: Version(Version.read(base) ?? []), mine: Version(mineBlocks), theirs: Version(theirsBlocks),
+        makeID: makeID)
       return merger.run()
     }
-    let document = Document.write(merged.blocks)
-    // A merge that comes to one side's page gives that page as it was stored, not rewritten.
-    if document.hasSameCodeUnits(as: Document.write(theirsBlocks)) {
-      return Merged(document: theirs, bothChanged: false)
-    }
-    if document.hasSameCodeUnits(as: Document.write(mineBlocks)) { return Merged(document: mine, bothChanged: false) }
-    return Merged(document: document, bothChanged: merged.bothChanged)
+    return Merged(document: Document.write(result.blocks), bothChanged: result.bothChanged)
   }
 }
 
@@ -87,8 +116,6 @@ extension PageMerge {
     struct Line {
       let block: Block
       let parent: String?
-      /// The node as written without its nested lines: what "changed" compares.
-      let form: String
     }
 
     let blocks: [Block]
@@ -113,7 +140,7 @@ extension PageMerge {
       for block in list {
         if !everyID.insert(block.id).inserted { repeatsAnID = true }
         if lines[block.id] == nil {
-          lines[block.id] = Line(block: block, parent: parent, form: Self.form(of: block))
+          lines[block.id] = Line(block: block, parent: parent)
           order.append(block.id)
           children[parent, default: []].append(block.id)
         }
@@ -132,30 +159,35 @@ extension PageMerge {
       }
     }
 
-    private static func form(of block: Block) -> String {
-      var alone = block
-      alone.children = []
-      return JSON.write(alone.value)
-    }
-
     /// The lines under a line, at any depth, in page order.
     func descendants(of id: String) -> [String] {
       (children[id] ?? []).flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// Each shared line in page order with the nearest line above it that is also shared: what a rearrangement
-    /// changes, and deleting or adding a line does not.
-    func arrangement(over shared: Set<String>) -> [Placement] {
+    /// Each shared line in page order with what it is under: what a rearrangement changes, and deleting or adding
+    /// a line does not. In a side, a line under one the base does not have is under a new line (as when a Return
+    /// moves nested lines to the new half); in the base, a line under one the side deleted is under what that line
+    /// was under, where the side's deletion left it.
+    func arrangement(over shared: Set<String>, isBase: Bool) -> [Placement] {
       order.filter(shared.contains).map { id in
         var parent = lines[id]?.parent
-        while let above = parent, !shared.contains(above) { parent = lines[above]?.parent }
-        return Placement(line: id, under: parent)
+        while let above = parent, !shared.contains(above) {
+          guard isBase else { return Placement(line: id, under: .newLine) }
+          parent = lines[above]?.parent
+        }
+        return Placement(line: id, under: parent.map(Placement.Under.line) ?? .top)
       }
     }
 
     struct Placement: Equatable {
+      enum Under: Equatable {
+        case top
+        case line(String)
+        case newLine
+      }
+
       let line: String
-      let under: String?
+      let under: Under
     }
   }
 
@@ -169,6 +201,158 @@ extension PageMerge {
   }
 }
 
+// MARK: - One line, field by field
+
+extension PageMerge {
+  /// A line's fields: the keys of its node but `id`, `props` and `children` (`type`, `content`, anything else), in
+  /// the node's order, and the keys of its `props`.
+  fileprivate struct Fields {
+    let node: JSONObject
+    let props: JSONObject
+
+    init(_ block: Block) {
+      var alone = block
+      alone.children = []
+      var node = alone.value.objectValue ?? JSONObject()
+      for key in ["id", "props", "children"] { node[key] = nil }
+      self.node = node
+      props = block.props
+    }
+
+    /// The same fields with the same values, in whatever order; stamps on links ignored when `unstamping`.
+    func isSame(as other: Fields, unstamping: Bool) -> Bool {
+      Self.same(node, other.node, unstamping: unstamping) && Self.same(props, other.props, unstamping: false)
+    }
+
+    private static func same(_ a: JSONObject, _ b: JSONObject, unstamping: Bool) -> Bool {
+      guard Set(a.keys) == Set(b.keys) else { return false }
+      return a.keys.allSatisfy { key in
+        key == "content" && unstamping ? unstamped(a[key]) == unstamped(b[key]) : a[key] == b[key]
+      }
+    }
+  }
+
+  fileprivate enum FieldMerge {
+    case value(JSONValue?)
+    case conflict
+  }
+
+  fileprivate enum LineMerge {
+    case one(Block)
+    case conflict
+  }
+
+  /// Whether a side changed a line since the base: some field differs, a stamp on a link not counting.
+  fileprivate static func isChanged(_ base: Block, to side: Block) -> Bool {
+    !Fields(base).isSame(as: Fields(side), unstamping: true)
+  }
+
+  /// A line both sides have. `base` is nil when the base does not have it (an unreadable base).
+  fileprivate static func mergeLine(base: Block?, mine: Block, theirs: Block) -> LineMerge {
+    let his = Fields(mine)
+    let servers = Fields(theirs)
+    let before = base.map(Fields.init)
+    if let before {
+      if before.isSame(as: his, unstamping: false) { return .one(theirs) }
+      if before.isSame(as: servers, unstamping: false) { return .one(mine) }
+    }
+    if his.isSame(as: servers, unstamping: false) { return .one(theirs) }
+
+    func merged(_ his: JSONObject, _ servers: JSONObject, _ before: JSONObject?, words: Bool) -> JSONObject? {
+      var out = JSONObject()
+      for key in servers.keys + his.keys.filter({ servers[$0] == nil }) {
+        let field =
+          words && key == "content"
+          ? mergeContent(base: before?[key], baseKnown: before != nil, mine: his[key], theirs: servers[key])
+          : mergeField(base: before?[key], baseKnown: before != nil, mine: his[key], theirs: servers[key])
+        guard case .value(let value) = field else { return nil }
+        if let value { out[key] = value }
+      }
+      return out
+    }
+    guard
+      let node = merged(his.node, servers.node, before?.node, words: true),
+      let props = merged(his.props, servers.props, before?.props, words: false)
+    else { return .conflict }
+
+    // Built on the server's node, so its key order and anything not merged stay as the server wrote them.
+    var line = theirs.value.objectValue ?? JSONObject()
+    for key in servers.node.keys where node[key] == nil { line[key] = nil }
+    for key in node.keys {
+      if line[key] != nil {
+        line[key] = node[key]
+      } else if let value = node[key] {
+        line.set(key, to: value, before: "children")
+      }
+    }
+    if props != servers.props {
+      if line["props"] != nil {
+        line["props"] = .object(props)
+      } else {
+        line.set("props", to: .object(props), before: line["content"] != nil ? "content" : "children")
+      }
+    }
+    guard let block = Block(.object(line)) else { return .conflict }
+    return .one(block)
+  }
+
+  fileprivate static func mergeField(
+    base: JSONValue?, baseKnown: Bool, mine: JSONValue?, theirs: JSONValue?
+  ) -> FieldMerge {
+    if mine == theirs { return .value(theirs) }
+    guard baseKnown else { return .conflict }
+    if mine == base { return .value(theirs) }
+    if theirs == base { return .value(mine) }
+    return .conflict
+  }
+
+  /// `content`, where the server's stamps on links are not a change of words.
+  fileprivate static func mergeContent(
+    base: JSONValue?, baseKnown: Bool, mine: JSONValue?, theirs: JSONValue?
+  ) -> FieldMerge {
+    if mine == theirs { return .value(theirs) }
+    let hisWords = unstamped(mine)
+    let serversWords = unstamped(theirs)
+    guard baseKnown else { return hisWords == serversWords ? .value(theirs) : .conflict }
+    if mine == base { return .value(theirs) }
+    if theirs == base { return .value(mine) }
+    if serversWords == unstamped(base) { return .value(restamped(mine, from: theirs)) }
+    if hisWords == serversWords { return .value(theirs) }
+    return .conflict
+  }
+
+  /// Words with the `at` of each `pageRef` taken out.
+  fileprivate static func unstamped(_ content: JSONValue?) -> JSONValue? {
+    guard case .array(let items)? = content else { return content }
+    return .array(items.map(unstampedItem))
+  }
+
+  private static func unstampedItem(_ item: JSONValue) -> JSONValue {
+    guard
+      var object = item.objectValue, object["type"]?.stringValue == "pageRef",
+      var props = object["props"]?.objectValue, props["at"] != nil
+    else { return item }
+    props["at"] = nil
+    object["props"] = .object(props)
+    return .object(object)
+  }
+
+  /// His words, each `pageRef` of his without `at` replaced by the server's stamped one that is otherwise the same.
+  private static func restamped(_ mine: JSONValue?, from theirs: JSONValue?) -> JSONValue? {
+    guard case .array(let items)? = mine, case .array(let servers)? = theirs else { return mine }
+    let stamped = servers.filter { unstampedItem($0) != $0 }
+    var taken = Set<Int>()
+    return .array(
+      items.map { item in
+        guard unstampedItem(item) == item, item.objectValue?["type"]?.stringValue == "pageRef",
+          let index = stamped.indices.first(where: { !taken.contains($0) && unstampedItem(stamped[$0]) == item })
+        else { return item }
+        taken.insert(index)
+        return stamped[index]
+      })
+  }
+}
+
 // MARK: - The merge
 
 extension PageMerge {
@@ -177,14 +361,17 @@ extension PageMerge {
     var block: Block
     /// A block the app does not draw: written exactly as the server has it, nested blocks included.
     let isServersWhole: Bool
+    /// The server's line (by id), which keeps a `taskId` another row also carries.
+    let isServers: Bool
     var children: [Node] = []
     weak var parent: Node?
     /// His words, right below this line, when both changed it differently.
     var copy: Node?
 
-    init(_ block: Block, isServersWhole: Bool = false) {
+    init(_ block: Block, isServersWhole: Bool = false, isServers: Bool = false) {
       self.block = block
       self.isServersWhole = isServersWhole
+      self.isServers = isServers
     }
 
     func insert(_ node: Node, at index: Int) {
@@ -231,19 +418,20 @@ extension PageMerge {
     mutating func run() -> (blocks: [Block], bothChanged: Bool) {
       let hisArrangementLeads = hasRearranged(mine) && !hasRearranged(theirs)
       let (lead, other) = hisArrangementLeads ? (mine, theirs) : (theirs, mine)
-      walk(lead.blocks, of: lead, into: root)
-      // What the leading arrangement does not hold goes in by the other side's; then anything left of the leading
-      // side, whose place was inside a block the server's version does not draw.
+      walk(lead.blocks, into: root)
+      // What the leading arrangement does not hold goes in by the other side's. Then what is left of his leading
+      // draft: lines nested under one of his that the server's page has as a block the app does not draw.
       for (version, id) in other.order.map({ (other, $0) }) + lead.order.map({ (lead, $0) }) where placed[id] == nil {
         insert(id, from: version)
       }
+      keepEachTaskIDOnOneRow()
       makeIDsUnique()
       return (root.children.map(\.written), bothChanged)
     }
 
     private func hasRearranged(_ side: Version) -> Bool {
       let shared = Set(base.order).intersection(side.order)
-      return side.arrangement(over: shared) != base.arrangement(over: shared)
+      return side.arrangement(over: shared, isBase: false) != base.arrangement(over: shared, isBase: true)
     }
 
     // MARK: What each line becomes
@@ -257,27 +445,24 @@ extension PageMerge {
 
     private mutating func decide(_ id: String) -> Fate {
       let before = base.lines[id]
-      let his = mine.lines[id]
+      // A line under a block his draft does not draw was not looked at, so he did not change or delete it.
+      let his = mine.lines[id] ?? (mine.everyID.contains(id) ? before : nil)
       let server = theirs.lines[id]
-      if let server, isUndrawn(server.block) || his.map({ isUndrawn($0.block) }) == true {
-        return .kept(server.block, isServersWhole: true, copy: nil)
-      }
+      if let server, isUndrawn(server.block) { return .kept(server.block, isServersWhole: true, copy: nil) }
       switch (his, server) {
       case (let his?, let server?):
-        if his.form.hasSameCodeUnits(as: server.form) { return .kept(server.block, isServersWhole: false, copy: nil) }
-        // With no base line (an unreadable base), each side's line counts as written by that side.
-        let heChanged = before.map { !$0.form.hasSameCodeUnits(as: his.form) } ?? true
-        let serverChanged = before.map { !$0.form.hasSameCodeUnits(as: server.form) } ?? true
-        if heChanged && !serverChanged { return .kept(his.block, isServersWhole: false, copy: nil) }
-        if serverChanged && !heChanged { return .kept(server.block, isServersWhole: false, copy: nil) }
-        return .kept(server.block, isServersWhole: false, copy: copyBelow(his.block))
+        if isUndrawn(his.block) { return .kept(server.block, isServersWhole: false, copy: nil) }
+        switch mergeLine(base: before?.block, mine: his.block, theirs: server.block) {
+        case .one(let line): return .kept(line, isServersWhole: false, copy: nil)
+        case .conflict: return .kept(server.block, isServersWhole: false, copy: copyBelow(his.block))
+        }
       case (nil, let server?):
-        if let before, before.form.hasSameCodeUnits(as: server.form) { return .gone }
+        if let before, !isChanged(before.block, to: server.block) { return .gone }
         return .kept(server.block, isServersWhole: false, copy: nil)
       case (let his?, nil):
         if isUndrawn(his.block) { return .gone }
         guard let before else { return .kept(his.block, isServersWhole: false, copy: nil) }
-        if before.form.hasSameCodeUnits(as: his.form) { return .gone }
+        if !isChanged(before.block, to: his.block) { return .gone }
         // The server no longer has that id, so his line comes back with it, unless it is a to-do's row: a to-do
         // removed elsewhere does not come back because he was typing in it.
         let back = isToDoRow(his.block) ? plainLine(his.block) : his.block
@@ -316,21 +501,22 @@ extension PageMerge {
     // MARK: Putting the page together
 
     /// The leading side's lines in its arrangement. A line that goes leaves its nested lines in its place.
-    private mutating func walk(_ list: [Block], of version: Version, into parent: Node) {
+    private mutating func walk(_ list: [Block], into parent: Node) {
       for block in list {
         guard walked.insert(block.id).inserted else {
           // The same id again in one version: kept where it is, and given a fresh id at the end.
           let node = Node(block, isServersWhole: isUndrawn(block))
           parent.insert(node, at: parent.children.endIndex)
-          if !node.isServersWhole { walk(block.children, of: version, into: node) }
+          if !node.isServersWhole { walk(block.children, into: node) }
           continue
         }
         switch fate(of: block.id) {
         case .gone:
-          if !isUndrawn(block) { walk(block.children, of: version, into: parent) }
+          if !isUndrawn(block) { walk(block.children, into: parent) }
         case .kept(let line, let isServersWhole, let copy):
           let node = place(block.id, line, isServersWhole, copy, in: parent, at: parent.children.endIndex)
-          if !isServersWhole { walk(block.children, of: version, into: node) }
+          // Under a block this version does not draw nothing was read; the server's lines there go in after.
+          if !isServersWhole, !isUndrawn(block) { walk(block.children, into: node) }
         }
       }
     }
@@ -345,7 +531,7 @@ extension PageMerge {
     private mutating func place(
       _ id: String, _ line: Block, _ isServersWhole: Bool, _ copy: Block?, in parent: Node, at index: Int
     ) -> Node {
-      let node = Node(line, isServersWhole: isServersWhole)
+      let node = Node(line, isServersWhole: isServersWhole, isServers: theirs.lines[id] != nil)
       parent.insert(node, at: index)
       placed[id] = node
       if let copy {
@@ -378,6 +564,34 @@ extension PageMerge {
       let last = node.copy ?? node
       guard let parent = last.parent, let index = parent.children.firstIndex(where: { $0 === last }) else { return nil }
       return (parent, index + 1)
+    }
+
+    /// A `taskId` on two rows stays on the server's (the first of the server's, else the first in page order); each
+    /// other row carrying it becomes a plain line with its words, as one to-do must not become two.
+    private func keepEachTaskIDOnOneRow() {
+      var rows: [(node: Node?, taskId: String, isServers: Bool)] = []
+      func collectWhole(_ block: Block) {
+        if isToDoRow(block), let taskId = block.props["taskId"]?.stringValue { rows.append((nil, taskId, true)) }
+        block.children.forEach(collectWhole)
+      }
+      func collect(_ node: Node) {
+        if node.isServersWhole { return collectWhole(node.block) }
+        if isToDoRow(node.block), let taskId = node.block.props["taskId"]?.stringValue {
+          rows.append((node, taskId, node.isServers))
+        }
+        node.children.forEach(collect)
+      }
+      root.children.forEach(collect)
+
+      var keeper: [String: Int] = [:]
+      for (index, row) in rows.enumerated() {
+        if let kept = keeper[row.taskId], rows[kept].isServers || !row.isServers { continue }
+        keeper[row.taskId] = index
+      }
+      for (index, row) in rows.enumerated() where keeper[row.taskId] != index {
+        guard let node = row.node else { continue }
+        node.block = NewBlock.make(.paragraph, id: node.block.id, content: node.block.content, pageDate: nil)
+      }
     }
 
     /// A repeated id gets a fresh one; ids inside a block the app does not draw are the server's and never change.
