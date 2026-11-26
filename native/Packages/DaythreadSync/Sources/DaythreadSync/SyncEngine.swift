@@ -44,6 +44,12 @@ public actor SyncEngine {
   var outbox: [OutboxEntry] = []
   /// Commands `perform` is waiting on, in the order asked.
   var performances: [Performance] = []
+  /// Ticks the server held that the next load settles, by operation id, with the server's reason. They stay pending
+  /// until then, so they stay drawn, and nothing for the same to-do is sent before them.
+  var unsettled: [String: String] = [:]
+  /// Ticks sent again after a merge, by operation id: held a second time, they are held for him. Kept in memory only,
+  /// so a relaunch may merge one once more.
+  var merged: Set<String> = []
   /// Tickets given by `enqueue` in this engine's lifetime. Not an entry's `seq`, which restarts when the store is
   /// erased.
   private var enqueued = 0
@@ -98,7 +104,7 @@ public actor SyncEngine {
   public init(
     transport: any ServerTransport, tokens: any TokenStore, store: any WorkspaceStore,
     reachability: any Reachability = NoReachability(),
-    sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+    sleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep,
     now: @escaping @Sendable () -> Date = Date.init
   ) {
     self.transport = transport
@@ -413,6 +419,8 @@ public actor SyncEngine {
         interrupted(error, pass) ?? Performed(error)
       }
     answerPerformances(of: pass, with: unsent)
+    // Without the load that settles them they are plain pending entries, sent again by the next pass.
+    unsettled = [:]
     if error is CancellationError || error is Superseded {
       SyncLog.logger.info("Pass dropped: \(SyncLog.describe(error), privacy: .public)")
       return
@@ -498,6 +506,7 @@ public actor SyncEngine {
       try await store.replace(with: workspace, owner: owner)
       copy = (workspace, owner)
     }
+    try await settleHeldTicks()
     copyShown = true
     await ensureToday()
     await readOutbox()
@@ -513,6 +522,15 @@ public actor SyncEngine {
     return outbox.contains { $0.state == .pending && !behind.contains($0.seq) }
   }
 
+  /// The engine's own wait, to the second. It is `Task.sleep(nanoseconds:)` and not `Task.sleep(for:)`: built by
+  /// Xcode 26.6, a retry wait made with the latter and cancelled at once (an engine let go right after a pass failed)
+  /// aborted the process when its task resumed ("freed pointer was not the last allocation", in `swift_task_dealloc`).
+  /// Seen only on the hosted runner, six runs of six in each of the two tests that do exactly that, and gone with
+  /// this; never seen built by Xcode 27. Anything that waits and may be cancelled should use this.
+  public static let sleep: @Sendable (Duration) async throws -> Void = { duration in
+    try await Task.sleep(nanoseconds: UInt64(max(0, duration.components.seconds)) * 1_000_000_000)
+  }
+
   /// Plans the next try after the schedule's wait, or a 429's when longer, replacing any wait in progress.
   private func planRetry(after error: any Error) {
     var wait = Self.retryWaits[min(failedPasses, Self.retryWaits.count - 1)]
@@ -524,9 +542,12 @@ public actor SyncEngine {
     let sleep = sleep
     SyncLog.logger.info("Trying again in \(wait.components.seconds, privacy: .public) s")
     retry = Task { [weak self] in
-      // A cancelled wait (signed out, the network back, nothing left to send) asks for nothing.
-      guard (try? await sleep(wait)) != nil, !Task.isCancelled else { return }
-      await self?.retryDue(number)
+      // A cancelled wait (signed out, the network back, nothing left to send) asks for nothing. A wait cancelled
+      // before it began is never started: see `SyncEngine.sleep`.
+      guard !Task.isCancelled else { return }
+      do { try await sleep(wait) } catch { return }
+      guard !Task.isCancelled, let engine = self else { return }
+      await engine.retryDue(number)
     }
     listenForTheNetwork()
   }
@@ -548,7 +569,10 @@ public actor SyncEngine {
     guard listening == nil else { return }
     let returns = reachability.becameReachable
     listening = Task { [weak self] in
-      for await _ in returns { await self?.networkReturned() }
+      for await _ in returns {
+        guard let engine = self else { return }
+        await engine.networkReturned()
+      }
     }
   }
 

@@ -95,6 +95,8 @@
       case .day:
         let navigation = UINavigationController(rootViewController: DayViewController(model: model))
         navigation.navigationBar.prefersLargeTitles = true
+        // Moving between days is in the system's toolbar, on every day and in every state of one.
+        navigation.isToolbarHidden = false
         return navigation
       }
     }

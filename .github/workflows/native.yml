@@ -37,6 +37,32 @@ jobs:
       - name: swift test (DaythreadSync)
         run: |
           if [ -d native/Packages/DaythreadSync ]; then cd native/Packages/DaythreadSync && swift test; else echo "native/Packages/DaythreadSync does not exist yet"; fi
+      # A test process that dies leaves no assertion behind, only this.
+      - name: The crash report, when a test process died
+        if: failure()
+        run: |
+          sleep 15
+          python3 - <<'PY'
+          import glob, json, os
+          files = sorted(glob.glob(os.path.expanduser('~/Library/Logs/DiagnosticReports/*.ips')), key=os.path.getmtime)[-2:]
+          if not files: print('no crash report found')
+          for path in files:
+              print('==', path)
+              text = open(path, errors='replace').read()
+              head, _, body = text.partition('\n')
+              try:
+                  report = json.loads(body)
+              except Exception as error:
+                  print('unreadable:', error); print(text[:4000]); continue
+              images = report.get('usedImages', [])
+              print(report.get('procName'), report.get('exception'), report.get('termination'))
+              print('asi:', report.get('asi'))
+              for thread in report.get('threads', []):
+                  if not thread.get('triggered'): continue
+                  for frame in thread.get('frames', [])[:60]:
+                      image = images[frame.get('imageIndex', 0)].get('name', '?') if images else '?'
+                      print('  ', image, frame.get('symbol', hex(frame.get('imageOffset', 0))), '+', frame.get('symbolLocation', ''))
+          PY
       - name: swift test (DaythreadEditor)
         run: |
           if [ -d native/Packages/DaythreadEditor ]; then cd native/Packages/DaythreadEditor && swift test; else echo "native/Packages/DaythreadEditor does not exist yet"; fi

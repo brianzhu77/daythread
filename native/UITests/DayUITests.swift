@@ -55,13 +55,18 @@ final class DayUITests: XCTestCase {
     app.launch()
 
     XCTAssertTrue(app.navigationBars[dayTitle(today)].waitForExistence(timeout: 30), "today's title")
-    let next = app.buttons["Next day"]
+    // The day controls are in the toolbar at the bottom; the navigation bar is left to the title.
+    let toolbar = app.toolbars.firstMatch
+    let next = toolbar.buttons["Next day"]
+    XCTAssertTrue(toolbar.buttons["Previous day"].exists)
+    XCTAssertTrue(toolbar.buttons["Calendar"].exists)
     XCTAssertFalse(next.isEnabled, "no next day from today")
     XCTAssertFalse(app.buttons["Today"].exists)
+    XCTAssertFalse(app.navigationBars.buttons["Previous day"].exists)
 
-    app.buttons["Previous day"].tap()
+    toolbar.buttons["Previous day"].tap()
     XCTAssertTrue(app.navigationBars[dayTitle(today, adding: -1)].waitForExistence(timeout: 10), "yesterday")
-    XCTAssertTrue(app.buttons["Today"].exists, "a way back")
+    XCTAssertTrue(toolbar.buttons["Today"].exists, "a way back")
     XCTAssertTrue(next.isEnabled)
 
     next.tap()
@@ -76,7 +81,7 @@ final class DayUITests: XCTestCase {
     var parts = calendar.dateComponents([.year, .month], from: today)
     parts.day = day
     let pickedDay = calendar.date(from: parts)!
-    app.buttons["Calendar"].tap()
+    toolbar.buttons["Calendar"].tap()
     // The calendar's own label for a day: "Tuesday, November 10" (with "Today, " before the system's today).
     let month = pickedDay.formatted(
       Date.FormatStyle(locale: Locale(identifier: "en_US"), calendar: calendar, timeZone: .gmt).month(.wide))
@@ -86,14 +91,14 @@ final class DayUITests: XCTestCase {
     let pickedTitle = dayTitle(pickedDay)
     XCTAssertTrue(app.navigationBars[pickedTitle].waitForExistence(timeout: 10), "the day picked")
 
-    app.buttons["Today"].tap()
+    toolbar.buttons["Today"].tap()
     XCTAssertTrue(app.navigationBars[dayTitle(today)].waitForExistence(timeout: 10), "back to today")
     XCTAssertFalse(app.buttons["Today"].exists)
     app.terminate()
   }
 
   @MainActor
-  func test_a_past_day_with_no_page_can_be_started() throws {
+  func test_a_past_day_with_no_page_can_be_added() throws {
     let server = try Wrapper.value("DAYTHREAD_SERVER_URL")
     let today = try Wrapper.today()
     let app = XCUIApplication.daythread(server: server, store: Wrapper.storeName())
@@ -101,16 +106,16 @@ final class DayUITests: XCTestCase {
 
     XCTAssertTrue(app.navigationBars[dayTitle(today)].waitForExistence(timeout: 30), "today's title")
     // Two days back: no other test opens it, and nothing in the seed is there.
-    app.buttons["Previous day"].tap()
-    app.buttons["Previous day"].tap()
+    app.toolbars.buttons["Previous day"].tap()
+    app.toolbars.buttons["Previous day"].tap()
     let title = dayTitle(today, adding: -2)
     XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10))
-    let empty = app.staticTexts["No page for \(title) yet"]
+    let empty = app.staticTexts["No page for \(title)"]
     XCTAssertTrue(empty.waitForExistence(timeout: 10), "what a day without a page says")
 
-    app.buttons["Start this page"].tap()
+    app.buttons["Add page"].tap()
     XCTAssertTrue(empty.waitForNonExistence(timeout: 30), "the day's page")
-    XCTAssertFalse(app.buttons["Start this page"].exists)
+    XCTAssertFalse(app.buttons["Add page"].exists)
     XCTAssertTrue(app.navigationBars[title].exists, "the same day")
     app.terminate()
   }
