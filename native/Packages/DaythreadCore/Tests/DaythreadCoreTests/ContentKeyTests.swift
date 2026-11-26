@@ -28,6 +28,17 @@ import Testing
     #expect(ContentKey.of(Self.withLines) == "d:254:e4f1352852855cb50f84469159c1faec")
   }
 
+  @Test func a_page_as_the_server_stores_it_is_its_own_stored_form() throws {
+    for name in ["synced-block"] {
+      let entry = try #require(try Fixtures.cases("content-key/cases.json").first { $0["name"]?.stringValue == name })
+      let document = try #require(entry["document"]?.stringValue)
+      #expect(ContentKey.storedDocument(document) == document)
+    }
+    let entry = try Fixtures.saveCase("untouched-synced-and-database")
+    let document = try #require(entry.beforePage).document
+    #expect(ContentKey.storedDocument(document) == document)
+  }
+
   @Test func a_synced_block_without_roles_gets_an_empty_roles_prop() {
     let bare = #"[{"id":"s1","type":"syncedBlock","props":{"syncId":"s","rev":2},"children":[]}]"#
     #expect(ContentKey.of(bare) == "d:82:cb8199e1abfcb7c6f407e4fbe86ed400")
