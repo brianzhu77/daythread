@@ -14,7 +14,8 @@ extension EditablePage {
       return Caret(block: caret.block, offset: shortcut.typed)
     }
     let line = self[path]
-    let isFirstLine = path == [0]
+    // The web's `caretAtDocumentStart`: the first line of words on the page, whatever blocks come before it.
+    let isFirstLine = textBlocks.first == line.id
     switch line.type {
     case "paragraph":
       return joinAbove(line, at: path)
@@ -43,8 +44,13 @@ extension EditablePage {
     switch above.type {
     case "divider":
       if isEmpty { return removeLine(line, at: path) }
-      // A divider holds no words to join into; it goes, and what was nested under it takes its place.
-      modifySiblings(of: abovePath) { list, index in list.replaceSubrange(index...index, with: list[index].children) }
+      // A divider holds no words to join into, so it goes. As a parent, what was nested under it takes its place;
+      // as the line drawn above, the line moves into its place ("deletes previous block if it contains no content").
+      if isParent {
+        replaceWithChildren(at: abovePath)
+      } else {
+        moveUp(line, at: path, into: abovePath)
+      }
       return Caret(block: line.id, offset: 0)
     case "syncedBlock", "database":
       return nil
@@ -64,14 +70,12 @@ extension EditablePage {
     if !isParent, upper.isEmpty, above.type == "paragraph",
       Self.asParagraph(above).props == Self.asParagraph(line).props
     {
-      // The line above is inside the previous sibling's subtree, so removing this line leaves its path alone.
-      modifySiblings(of: path) { list, index in _ = list.remove(at: index) }
-      self[abovePath] = line
+      moveUp(line, at: path, into: abovePath)
       return Caret(block: line.id, offset: 0)
     }
     let lower = InlineContent(line.content)
     if !lower.isEmpty { self[abovePath].content = upper.appending(lower).json }
-    modifySiblings(of: path) { list, index in list.replaceSubrange(index...index, with: list[index].children) }
+    replaceWithChildren(at: path)
     return Caret(block: above.id, offset: upper.length)
   }
 
@@ -101,8 +105,15 @@ extension EditablePage {
     } else {
       return nil
     }
-    modifySiblings(of: path) { list, index in list.replaceSubrange(index...index, with: list[index].children) }
+    replaceWithChildren(at: path)
     return caret
+  }
+
+  /// The line, with its nested lines, takes the place of the block drawn above it, which goes. That block is in the
+  /// previous sibling's subtree, so removing the line first leaves its path alone.
+  private mutating func moveUp(_ line: Block, at path: Path, into abovePath: Path) {
+    modifySiblings(of: path) { list, index in _ = list.remove(at: index) }
+    self[abovePath] = line
   }
 
   /// The save names the row so the server settles its to-do as a single delete. The web adds the row's block id

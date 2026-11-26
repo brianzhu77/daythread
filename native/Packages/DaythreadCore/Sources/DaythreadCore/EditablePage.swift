@@ -143,6 +143,11 @@ extension EditablePage {
     Self.modifyList(&blocks, under: path.dropLast()[...]) { body(&$0, path[path.count - 1]) }
   }
 
+  /// Removes the block at `path`, its children taking its place in its list, one level up.
+  mutating func replaceWithChildren(at path: Path) {
+    modifySiblings(of: path) { list, index in list.replaceSubrange(index...index, with: list[index].children) }
+  }
+
   /// Runs `body` on the children of the block at `path` (the top level for an empty path).
   mutating func modifyChildren<R>(of path: Path, _ body: (inout [Block]) -> R) -> R {
     Self.modifyList(&blocks, under: path[...], body)

@@ -8,14 +8,17 @@ struct TypedShortcut: Sendable {
 
 /// The typed shortcuts, as the web's editor has them: BlockNote 0.56's input rules (`Heading/block.ts`,
 /// `BulletListItem/block.ts`, `NumberedListItem/block.ts`, `CheckListItem/block.ts` turned into a `task` by
-/// `page-editor.tsx`, `Quote/block.ts`) and the app's own `---` (`separator.ts`). Only in a paragraph, only for a
-/// single character typed, and only when the words before the caret are exactly the pattern.
+/// `page-editor.tsx`, `Quote/block.ts`) and the app's own `---` (`separator.ts`). Only for a single character
+/// typed, and only when the words before the caret are exactly the pattern; `---` in any line but a to-do, the
+/// others only in a paragraph.
 extension EditablePage {
   mutating func applyShortcut(typed text: String, at caret: Caret, path: Path) -> Caret? {
     let line = self[path]
-    guard text.count == 1, line.type == "paragraph" else { return nil }
+    guard text.count == 1, line.type != "task" else { return nil }
     var words = InlineContent(line.content)
+    // `separatorShortcut` takes any line of words but a to-do, whose dashes stay: turning it would delete the task.
     if text == "-", caret.offset == 3, words.plain == "---" { return makeDivider(of: line, at: path) }
+    guard line.type == "paragraph" else { return nil }
     let before = String(decoding: Array(words.plain.utf16).prefix(caret.offset), as: UTF16.self)
     guard text == " ", let kind = Self.shortcutKind(before) else { return nil }
 
