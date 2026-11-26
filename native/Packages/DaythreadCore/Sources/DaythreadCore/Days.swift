@@ -43,9 +43,9 @@ extension Workspace {
   private static func holdsDatabase(_ page: Page) -> Bool {
     switch page.raw["database"] {
     case nil, .null?, .bool(false)?: false
-    case .string(let text)?: !text.isEmpty
+    case .string(let text)?, .verbatim(let text, _)?: !text.isEmpty
     case .number(let token)?: token != "0"
-    default: true
+    case .bool(true)?, .array?, .object?: true
     }
   }
 
@@ -67,7 +67,8 @@ extension Workspace {
 
   private static func hasUrl(_ value: JSONValue?) -> Bool {
     switch value {
-    case .string(let text)?: !text.isEmpty
+    // A string read with an escape (`\/`) is kept as written, and is a string all the same.
+    case .string(let text)?, .verbatim(let text, _)?: !text.isEmpty
     case .bool(true)?: true
     case .number(let token)?: token != "0"
     case .array?, .object?: true
