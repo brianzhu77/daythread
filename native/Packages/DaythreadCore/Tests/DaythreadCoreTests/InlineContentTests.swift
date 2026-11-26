@@ -210,11 +210,14 @@ import Testing
     #expect(line.split(at: 0).1.json == line.json)
     #expect(line.split(at: line.length).0.json == line.json)
     #expect(line.split(at: 0).0.isEmpty)
-    // Boundaries between items (not inside a link) rejoin to exactly what was read.
-    for boundary in [4, 8, 9] {
-      let (left, right) = line.split(at: boundary)
-      #expect(left.appending(right).json == line.json, "boundary \(boundary)")
+    // Joining what was split gives back exactly what was read, at every offset.
+    for offset in 0...line.length {
+      let (left, right) = line.split(at: offset)
+      #expect(left.appending(right).json == line.json, "offset \(offset)")
     }
+    let bold = try content(#"[{"type":"text","text":"abcd","styles":{"bold":true}}]"#)
+    let (first, second) = bold.split(at: 2)
+    #expect(first.appending(second).json == bold.json)
     // An offset inside a surrogate pair moves back to the character's start.
     let (left, right) = line.split(at: 3)
     #expect(left.length == 2 && right.length == 9)
@@ -240,6 +243,44 @@ import Testing
     var half = try content(#"[{"type":"text","text":"a😀b","styles":{}}]"#)
     half.replace(1..<2, with: "")
     #expect(half.plain == "ab")
+  }
+
+  private let aLinkD =
+    #"[{"type":"text","text":"a","styles":{}},{"type":"link","href":"h","content":[{"type":"text","text":"bc","styles":{}}]},{"type":"text","text":"d","styles":{"bold":true}}]"#
+
+  @Test func typing_at_the_edges_of_a_link_goes_outside_it() throws {
+    var before = try content(aLinkD)
+    before.replace(1..<1, with: "X")
+    #expect(written(before).contains(#""text":"aX""#))
+    #expect(written(before).contains(#""content":[{"type":"text","text":"bc""#))
+
+    var after = try content(aLinkD)
+    after.replace(3..<3, with: "X")
+    #expect(written(after).contains(#""text":"bc""#))
+    #expect(written(after).contains(#""text":"Xd","styles":{"bold":true}"#))
+  }
+
+  @Test func typing_beside_a_link_with_no_run_outside_makes_a_plain_run() throws {
+    let link = #"{"type":"link","href":"h","content":[{"type":"text","text":"bc","styles":{"bold":true}}]}"#
+    let plain = #"{"type":"text","text":"X","styles":{}}"#
+    let a = #"{"type":"text","text":"a","styles":{}}"#
+    var atStart = try content("[\(link)]")
+    atStart.replace(0..<0, with: "X")
+    #expect(written(atStart) == "[\(plain),\(link)]")
+    var atEnd = try content("[\(link)]")
+    atEnd.replace(2..<2, with: "X")
+    #expect(written(atEnd) == "[\(link),\(plain)]")
+    var lineEnd = try content("[\(a),\(link)]")
+    lineEnd.replace(3..<3, with: "X")
+    #expect(written(lineEnd) == "[\(a),\(link),\(plain)]")
+  }
+
+  @Test func a_selection_that_starts_inside_a_link_types_inside_it() throws {
+    var line = try content(aLinkD)
+    line.replace(2..<4, with: "X")
+    #expect(
+      written(line)
+        == #"[{"type":"text","text":"a","styles":{}},{"type":"link","href":"h","content":[{"type":"text","text":"bX","styles":{}}]}]"#)
   }
 
   @Test func a_line_break_inside_a_run_is_kept() throws {
