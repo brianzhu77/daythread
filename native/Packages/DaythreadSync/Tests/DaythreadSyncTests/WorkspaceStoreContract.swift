@@ -26,7 +26,7 @@ enum WorkspaceStoreContract {
     StoreCase(name: "update of an entry that is not there is refused", run: updateOfMissingEntry),
     StoreCase(name: "remove of an entry that is not there does nothing", run: removeOfMissingEntry),
     StoreCase(name: "append without a workspace kept is refused", run: appendWithoutWorkspace),
-    StoreCase(name: "erase leaves nothing", run: eraseLeavesNothing),
+    StoreCase(name: "erasing keeping drafts leaves nothing else", run: eraseLeavesNothing),
     StoreCase(name: "2,000 pages of 2 KB are replaced and loaded", run: manyPages),
     StoreCase(name: "acknowledge removes the entry and passes the revision on", run: acknowledgePassesOn),
     StoreCase(name: "acknowledge does not repeat a revision an entry has", run: acknowledgeDoesNotRepeat),
@@ -47,10 +47,12 @@ enum WorkspaceStoreContract {
       run: two_owners_drafts_of_the_same_page_are_both_kept),
     StoreCase(name: "replacing the workspace keeps every draft", run: replacing_the_workspace_keeps_every_draft),
     StoreCase(name: "removing a draft leaves the others", run: removing_a_draft_leaves_the_others),
-    StoreCase(name: "erase removes drafts", run: erase_removes_drafts),
     StoreCase(
       name: "erasing all but the drafts leaves every owner's drafts and nothing else",
       run: erasing_all_but_the_drafts_leaves_every_owners_drafts_and_nothing_else),
+    StoreCase(
+      name: "erasing all but the drafts except an owner's removes that owner's drafts only",
+      run: erasing_all_but_the_drafts_except_an_owners_removes_that_owners_drafts_only),
     StoreCase(
       name: "drafts come oldest first, ties by owner then page", run: drafts_come_oldest_first_then_by_owner_and_page),
   ]
@@ -212,10 +214,10 @@ enum WorkspaceStoreContract {
   static func eraseLeavesNothing(_ store: any WorkspaceStore) async throws {
     try await store.replace(with: try firstWorkspace(), owner: owner)
     _ = try await store.append(newEntry())
-    try await store.erase()
+    try await store.eraseKeepingDrafts(except: nil)
     #expect(try await store.load() == nil)
     #expect(try await store.entries().isEmpty)
-    try await store.erase()
+    try await store.eraseKeepingDrafts(except: owner)
   }
 
   private static func entry(_ operationId: String, owner: String = owner, own: [Int] = []) -> NewOutboxEntry {
@@ -385,14 +387,6 @@ enum WorkspaceStoreContract {
     #expect(try await store.drafts() == [one, three])
   }
 
-  static func erase_removes_drafts(_ store: any WorkspaceStore) async throws {
-    try await store.replace(with: try firstWorkspace(), owner: owner)
-    try await store.put(draft(owner: "user-1"))
-    try await store.put(draft(owner: "user-2"))
-    try await store.erase()
-    #expect(try await store.drafts().isEmpty)
-  }
-
   static func erasing_all_but_the_drafts_leaves_every_owners_drafts_and_nothing_else(
     _ store: any WorkspaceStore
   ) async throws {
@@ -405,18 +399,38 @@ enum WorkspaceStoreContract {
     try await store.put(mine)
     try await store.put(theirs)
 
-    try await store.eraseKeepingDrafts()
+    try await store.eraseKeepingDrafts(except: nil)
 
     #expect(try await store.load() == nil)
     #expect(try await store.entries().isEmpty)
     #expect(try await store.drafts() == [mine, theirs])
-    // The outbox's numbers start again, as after `erase`.
+    // The outbox's numbers start again.
     try await store.replace(with: try firstWorkspace(), owner: "user-2")
     #expect(try await store.append(newEntry(owner: "user-2")).seq == 1)
     // With nothing but drafts left, it is the same again.
-    try await store.erase()
-    try await store.put(theirs)
-    try await store.eraseKeepingDrafts()
+    try await store.eraseKeepingDrafts(except: nil)
+    #expect(try await store.drafts() == [mine, theirs])
+  }
+
+  static func erasing_all_but_the_drafts_except_an_owners_removes_that_owners_drafts_only(
+    _ store: any WorkspaceStore
+  ) async throws {
+    let mine = draft(owner: "user-1")
+    let mineToo = draft("p2", owner: "user-1", changedAt: 1_798_194_650)
+    let theirs = draft("p2", owner: "user-2", changedAt: 1_798_194_700)
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    _ = try await store.append(newEntry())
+    for each in [mine, mineToo, theirs] { try await store.put(each) }
+
+    try await store.eraseKeepingDrafts(except: "user-1")
+
+    #expect(try await store.load() == nil)
+    #expect(try await store.entries().isEmpty)
+    #expect(try await store.drafts() == [theirs])
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    #expect(try await store.append(newEntry()).seq == 1)
+    // An owner with no drafts: the others stay.
+    try await store.eraseKeepingDrafts(except: "user-3")
     #expect(try await store.drafts() == [theirs])
   }
 

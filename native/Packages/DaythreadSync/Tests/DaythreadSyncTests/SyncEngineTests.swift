@@ -217,16 +217,10 @@ actor RecordingStore: WorkspaceStore {
     try await inner.removeDraft(pageId: pageId, owner: owner)
   }
 
-  func erase() async throws {
-    log.append("erase")
-    try check("erase")
-    try await inner.erase()
-  }
-
-  func eraseKeepingDrafts() async throws {
-    log.append("eraseKeepingDrafts")
+  func eraseKeepingDrafts(except owner: String?) async throws {
+    log.append(owner.map { "eraseKeepingDrafts except \($0)" } ?? "eraseKeepingDrafts")
     try check("eraseKeepingDrafts")
-    try await inner.eraseKeepingDrafts()
+    try await inner.eraseKeepingDrafts(except: owner)
   }
 }
 
@@ -936,7 +930,7 @@ private struct Harness {
     await gate.open(.workspace(.full(try workspace(9), owner: "user-1")))
     await loading.value
 
-    #expect(await h.log == ["erase"])
+    #expect(await h.log == ["eraseKeepingDrafts except user-1"])
     #expect(try await h.kept == nil)
     #expect(await current(h.engine) == state(.signedOut, nil))
   }
@@ -1092,11 +1086,11 @@ private struct Harness {
   @Test func a_copy_an_erase_could_not_remove_stays_hidden_and_is_not_erased_at_launch() async throws {
     let h = try await Harness(opening + [.done], copy: try workspace(5))
     await h.engine.start()
-    await h.store.fail("erase")
+    await h.store.fail("eraseKeepingDrafts")
 
     await h.engine.signOut(discardingUnsent: true)
 
-    #expect(await h.log == ["erase", "erase"])
+    #expect(await h.log == ["eraseKeepingDrafts except user-1", "eraseKeepingDrafts except user-1"])
     #expect(await current(h.engine) == state(.signedOut, nil))
     #expect(try h.tokens.read() == nil)
     #expect(try await h.kept != nil)
@@ -1256,7 +1250,7 @@ private struct Harness {
     await gate.open(.done)
     _ = await signingOut.value
 
-    #expect(await store.log == ["erase"])
+    #expect(await store.log == ["eraseKeepingDrafts except user-1"])
     #expect(try await store.load() == nil)
     #expect(try tokens.read() == nil)
     #expect(await current(engine) == state(.signedOut, nil))

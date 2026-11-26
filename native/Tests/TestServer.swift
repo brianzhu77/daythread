@@ -164,6 +164,7 @@ actor TestStore: WorkspaceStore {
   func removeDraft(pageId: String, owner: String) async throws {
     try await memory.removeDraft(pageId: pageId, owner: owner)
   }
-  func erase() async throws { try await memory.erase() }
-  func eraseKeepingDrafts() async throws { try await memory.eraseKeepingDrafts() }
+  func eraseKeepingDrafts(except owner: String?) async throws {
+    try await memory.eraseKeepingDrafts(except: owner)
+  }
 }
