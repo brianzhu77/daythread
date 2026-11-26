@@ -47,11 +47,18 @@ private func yesterdayStarted() throws -> WorkspaceChanges {
 
 @MainActor
 extension DayViewController {
-  /// The bar button with this accessibility label or title.
+  /// The button with this accessibility label or title, in the navigation bar or the toolbar.
   fileprivate func item(_ name: String) -> UIBarButtonItem? {
-    let items = (navigationItem.leftBarButtonItems ?? []) + (navigationItem.rightBarButtonItems ?? [])
+    let items =
+      (navigationItem.leftBarButtonItems ?? []) + (navigationItem.rightBarButtonItems ?? []) + (toolbarItems ?? [])
     return items.first { $0.accessibilityLabel == name || $0.title == name }
   }
+
+  /// The navigation bar's trailing buttons from the trailing edge, by what VoiceOver says.
+  fileprivate var trailingButtons: [String] { (navigationItem.rightBarButtonItems ?? []).compactMap(\.name) }
+
+  /// The toolbar's buttons from the leading edge, by what VoiceOver says; its spaces are not buttons.
+  fileprivate var toolbarButtons: [String] { (toolbarItems ?? []).compactMap(\.name) }
 
   fileprivate func tap(_ name: String) {
     guard let item = item(name) else {
@@ -74,6 +81,23 @@ extension DayViewController {
   }
 }
 
+extension UIBarButtonItem {
+  fileprivate var name: String? { accessibilityLabel ?? title }
+}
+
+/// A held tick, answered by a server that holds it and then has the to-do cancelled elsewhere.
+@MainActor
+private func heldTick(on h: Harness) async throws {
+  let cancelled = #"{"id":"t-open","title":"Water the plants","status":"cancelled","paused":false,"doneOn":null,"version":2}"#
+  let text = #"{"revision":2,"timezone":"UTC","pages":[\#(dayPage(today))],"tasks":[\#(cancelled)]}"#
+  await h.server.add([
+    .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "one")),
+    .workspace(.full(try #require(Workspace(try JSON.parse(text))), owner: "one")),
+  ])
+  #expect(h.model.tick(taskId: "t-open"))
+  try await until { !h.model.state.held.isEmpty }
+}
+
 /// Moving between days: what the bar offers on each, which day the screen holds as the clock moves, and starting a
 /// day's page from its empty state.
 @MainActor
@@ -88,6 +112,67 @@ extension DayViewController {
 
   @Test func tomorrow_cannot_go_next_and_shows_today() {
     #expect(DayNavigation.bar(for: tomorrow, today: today) == DayNavigation(canGoNext: false, showsToday: true))
+  }
+
+  @Test func on_today_the_bar_has_the_account_and_the_toolbar_the_three_day_controls() {
+    #expect(
+      DayControls.controls(for: today, today: today, hasAccount: true, hasHeld: false)
+        == DayControls(
+          navigationBar: [.account], toolbar: [.previousDay, .space, .calendar, .space, .nextDay], canGoNext: false))
+  }
+
+  @Test func on_yesterday_the_toolbar_adds_today_before_next() {
+    #expect(
+      DayControls.controls(for: yesterday, today: today, hasAccount: true, hasHeld: false)
+        == DayControls(
+          navigationBar: [.account], toolbar: [.previousDay, .space, .calendar, .space, .today, .nextDay],
+          canGoNext: true))
+  }
+
+  @Test func on_tomorrow_the_toolbar_adds_today_and_next_is_off() {
+    #expect(
+      DayControls.controls(for: tomorrow, today: today, hasAccount: true, hasHeld: false)
+        == DayControls(
+          navigationBar: [.account], toolbar: [.previousDay, .space, .calendar, .space, .today, .nextDay],
+          canGoNext: false))
+  }
+
+  @Test func not_saved_sits_beside_the_account_only_while_a_change_is_held() {
+    let held = DayControls.controls(for: today, today: today, hasAccount: true, hasHeld: true)
+    #expect(held.navigationBar == [.account, .held])
+    #expect(DayControls.controls(for: today, today: today, hasAccount: false, hasHeld: true).navigationBar == [.held])
+    #expect(DayControls.controls(for: today, today: today, hasAccount: false, hasHeld: false).navigationBar == [])
+  }
+
+  @Test func the_day_controls_are_in_the_toolbar_and_the_account_in_the_navigation_bar() async throws {
+    let h = try await Harness(copy: try copy())
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+    screen.updatePropertiesIfNeeded()
+
+    #expect(screen.navigationItem.leftBarButtonItems ?? [] == [])
+    #expect(screen.trailingButtons == ["Account"])
+    #expect(screen.toolbarButtons == ["Previous day", "Calendar", "Next day"])
+    #expect(screen.item("Next day")?.isEnabled == false)
+
+    screen.tap("Previous day")
+    #expect(screen.trailingButtons == ["Account"])
+    #expect(screen.toolbarButtons == ["Previous day", "Calendar", "Today", "Next day"])
+    #expect(screen.item("Next day")?.isEnabled == true)
+
+    screen.tap("Today")
+    #expect(screen.toolbarButtons == ["Previous day", "Calendar", "Next day"])
+  }
+
+  @Test func not_saved_appears_beside_the_account_while_a_change_is_held() async throws {
+    let h = try await Harness(copy: try copy())
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+
+    try await heldTick(on: h)
+
+    #expect(screen.drawn().trailingButtons == ["Account", "Not saved"])
+    #expect(screen.toolbarButtons == ["Previous day", "Calendar", "Next day"])
   }
 
   @Test func the_bar_steps_back_a_day_and_returns_to_today() async throws {
