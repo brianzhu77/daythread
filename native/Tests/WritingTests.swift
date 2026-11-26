@@ -547,6 +547,34 @@ private struct DayScreen {
     day.close()
   }
 
+  @Test func typing_in_a_to_do_only_the_draft_makes_replaces_the_list_once() async throws {
+    let h = try await harness([page(today, document([line("a", "Morning"), todoLine("r1", "")]))])
+    let day = try DayScreen(h.model)
+    func stored(_ words: String) async throws {
+      try await until { h.model.state.workspace?.task("editor-task:r1")?.title == words }
+      day.drawn()
+    }
+
+    // The first word makes the to-do: the list is handed it, so its circle can be ticked.
+    let row = try day.type("B", atEndOf: "")
+    try await stored("B")
+    #expect(day.screen.replacedDocuments.count == 1)
+
+    // Each later keystroke renames the to-do the engine draws; the list draws no title, so it is left alone.
+    for (typed, words) in [("uy", "Buy"), (" milk", "Buy milk"), ("!", "Buy milk!")] {
+      row.insertText(typed)
+      try await stored(words)
+    }
+    #expect(day.screen.replacedDocuments.count == 1)
+
+    let circle = try #require(day.circle("Complete Buy milk!"))
+    circle.sendActions(for: .primaryActionTriggered)
+    try await until { h.model.state.pending == 1 }
+    day.drawn()
+    #expect(day.screen.replacedDocuments.count == 2, "a tick is drawn")
+    day.close()
+  }
+
   @Test func saving_now_does_not_hold_up_what_he_types_next() async throws {
     let h = try await harness([page(today, base), page(yesterday, base)])
     let day = try DayScreen(h.model)
