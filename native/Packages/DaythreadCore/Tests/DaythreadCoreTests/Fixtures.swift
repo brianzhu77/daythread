@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 
 @testable import DaythreadCore
 
@@ -125,5 +126,12 @@ extension Fixtures {
   private static func requireObject(_ value: JSONValue, _ name: String) throws -> JSONObject {
     guard let object = value.objectValue else { throw Missing(path: "commands/\(name).json") }
     return object
+  }
+}
+
+extension Fixtures {
+  /// The entries of a shared case file whose cases are an array of objects.
+  static func cases(_ path: String) throws -> [JSONObject] {
+    try #require(try json(path).arrayValue).compactMap(\.objectValue)
   }
 }
