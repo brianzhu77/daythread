@@ -1360,6 +1360,26 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
     #expect(sent.map(\.1) == [true, false])
   }
 
+  @Test func an_already_applied_tick_stays_drawn_until_the_load_brings_it() async throws {
+    // The server applied the tick earlier, but its reply never reached the device: the copy lacks it.
+    let tick = NewOutboxEntry(
+      kind: .command, owner: "user-1", operationId: "op-1", action: done("t1"), baseRevision: 5, ownRevisions: [],
+      label: #"ticked "t1""#, createdAt: noon, state: .pending, reason: nil)
+    let gate = Gate()
+    let h = try await Harness(
+      opening + [.outcome(.alreadyApplied(owner: "user-1")), .gated(gate)],
+      copy: try board(5, rows: [row("t1")]), entries: [tick])
+
+    let starting = Task { await h.engine.start() }
+    await gate.reached()
+    #expect(task("t1", in: await current(h.engine)?.workspace)?.status == .done, "while the load is in flight")
+
+    await gate.open(.failure(TransportError.offline))
+    await starting.value
+    #expect(task("t1", in: await current(h.engine)?.workspace)?.status == .done, "after the load failed")
+    #expect(try await h.entries == ["op-1 pending base 5 own []"], "so it is sent again later")
+  }
+
   @Test func enqueue_before_a_copy_is_shown_throws_and_gives_no_ticket() async throws {
     let empty = try await Harness()
     await #expect(throws: SyncError.notReady) { try await empty.engine.enqueue(action: done("t1"), label: "t1") }
