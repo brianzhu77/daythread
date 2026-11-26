@@ -31,13 +31,18 @@
 
     /// What a button of a day without a page asks the server for.
     enum DayAction: Equatable {
-      case start
+      /// "Add page" on a past day, or "Add a new page" beside a page in Trash.
+      case add
+      /// "Create page" on a future day.
+      case create
       case restore(trashId: String)
 
-      /// The empty state's second line after the server could not be reached or would not do it; the web's words.
+      /// The empty state's second line after the server could not be reached or would not do it, naming what the
+      /// button tried.
       var failureLine: String {
         switch self {
-        case .start: "Couldn't start a page · try again"
+        case .add: "Couldn't add a page · try again"
+        case .create: "Couldn't create a page · try again"
         case .restore: "Couldn't restore · try again"
         }
       }
@@ -240,16 +245,16 @@
       case .page, .askingForToday:
         return nil
       case .noPage:
-        text = "No page for \(day) yet"
-        buttons = [("Start this page", .start)]
+        text = "No page for \(day)"
+        buttons = [("Add page", .add)]
       case .notYet:
         text = "\(day) hasn't happened yet"
-        buttons = [("Create page", .start)]
+        buttons = [("Create page", .create)]
       case .inTrash(let page):
         text = date == model.today ? "Today's page is in Trash." : "The page for \(day) is in Trash."
-        // `restore-batch` names the trash entry; a page without one can only be started again.
+        // `restore-batch` names the trash entry; a page without one can only be added again.
         let restore = page.trashId.map { [(title: "Restore", action: DayAction.restore(trashId: $0))] } ?? []
-        buttons = restore + [("Start a new page", .start)]
+        buttons = restore + [("Add a new page", .add)]
       }
 
       var configuration = UIContentUnavailableConfiguration.empty()
@@ -283,7 +288,7 @@
       setNeedsUpdateProperties()
       let command =
         switch action {
-        case .start: Command.ensureDay(date)
+        case .add, .create: Command.ensureDay(date)
         case .restore(let trashId): Command.restoreBatch(trashId: trashId)
         }
       Task { [weak self, model] in
