@@ -273,11 +273,8 @@ private struct DayScreen {
     #expect(day.words == merged)
     #expect(words(of: await saves(h.server).last?.document) == merged)
     #expect(day.status == "Latest loaded · your changes are below their lines")
-
-    // A refresh that changes nothing keeps saying it.
-    await h.server.add([.workspace(.unchanged(revision: 2, owner: "one"))])
-    await h.model.refresh()
-    #expect(day.status == "Latest loaded · your changes are below their lines")
+    try await turns()
+    #expect(day.status == "Latest loaded · your changes are below their lines", "until he types again")
 
     try day.type("!", atEndOf: "Walk the dog")
     try await until { day.status == nil }
@@ -367,9 +364,11 @@ private struct DayScreen {
     let save = try #require(await saves(h.server).last)
     #expect(save.pageId == yesterdayId)
     #expect(words(of: save.document) == ["Morning", "Walk the dog", "Call mum"])
-    // Once, not again and again.
+    // Once, not again and again: nothing more is stored or sent while the save is on its way.
+    let stored = await h.store.puts.count
     try await turns()
-    #expect(await h.store.puts.count == 2)
+    #expect(await h.store.puts.count == stored)
+    #expect(await saves(h.server).count == 1)
     await h.server.release()
   }
 

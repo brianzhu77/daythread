@@ -69,7 +69,26 @@
     private(set) var dayTimer: Timer?
     private var scheduledChange: Date?
 
+    /// The page being edited, and the page his words on it were typed onto: the document the list was last given
+    /// from outside (by `edit`, a change from outside, or a merge), never one of its own changes coming back.
+    private struct OpenPage {
+      let id: String
+      var startedFrom: String
+    }
+
     private let document = DocumentViewController()
+    private var openPage: OpenPage?
+    /// The workspace the list was last drawn with, the screen's words drawn on it.
+    private var listWorkspace: Workspace?
+    /// A merge of the open page is being made and handed over: until the engine has it, what it publishes for the
+    /// page is older than the screen.
+    private var merging = false
+    /// The last merge put a line of his below the server's; the status line says so until he types again.
+    private var saysMerged = false
+    /// Looks again for the end of a composition that holds up a merge.
+    private var mergeAfterComposition: Task<Void, Never>?
+    /// Where "Copy draft" puts the draft's words.
+    var pasteboard = UIPasteboard.general
     private let refreshControl = UIRefreshControl()
     let emptyView = UIContentUnavailableView(configuration: UIContentUnavailableConfiguration.empty())
     /// The list's background on a day without a page: the empty state, in the space under the header.
@@ -98,6 +117,8 @@
 
     isolated deinit {
       dayTimer?.invalidate()
+      mergeAfterComposition?.cancel()
+      if let openPage { model.closed(openPage.id) }
     }
 
     override func viewDidLoad() {
@@ -122,6 +143,7 @@
       }
       heldButton.tintColor = .systemRed
       document.onTick = { [weak self] taskId in self?.tick(taskId) }
+      document.onChange = { [weak self] document, singleDeleteIds in self?.wrote(document, singleDeleteIds) }
       document.headerView = headerView
       headerView.onResize = { [weak self] in self?.emptyBackground.setNeedsLayout() }
       registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (self: Self, _) in self.setNeedsUpdateProperties() }
@@ -153,13 +175,16 @@
       if shownDate == model.today { shownDate = nil }
       let state = model.state
       let date = date
-      let status = StatusLine.text(state: state, keepsChanges: model.keepsChanges)
+      let status = StatusLine.text(
+        state: state, keepsChanges: model.keepsChanges, pageId: model.workspace?.dayPage(date)?.id, merged: saysMerged)
       if headerView.show(DayHeading(for: date, today: model.today), status: status) { document.headerDidChange() }
       showDay()
 
+      let stuck = !HeldMenu.draftSections(state.drafts, in: state.workspace).isEmpty
       let controls = DayControls.controls(
         for: date, today: model.today, regularWidth: traitCollection.horizontalSizeClass == .regular,
-        hasHeld: !state.held.isEmpty, hasMore: !Self.accountRows(state: state, roundTrip: model.roundTrip).isEmpty)
+        hasHeld: !state.held.isEmpty || stuck,
+        hasMore: !Self.accountRows(state: state, roundTrip: model.roundTrip).isEmpty)
       previousButton.isEnabled = date.adding(days: -1) != nil
       nextButton.isEnabled = controls.canGoNext
       // Set only when they change, so a state change that moves nothing does not lay the bar out again. The bar
@@ -190,17 +215,21 @@
       list.setContentOffset(CGPoint(x: 0, y: -list.adjustedContentInset.top), animated: true)
     }
 
-    /// Draws the day from what the model draws: its page, or an empty one under what the day says instead.
+    /// Draws the day from what the model draws: its page, edited, or an empty one under what the day says instead.
     private func showDay() {
       guard let workspace = model.workspace else { return }
       let date = date
       let content = DayContent.content(for: date, today: model.today, in: workspace)
       self.content = content
       if case .page = content, failed?.date == date { failed = nil }
-      // Until the engine has made today's page, an empty one stands in for it.
-      let page: Page? =
-        if case .page(let page) = content { page } else { Self.emptyPage(on: date) }
-      if let page { document.show(page: page, in: workspace) }
+      if case .page(let page) = content {
+        edit(page, in: workspace)
+      } else {
+        // Until the engine has made today's page, an empty one stands in for it. Shown first: what he was composing
+        // on the page before is reported for that page.
+        if let page = Self.emptyPage(on: date) { document.show(page: page, in: workspace) }
+        closePage()
+      }
 
       emptyState = emptyState(for: content, on: date)
       if let emptyState { emptyView.configuration = emptyState }
@@ -208,8 +237,122 @@
       if drawnDate != date {
         if drawnDate != nil, let list {
           list.setContentOffset(CGPoint(x: 0, y: -list.adjustedContentInset.top), animated: false)
+          // He left the day: what he wrote there goes now, not after the wait.
+          model.saveNow()
         }
         drawnDate = date
+      }
+    }
+
+    // MARK: Writing
+
+    /// The day's page in the list, edited. While the screen is ahead of the engine (what it wrote is not all stored,
+    /// or a merge is being handed over) its words are the truth, and only what else the list draws (to-dos' circles,
+    /// page titles) follows the workspace. Once the engine has it all, a page that differs from the screen's was
+    /// changed from outside (a save's answer, a load with no draft, a discard), and the list takes it.
+    private func edit(_ page: Page, in workspace: Workspace) {
+      guard let open = openPage, open.id.utf8.elementsEqual(page.id.utf8), let mine = document.document else {
+        let previous = openPage?.id
+        // Another page: what he was composing on the one before is reported for that one, so `openPage` moves after.
+        document.edit(page: page, in: workspace)
+        if let previous { model.closed(previous) }
+        model.opened(page.id)
+        openPage = OpenPage(id: page.id, startedFrom: page.document)
+        listWorkspace = workspace
+        saysMerged = false
+        mergeIfBehind()
+        return
+      }
+      if !merging, !model.isWriting(page.id), !page.document.utf8.elementsEqual(mine.utf8) {
+        document.replace(document: page.document, in: workspace)
+        openPage?.startedFrom = page.document
+        listWorkspace = workspace
+      } else {
+        let drawn = workspace.drawing(draft: mine, of: page.id)
+        if drawn != listWorkspace {
+          document.replace(document: mine, in: drawn)
+          listWorkspace = drawn
+        }
+      }
+      mergeIfBehind()
+    }
+
+    private func closePage() {
+      guard let openPage else { return }
+      model.closed(openPage.id)
+      self.openPage = nil
+      listWorkspace = nil
+      saysMerged = false
+      mergeAfterComposition?.cancel()
+      mergeAfterComposition = nil
+    }
+
+    /// The list's report of a change he made. Not a place to read `document.document`: the list hands it over.
+    private func wrote(_ document: String, _ singleDeleteIds: [String]) {
+      guard let openPage else { return }
+      model.wrote(
+        pageId: openPage.id, document: document, singleDeleteIds: singleDeleteIds, startedFrom: openPage.startedFrom)
+      if saysMerged {
+        saysMerged = false
+        setNeedsUpdateProperties()
+      }
+    }
+
+    /// When the engine says the open page's draft is behind the server's page, the page as it is on screen is merged
+    /// with the server's and replaces it, without asking (`native-phase-1.md` §10.6), and the result is handed to the
+    /// engine as the draft on the server's page. Never while he composes: the merge waits for the composition to
+    /// end. After a merge the engine refused (the page moved again meanwhile, or the draft went), the state decides:
+    /// behind again, and the page is merged again (merging twice is safe, the merge settles); or the page is the
+    /// server's, and the list takes it.
+    private func mergeIfBehind() {
+      guard let open = openPage, !merging,
+        model.state.drafts.contains(where: { $0.id.utf8.elementsEqual(open.id.utf8) && $0.state == .behind })
+      else { return }
+      guard !document.isComposing else {
+        mergeWhenCompositionEnds()
+        return
+      }
+      merging = true
+      let pageId = open.id
+      Task { [weak self, model] in
+        let pair = await model.merging(pageId)
+        guard let self else { return }
+        // From here to the hand-over nothing suspends: the words merged are the words on screen, and no keystroke
+        // can come between.
+        guard let pair, self.openPage?.id.utf8.elementsEqual(pageId.utf8) == true, !self.document.isComposing,
+          let mine = self.document.document, let workspace = self.model.workspace
+        else {
+          // Not behind any more (the state saying so is on its way), or another page; or he began composing.
+          self.merging = false
+          if self.document.isComposing { self.mergeWhenCompositionEnds() }
+          return
+        }
+        let merged = DraftMerging.merged(base: pair.baseDocument, mine: mine, theirs: pair.theirs)
+        let drawn = workspace.drawing(draft: merged.document, of: pageId)
+        self.document.replace(document: merged.document, in: drawn)
+        self.listWorkspace = drawn
+        self.openPage?.startedFrom = merged.document
+        if merged.bothChanged {
+          self.saysMerged = true
+          self.setNeedsUpdateProperties()
+        }
+        _ = await self.model.rebase(pageId: pageId, baseDocument: pair.theirs, document: merged.document).value
+        self.merging = false
+        // Refused, the state says behind again (and this merges again) or says the page is the server's.
+        self.setNeedsUpdateProperties()
+      }
+    }
+
+    /// The list reports each change of its words, but not a composition that ends with nothing typed; so while he
+    /// composes the screen looks again shortly, and merges once he has stopped.
+    private func mergeWhenCompositionEnds() {
+      guard mergeAfterComposition == nil else { return }
+      mergeAfterComposition = Task { [weak self] in
+        while self?.document.isComposing == true {
+          do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
+        }
+        self?.mergeAfterComposition = nil
+        self?.mergeIfBehind()
       }
     }
 
@@ -348,7 +491,7 @@
     // MARK: Menus
 
     /// The More menu: the account's rows.
-    private func accountMenu() -> [UIMenuElement] {
+    func accountMenu() -> [UIMenuElement] {
       Self.accountRows(state: model.state, roundTrip: model.roundTrip).map { row in
         switch row {
         case .roundTrip(let failing, let total):
@@ -361,9 +504,20 @@
       }
     }
 
-    private func heldMenu() -> [UIMenuElement] {
+    /// The "Not saved" menu: first each draft the engine keeps and does not send, then each held change.
+    func heldMenu() -> [UIMenuElement] {
       let state = model.state
-      var elements: [UIMenuElement] = HeldMenu.sections(state.held).map { section in
+      var elements: [UIMenuElement] = HeldMenu.draftSections(state.drafts, in: state.workspace).map { section in
+        UIMenu(
+          title: section.title, options: .displayInline,
+          children: [
+            UIAction(title: "Copy draft") { [weak self] _ in self?.copyDraft(of: section.pageId) },
+            UIAction(title: "Discard draft", attributes: .destructive) { [model] _ in
+              Task { await model.discardDraft(pageId: section.pageId) }
+            },
+          ])
+      }
+      elements += HeldMenu.sections(state.held).map { section in
         var actions: [UIMenuElement] = []
         if section.canKeep {
           actions.append(UIAction(title: "Keep mine") { [model] _ in Task { await model.keep(section.id) } })
@@ -376,6 +530,14 @@
         elements.append(UIAction(title: line, attributes: .disabled) { _ in })
       }
       return elements
+    }
+
+    /// The draft's words as plain text, so he can put them somewhere the app can save them.
+    private func copyDraft(of pageId: String) {
+      Task { [weak self, model] in
+        guard let text = await model.draftText(of: pageId) else { return }
+        self?.pasteboard.string = text
+      }
     }
 
     // MARK: Signing out
