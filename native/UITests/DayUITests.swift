@@ -69,10 +69,10 @@ final class DayUITests: XCTestCase {
     XCTAssertFalse(next.isEnabled)
     XCTAssertFalse(app.buttons["Today"].exists)
 
-    // A day of today's month that is neither today nor yesterday.
+    // A day of today's month that is neither today nor yesterday: of three days three apart, one always is.
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = .gmt
-    let day = [10, 11, 12].first { abs($0 - calendar.component(.day, from: today)) > 1 }!
+    let day = try XCTUnwrap([10, 13, 16].first { abs($0 - calendar.component(.day, from: today)) > 1 })
     var parts = calendar.dateComponents([.year, .month], from: today)
     parts.day = day
     let pickedDay = calendar.date(from: parts)!

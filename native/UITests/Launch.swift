@@ -45,10 +45,9 @@ enum Wrapper {
   /// The seeded server's today, as a date at midnight UTC.
   static func today() throws -> Date {
     let text = try value("DAYTHREAD_TODAY")
-    guard let date = try? Date(text + "T00:00:00Z", strategy: .iso8601) else {
-      throw XCTSkip("DAYTHREAD_TODAY is not a date: \(text)")
-    }
-    return date
+    // Set but unreadable is the wrapper's mistake: it fails the test rather than skipping it.
+    return try XCTUnwrap(
+      try? Date(text + "T00:00:00Z", strategy: .iso8601), "DAYTHREAD_TODAY is not a date: \(text)")
   }
 }
 
