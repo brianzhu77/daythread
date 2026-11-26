@@ -6,12 +6,17 @@ public struct PageDraft: Sendable, Equatable {
   /// merged against what was sent.
   public struct Sent: Sendable, Equatable {
     public var operationId: String
-    /// The exact document sent.
+    /// The exact document sent: the one in `action`.
     public var document: String
+    /// The whole action as first sent, as `JSON.write` gave it. The server replays an operation only for the same
+    /// action, so every try sends this text again rather than an action built anew (its `at`, `today` and rows
+    /// removed would differ).
+    public var action: String
 
-    public init(operationId: String, document: String) {
+    public init(operationId: String, document: String, action: String) {
       self.operationId = operationId
       self.document = document
+      self.action = action
     }
   }
 

@@ -27,11 +27,13 @@ public struct SyncState: Sendable, Equatable {
   public var enqueued: Int
   /// The account's email, once the server has told it on this launch.
   public var address: String?
+  /// The signed-in account's pages with words not yet saved, oldest change first. Another account's are never here.
+  public var drafts: [DraftStatus]
 
   public init(
     phase: Phase = .starting, workspace: Workspace? = nil, offline: Bool = false, held: [HeldChange] = [],
     pending: Int = 0, waiting: Int = 0, failure: SyncFailure? = nil, signedIn: Bool = false, enqueued: Int = 0,
-    address: String? = nil
+    address: String? = nil, drafts: [DraftStatus] = []
   ) {
     self.phase = phase
     self.workspace = workspace
@@ -43,9 +45,37 @@ public struct SyncState: Sendable, Equatable {
     self.signedIn = signedIn
     self.enqueued = enqueued
     self.address = address
+    self.drafts = drafts
   }
 
   static let initial = SyncState()
+}
+
+/// Where a page's unsaved words stand.
+public struct DraftStatus: Sendable, Equatable, Identifiable {
+  public enum State: Sendable, Equatable {
+    /// Kept, and not on its way: within the wait after his last change, or not to be sent until he types again.
+    case waiting
+    /// A save is on its way to the server.
+    case sending
+    /// The last try to reach the server failed for lack of network; it goes again when the network is back.
+    case offline
+    /// The last try failed for another reason; it goes again on the schedule.
+    case retrying
+    /// The server's page changed since the draft started from it.
+    case behind
+    /// The server will not take it as it is.
+    case stuck(String)
+  }
+
+  /// The page.
+  public let id: String
+  public let state: State
+
+  public init(id: String, state: State) {
+    self.id = id
+    self.state = state
+  }
 }
 
 /// A change the server would not apply, kept until he keeps or discards it.

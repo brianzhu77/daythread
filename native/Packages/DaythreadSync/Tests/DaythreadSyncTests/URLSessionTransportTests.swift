@@ -336,6 +336,88 @@ private func expectError(_ expected: TransportError, _ call: () async throws -> 
   }
 }
 
+@Suite struct SaveTests {
+  private let saveAction: JSONValue = .object([
+    "type": .string("save-editor"), "pageId": .string("day:2026-11-25"), "document": .string("[]"),
+  ])
+
+  private func save(_ server: StubServer) async throws -> SaveOutcome {
+    try await server.transport().save(
+      token: "tok-1", operationId: "op-1", expectedRevision: 7, expectedOwner: "user-1", action: saveAction)
+  }
+
+  @Test func theRequestCarriesTheSaveInTheRoutesOrder() async throws {
+    let server = StubServer()
+    server.answer(status: 200, json: #"{"receipt":{},"changes":\#(changesJSON),"owner":"user-1"}"#)
+    _ = try await save(server)
+    let request = try #require(server.requests.first)
+    #expect(request.method == "POST")
+    #expect(request.path == "/api/v1/saves")
+    #expect(request.header("Authorization") == "Bearer tok-1")
+    #expect(request.header("Content-Type") == "application/json")
+    let body = try json(request.bodyText)
+    #expect(body.objectValue?.keys == ["operationId", "expectedRevision", "expectedOwner", "action"])
+    let expected: JSONValue = .object([
+      "operationId": .string("op-1"),
+      "expectedRevision": .number("7"),
+      "expectedOwner": .string("user-1"),
+      "action": saveAction,
+    ])
+    #expect(body == expected)
+  }
+
+  @Test func appliedCarriesTheReceiptAndTheChanges() async throws {
+    let server = StubServer()
+    server.answer(status: 200, json: #"{"receipt":{"id":"r1"},"changes":\#(changesJSON),"owner":"user-1"}"#)
+    guard case .applied(let receipt, let changes, let owner) = try await save(server) else {
+      Issue.record("expected applied")
+      return
+    }
+    #expect(receipt == .object(["id": .string("r1")]))
+    #expect(changes.from == 7)
+    #expect(changes.revision == 8)
+    #expect(owner == "user-1")
+  }
+
+  @Test func aRefusalCarriesTheServersMessage() async throws {
+    let server = StubServer()
+    server.answer(status: 409, json: #"{"error":"refused","message":"Page changed elsewhere"}"#)
+    guard case .refused(let message) = try await save(server) else {
+      Issue.record("expected refused")
+      return
+    }
+    #expect(message == "Page changed elsewhere")
+  }
+
+  @Test func anOwnerMismatchNamesTheServersOwner() async throws {
+    let server = StubServer()
+    server.answer(status: 409, json: #"{"error":"owner-mismatch","owner":"someone-else"}"#)
+    guard case .ownerMismatch(let owner) = try await save(server) else {
+      Issue.record("expected ownerMismatch")
+      return
+    }
+    #expect(owner == "someone-else")
+  }
+
+  @Test func aBadRequestThrows() async {
+    let server = StubServer()
+    server.answer(status: 400, json: #"{"error":"bad-request"}"#)
+    await expectError(.refused(status: 400, reason: "bad-request")) { _ = try await save(server) }
+  }
+
+  @Test func a409ThisClientDoesNotKnowIsARefusalWithItsStatus() async {
+    let server = StubServer()
+    server.answer(status: 409, json: #"{"error":"teleported"}"#)
+    await expectError(.refused(status: 409, reason: "teleported")) { _ = try await save(server) }
+  }
+
+  @Test func anAppliedReplyWithoutChangesIsUnreadable() async {
+    let server = StubServer()
+    server.answer(status: 200, json: #"{"receipt":{},"owner":"user-1"}"#)
+    await expectError(.unreadable) { _ = try await save(server) }
+  }
+}
+
 @Suite struct ErrorMapTests {
   private func probe(_ server: StubServer) async throws {
     _ = try await server.transport().account(token: "tok-1")

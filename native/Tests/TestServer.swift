@@ -12,6 +12,7 @@ actor TestServer: ServerTransport {
     case account(Account)
     case workspace(WorkspaceReply)
     case outcome(CommandOutcome)
+    case saved(SaveOutcome)
   }
 
   private var script: [Reply]
@@ -75,6 +76,14 @@ actor TestServer: ServerTransport {
   ) async throws -> CommandOutcome {
     sent.append(action)
     guard case .outcome(let outcome) = try await answer() else { throw TransportError.unreadable }
+    return outcome
+  }
+
+  func save(
+    token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
+  ) async throws -> SaveOutcome {
+    sent.append(action)
+    guard case .saved(let outcome) = try await answer() else { throw TransportError.unreadable }
     return outcome
   }
 

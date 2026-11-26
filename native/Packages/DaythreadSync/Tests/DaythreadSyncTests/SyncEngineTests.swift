@@ -200,7 +200,10 @@ actor RecordingStore: WorkspaceStore {
     try await inner.acknowledge(seq: seq, revision: revision)
   }
 
-  func drafts() async throws -> [PageDraft] { try await inner.drafts() }
+  func drafts() async throws -> [PageDraft] {
+    try check("drafts")
+    return try await inner.drafts()
+  }
 
   func put(_ draft: PageDraft) async throws {
     log.append("put \(draft.owner) \(draft.pageId)")

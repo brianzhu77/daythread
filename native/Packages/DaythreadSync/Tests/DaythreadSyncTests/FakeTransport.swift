@@ -12,9 +12,15 @@ actor FakeTransport: ServerTransport {
     case account(token: String?)
     case workspace(token: String?, have: Int?)
     case send(token: String?, operationId: String, action: JSONValue, expectedOwner: String, basis: OutboxBasis)
+    case save(token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue)
 
+    /// The operation of a command sent; nil for every other call, a save included.
     var operationId: String? {
       if case .send(_, let operationId, _, _, _) = self { operationId } else { nil }
+    }
+
+    var isSave: Bool {
+      if case .save = self { true } else { false }
     }
   }
 
@@ -24,6 +30,7 @@ actor FakeTransport: ServerTransport {
     case account(Account)
     case workspace(WorkspaceReply)
     case outcome(CommandOutcome)
+    case saved(SaveOutcome)
     case failure(any Error)
     case gated(Gate)
   }
@@ -63,6 +70,9 @@ actor FakeTransport: ServerTransport {
   /// The calls that sent a command, in order.
   var sends: [Call] { calls.filter { $0.operationId != nil } }
 
+  /// The calls that saved a page, in order.
+  var saves: [Call] { calls.filter(\.isSave) }
+
   // MARK: ServerTransport
 
   func signIn(email: String, password: String, timezone: String) async throws -> Session {
@@ -96,6 +106,16 @@ actor FakeTransport: ServerTransport {
     let call = Call.send(
       token: token, operationId: operationId, action: action, expectedOwner: expectedOwner, basis: basis)
     guard case .outcome(let outcome) = try await answer(call) else { throw mismatch(call) }
+    return outcome
+  }
+
+  func save(
+    token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
+  ) async throws -> SaveOutcome {
+    let call = Call.save(
+      token: token, operationId: operationId, expectedRevision: expectedRevision, expectedOwner: expectedOwner,
+      action: action)
+    guard case .saved(let outcome) = try await answer(call) else { throw mismatch(call) }
     return outcome
   }
 
