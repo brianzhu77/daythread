@@ -95,6 +95,16 @@ private func until(_ condition: () async -> Bool) async {
   while !(await condition()) { await Task.yield() }
 }
 
+/// Whether `condition` comes to hold while the tasks already started run; gives up after a bounded number of turns,
+/// so a test of something that must not happen ends.
+private func eventually(_ condition: () async -> Bool) async -> Bool {
+  for _ in 0..<2_000 {
+    if await condition() { return true }
+    await Task.yield()
+  }
+  return await condition()
+}
+
 /// The state a new reader of `states` gets at once.
 private func current(_ engine: SyncEngine) async -> SyncState? {
   await engine.states.first { _ in true }
@@ -2042,7 +2052,8 @@ private func applied(_ changes: WorkspaceChanges) -> FakeTransport.Reply {
     await h.engine.start()
     await until { await h.waits.asked.count == 1 }
 
-    await h.transport.add([applied(answer)])
+    // The pass that failed was offline, so the one the network's return asks for loads first.
+    await h.transport.add([.workspace(.unchanged(revision: 5, owner: "user-1")), applied(answer)])
     network.fire()
     await until { await h.transport.sends.count == 2 }
     await h.engine.settled()
@@ -2051,6 +2062,54 @@ private func applied(_ changes: WorkspaceChanges) -> FakeTransport.Reply {
     #expect(await h.waits.asked == [.seconds(2)], "the 2 s wait was cut short, and none follows")
     #expect(await h.waits.cancelled == 1)
     #expect(await current(h.engine)?.failure == nil)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func the_network_coming_back_after_an_offline_launch_loads_once() async throws {
+    let network = FiredReachability()
+    let h = try await Harness(copy: try board(5, rows: [row("t1")]), reachability: network)
+    await h.transport.goOffline()
+    await h.engine.start()
+    #expect(await current(h.engine)?.offline == true)
+    #expect(await h.waits.asked == [], "nothing to send, so no retry is planned")
+
+    await h.transport.comeBack()
+    await h.transport.add(opening)
+    network.fire()
+
+    #expect(await eventually { await current(h.engine)?.offline == false })
+    await h.engine.settled()
+    #expect(await h.transport.answered == [.account(token: "tok-1"), .workspace(token: "tok-1", have: 5)])
+    #expect(await h.engine.passRequests == 2)
+    #expect(await current(h.engine) == state(.ready, try board(5, rows: [row("t1")]), address: one))
+  }
+
+  @Test func the_network_coming_back_asks_for_nothing_when_not_offline() async throws {
+    let network = FiredReachability()
+    let h = try await Harness(opening, copy: try board(5, rows: [row("t1")]), reachability: network)
+    await h.engine.start()
+
+    network.fire()
+
+    #expect(await !eventually { await h.engine.passRequests > 1 })
+    #expect(await h.calls.count == 2)
+  }
+
+  @Test func the_network_coming_back_asks_for_nothing_when_signed_out() async throws {
+    let network = FiredReachability()
+    let h = try await Harness(opening, copy: try board(5, rows: [row("t1")]), reachability: network)
+    await h.engine.start()
+    // Signed out with the network gone: the server could not be told, so the screen is offline and shows sign-in.
+    await h.transport.goOffline()
+    #expect(await h.engine.signOut(discardingUnsent: true) == 0)
+    #expect(await current(h.engine) == state(.signedOut, nil, offline: true))
+    let requested = await h.engine.passRequests
+
+    await h.transport.comeBack()
+    network.fire()
+
+    #expect(await !eventually { await h.engine.passRequests > requested })
+    #expect(await h.calls.count == 3)
   }
 
   @Test func signed_out_stops_the_retries() async throws {
