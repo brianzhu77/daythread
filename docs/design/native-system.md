@@ -22,11 +22,20 @@
 
 | Text | Where |
 | --- | --- |
-| Offline · showing what was last loaded | The prompt over Today, when the device is offline and a copy is shown |
+| Offline · showing what was last loaded | The prompt over the day screen, when the device is offline and a copy is shown |
 | Offline · showing what was last loaded · 1 change will be sent (· N changes will be sent) | The same prompt, with changes waiting to be sent; the web's words |
-| Changes aren't kept on this device | The prompt over Today when the store on the device could not be opened; it comes before offline and a failed update |
+| Changes aren't kept on this device | The prompt over the day screen when the store on the device could not be opened; it comes before offline and a failed update |
 | Couldn't update · showing what was last loaded | The same prompt, when a pass failed for any other reason |
 | Couldn't load, Retry | The whole screen, when a pass failed and there is no copy to show |
+| Tuesday, Nov 3 | The day screen's title: weekday, month and day in the reader's language, no year; `<day>` below is this text |
+| Previous day, Next day | The leading bar buttons' accessibility labels (`chevron.left`, `chevron.right`, no text); Next is disabled from today on |
+| Calendar | The calendar bar button's accessibility label (`calendar`, no text); it opens the system's calendar, a dot on each day with something written |
+| Today | A bar button, shown only while another day is open |
+| No page for <day> yet, Start this page | A past day with no page, in place of the page |
+| <day> hasn't happened yet, Create page | A future day with no page, in place of the page |
+| Today's page is in Trash. (The page for <day> is in Trash.), Restore, Start a new page | A day whose page is in Trash; "Restore" only when the page names its trash entry |
+| Couldn't start a page · try again | The second line of those states when "Start this page", "Create page" or "Start a new page" did not go through; the web's words |
+| Couldn't restore · try again | The same, when "Restore" did not go through; the web's words |
 | Daythread | The sign-in screen's title |
 | Email, Password, Sign in | The sign-in form |
 | That didn't work · Check the email and password | Under "Sign in", wrong email or password |

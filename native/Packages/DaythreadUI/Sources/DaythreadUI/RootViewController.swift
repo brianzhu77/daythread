@@ -4,21 +4,21 @@
   import UIKit
 
   /// The window's root: nothing while the app starts with no copy to show, "Couldn't load" when there is none to show
-  /// after a pass failed, sign-in when signed out, Today otherwise. Its child changes, with a cross-dissolve, only when
-  /// that choice does; an ordinary state change never rebuilds it. It refreshes whenever its scene becomes active,
-  /// whatever it shows.
+  /// after a pass failed, sign-in when signed out, the day screen otherwise. Its child changes, with a cross-dissolve,
+  /// only when that choice does; an ordinary state change never rebuilds it. It checks the day and refreshes whenever
+  /// its scene becomes active, whatever it shows.
   @MainActor
   public final class RootViewController: UIViewController {
     enum Screen: Equatable {
-      case nothing, couldNotLoad, signIn, today
+      case nothing, couldNotLoad, signIn, day
 
       init(_ state: SyncState) {
         let failed = state.failure != nil || state.offline
         switch state.phase {
         case .signedOut: self = .signIn
         case _ where state.workspace == nil && failed: self = .couldNotLoad
-        case .ready: self = .today
-        case .starting: self = state.workspace == nil ? .nothing : .today
+        case .ready: self = .day
+        case .starting: self = state.workspace == nil ? .nothing : .day
         }
       }
     }
@@ -81,6 +81,8 @@
 
     @objc private func sceneBecameActive(_ notification: Notification) {
       guard let scene = notification.object as? UIScene, scene === view.window?.windowScene else { return }
+      // The account's midnight may have passed while the app was away.
+      model.checkToday()
       Task { await model.refresh() }
     }
 
@@ -90,8 +92,8 @@
         return nil
       case .signIn:
         return UIHostingController(rootView: SignInView(model: model))
-      case .today:
-        let navigation = UINavigationController(rootViewController: TodayViewController(model: model))
+      case .day:
+        let navigation = UINavigationController(rootViewController: DayViewController(model: model))
         navigation.navigationBar.prefersLargeTitles = true
         return navigation
       }

@@ -71,6 +71,7 @@ public final class AppModel {
     self.engine = engine
     self.keepsChanges = keepsChanges
     self.now = now
+    today = LocalDate.today(in: TimeZone.current.identifier, at: now())
   }
 
   isolated deinit {
@@ -83,9 +84,27 @@ public final class AppModel {
     records.reduce(state.workspace) { $0?.predicting($1.action) }
   }
 
-  /// The account's day: today in the workspace's zone, or the device's before there is a workspace.
-  public var today: LocalDate {
-    LocalDate.today(in: state.workspace?.timezone ?? TimeZone.current.identifier, at: now())
+  /// The account's day: today in the workspace's zone, or the device's before there is a workspace. It moves only in
+  /// `checkToday`, which runs whenever a state arrives, so a tick and the screen it is made on read the same day.
+  public private(set) var today: LocalDate
+
+  /// When `today` next changes, unless the zone does, and how long until then; both by the model's clock, which a
+  /// timer must count from rather than the device's.
+  public var nextDayChange: (at: Date, in: TimeInterval) {
+    let now = now()
+    let change = DayClock.nextChange(after: now, timezone: zone)
+    return (change, change.timeIntervalSince(now))
+  }
+
+  /// Moves `today` to the account's day of this moment. The screen calls it at `nextDayChange` and whenever the day
+  /// may have changed while nothing was looking (the app becoming active, the system's clock or zone changing).
+  public func checkToday() {
+    let day = LocalDate.today(in: zone, at: now())
+    if day != today { today = day }
+  }
+
+  private var zone: String {
+    state.workspace?.timezone ?? TimeZone.current.identifier
   }
 
   /// Follows the engine's states, then shows the device's copy and asks the server. Calling it again does nothing.
@@ -202,6 +221,7 @@ public final class AppModel {
 
   private func receive(_ state: SyncState) {
     self.state = state
+    checkToday()
     if state.phase == .signedOut {
       forgetTicks()
     } else {

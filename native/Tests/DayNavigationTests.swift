@@ -42,12 +42,12 @@ extension DayViewController {
       Issue.record("No \(name) button")
       return
     }
-    item.primaryAction?.perform(withSender: item, target: nil)
+    item.primaryAction?.performWithSender(item, target: nil)
     updatePropertiesIfNeeded()
   }
 
   fileprivate func tapEmptyStateButton() {
-    emptyState?.buttonProperties.primaryAction?.perform(withSender: nil, target: nil)
+    emptyState?.buttonProperties.primaryAction?.performWithSender(nil, target: nil)
     updatePropertiesIfNeeded()
   }
 
