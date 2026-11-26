@@ -80,6 +80,17 @@ public struct EditablePage: Sendable {
     return result
   }
 
+  /// An empty paragraph after the page's last block, at the top level: where a tap under a page that ends with a
+  /// block holding no words (a divider, a database) puts the caret (spec §10.4). Nil when the page is not readable.
+  public mutating func appendParagraph() -> Caret? {
+    guard isReadable else { return nil }
+    lastShortcut = nil
+    let paragraph = NewBlock.make(.paragraph, id: makeID(), content: .array([]), pageDate: pageDate)
+    blocks.append(paragraph)
+    changed = true
+    return Caret(block: paragraph.id, offset: 0)
+  }
+
   public func content(of block: String) -> InlineContent? {
     editablePath(of: block).map { InlineContent(self[$0].content) }
   }

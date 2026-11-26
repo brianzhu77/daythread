@@ -10,6 +10,11 @@
     func lineTextView(_ line: LineTextView, didPress key: EditablePage.Key) -> Bool
     /// Marked text was set or committed, which a text view does not always report as a change of its text.
     func lineTextViewMarkedTextDidChange(_ line: LineTextView)
+    /// Whether some row in that direction takes a caret.
+    func lineTextView(_ line: LineTextView, canMoveCaret direction: LineTextView.Direction) -> Bool
+    /// The caret goes to the next row in that direction that takes one, as near to `point` (in the line's
+    /// coordinates) across the row as its words allow.
+    func lineTextView(_ line: LineTextView, moveCaret direction: LineTextView.Direction, near point: CGPoint)
   }
 
   /// A row's words: a text view on TextKit 2 that does not scroll and adds no inset of its own, so the row's margins
@@ -72,24 +77,42 @@
     // MARK: words that come in
 
     /// What stands in the text for a token's attachment. It is never a character of the line.
-    static let objectReplacement = Character(Unicode.Scalar(0xFFFC)!)
+    static let objectReplacement = Unicode.Scalar(0xFFFC)!
 
     /// Return, as a keyboard may spell it.
     static func isReturn(_ text: String) -> Bool { text == "\n" || text == "\r" || text == "\r\n" }
 
+    // Checked scalar by scalar: a tab or an object replacement followed by a combining mark is one Character, which
+    // equals neither.
+
     /// Whether words that come in hold something a line never holds: a line break, a tab, an object replacement.
     static func needsCleaning(_ text: String) -> Bool {
-      text.contains { $0.isNewline || $0 == "\t" || $0 == objectReplacement }
+      text.unicodeScalars.contains { isBreak($0) || $0 == objectReplacement }
     }
 
-    /// The words as one line: each line break and tab a space, and no object replacement character.
+    static func holdsObjectReplacement(_ text: String) -> Bool {
+      text.unicodeScalars.contains(objectReplacement)
+    }
+
+    /// The words as one line: each line break (CR LF as one) and tab a space, and no object replacement character.
     static func cleaned(_ text: String) -> String {
-      String(text.compactMap { $0 == objectReplacement ? nil : ($0.isNewline || $0 == "\t" ? " " : $0) })
+      var words = String.UnicodeScalarView()
+      var previous: Unicode.Scalar?
+      for scalar in text.unicodeScalars {
+        defer { previous = scalar }
+        if scalar == objectReplacement || (scalar == "\n" && previous == "\r") { continue }
+        words.append(isBreak(scalar) ? " " : scalar)
+      }
+      return String(words)
+    }
+
+    private static func isBreak(_ scalar: Unicode.Scalar) -> Bool {
+      scalar == "\t" || CharacterSet.newlines.contains(scalar)
     }
 
     /// Replaces `range` with `words` on the run loop's next turn, as typing would: a text view ignores a change made
-    /// while it asks its delegate about another. Dropped if the line is given to another row, or its text changes,
-    /// before then: the range belongs to the text as it is now.
+    /// while it asks its delegate about another. Dropped if the line is given to another row, its text changes, or it
+    /// stops being editable before then: the range belongs to the text as it is now.
     func replaceSoon(_ range: NSRange, with words: String) {
       cancelPendingReplacement()
       pendingReplacement = (range, words, rowID, text)
@@ -107,7 +130,7 @@
       guard let pending = pendingReplacement else { return }
       pendingReplacement = nil
       guard
-        pending.rowID == rowID, pending.text == text,
+        isEditable, pending.rowID == rowID, pending.text == text,
         let start = position(from: beginningOfDocument, offset: pending.range.location),
         let end = position(from: start, offset: pending.range.length),
         let replaced = textRange(from: start, to: end)
@@ -172,13 +195,17 @@
       replace(range, withText: "")
     }
 
-    /// The words in `range` as they read: each token's words where its attachment is.
+    /// The words in `range` as they read: each token's words where its attachment is. Each attachment character is
+    /// one token, so two the same side by side are two; a character that is not an attachment is itself.
     func pasteboardWords(in range: NSRange) -> String {
       let text = attributedText.attributedSubstring(from: range)
       var out = ""
-      text.enumerateAttribute(InlineTextStorage.tokenWords, in: NSRange(location: 0, length: text.length)) {
-        value, part, _ in
-        out += (value as? String) ?? text.attributedSubstring(from: part).string
+      text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) { attributes, part, _ in
+        if attributes[.attachment] != nil, let words = attributes[InlineTextStorage.tokenWords] as? String {
+          out += String(repeating: words, count: part.length)
+        } else {
+          out += text.attributedSubstring(from: part).string
+        }
       }
       return out
     }
@@ -206,6 +233,14 @@
       lineDelegate?.lineTextViewMarkedTextDidChange(self)
     }
 
+    /// A composition ends with the keyboard. The system commits it without calling `unmarkText` or reporting a change
+    /// of the text (seen on the simulator), so the line would stay composing; it is committed here, and read.
+    @discardableResult
+    override func resignFirstResponder() -> Bool {
+      if markedTextRange != nil { unmarkText() }
+      return super.resignFirstResponder()
+    }
+
     override func deleteBackward() {
       let atStart = markedTextRange == nil && selectedRange == NSRange(location: 0, length: 0)
       if atStart, lineDelegate?.lineTextView(self, didPress: .backspace) == true { return }
@@ -215,9 +250,43 @@
     override var keyCommands: [UIKeyCommand]? {
       let tab = UIKeyCommand(input: "\t", modifierFlags: [], action: #selector(pressTab))
       let shiftTab = UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(pressShiftTab))
-      // Without priority the text view would type a tab character into the line.
-      for command in [tab, shiftTab] { command.wantsPriorityOverSystemBehavior = true }
-      return (super.keyCommands ?? []) + [tab, shiftTab]
+      let up = UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: #selector(caretToRowAbove))
+      let down = UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: #selector(caretToRowBelow))
+      // Without priority the text view would type a tab character into the line, and move the caret itself on the
+      // arrows. The arrows are taken only on the line's edge (`canPerformAction`); elsewhere they are the system's.
+      for command in [tab, shiftTab, up, down] { command.wantsPriorityOverSystemBehavior = true }
+      return (super.keyCommands ?? []) + [tab, shiftTab, up, down]
+    }
+
+    /// Up or down out of a row.
+    enum Direction { case up, down }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+      switch action {
+      case #selector(caretToRowAbove): leavesRow(.up)
+      case #selector(caretToRowBelow): leavesRow(.down)
+      default: super.canPerformAction(action, withSender: sender)
+      }
+    }
+
+    /// Whether an arrow key takes the caret out of the row: the caret, with nothing selected or marked, is on the
+    /// row's first visual line (up) or last (down), and some row that way takes a caret.
+    private func leavesRow(_ direction: Direction) -> Bool {
+      guard markedTextRange == nil, let caret = selectedTextRange, caret.isEmpty else { return false }
+      let edge = caretRect(for: direction == .up ? beginningOfDocument : endOfDocument)
+      let here = caretRect(for: caret.start)
+      guard abs(here.midY - edge.midY) < max(1, edge.height / 2) else { return false }
+      return lineDelegate?.lineTextView(self, canMoveCaret: direction) ?? false
+    }
+
+    @objc private func caretToRowAbove() { moveCaret(.up) }
+
+    @objc private func caretToRowBelow() { moveCaret(.down) }
+
+    private func moveCaret(_ direction: Direction) {
+      guard leavesRow(direction), let caret = selectedTextRange else { return }
+      let here = caretRect(for: caret.start)
+      lineDelegate?.lineTextView(self, moveCaret: direction, near: CGPoint(x: here.midX, y: here.midY))
     }
 
     @objc private func pressTab() {

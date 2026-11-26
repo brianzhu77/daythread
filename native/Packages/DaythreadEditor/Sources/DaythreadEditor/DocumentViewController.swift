@@ -57,20 +57,20 @@
     private var shownPageID: String?
     /// The row whose text view holds marked text. What is being composed is not the document yet.
     private var composingRow: String?
-    /// The last change from outside that arrived while he composed, with the page as it was when the first did.
+    /// The last change from outside that arrived while he composed, with the page as it was when the first did. The
+    /// rest of it is on screen already; the composing row's part waits for the composition to end.
     private var heldReplace: (base: String, document: String, workspace: Workspace)?
     /// Whether each snapshot applied was animated, in order; a call that changes nothing applies none.
     private(set) var appliedAnimated: [Bool] = []
     var appliedSnapshots: Int { appliedAnimated.count }
     /// The rows the last snapshot redrew, reconfigured or reloaded, in page order.
     private(set) var redrawnRows: [String] = []
-    /// The keys that change the page's structure, as they reached the screen, in order (tests read it).
-    private(set) var pressedKeys: [EditablePage.Key] = []
     /// Space kept between the caret and the edge of what the list shows when the list scrolls to it.
     private static let caretMargin: CGFloat = 8
     /// A view held at the top of the keyboard layout guide, so the list is laid out again when the keyboard moves.
     private let keyboardEdge = UIView()
     private lazy var lineInput = LineInput(self)
+    private lazy var tapsUnderLines = TapsUnderLines(self)
 
     /// A view the host puts above the rows, as the page's first line: it scrolls with them and is not a row, so the
     /// rows keep their indices.
@@ -140,6 +140,10 @@
         keyboardEdge.widthAnchor.constraint(equalToConstant: 0),
         keyboardEdge.heightAnchor.constraint(equalToConstant: 0),
       ])
+      let tap = UITapGestureRecognizer(target: tapsUnderLines, action: #selector(TapsUnderLines.tapped(_:)))
+      tap.delegate = tapsUnderLines
+      tap.cancelsTouchesInView = false
+      collectionView.addGestureRecognizer(tap)
     }
 
     public override func viewDidLayoutSubviews() {
@@ -171,37 +175,53 @@
     }
 
     /// Before another page: what he composed is committed into the page it was composed in, and reported for it,
-    /// and the keyboard is put away, so nothing of this page is read into the next.
+    /// nothing deferred lands in a line afterwards, and the keyboard is put away, so nothing of this page is read into
+    /// the next.
     private func finishEditing() {
       guard editedPage != nil else { return }
       for line in lines where line.markedTextRange != nil { line.unmarkText() }
+      for line in lines { line.cancelPendingReplacement() }
       collectionView.endEditing(true)
       composingRow = nil
     }
 
-    /// Replaces the page from outside (a merge, a load) keeping the caret where its line still exists. Deferred until
-    /// composition ends when `isComposing`; his composed words and this page are then merged (`read`).
+    /// Replaces the page from outside (a merge, a load) keeping the caret where its line still exists. While he
+    /// composes, every row but the composing one is drawn from it at once; that row's part waits until the
+    /// composition ends, when his composed words and this page are merged (`commitHeld`).
     public func replace(document: String, in workspace: Workspace) {
       guard let editedPage, let pageID = shownPageID else { return }
       if isComposing {
         heldReplace = (heldReplace?.base ?? editedPage.document, document, workspace)
-        return
       }
       self.editedPage = EditablePage(document: document, pageDate: pageDate)
       redraw(pageID: pageID, pageDate: pageDate, in: workspace)
     }
 
-    /// Draws the page being edited from its blocks.
+    /// Draws the page being edited from its blocks. The row being composed in stays as it is on screen, where it was,
+    /// whatever the page now holds for it.
     private func redraw(pageID: String, pageDate: LocalDate?, in workspace: Workspace) {
       guard let editedPage else { return }
-      let editable = editedPage.isReadable ? Set(editedPage.textBlocks) : []
-      draw(
-        BlockRows.rows(for: editedPage.blocks, in: workspace), pageID: pageID, pageDate: pageDate, in: workspace,
-        editable: editable)
+      var rows = BlockRows.rows(for: editedPage.blocks, in: workspace)
+      var editable = editedPage.isReadable ? Set(editedPage.textBlocks) : []
+      let pinned = composingRow.flatMap { id in rowsByID[id].map { (id: id, row: $0) } }
+      if let pinned {
+        if let index = rows.firstIndex(where: { $0.id == pinned.id }) {
+          rows[index] = pinned.row
+        } else {
+          // After the nearest row above it that is still there.
+          let above = orderedIDs.prefix { $0 != pinned.id }.reversed().first { id in rows.contains { $0.id == id } }
+          let index = above.flatMap { id in rows.firstIndex { $0.id == id } }.map { $0 + 1 } ?? 0
+          rows.insert(pinned.row, at: index)
+        }
+        editable.insert(pinned.id)
+      }
+      draw(rows, pageID: pageID, pageDate: pageDate, in: workspace, editable: editable, pinned: pinned?.id)
     }
 
+    /// `pinned`: a row that is not redrawn, however the page or the workspace draws it now.
     private func draw(
-      _ rows: [BlockRow], pageID: String, pageDate: LocalDate?, in workspace: Workspace, editable: Set<String>
+      _ rows: [BlockRow], pageID: String, pageDate: LocalDate?, in workspace: Workspace, editable: Set<String>,
+      pinned: String? = nil
     ) {
       var newRows: [String: BlockRow] = [:]
       var newDrawn: [String: AttributedString] = [:]
@@ -211,15 +231,17 @@
         case .text, .todo:
           // A line that is edited is drawn by its runs, a chip one position wide; one that is only shown as 1a drew it.
           newDrawn[row.id] =
-            editable.contains(row.id)
-            ? InlineAttributedText.make(InlineContent(row.content), pageDate: pageDate, in: workspace)
-            : InlineAttributedText.make(row.content, pageDate: pageDate, in: workspace)
+            row.id == pinned
+            ? drawn[row.id]
+            : editable.contains(row.id)
+              ? InlineAttributedText.make(InlineContent(row.content), pageDate: pageDate, in: workspace)
+              : InlineAttributedText.make(row.content, pageDate: pageDate, in: workspace)
         case .separator, .placeholder: break
         }
       }
       let ids = rows.map(\.id)
       let changed = ids.filter {
-        rowsByID[$0] != nil
+        $0 != pinned && rowsByID[$0] != nil
           && (rowsByID[$0] != newRows[$0] || drawn[$0] != newDrawn[$0]
             || editableIDs.contains($0) != editable.contains($0))
       }
@@ -249,9 +271,44 @@
       shownPageID = pageID
       appliedAnimated.append(animated)
       redrawnRows = changed
+      // A reconfigured row keeps its cell, and its text view the caret; a reloaded one has a new cell to give it to,
+      // and the keyboard is held meanwhile.
+      let rebuilt = focus.map { reloaded.contains($0.id) } == true
+      if rebuilt, let line = focusedLine { holdKeyboard(from: line) }
       dataSource.apply(snapshot, animatingDifferences: animated)
-      // A reconfigured row keeps its cell, and its text view the caret; a reloaded one has a new cell to give it to.
-      if let focus, reloaded.contains(focus.id) { place(caretIn: focus.id, selection: focus.selection) }
+      if let focus, rebuilt {
+        place(caretIn: focus.id, selection: focus.selection)
+        releaseKeyboardHold()
+      }
+    }
+
+    /// A text view of the screen's own, out of sight, that holds the keyboard while the row that had it is rebuilt or
+    /// removed: the list resigns a first responder in a cell it takes away, and with no other the keyboard goes down
+    /// and comes up again. Moving it straight from line to line keeps it up.
+    private lazy var keyboardHolder: UITextView = {
+      let holder = UITextView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+      holder.alpha = 0
+      holder.isScrollEnabled = false
+      holder.isAccessibilityElement = false
+      holder.accessibilityElementsHidden = true
+      collectionView.addSubview(holder)
+      return holder
+    }()
+
+    private func holdKeyboard(from line: LineTextView) {
+      guard line.isFirstResponder else { return }
+      // The same keyboard, so it does not change while it is held.
+      keyboardHolder.keyboardType = line.keyboardType
+      keyboardHolder.autocorrectionType = line.autocorrectionType
+      keyboardHolder.autocapitalizationType = line.autocapitalizationType
+      keyboardHolder.smartDashesType = line.smartDashesType
+      keyboardHolder.inputView = line.inputView
+      keyboardHolder.becomeFirstResponder()
+    }
+
+    /// The hold ends: a line has taken the keyboard, or, when none could, it goes down.
+    private func releaseKeyboardHold() {
+      if keyboardHolder.isFirstResponder { keyboardHolder.resignFirstResponder() }
     }
 
     /// The number of rows the list holds (tests and accessibility use it; nothing else does).
@@ -334,8 +391,41 @@
       screen?.lineSelectionDidChange(line)
     }
 
+    func textViewDidEndEditing(_ textView: UITextView) {
+      guard let line = textView as? LineTextView else { return }
+      screen?.lineDidEndEditing(line)
+    }
+
     func lineTextView(_ line: LineTextView, didPress key: EditablePage.Key) -> Bool {
       screen?.line(line, didPress: key) ?? false
+    }
+
+    func lineTextView(_ line: LineTextView, canMoveCaret direction: LineTextView.Direction) -> Bool {
+      screen?.row(after: line, going: direction) != nil
+    }
+
+    func lineTextView(_ line: LineTextView, moveCaret direction: LineTextView.Direction, near point: CGPoint) {
+      screen?.moveCaret(from: line, going: direction, near: point)
+    }
+  }
+
+  /// Hears taps on the list for the screen: only one in the empty space under the last row is its.
+  @MainActor
+  private final class TapsUnderLines: NSObject, UIGestureRecognizerDelegate {
+    weak var screen: DocumentViewController?
+
+    init(_ screen: DocumentViewController) {
+      self.screen = screen
+    }
+
+    func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+      guard let screen, let list = recognizer.view else { return false }
+      return screen.takesTapUnderTheLastLine(at: recognizer.location(in: list))
+    }
+
+    @objc func tapped(_ recognizer: UITapGestureRecognizer) {
+      guard let screen, let list = recognizer.view, recognizer.state == .ended else { return }
+      screen.tapUnderTheLastLine(at: recognizer.location(in: list))
     }
   }
 
@@ -366,51 +456,141 @@
       revealCaret(of: line)
     }
 
-    /// The keys that change the page's structure. None is taken yet: Return is refused, so a line never holds a
-    /// newline, and Backspace at the start of a line and Tab do nothing.
+    /// A key that changes the page's structure, at the caret in `line`: the page decides what it does (`press`), the
+    /// rows that changed are drawn again, the caret goes where the page put it, and the change is reported once. While
+    /// text is marked no key is the page's: Return only commits (`LineTextView.insertText`), Backspace edits the marked
+    /// text, Tab does nothing. True when the key was taken; Return and Tab always are, so neither is typed.
     fileprivate func line(_ line: LineTextView, didPress key: EditablePage.Key) -> Bool {
-      pressedKeys.append(key)
-      return false
+      let taken = key != .backspace
+      guard line.markedTextRange == nil, line.isEditable, let id = line.rowID, editableIDs.contains(id) else {
+        return taken
+      }
+      // Words on screen the page has not read yet (an autocorrection, say) are its before the key is.
+      let read = absorb(line) != nil
+      guard var page = editedPage, let workspace, let pageID = shownPageID else { return taken }
+      var selection = line.selectedRange
+      if key == .returnKey, selection.length > 0 {
+        // Return over a selection replaces it, as on the web: the selected words go, then the line splits.
+        _ = page.replaceText(in: id, range: selection.location..<NSMaxRange(selection), with: "")
+        selection.length = 0
+      }
+      guard let caret = page.press(key, at: EditablePage.Caret(block: id, offset: selection.location)) else {
+        if read { report() }
+        return taken
+      }
+      editedPage = page
+      // Nesting keeps the selection in its words; the other keys leave a caret.
+      let kept = key == .tab || key == .shiftTab ? selection.length : 0
+      restructure(from: line, caret: caret, selectionLength: kept, pageID: pageID, workspace: workspace)
+      report()
+      return true
+    }
+
+    /// The page's rows changed under the line being typed in: the page is drawn again and the caret goes to `caret`.
+    ///
+    /// The keyboard stays up. The list resigns the first responder of a row it removes or reloads, and the keyboard
+    /// goes down for want of another, so the line typed in never holds it when its row goes: the caret's row takes it
+    /// first, before the list changes, when it has a cell already (a join); when the key made that row (a divider's
+    /// new paragraph), the keyboard is held (`holdKeyboard`) until it is in the list. A row that stays (a split) keeps
+    /// the keyboard until the new row takes it after the snapshot; one rebuilt as another kind is `draw`'s.
+    ///
+    /// The text views' own undo is emptied, so a shake or Command-Z cannot put a line's old words back over the new
+    /// rows.
+    private func restructure(
+      from line: LineTextView, caret: EditablePage.Caret, selectionLength: Int, pageID: String, workspace: Workspace
+    ) {
+      let selection = NSRange(location: caret.offset, length: selectionLength)
+      let leaving =
+        line.rowID.map { id in
+          editedPage.map { page in BlockRows.rows(for: page.blocks, in: workspace).contains { $0.id == id } } == false
+        } ?? false
+      if caret.block != line.rowID, let target = lineView(for: caret.block), target.isEditable {
+        target.becomeFirstResponder()
+      } else if leaving {
+        holdKeyboard(from: line)
+      }
+      redraw(pageID: pageID, pageDate: pageDate, in: workspace)
+      place(caretIn: caret.block, selection: selection)
+      releaseKeyboardHold()
+      line.undoManager?.removeAllActions()
+      focusedLine?.undoManager?.removeAllActions()
+    }
+
+    private func report() {
+      guard let editedPage else { return }
+      onChange?(editedPage.document, editedPage.singleDeleteIds)
+    }
+
+    /// A line that loses the keyboard is no longer composing. Its commit is read here when the text view did not
+    /// report it otherwise.
+    fileprivate func lineDidEndEditing(_ line: LineTextView) {
+      if let id = line.rowID, id == composingRow, line.markedTextRange == nil { read(line) }
     }
 
     /// Reads a line's words into the page once they are his: not while text is marked, and once when the composition
-    /// ends. The line on screen is compared with what it was last synced with, around the caret, and the difference is
-    /// the one change the page is given, so the page decides which run takes it; only while the page's line is still
-    /// that text. When it has moved on, the screen was stale: the line is drawn again from the page and nothing is
-    /// written.
+    /// ends, merged then with what arrived from outside meanwhile. A change is reported.
     private func read(_ line: LineTextView) {
-      guard let id = line.rowID, editableIDs.contains(id), var page = editedPage else { return }
+      guard let id = line.rowID, editableIDs.contains(id), editedPage != nil else { return }
       if line.markedTextRange != nil {
         composingRow = id
         return
       }
-      if composingRow == id { composingRow = nil }
-      guard let words = page.content(of: id) else { return }
-      var caret: EditablePage.Caret?
+      if composingRow == id {
+        composingRow = nil
+        if let held = heldReplace {
+          heldReplace = nil
+          commitHeld(line, in: id, held: held)
+          return
+        }
+      }
+      if absorb(line) != nil { report() }
+    }
+
+    /// The line on screen is compared with what it was last synced with, around the caret, and the difference is the
+    /// one change the page is given, so the page decides which run takes it; only while the page's line is still that
+    /// text. When it has moved on, the screen was stale: the line is drawn again from the page and nothing is
+    /// written. Returns the caret when the page changed; reports nothing.
+    private func absorb(_ line: LineTextView) -> EditablePage.Caret? {
+      guard let id = line.rowID, var page = editedPage, let words = page.content(of: id) else { return nil }
       let change = InlineTextStorage.change(
         from: line.syncedText, to: line.text, caret: NSMaxRange(line.selectedRange))
       if Array(words.plain.utf16) != Array(line.syncedText.utf16)
-        || change?.text.contains(LineTextView.objectReplacement) == true
+        || change.map({ LineTextView.holdsObjectReplacement($0.text) }) == true
       {
         // A token's character that came in by a way the line does not take one (a chip dragged within the line)
         // cannot be written as a chip: the line is drawn again from the page, as a stale one is.
         redrawLine(line, from: words)
-      } else if var change {
-        if LineTextView.needsCleaning(change.text) { change.text = flatten(change, in: line) }
-        caret = page.replaceText(in: id, range: change.range, with: change.text)
-        editedPage = page
-        line.syncedText = line.text
-        if let caret { typed(in: line, caret: caret) }
+        return nil
       }
-      if !isComposing, let held = heldReplace {
-        // What arrived while he composed, merged with what he composed: neither replaces the other.
-        heldReplace = nil
-        let merged = PageMerge.merge(base: held.base, mine: page.document, theirs: held.document).document
-        editedPage = EditablePage(document: merged, pageDate: pageDate)
-        if let pageID = shownPageID { redraw(pageID: pageID, pageDate: pageDate, in: held.workspace) }
+      guard var change else { return nil }
+      if LineTextView.needsCleaning(change.text) { change.text = flatten(change, in: line) }
+      let caret = page.replaceText(in: id, range: change.range, with: change.text)
+      editedPage = page
+      line.syncedText = line.text
+      typed(in: line, caret: caret)
+      return caret
+    }
+
+    /// The composition in `id` ended with changes from outside held (`replace`). What he committed goes into the page
+    /// as it was when the first of them arrived, and that is merged with the latest: neither replaces the other. A
+    /// row the outside change removed gets his words back by the merge's rule for a line deleted on the server and
+    /// changed by him. Reported once, when he committed anything.
+    private func commitHeld(_ line: LineTextView, in id: String, held: (base: String, document: String, workspace: Workspace)) {
+      var mine = EditablePage(document: held.base, pageDate: pageDate)
+      var committed = false
+      if let change = InlineTextStorage.change(
+        from: line.syncedText, to: line.text, caret: NSMaxRange(line.selectedRange)),
+        let words = mine.content(of: id), Array(words.plain.utf16) == Array(line.syncedText.utf16),
+        !LineTextView.holdsObjectReplacement(change.text)
+      {
+        _ = mine.replaceText(in: id, range: change.range, with: LineTextView.cleaned(change.text))
+        committed = true
       }
-      guard caret != nil, let editedPage else { return }
-      onChange?(editedPage.document, editedPage.singleDeleteIds)
+      editedPage = EditablePage(
+        document: PageMerge.merge(base: held.base, mine: mine.document, theirs: held.document).document,
+        pageDate: pageDate)
+      if let pageID = shownPageID { redraw(pageID: pageID, pageDate: pageDate, in: held.workspace) }
+      if committed { report() }
     }
 
     /// Draws what the page made of a change typed in `line`. When only that line's words changed, the text view
@@ -426,8 +606,7 @@
           return rowsByID[id].map { $0.kind == row.kind && $0.depth == row.depth } ?? false
         }
       guard onlyItsWords, let row = rows.first(where: { $0.id == id }) else {
-        redraw(pageID: pageID, pageDate: pageDate, in: workspace)
-        place(caretIn: caret.block, selection: NSRange(location: caret.offset, length: 0))
+        restructure(from: line, caret: caret, selectionLength: 0, pageID: pageID, workspace: workspace)
         return
       }
       rowsByID[id] = row
@@ -494,6 +673,75 @@
       let length = (cell.line.text as NSString).length
       let location = min(selection.location, length)
       cell.line.selectedRange = NSRange(location: location, length: min(selection.length, length - location))
+    }
+
+    /// The text view a row's cell holds now, if the list has made one.
+    private func lineView(for id: String) -> LineTextView? {
+      guard let item = orderedIDs.firstIndex(of: id) else { return nil }
+      return (collectionView.cellForItem(at: IndexPath(item: item, section: 0)) as? LineBlockCell)?.line
+    }
+
+    // MARK: the arrow keys
+
+    /// The next row up or down from `line`'s that takes a caret; rows that take none (a divider, a block the app does
+    /// not draw) are passed over.
+    fileprivate func row(after line: LineTextView, going direction: LineTextView.Direction) -> String? {
+      guard let id = line.rowID, let index = orderedIDs.firstIndex(of: id) else { return nil }
+      switch direction {
+      case .up: return orderedIDs[..<index].last { editableIDs.contains($0) }
+      case .down: return orderedIDs[(index + 1)...].first { editableIDs.contains($0) }
+      }
+    }
+
+    /// The caret goes to the next row that takes one, on its visual line nearest to `line` (its last going up, its
+    /// first going down), as near to `point` across as its words allow.
+    fileprivate func moveCaret(from line: LineTextView, going direction: LineTextView.Direction, near point: CGPoint) {
+      guard let id = row(after: line, going: direction) else { return }
+      let across = line.convert(point, to: collectionView).x
+      place(caretIn: id, selection: NSRange(location: 0, length: 0))
+      guard let target = lineView(for: id), target.isFirstResponder else { return }
+      let edge = target.caretRect(for: direction == .up ? target.endOfDocument : target.beginningOfDocument)
+      let probe = CGPoint(x: target.convert(CGPoint(x: across, y: 0), from: collectionView).x, y: edge.midY)
+      guard let position = target.closestPosition(to: probe) else { return }
+      target.selectedTextRange = target.textRange(from: position, to: position)
+    }
+
+    // MARK: the space under the last line
+
+    /// Whether a point in the list is in the empty space under its last row (and under its header, so a tap on the
+    /// day's header is never this).
+    func takesTapUnderTheLastLine(at point: CGPoint) -> Bool {
+      guard editedPage?.isReadable == true else { return false }
+      let layout = collectionView.collectionViewLayout
+      var end: CGFloat = 0
+      if let last = orderedIDs.indices.last, let row = layout.layoutAttributesForItem(at: IndexPath(item: last, section: 0)) {
+        end = row.frame.maxY
+      }
+      if headerView != nil,
+        let header = layout.layoutAttributesForSupplementaryView(
+          ofKind: UICollectionView.elementKindSectionHeader, at: IndexPath(item: 0, section: 0))
+      {
+        end = max(end, header.frame.maxY)
+      }
+      return point.y > end
+    }
+
+    /// A tap under the last row: the caret goes to the end of the last row when it takes a caret; when the page ends
+    /// with a block that holds no words, or has no rows, an empty paragraph is made after it for the caret.
+    func tapUnderTheLastLine(at point: CGPoint) {
+      guard takesTapUnderTheLastLine(at: point) else { return }
+      if let composing = focusedLine, composing.markedTextRange != nil { composing.unmarkText() }
+      if let last = orderedIDs.last, editableIDs.contains(last) {
+        place(caretIn: last, selection: NSRange(location: Int.max, length: 0))
+        return
+      }
+      guard var page = editedPage, let workspace, let pageID = shownPageID, let caret = page.appendParagraph() else {
+        return
+      }
+      editedPage = page
+      redraw(pageID: pageID, pageDate: pageDate, in: workspace)
+      place(caretIn: caret.block, selection: NSRange(location: caret.offset, length: 0))
+      report()
     }
 
     // MARK: the keyboard

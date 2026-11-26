@@ -18,13 +18,21 @@
           content: .array(text.map { [run($0)] } ?? []))
       }
 
-      /// Counts the times the keyboard goes down.
+      /// Counts the times the keyboard goes down. The notification is the whole app's, and comes a turn after the line
+      /// that lost the keyboard, so every other window (an earlier test's) is made to give the keyboard up first.
       @MainActor
       private final class KeyboardWatch {
         private(set) var droppedWhileTyping = 0
         private var observer: NSObjectProtocol?
 
         init(_ screen: Screen) {
+          let others = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+            .filter { $0 !== screen.window }
+          for window in others {
+            window.endEditing(true)
+            window.isHidden = true
+          }
+          _ = screen.wait(0.5) { false }
           observer = NotificationCenter.default.addObserver(
             forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main
           ) { [weak self] _ in MainActor.assumeIsolated { self?.droppedWhileTyping += 1 } }
@@ -60,6 +68,7 @@
         #expect(next.text == "two")
         #expect(next.isFirstResponder, "the new line has the keyboard")
         #expect(next.selectedRange == NSRange(location: 0, length: 0))
+        _ = screen.wait(0.5) { false }
         #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
       }
 
@@ -104,6 +113,7 @@
         #expect(joined.isFirstResponder)
         #expect(joined.selectedRange == NSRange(location: 3, length: 0))
         #expect(reports == 1)
+        _ = screen.wait(0.5) { false }
         #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
       }
 
@@ -113,7 +123,9 @@
         ])
         var reports: [(document: String, singleDeleteIds: [String])] = []
         screen.controller.onChange = { reports.append(($0, $1)) }
-        try screen.focus(1, at: 0).deleteBackward()
+        let line = try screen.focus(1, at: 0)
+        let watch = KeyboardWatch(screen)
+        line.deleteBackward()
         _ = screen.list
 
         #expect(try screen.blocks().map(\.id) == ["a", "c"])
@@ -122,6 +134,8 @@
         #expect(above.selectedRange == NSRange(location: 3, length: 0))
         #expect(reports.count == 1)
         #expect(reports.first?.singleDeleteIds == ["t"], "the save names the row he removed")
+        _ = screen.wait(0.5) { false }
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
       }
 
       @Test func tab_and_shift_tab_nest_and_unnest_and_the_caret_stays_in_its_words() throws {
@@ -176,6 +190,9 @@
         var reports = 0
         screen.controller.onChange = { _, _ in reports += 1 }
         let line = try screen.focus(0, at: 0)
+        _ = screen.wait(0.5) { false }
+        // The row becomes another kind of cell, and later another row: the keyboard stays up throughout.
+        let watch = KeyboardWatch(screen)
         for character in "[] " { line.insertText(String(character)) }
         _ = screen.list
         #expect(try screen.blocks()[0].type == "task")
@@ -193,6 +210,18 @@
         #expect(try screen.line(1).selectedRange == NSRange(location: 0, length: 0))
         // One report for each character typed; the shortcut is part of the last one's.
         #expect(reports == 5)
+
+        // `---` replaces the row with a divider, and the caret goes to a paragraph made after it.
+        let third = try screen.focus(1)
+        third.selectedRange = NSRange(location: 0, length: (third.text as NSString).length)
+        third.deleteBackward()
+        for character in "---" { try #require(screen.controller.focusedLine).insertText(String(character)) }
+        _ = screen.list
+        #expect(try screen.blocks().map(\.type) == ["task", "divider", "paragraph"])
+        let made = try screen.line(2)
+        #expect(made.isFirstResponder && made.selectedRange == NSRange(location: 0, length: 0))
+        _ = screen.wait(0.5) { false }
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
       }
 
       @Test func the_arrow_keys_move_from_the_last_line_of_one_row_to_the_next_row() throws {

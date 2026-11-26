@@ -140,7 +140,9 @@
       let drawn = display(probe, traits: traitCollection)
       guard offset < drawn.length else { return nil }
       var attributes = drawn.attributes(at: offset, effectiveRange: nil)
+      // A typed character is words, never part of a chip.
       attributes[.attachment] = nil
+      attributes[InlineTextStorage.tokenWords] = nil
       return attributes
     }
 
@@ -160,6 +162,7 @@
         // Until the screen sets them from the run at the caret, typing looks like the line's last words.
         var typing = drawn.length > 0 ? drawn.attributes(at: drawn.length - 1, effectiveRange: nil) : [:]
         typing[.attachment] = nil
+        typing[InlineTextStorage.tokenWords] = nil
         line.typingAttributes = typing.isEmpty ? baseAttributes(traits: traits) : typing
         shown = next
       }
