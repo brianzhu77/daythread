@@ -260,7 +260,7 @@
     }
 
     /// The gap between the glyph's right edge and the text's left edge, with the content size category given.
-    private func glyphToTextGap(_ category: UIContentSizeCategory) throws -> (gap: CGFloat, button: CGSize) {
+    private func glyphToTextGap(_ category: UIContentSizeCategory) throws -> (gap: CGFloat, button: CGSize, glyph: CGSize) {
       let controller = DocumentViewController()
       // In a window, so the category reaches the cells' trait collections.
       let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
@@ -276,12 +276,14 @@
       let glyph = try #require(cell.circle.imageView)
       let label = try #require(allSubviews(cell).compactMap { $0 as? UILabel }.first { $0.text?.isEmpty == false })
       let glyphEdge = glyph.convert(glyph.bounds, to: list).maxX
-      return (label.convert(label.bounds, to: list).minX - glyphEdge, cell.circle.bounds.size)
+      return (label.convert(label.bounds, to: list).minX - glyphEdge, cell.circle.bounds.size, glyph.bounds.size)
     }
 
     @Test func at_the_largest_text_size_the_glyph_does_not_reach_the_text_and_the_button_is_still_44_square() throws {
       let normal = try glyphToTextGap(.large)
       let largest = try glyphToTextGap(.accessibilityExtraExtraExtraLarge)
+      // Without this the two measurements could be the same layout and the rest would check nothing.
+      #expect(largest.glyph.width > normal.glyph.width * 1.5, "the larger category did not reach the cells")
       #expect(largest.gap >= 0, "the glyph overlaps the text")
       #expect(largest.gap >= normal.gap, "gap \(largest.gap) at the largest size, \(normal.gap) at the default")
       #expect(largest.button.width >= 44 && largest.button.height >= 44)
