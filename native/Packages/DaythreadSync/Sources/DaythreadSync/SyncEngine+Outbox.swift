@@ -359,8 +359,9 @@ extension SyncEngine {
         token: pass.session?.token, operationId: operationId, action: performance.action,
         expectedOwner: performance.owner,
         basis: OutboxBasis(baseRevision: revision, ownRevisions: [], readsBeyond: true))
-    } catch TransportError.refused(status: 400, reason: _) {
-      return .answer(.refused("bad-request"))
+    } catch TransportError.refused(let status, let reason) {
+      // The server's answer to this command alone: answered, and the pass goes on to the next.
+      return .answer(.refused(status == 400 ? "bad-request" : reason ?? "refused"))
     }
     try await enter(pass)
     defer { release() }

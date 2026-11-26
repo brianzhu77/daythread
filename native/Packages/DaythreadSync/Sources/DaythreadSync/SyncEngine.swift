@@ -401,7 +401,10 @@ public actor SyncEngine {
   /// and sign-in is shown, with the copy and the outbox kept for the next sign-in to claim or erase; any other reason
   /// is kept in `failure` until the server next answers.
   private func end(_ pass: Pass, after error: any Error) async {
-    answerPerformances(of: pass, with: Performed(error))
+    // A refusal here was the answer to something else; these commands were never sent.
+    let unsent: Performed =
+      if case TransportError.refused? = error as? TransportError { .offline } else { Performed(error) }
+    answerPerformances(of: pass, with: unsent)
     if error is CancellationError || error is Superseded {
       SyncLog.logger.info("Pass dropped: \(SyncLog.describe(error), privacy: .public)")
       return

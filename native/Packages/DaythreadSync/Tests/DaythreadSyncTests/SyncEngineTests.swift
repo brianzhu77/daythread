@@ -1919,7 +1919,8 @@ struct Answer: Sendable, CustomTestStringConvertible {
 
     // Two commands wait behind a tick in flight; the server refuses the first outright.
     let gate = Gate()
-    let h = try await Harness(opening + [.gated(gate), .failure(forbidden), applied(added)], copy: try board(5, rows: [row("t1")]))
+    let h = try await Harness(
+      opening + [.gated(gate), .failure(forbidden), applied(added)], copy: try board(5, rows: [row("t1")]))
     await h.engine.start()
     try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
     await gate.reached()
