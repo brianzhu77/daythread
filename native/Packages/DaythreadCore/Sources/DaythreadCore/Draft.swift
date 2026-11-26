@@ -20,9 +20,7 @@ extension Workspace {
     for row in Self.todoRows(in: Document.blocks(document)) {
       let words = InlineText.plain(row.content, pageDate: pageDate)
       // The server brings a deleted to-do back from its row instead of making a new one.
-      guard copy.task(row.id) == nil, !buried.contains(row.id),
-        !words.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-      else { continue }
+      guard copy.task(row.id) == nil, !buried.contains(row.id), !Self.isBlankInJavaScript(words) else { continue }
       if let task = TodoTask(Self.newTask(id: row.id, words: words, page: page)) { copy.tasks.append(task) }
     }
     return copy

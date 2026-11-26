@@ -43,7 +43,9 @@ public enum ContentKey {
     guard document.contains("\"\(syncedBlockType)\""),
       let nodes = try? JSON.parse(document).arrayValue
     else { return document }
-    return JSON.write(.array(nodes.map(strip)))
+    let stripped = JSONValue.array(nodes.map(strip))
+    // Nothing to strip: the string itself, so the key does not depend on the writer spelling it as the web does.
+    return stripped == .array(nodes) ? document : JSON.write(stripped)
   }
 
   private static func strip(_ node: JSONValue) -> JSONValue {
