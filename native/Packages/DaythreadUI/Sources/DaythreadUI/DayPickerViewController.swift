@@ -9,12 +9,15 @@
     private let selected: LocalDate
     private let written: Set<LocalDate>
     private let onPick: (LocalDate) -> Void
-    private let calendarView = UICalendarView()
+    let calendarView = UICalendarView()
     /// A `LocalDate` is a calendar day with no zone; read and written in UTC, the day tapped is the day picked, as in
     /// `DayTitle`.
     private let calendar: Calendar
 
-    init(selected: LocalDate, written: Set<LocalDate>, weekStartsOnMonday: Bool, onPick: @escaping (LocalDate) -> Void) {
+    init(
+      selected: LocalDate, written: Set<LocalDate>, weekStartsOnMonday: Bool, timezone: String,
+      onPick: @escaping (LocalDate) -> Void
+    ) {
       self.selected = selected
       self.written = written
       self.onPick = onPick

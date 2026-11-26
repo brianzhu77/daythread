@@ -212,7 +212,8 @@
       let workspace = model.workspace
       let picker = DayPickerViewController(
         selected: date, written: workspace?.writtenDays() ?? [],
-        weekStartsOnMonday: workspace?.weekStartsOnMonday ?? false
+        weekStartsOnMonday: workspace?.weekStartsOnMonday ?? false,
+        timezone: workspace?.timezone ?? TimeZone.current.identifier
       ) { [weak self] day in
         self?.dismiss(animated: true)
         self?.open(day)
