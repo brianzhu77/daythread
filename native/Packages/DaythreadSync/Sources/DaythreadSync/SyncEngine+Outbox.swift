@@ -71,6 +71,8 @@ extension SyncEngine {
         // After a load under another owner, the entries left are that owner's; this revision is not theirs.
         try await store.acknowledge(seq: entry.seq, revision: copy?.owner == entry.owner ? revision : nil)
         await readOutbox()
+        // The load holds its change now: said at once, not replayed until the pass's next publish.
+        publish()
       case .loadWholeAndStop:
         try await loadWorkspace(pass, have: nil)
         return .stopped
