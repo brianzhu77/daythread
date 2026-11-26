@@ -3,7 +3,8 @@
 - Author: Claude · 2026-11-25 · status: **phase 1a built and seen on the simulator**, its check on his own data to
   come (`docs/plan/native-phase-1a.md`, task 11); phase 0 before it (`docs/plan/native-phase-0.md`).
 - The app ticks a to-do and starts or restores a day's page; nothing else is changed from it. This list is checked
-  against the Swift code, not the plan; where it says "draws", the code draws it today. Update it in the same change as any screen or block kind it names.
+  against the Swift code, not the plan; where it says "draws", the code draws it today. Update it in the same change
+  as any screen or block kind it names.
 - Marks: **built** (the app has it, and the note says how much), **placeholder** (the app shows a named stand-in and
   no content), **absent** (the app has nothing for it).
 
