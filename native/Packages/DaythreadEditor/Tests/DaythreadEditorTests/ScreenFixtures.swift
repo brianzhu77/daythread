@@ -5,6 +5,31 @@
 
   @testable import DaythreadEditor
 
+  /// Counts the times the keyboard goes down. The notification is the whole app's, and comes a turn after the line
+  /// that lost the keyboard, so every other window (an earlier test's) is made to give the keyboard up first.
+  @MainActor
+  final class KeyboardWatch {
+    private(set) var droppedWhileTyping = 0
+    private var observer: NSObjectProtocol?
+
+    init(_ screen: Screen) {
+      let others = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+        .filter { $0 !== screen.window }
+      for window in others {
+        window.endEditing(true)
+        window.isHidden = true
+      }
+      _ = screen.wait(0.5) { false }
+      observer = NotificationCenter.default.addObserver(
+        forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main
+      ) { [weak self] _ in MainActor.assumeIsolated { self?.droppedWhileTyping += 1 } }
+    }
+
+    isolated deinit {
+      if let observer { NotificationCenter.default.removeObserver(observer) }
+    }
+  }
+
   /// A page being edited, in a window, as he sees it.
   @MainActor
   struct Screen {

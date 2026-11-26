@@ -241,6 +241,117 @@
         #expect(reports == 1)
       }
 
+      /// The server changed the words of the row he composed in: the server's words stay there and his go into a new
+      /// row below (the merge's rule). The caret follows his words, after what he committed, and the keyboard stays.
+      @Test func the_caret_follows_his_words_when_the_merge_puts_them_below_the_servers() throws {
+        let screen = try Screen.editing([
+          block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two"),
+          block("c", "paragraph", text: "three"),
+        ])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(1)
+        let watch = KeyboardWatch(screen)
+        compose("今天", in: line)
+        let outside = Document.write([
+          block("a", "paragraph", text: "one"), block("b", "paragraph", text: "TWO"),
+          block("c", "paragraph", text: "three"),
+        ])
+        screen.controller.replace(document: outside, in: try makeWorkspace())
+        line.unmarkText()
+        _ = screen.list
+
+        #expect(try screen.words() == ["one", "TWO", "two今天", "three"])
+        let his = try screen.line(2)
+        #expect(his.isFirstResponder, "the caret stayed in the server's line")
+        #expect(his.selectedRange == NSRange(location: 5, length: 0))
+        #expect(reports == 1)
+        _ = screen.wait(0.5) { false }
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
+        // His next character goes after his words, not into the server's.
+        his.insertText("!")
+        #expect(try screen.words() == ["one", "TWO", "two今天!", "three"])
+      }
+
+      /// The server deleted the to-do he composed in: his words come back as a plain line, which takes the caret and
+      /// the keyboard.
+      @Test func the_caret_follows_his_words_when_the_server_deleted_the_to_do_he_composed_in() throws {
+        let screen = try Screen.editing([
+          block("a", "paragraph", text: "one"),
+          block("t", "task", ["taskId": .string("editor-task:t"), "role": .string("plan"), "planDate": .string("")], text: "Call"),
+          block("c", "paragraph", text: "three"),
+        ])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(1)
+        let watch = KeyboardWatch(screen)
+        compose("今", in: line)
+        let outside = Document.write([block("a", "paragraph", text: "one"), block("c", "paragraph", text: "three")])
+        screen.controller.replace(document: outside, in: try makeWorkspace())
+        line.unmarkText()
+        _ = screen.list
+
+        #expect(try screen.words() == ["one", "Call今", "three"])
+        #expect(try screen.blocks()[1].type == "paragraph")
+        let his = try screen.line(1)
+        #expect(his.isFirstResponder, "the caret was lost")
+        #expect(his.selectedRange == NSRange(location: 5, length: 0))
+        #expect(reports == 1)
+        _ = screen.wait(0.5) { false }
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
+      }
+
+      /// Two changes from outside in one composition: the merge starts from the page before the first, and keeps both.
+      @Test func two_outside_changes_during_one_composition_are_both_kept() throws {
+        let workspace = try makeWorkspace()
+        let screen = try Screen.editing([
+          block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two"),
+          block("c", "paragraph", text: "three"),
+        ])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(1)
+        compose("今天", in: line)
+        screen.controller.replace(
+          document: Document.write([
+            block("a", "paragraph", text: "one"), block("b", "bulletListItem", text: "two"),
+            block("c", "paragraph", text: "three, later"),
+          ]), in: workspace)
+        screen.controller.replace(
+          document: Document.write([
+            block("a", "paragraph", text: "one, later"), block("b", "bulletListItem", text: "two"),
+            block("c", "paragraph", text: "three, later"),
+          ]), in: workspace)
+        #expect(try screen.line(0).text == "one, later")
+        #expect(line.markedTextRange != nil)
+        line.unmarkText()
+        _ = screen.list
+        #expect(try screen.words() == ["one, later", "two今天", "three, later"])
+        #expect(try screen.blocks()[1].type == "bulletListItem")
+        #expect(reports == 1)
+      }
+
+      /// Another page while composing, and a cell given to another row: each ends the composition once, after its
+      /// words were reported.
+      @Test(arguments: ["another page", "rebound cell"])
+      func a_composition_ended_from_outside_says_so_once(by way: String) throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        var events: [String] = []
+        screen.controller.onChange = { _, _ in events.append("change") }
+        screen.controller.onComposingChange = { events.append($0 ? "composing" : "done") }
+        let line = try screen.focus(1)
+        compose("今", in: line)
+        if way == "another page" {
+          screen.controller.edit(
+            page: try makePage([block("x", "paragraph", text: "other")], id: "q"), in: try makeWorkspace())
+        } else {
+          rebind(try #require(try screen.cell(1) as? TextBlockCell), to: "a", showing: "one")
+        }
+        _ = screen.wait(0.2) { false }
+        #expect(events == ["composing", "change", "done"])
+        #expect(!screen.controller.isComposing)
+      }
+
       @Test func composing_on_an_empty_new_line_stays_on_that_line() throws {
         let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
         try screen.focus(0).insertText("\n")

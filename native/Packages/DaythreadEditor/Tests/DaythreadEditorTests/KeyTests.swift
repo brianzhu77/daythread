@@ -18,30 +18,6 @@
           content: .array(text.map { [run($0)] } ?? []))
       }
 
-      /// Counts the times the keyboard goes down. The notification is the whole app's, and comes a turn after the line
-      /// that lost the keyboard, so every other window (an earlier test's) is made to give the keyboard up first.
-      @MainActor
-      private final class KeyboardWatch {
-        private(set) var droppedWhileTyping = 0
-        private var observer: NSObjectProtocol?
-
-        init(_ screen: Screen) {
-          let others = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
-            .filter { $0 !== screen.window }
-          for window in others {
-            window.endEditing(true)
-            window.isHidden = true
-          }
-          _ = screen.wait(0.5) { false }
-          observer = NotificationCenter.default.addObserver(
-            forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main
-          ) { [weak self] _ in MainActor.assumeIsolated { self?.droppedWhileTyping += 1 } }
-        }
-
-        isolated deinit {
-          if let observer { NotificationCenter.default.removeObserver(observer) }
-        }
-      }
 
       @Test func return_splits_the_line_and_the_caret_is_at_the_start_of_the_new_line() throws {
         let screen = try Screen.editing([
@@ -70,6 +46,103 @@
         #expect(next.selectedRange == NSRange(location: 0, length: 0))
         _ = screen.wait(0.5) { false }
         #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
+      }
+
+      /// The keyboard's own path: a software keyboard's Return and Tab reach the line as text to insert, and the
+      /// delegate is asked first.
+      @Test func return_and_tab_by_the_delegates_path_are_the_pages_keys() throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "twothree")])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(1, at: 3)
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: NSRange(location: 3, length: 0), replacementText: "\n") == false)
+        _ = screen.list
+        #expect(try screen.words() == ["one", "two", "three"])
+        let next = try #require(screen.controller.focusedLine)
+        #expect(next.rowID == (try screen.blocks()[2].id) && next.selectedRange == NSRange(location: 0, length: 0))
+
+        #expect(next.delegate?.textView?(next, shouldChangeTextIn: NSRange(location: 0, length: 0), replacementText: "\t") == false)
+        _ = screen.list
+        #expect(try screen.blocks().map(\.id) == ["a", "b"])
+        #expect(try screen.blocks()[1].children.count == 1, "Tab did not nest the line")
+        #expect(screen.controller.focusedLine?.text == "three")
+        #expect(reports == 2)
+      }
+
+      /// Return over a selection on screen: the selected words go and the line splits there.
+      @Test func return_over_a_selection_replaces_it_and_splits() throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "one, two")])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(0)
+        line.selectedRange = NSRange(location: 3, length: 2)
+        line.insertText("\n")
+        _ = screen.list
+        #expect(try screen.words() == ["one", "two"])
+        #expect(try screen.line(1).isFirstResponder)
+        #expect(try screen.line(1).selectedRange == NSRange(location: 0, length: 0))
+        #expect(reports == 1)
+      }
+
+      /// Pasted words still waiting for the run loop's next turn when a key comes: they go in first, and the key acts
+      /// after them.
+      @Test func words_pasted_just_before_return_go_in_before_the_split() throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(0)
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: NSRange(location: 3, length: 0), replacementText: " x\ny") == false)
+        line.insertText("\n")
+        _ = screen.wait(0.3) { false }
+        #expect(try screen.words() == ["one x y", "", "two"])
+        #expect(try screen.line(1).isFirstResponder)
+        #expect(try screen.line(1).text == "")
+        #expect(reports == 1)
+      }
+
+      /// A restructure that holds the keyboard (a row rebuilt as a to-do) does not move the list.
+      @Test func holding_the_keyboard_does_not_scroll_the_list() throws {
+        let screen = try Screen.editing((0..<60).map { block("p\($0)", "paragraph", text: "Line \($0)") })
+        let list = screen.list
+        list.setContentOffset(CGPoint(x: 0, y: list.contentSize.height - list.bounds.height), animated: false)
+        list.layoutIfNeeded()
+        let item = try #require(list.indexPathsForVisibleItems.map(\.item).sorted().dropLast(2).last)
+        let line = try screen.focus(item, at: 0)
+        for character in "[]" { line.insertText(String(character)) }
+        _ = screen.wait(1) { false }
+        let before = list.contentOffset
+        line.insertText(" ")
+        _ = screen.wait(0.5) { false }
+        #expect(try screen.blocks()[item].type == "task")
+        #expect(screen.controller.focusedLine?.rowID == "p\(item)")
+        #expect(abs(list.contentOffset.y - before.y) <= 0.5, "the list moved from \(before.y) to \(list.contentOffset.y)")
+      }
+
+      /// At a soft wrap one offset is two places: the end of the first visual line (the tokenizer's line end, carrying
+      /// a backward affinity, as End puts it) and the start of the second. The caret is on the line it is drawn on: at
+      /// the first, Down stays in the row of two lines and Up leaves it; at the second, the other way round.
+      @Test func at_a_soft_wrap_the_caret_is_on_the_line_it_is_drawn_on() throws {
+        let long = "Words long enough to wrap onto a second line on a phone, and that is all"
+        let screen = try Screen.editing([
+          block("a", "paragraph", text: "one"), block("b", "paragraph", text: long), block("c", "paragraph", text: "end"),
+        ])
+        let line = try screen.focus(1, at: 0)
+        let lineEnd = try #require(
+          line.tokenizer.position(from: line.beginningOfDocument, toBoundary: .line, inDirection: .storage(.forward)))
+        let offset = line.offset(from: line.beginningOfDocument, to: lineEnd)
+        #expect(offset < (long as NSString).length, "the row does not wrap")
+        let secondLine = try #require(line.tokenizer.position(from: lineEnd, toBoundary: .line, inDirection: .storage(.forward)))
+        #expect(line.offset(from: line.beginningOfDocument, to: secondLine) == (long as NSString).length, "more than two lines")
+
+        line.selectedTextRange = line.textRange(from: lineEnd, to: lineEnd)
+        let drawn = line.caretRect(for: try #require(line.selectedTextRange).start)
+        #expect(abs(drawn.midY - line.caretRect(for: line.beginningOfDocument).midY) < 1, "not drawn on the first line")
+        #expect(try !screen.takesKey(line, UIKeyCommand.inputDownArrow), "Down left a row of two lines from its first")
+        #expect(try screen.takesKey(line, UIKeyCommand.inputUpArrow))
+
+        line.selectedRange = NSRange(location: offset, length: 0)
+        #expect(try screen.takesKey(line, UIKeyCommand.inputDownArrow))
+        #expect(try !screen.takesKey(line, UIKeyCommand.inputUpArrow))
       }
 
       @Test func return_in_a_to_do_makes_a_new_circle() throws {
