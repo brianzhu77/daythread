@@ -183,6 +183,27 @@
       #expect(try cell(controller, 0) === untouched)
     }
 
+    /// A tick the server holds goes back to open: the words lose the line through them, not only the circle its fill.
+    @Test func a_done_to_do_drawn_open_again_has_no_line_through_its_words() throws {
+      let controller = DocumentViewController()
+      let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+      window.rootViewController = controller
+      window.makeKeyAndVisible()
+      controller.view.layoutIfNeeded()
+      let page = try makePage([block("a", "task", ["taskId": .string("k")], text: "Call the bank")])
+      controller.show(page: page, in: try makeWorkspace(tasks: [taskJSON("k", status: "done")]))
+      _ = try collection(controller)
+      controller.show(page: page, in: try makeWorkspace(tasks: [taskJSON("k", status: "open")]))
+      let list = try collection(controller)
+      let cell = try #require(try self.cell(controller, 0) as? TodoBlockCell)
+      cell.layoutIfNeeded()
+      #expect(cell.symbolName == "circle")
+      let label = try #require(allSubviews(list).compactMap { $0 as? UILabel }.first { $0.text == "Call the bank" })
+      let drawn = try #require(label.attributedText)
+      let style = drawn.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int ?? 0
+      #expect(style == 0, "the label draws a line through the words")
+    }
+
     @Test func aRowWhoseTextChangedButNotItsKindIsReconfiguredInPlace() throws {
       let controller = hosted()
       let workspace = try makeWorkspace()
