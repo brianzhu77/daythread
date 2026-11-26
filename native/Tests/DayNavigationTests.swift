@@ -14,11 +14,27 @@ private func dayPage(_ date: LocalDate) -> String {
   #"{"id":"day:\#(date.value)","type":"daily","date":"\#(date.value)","title":"","document":"[]"}"#
 }
 
-/// Today's page and an open to-do; nothing for yesterday.
-private func copy() throws -> Workspace {
+/// Yesterday's page gone to Trash, with the batch it went in when `trashId` is given.
+private func trashedPage(_ date: LocalDate, trashId: String?) -> String {
+  let batch = trashId.map { #","trashId":"\#($0)""# } ?? ""
+  return #"{"id":"day:\#(date.value)","type":"daily","date":"\#(date.value)","title":"","document":"[]","#
+    + #""trashedAt":"2026-11-24T20:00:00.000Z"\#(batch)}"#
+}
+
+/// Today's page and an open to-do, and `others` pages; nothing for yesterday unless `others` has it.
+private func copy(revision: Int = 1, others: [String] = []) throws -> Workspace {
   let task = #"{"id":"t-open","title":"Water the plants","status":"open","paused":false,"doneOn":null,"version":1}"#
-  let text = #"{"revision":1,"timezone":"UTC","pages":[\#(dayPage(today))],"tasks":[\#(task)]}"#
+  let pages = ([dayPage(today)] + others).joined(separator: ",")
+  let text = #"{"revision":\#(revision),"timezone":"UTC","pages":[\#(pages)],"tasks":[\#(task)]}"#
   return try #require(Workspace(try JSON.parse(text)))
+}
+
+/// What the server answers for `restore-batch` on yesterday's page, made on revision 1.
+private func yesterdayRestored() throws -> WorkspaceChanges {
+  let text =
+    #"{"from":1,"revision":2,"timezone":"UTC","pages":{"upsert":[\#(dayPage(yesterday))],"remove":[]},"#
+    + #""tasks":{"upsert":[],"remove":[]}}"#
+  return try #require(WorkspaceChanges(try JSON.parse(text)))
 }
 
 /// What the server answers for `ensure-day` on yesterday, made on revision 1.
@@ -168,5 +184,123 @@ extension DayViewController {
     try await until { screen.drawn().emptyState == nil }
     #expect(screen.content == .page(try #require(h.model.workspace?.dayPage(yesterday))))
     #expect(await h.server.sent == [Command.ensureDay(yesterday), Command.ensureDay(yesterday)])
+  }
+
+  @Test func a_day_opened_before_it_is_today_follows_today_once_it_is() async throws {
+    let clock = Clock()
+    let h = try await Harness(copy: try copy(), clock: clock)
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+    screen.open(tomorrow)
+    #expect(screen.drawn().title == DayTitle.text(for: tomorrow))
+
+    clock.date = Date(timeIntervalSince1970: 1_795_651_201)  // 2026-11-26T00:00:01Z
+    h.model.checkToday()
+    #expect(screen.drawn().title == DayTitle.text(for: tomorrow))
+    #expect(screen.item("Today") == nil, "the day shown is today")
+
+    clock.date = Date(timeIntervalSince1970: 1_795_737_601)  // 2026-11-27T00:00:01Z
+    h.model.checkToday()
+    #expect(screen.drawn().title == DayTitle.text(for: LocalDate("2026-11-27")!))
+  }
+
+  @Test func the_day_timer_is_set_again_when_the_scene_becomes_active() async throws {
+    let clock = Clock()
+    let h = try await Harness(copy: try copy(), clock: clock)
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+    screen.updatePropertiesIfNeeded()
+    let armed = try #require(screen.dayTimer)
+
+    // The device slept for an hour: the timer counted none of it, so it would fire an hour late.
+    clock.date = noon.addingTimeInterval(3_600)
+    NotificationCenter.default.post(name: UIScene.didActivateNotification, object: nil)
+    let rearmed = try #require(screen.drawn().dayTimer)
+
+    #expect(rearmed !== armed)
+    #expect(!armed.isValid)
+    let fires = rearmed.fireDate.timeIntervalSinceNow
+    #expect(abs(fires - h.model.nextDayChange.in) < 5, "fires in \(fires) s, the day changes in \(h.model.nextDayChange.in) s")
+  }
+
+  @Test func a_failure_line_goes_when_he_moves_to_another_day() async throws {
+    let h = try await Harness(copy: try copy())
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+    screen.tap("Previous day")
+    screen.tapEmptyStateButton()
+    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't start a page · try again" }
+
+    screen.tap("Today")
+    screen.tap("Previous day")
+    let empty = try #require(screen.emptyState)
+    #expect(empty.text == "No page for \(DayTitle.text(for: yesterday)) yet")
+    #expect(empty.secondaryText == nil)
+  }
+
+  @Test func a_failure_line_goes_when_the_day_shows_a_page() async throws {
+    let h = try await Harness(copy: try copy())
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+    screen.tap("Previous day")
+    screen.tapEmptyStateButton()
+    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't start a page · try again" }
+
+    // Another device starts the page, then puts it in Trash.
+    await h.server.add([.workspace(.full(try copy(revision: 2, others: [dayPage(yesterday)]), owner: "one"))])
+    await h.model.refresh()
+    try await until { screen.drawn().emptyState == nil }
+    await h.server.add([
+      .workspace(.full(try copy(revision: 3, others: [trashedPage(yesterday, trashId: "batch-1")]), owner: "one"))
+    ])
+    await h.model.refresh()
+    try await until { screen.drawn().emptyState != nil }
+    let trashed = try #require(screen.emptyState)
+    #expect(trashed.text == "The page for \(DayTitle.text(for: yesterday)) is in Trash.")
+    #expect(trashed.secondaryText == nil)
+  }
+
+  @Test func restore_sends_the_pages_trash_batch_and_shows_the_page() async throws {
+    let h = try await Harness(copy: try copy(others: [trashedPage(yesterday, trashId: "batch-1")]))
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+    screen.tap("Previous day")
+
+    let empty = try #require(screen.emptyState)
+    #expect(empty.text == "The page for \(DayTitle.text(for: yesterday)) is in Trash.")
+    #expect(empty.button.title == "Restore")
+    #expect(empty.secondaryButton.title == "Start a new page")
+
+    await h.server.add([.outcome(.applied(receipt: .object([:]), changes: try yesterdayRestored(), owner: "one"))])
+    screen.tapEmptyStateButton()
+    try await until { screen.drawn().emptyState == nil }
+    #expect(screen.content == .page(try #require(h.model.workspace?.dayPage(yesterday))))
+    #expect(await h.server.sent == [Command.restoreBatch(trashId: "batch-1")])
+  }
+
+  @Test func restore_says_it_could_not_when_offline() async throws {
+    let h = try await Harness(copy: try copy(others: [trashedPage(yesterday, trashId: "batch-1")]))
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+    screen.tap("Previous day")
+
+    screen.tapEmptyStateButton()
+    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't restore · try again" }
+    let failed = try #require(screen.emptyState)
+    #expect(failed.button.title == "Restore")
+    #expect(failed.buttonProperties.isEnabled)
+    #expect(await h.server.sent == [Command.restoreBatch(trashId: "batch-1")])
+  }
+
+  @Test func a_page_in_trash_with_no_batch_can_only_be_started_again() async throws {
+    let h = try await Harness(copy: try copy(others: [trashedPage(yesterday, trashId: nil)]))
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+    screen.tap("Previous day")
+
+    let empty = try #require(screen.emptyState)
+    #expect(empty.text == "The page for \(DayTitle.text(for: yesterday)) is in Trash.")
+    #expect(empty.button.title == "Start a new page")
+    #expect(empty.secondaryButton.title == nil)
   }
 }

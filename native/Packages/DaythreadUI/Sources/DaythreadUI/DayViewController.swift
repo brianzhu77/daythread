@@ -59,7 +59,8 @@
     private var running: Attempt?
     private var failed: Attempt?
     private var drawnDate: LocalDate?
-    private var dayTimer: Timer?
+    /// Fires at the account's next midnight.
+    private(set) var dayTimer: Timer?
     private var scheduledChange: Date?
 
     private let document = DocumentViewController()
@@ -193,7 +194,7 @@
     }
 
     /// Shows `day`; today, or nil, follows today from then on.
-    private func open(_ day: LocalDate?) {
+    func open(_ day: LocalDate?) {
       shownDate = day == model.today ? nil : day
       setNeedsUpdateProperties()
     }
