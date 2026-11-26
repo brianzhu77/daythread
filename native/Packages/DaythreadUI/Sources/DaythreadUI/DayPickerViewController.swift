@@ -31,6 +31,11 @@
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// The detent the sheet opens at on the phone.
+    static func firstDetent(for category: UIContentSizeCategory) -> UISheetPresentationController.Detent.Identifier {
+      .medium
+    }
+
     override func viewDidLoad() {
       super.viewDidLoad()
       view.backgroundColor = .systemBackground

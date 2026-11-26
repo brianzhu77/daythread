@@ -31,4 +31,12 @@ import UIKit
       #expect(picked == [LocalDate("2026-11-24")!], "in \(zone)")
     }
   }
+
+  /// At the accessibility text sizes a month does not fit half the screen: the sheet opens at its full height.
+  @Test func the_sheet_opens_at_full_height_at_the_accessibility_text_sizes() {
+    #expect(DayPickerViewController.firstDetent(for: .large) == .medium)
+    #expect(DayPickerViewController.firstDetent(for: .extraExtraExtraLarge) == .medium)
+    #expect(DayPickerViewController.firstDetent(for: .accessibilityMedium) == .large)
+    #expect(DayPickerViewController.firstDetent(for: .accessibilityExtraExtraExtraLarge) == .large)
+  }
 }
