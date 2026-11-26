@@ -77,9 +77,10 @@ final class DayUITests: XCTestCase {
     parts.day = day
     let pickedDay = calendar.date(from: parts)!
     app.buttons["Calendar"].tap()
-    let cell = app.collectionViews.buttons.matching(
-      NSPredicate(format: "label CONTAINS %@", " \(day),")
-    ).firstMatch
+    // The calendar's own label for a day: "Tuesday, November 10" (with "Today, " before the system's today).
+    let month = pickedDay.formatted(
+      Date.FormatStyle(locale: Locale(identifier: "en_US"), calendar: calendar, timeZone: .gmt).month(.wide))
+    let cell = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", ", \(month) \(day)")).firstMatch
     XCTAssertTrue(cell.waitForExistence(timeout: 10), "the calendar")
     cell.tap()
     let pickedTitle = dayTitle(pickedDay)

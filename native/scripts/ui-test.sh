@@ -128,7 +128,9 @@ const today = new Intl.DateTimeFormat('en-CA', {
   timeZone: workspace.timezone, year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date())
 await send('ui-test-day', { type: 'ensure-day', date: today })
-await send('ui-test-task', { type: 'add-task', pageId: `day:${today}`, title: 'Water the plants' })
+for (const [index, title] of ['Water the plants', 'Tick me', 'Tick me offline', 'Tick me twice'].entries()) {
+  await send(`ui-test-task-${index}`, { type: 'add-task', pageId: `day:${today}`, title })
+}
 const title = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric',
 }).format(new Date(`${today}T00:00:00Z`))
