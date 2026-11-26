@@ -634,7 +634,8 @@ public actor SyncEngine {
     let shown = copyShown && copy != nil
     let behind = outbox.waiting
     let held = outbox.filter { $0.state == .held && !$0.asksForADay }.map(HeldChange.init)
-    let pending = outbox.count { $0.state == .pending && !behind.contains($0.seq) }
+    // He did not make the engine's own request for today's page: it is sent, but not counted as his.
+    let pending = outbox.count { $0.state == .pending && !behind.contains($0.seq) && !$0.asksForADay }
     broadcast.publish(
       SyncState(
         phase: phase, workspace: drawn, offline: offline, held: shown ? held : [], pending: shown ? pending : 0,

@@ -13,7 +13,8 @@ public struct SyncState: Sendable, Equatable {
   public var offline: Bool
   /// Outbox entries the server held or refused, waiting for him to keep or discard them, by `seq`.
   public var held: [HeldChange]
-  /// Pending entries the engine will send.
+  /// His pending entries the engine will send: not those waiting behind a held one, and not the engine's own request
+  /// for today's page, which it sends but he did not make.
   public var pending: Int
   /// Pending entries not sent while an earlier entry for the same to-do is held.
   public var waiting: Int
