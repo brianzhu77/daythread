@@ -441,7 +441,10 @@ The web's rules, read from its editor (BlockNote 0.56's keyboard handling and th
 - **A to-do let go.** When a to-do's row leaves the page, the server decides what becomes of the to-do, as it
   does for the web: it goes to the to-dos' Trash unless it still has a row on another page. The save names the
   rows he removed one at a time (`singleDeleteIds`) in exactly the web's two cases: Backspace on an empty to-do,
-  and Backspace turning the page's first line from a to-do into a paragraph. The list is emptied after a merge.
+  and Backspace turning the page's first line from a to-do into a paragraph. The screen keeps naming such a row
+  while it is still absent from the page, across a redraw and across a merge (the server settles a row as removed
+  one at a time only if the save that removes it says so), and forgets it when the row is back or another page
+  is opened.
 - **A new to-do can be ticked at once**, offline too. The server will make its to-do under the row's own
   `taskId` when the save lands, so the app draws it as an open to-do from the draft, and a tick on it waits in the
   outbox behind that page's save (`native-app.md` §7: one ordered queue). The web cannot tick it until the save
@@ -476,12 +479,21 @@ copy of itself coming back, and nothing computed a moment ago can overwrite what
 
 **The draft.** Each change is handed to the engine, which writes it to the store at once, as that page's draft
 under his account: the document; the page it started from (its text and its key); the rows he removed; and, while
-a save is on its way, exactly what was sent and under which operation. A crash or a quit loses nothing. This is a
-new kind of row in the store, added with a migration that keeps what the store already holds.
+a save is on its way, exactly what was sent and under which operation: the whole request as first sent, because
+the server recognises a repeated operation only when it is the same request, timestamps included. A crash or a
+quit loses nothing. This is a new kind of row in the store, added with a migration that keeps what the store
+already holds.
+
+- **The page a draft started from is the page he typed on**, which the screen tells the engine with his first
+  change, never the engine's copy at the moment the change arrives: a load can land between the keystroke and the
+  engine, and a draft that took the newer page as its start would be sent over another device's words.
 
 - A draft belongs to its account. Day pages and their template lines have the same ids in every account, so a
   draft is never drawn, merged or sent under another one. It is kept, out of sight, until its own account is back;
-  signing out asks first, as for any change not sent.
+  signing out asks first, as for any change not sent. A sign-out removes the drafts of the account signing out,
+  and only when he chose to discard them; it never removes another account's (my call: an account that never
+  returns leaves its unsent words on the device, neither drawn nor sent, which costs less than erasing words
+  nobody was asked about).
 
 **What is drawn.** Where a page has a draft, the workspace the engine publishes has the draft's document for that
 page, and an open to-do for each new to-do row that has words. So every screen and a relaunch show what he wrote.
