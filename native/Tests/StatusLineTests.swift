@@ -49,6 +49,24 @@ private func workspace() throws -> Workspace {
         == notKept)
   }
 
+  @Test func offline_with_only_the_request_for_todays_page_counts_no_change() async throws {
+    // Today has no page, so the engine asks for it; the server cannot be reached for that request.
+    let server = TestServer([
+      .account(Account(owner: "one", email: "one@example.com", signIn: true)),
+      .workspace(.full(try workspace(), owner: "one")),
+    ])
+    let tokens = MemoryTokenStore()
+    try tokens.write(one)
+    let engine = SyncEngine(transport: server, tokens: tokens, store: MemoryWorkspaceStore(), now: { noon })
+
+    await engine.start()
+
+    let state = try #require(await engine.states.first { _ in true })
+    #expect(await server.sent.count == 1)
+    #expect(state.pending == 0)
+    #expect(StatusLine.text(state: state, keepsChanges: true) == "Offline · showing what was last loaded")
+  }
+
   @Test func nothing_wrong_says_nothing() throws {
     let copy = try workspace()
     #expect(StatusLine.text(state: SyncState(phase: .ready, workspace: copy), keepsChanges: true) == nil)

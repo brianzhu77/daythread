@@ -1756,6 +1756,18 @@ struct Answer: Sendable, CustomTestStringConvertible {
     #expect(try await h.entries == [])
   }
 
+  @Test func the_engines_own_request_for_todays_page_is_not_counted_as_pending() async throws {
+    let missing = try board(4, days: [], rows: [])
+    let h = try await Harness([.account(firstAccount), .workspace(.full(missing, owner: "user-1")), offline])
+
+    await h.engine.start()
+
+    let shown = await current(h.engine)
+    #expect(shown?.offline == true)
+    #expect(shown?.pending == 0, "he did not make it")
+    #expect(try await h.store.entries().map(\.asksForADay) == [true], "still sent when the network is back")
+  }
+
   @Test func a_held_ensure_day_left_in_the_store_is_removed_at_start() async throws {
     let leftover = stored("op-day", Command.ensureDay(yesterday), heldFor: "conflict")
     let h = try await Harness(opening, copy: try board(5, rows: []), entries: [leftover])
