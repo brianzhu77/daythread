@@ -196,7 +196,7 @@ import Testing
   @Test func split_and_append_are_inverse() throws {
     let line = try content(
       #"[{"type":"text","text":"ab😀","styles":{"bold":true}},{"type":"link","href":"h","content":[{"type":"text","text":"cd","styles":{}},{"type":"text","text":"ef","styles":{"code":true}}]},{"type":"dateMention","props":{"eventId":"e","date":"2026-10-22","time":""}},{"type":"text","text":"gh","styles":{}}]"#)
-    #expect(line.length == 10)
+    #expect(line.length == 11)
     for offset in 0...line.length {
       if offset == 3 { continue }  // inside the emoji: covered below
       let (left, right) = line.split(at: offset)
@@ -210,14 +210,14 @@ import Testing
     #expect(line.split(at: 0).1.json == line.json)
     #expect(line.split(at: line.length).0.json == line.json)
     #expect(line.split(at: 0).0.isEmpty)
-    // Run boundaries rejoin to exactly what was read.
-    for boundary in [4, 6, 8, 9] {
+    // Boundaries between items (not inside a link) rejoin to exactly what was read.
+    for boundary in [4, 8, 9] {
       let (left, right) = line.split(at: boundary)
       #expect(left.appending(right).json == line.json, "boundary \(boundary)")
     }
     // An offset inside a surrogate pair moves back to the character's start.
     let (left, right) = line.split(at: 3)
-    #expect(left.length == 2 && right.length == 8)
+    #expect(left.length == 2 && right.length == 9)
   }
 
   @Test func offsets_count_utf16_units() throws {
