@@ -49,6 +49,15 @@ import UIKit
     let standard = UIFont.preferredFont(
       forTextStyle: .largeTitle, compatibleWith: UITraitCollection(preferredContentSizeCategory: .large))
     #expect(title.font.pointSize > standard.pointSize, "drawn at \(title.font.pointSize)", sourceLocation: sourceLocation)
+    // The letters reach the button's edges (it has no insets), so no view from the title up to the button may round
+    // its corners: a rounded corner cuts the first letter's corner off ("T" of "Thu" at the largest sizes).
+    var ancestor = title.superview
+    while let view = ancestor, view !== header {
+      #expect(view.layer.cornerRadius == 0, "a \(type(of: view)) rounds its corners by \(view.layer.cornerRadius)",
+        sourceLocation: sourceLocation)
+      if view === button { break }
+      ancestor = view.superview
+    }
     let lineHeight = title.font.lineHeight
     if oneLine {
       #expect(text.height < lineHeight * 1.5, "one line: \(text.height) for a line of \(lineHeight)",
@@ -74,7 +83,7 @@ import UIKit
   }
 
   @Test func on_a_narrow_screen_at_the_largest_size_the_title_wraps_without_clipping() throws {
-    let (header, window) = header("2026-09-30", width: 320, size: .accessibilityExtraExtraExtraLarge)
+    let (header, window) = header("2026-11-26", width: 320, size: .accessibilityExtraExtraExtraLarge)
     try check(header, oneLine: false)
     window.isHidden = true
   }
