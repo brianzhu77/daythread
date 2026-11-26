@@ -530,6 +530,12 @@ twin. The web keeps its button until it is given the same merge; the parity list
 | Deleted on the server, untouched by him | Deleted |
 | Deleted on the server, changed by him | His words go back in where the line was |
 
+- **What "changed differently" means.** A line is its kind, each of its properties, and its words, and each is
+  merged on its own: a line conflicts only when the same one of these was changed by both to different values.
+  The server changes what he sends (it marks a new to-do's row as planned for the day, and stamps links), and he
+  keeps typing while a save is on its way; if the whole line were compared, his words would be doubled under a
+  to-do he had just typed. A stamp the server puts on a link inside the words is not a change of words: his words
+  stand and take the stamp.
 - **To-dos.** A to-do's row is a line like any other, and its `taskId` travels with it. When both changed a
   to-do's words, the server's row keeps the to-do and his words go below it as a plain line: one to-do must not
   become two. For the same reason, when the server deleted a to-do's row and he changed its words, his words go
