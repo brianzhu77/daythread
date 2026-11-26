@@ -183,6 +183,31 @@
       #expect(try cell(controller, 0) === untouched)
     }
 
+    /// A day without a page puts what it says behind an empty list: nothing the list draws may hide it.
+    @Test func nothing_the_list_draws_covers_its_background_view() throws {
+      let controller = DocumentViewController()
+      let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+      window.rootViewController = controller
+      window.makeKeyAndVisible()
+      controller.view.layoutIfNeeded()
+      controller.show(page: try EditorFixtures.dayPage(), in: try EditorFixtures.workspace())
+      _ = try collection(controller)
+      controller.show(page: try makePage([]), in: try makeWorkspace())
+      let list = try collection(controller)
+      let behind = UIView()
+      list.backgroundView = behind
+      list.layoutIfNeeded()
+      let shown = behind.convert(behind.bounds, to: list)
+      let over = list.subviews.drop { $0 !== behind }.dropFirst()
+        .filter { !$0.isHidden && $0.alpha > 0 && $0.frame.intersects(shown) }
+        .filter { view in
+          var alpha: CGFloat = 0
+          view.backgroundColor?.getWhite(nil, alpha: &alpha)
+          return alpha > 0
+        }
+      #expect(over.isEmpty, "covered by \(over.map { "\(type(of: $0)) \($0.frame)" })")
+    }
+
     /// A tick the server holds goes back to open: the words lose the line through them, not only the circle its fill.
     @Test func a_done_to_do_drawn_open_again_has_no_line_through_its_words() throws {
       let controller = DocumentViewController()
