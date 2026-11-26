@@ -216,6 +216,23 @@
       #expect(ticked == ["editor-task:d3"])
     }
 
+    /// A finger on the circle reaches the circle: nothing the cell draws lies over it.
+    @Test func a_touch_on_the_circle_lands_on_the_circle() throws {
+      let controller = DocumentViewController()
+      let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+      window.rootViewController = controller
+      window.makeKeyAndVisible()
+      controller.view.layoutIfNeeded()
+      controller.show(page: try EditorFixtures.dayPage(), in: try EditorFixtures.workspace())
+      let list = try collection(controller)
+      list.layoutIfNeeded()
+      let button = try circle(controller, 2)
+      button.superview?.layoutIfNeeded()
+      let center = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: window)
+      let hit = try #require(window.hitTest(center, with: nil))
+      #expect(hit === button || hit.isDescendant(of: button), "the touch lands on \(type(of: hit))")
+    }
+
     @Test func a_circle_that_cannot_be_ticked_is_disabled_and_reports_nothing() throws {
       let controller = hosted()
       let blocks = [
