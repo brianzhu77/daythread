@@ -63,7 +63,6 @@
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
 | Today, Tasks, Calendar, Pages | The tab bar's tabs, the web's places in its order: the system's tab bar with its default appearance (the floating glass capsule on iOS 26). Symbols: `<day of month>.calendar` for Today (the account's today, `26.calendar` on the 26th; it changes at the account's midnight), `checkmark.square`, `calendar`, `doc.text` |
 | Search | The system's search tab (`UISearchTab`), its own title and symbol, after the four; the system draws it apart, as the round button at the end of the bar |
-| (Tags) | No tab: a phone's bar holds five items, the search tab included, and a sixth puts Tags and Search behind the system's More tab (seen on the simulator, 2026-11-26). Which place gives way is Brian's choice; until then it is Tags |
 | <place>, Not in the app yet | A tab whose place is not built yet: its symbol, its name and this line, centred, nothing to press |
 
 The sign-in lines are the web's (`src/routes/sign-in.tsx`).
@@ -87,5 +86,6 @@ Phase 1 must settle:
 
 - Row spacing on a page.
 - How date chips and page references are drawn (today they are plain text).
-- Which of the web's five places has no tab on the phone: Tags for now, Brian's choice
-  (`docs/design/native-phase-1.md` section 6).
+- Which of the web's five places has no tab on the phone. A phone's tab bar holds five items, the search tab
+  included, and a sixth puts Tags and Search behind the system's More tab (seen on the simulator, 2026-11-26). Until
+  Brian chooses, Tags has no tab (`docs/design/native-phase-1.md` section 6).

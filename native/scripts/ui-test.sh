@@ -148,7 +148,6 @@ if [ "${1:-}" = --serve ]; then
 fi
 
 TEST_RUNNER_DAYTHREAD_SERVER_URL="http://127.0.0.1:$today_port" \
-TEST_RUNNER_DAYTHREAD_TODAY_TITLE="$title" \
 TEST_RUNNER_DAYTHREAD_TODAY="$today" \
 TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL="http://127.0.0.1:$sign_in_port" \
   xcodebuild test -project "$native/Daythread.xcodeproj" -scheme Daythread \
