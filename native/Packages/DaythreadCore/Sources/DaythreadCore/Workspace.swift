@@ -233,7 +233,4 @@ public struct Workspace: Hashable, Sendable {
   public func page(_ id: String) -> Page? { pages.first { $0.id.hasSameCodeUnits(as: id) } }
 
   public func task(_ id: String) -> TodoTask? { tasks.first { $0.id.hasSameCodeUnits(as: id) } }
-
-  /// The page `day:<date>`.
-  public func dayPage(_ date: LocalDate) -> Page? { page("day:\(date.value)") }
 }

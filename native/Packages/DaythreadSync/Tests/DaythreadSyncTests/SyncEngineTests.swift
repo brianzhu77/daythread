@@ -27,7 +27,7 @@ private let opening: [FakeTransport.Reply] = [
 private func workspace(
   _ revision: Int, timezone: String = "UTC", days: [String] = ["2026-11-25"], tasks: [String] = []
 ) throws -> Workspace {
-  let pages = days.map { #"{"id":"day:\#($0)","type":"day","date":"\#($0)","title":"\#($0)","document":"[]"}"# }
+  let pages = days.map { #"{"id":"day:\#($0)","type":"daily","date":"\#($0)","title":"\#($0)","document":"[]"}"# }
   let rows = tasks.map { #"{"id":"\#($0)","title":"\#($0)","status":"open","paused":false}"# }
   let text =
     #"{"revision":\#(revision),"timezone":"\#(timezone)","pages":[\#(pages.joined(separator: ","))],"#
