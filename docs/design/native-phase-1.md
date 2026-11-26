@@ -532,7 +532,9 @@ twin. The web keeps its button until it is given the same merge; the parity list
 
 - **To-dos.** A to-do's row is a line like any other, and its `taskId` travels with it. When both changed a
   to-do's words, the server's row keeps the to-do and his words go below it as a plain line: one to-do must not
-  become two.
+  become two. For the same reason, when the server deleted a to-do's row and he changed its words, his words go
+  back in where the row was as a plain line, without the `taskId`: a to-do removed elsewhere does not come back
+  because he was typing in it (my call; what it costs is making that line a to-do again by hand).
 - **Nesting and order.** If only one side moved or nested lines, that side's arrangement is kept and the other's
   words and added lines are fitted into it. If both rearranged, the server's arrangement is kept and his words,
   additions and deletions are applied to it; his rearrangement is the one thing given up, and it is the rarest.
