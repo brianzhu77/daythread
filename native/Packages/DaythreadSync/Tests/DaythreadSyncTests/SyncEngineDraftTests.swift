@@ -595,6 +595,44 @@ private struct DraftHarness {
     #expect(basis.ownRevisions == [6])
   }
 
+  @Test func a_tick_learns_a_replayed_saves_revision_after_the_copy_moved_past_it() async throws {
+    // The first send lands as revision 6 and its answer is lost. A load then brings revision 7, another device's
+    // write to something else. (Here that load does not yet hold the to-do, so the tick still waits for the save.)
+    let elsewhere: JSONValue = .object([
+      "id": .string("other"), "title": .string("Other"), "status": .string("open"), "paused": .bool(false),
+      "version": .number("1"),
+    ])
+    let moved = served(7, tasks: [elsewhere])
+    // The resend is answered as a replay: changes from the workspace as it is now, the receipt the save's own.
+    let replay = try saved(
+      from: 7, to: 7, document: withTodo(planned: true), tasks: [todo("open")], receipt: 6)
+    let ticked = try changes(from: 7, to: 8, tasks: [todo("done", version: 2)])
+    let h = try await DraftHarness(
+      opening + [
+        .failure(TransportError.offline), .workspace(.full(moved, owner: "user-1")), replay,
+        .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1")),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [])
+    try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
+    await h.engine.settled()
+    await h.engine.saveNow()
+
+    await h.engine.refresh()
+
+    let saves = await h.saves
+    #expect(saves.count == 2)
+    #expect(saves.last?.operationId == saves.first?.operationId)
+    #expect(saves.last?.expectedRevision == 7)
+    guard case .send(_, _, _, _, let basis)? = await h.transport.sends.last else {
+      Issue.record("the tick was not sent")
+      return
+    }
+    #expect(basis.baseRevision == 5)
+    #expect(basis.ownRevisions == [6])
+    #expect(await h.transport.unscripted == [])
+  }
+
   @Test func an_entry_that_did_not_wait_for_the_save_does_not_learn_its_revision() async throws {
     // Built at revision 3 and waiting behind a held tick on the same to-do: revisions 4 and 5 are not its own, and
     // the save was checked against the copy's revision, not against the entry's base.
