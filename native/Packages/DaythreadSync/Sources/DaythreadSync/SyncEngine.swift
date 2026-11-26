@@ -532,10 +532,14 @@ public actor SyncEngine {
     let number = retryNumber
     let sleep = sleep
     SyncLog.logger.info("Trying again in \(wait.components.seconds, privacy: .public) s")
+    // Written with a plain `do`/`catch` and a strong `engine`, not `try? await` in a condition and `await self?.`:
+    // built by Xcode 26.6 that shorter form aborted when this task ended ("freed pointer was not the last
+    // allocation", in `swift_task_dealloc`), on the hosted runner, in two runs of two.
     retry = Task { [weak self] in
       // A cancelled wait (signed out, the network back, nothing left to send) asks for nothing.
-      guard (try? await sleep(wait)) != nil, !Task.isCancelled else { return }
-      await self?.retryDue(number)
+      do { try await sleep(wait) } catch { return }
+      guard !Task.isCancelled, let engine = self else { return }
+      await engine.retryDue(number)
     }
     listenForTheNetwork()
   }
@@ -557,7 +561,10 @@ public actor SyncEngine {
     guard listening == nil else { return }
     let returns = reachability.becameReachable
     listening = Task { [weak self] in
-      for await _ in returns { await self?.networkReturned() }
+      for await _ in returns {
+        guard let engine = self else { return }
+        await engine.networkReturned()
+      }
     }
   }
 
