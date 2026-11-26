@@ -99,7 +99,8 @@ public struct HeldChange: Sendable, Equatable, Identifiable {
 
 /// What `SyncEngine.perform` did with a command it sent and waited for.
 public enum Performed: Sendable, Equatable {
-  /// The server applied it; its changes are in the published workspace.
+  /// The server applied it; its changes are in the published workspace, unless the whole load needed to bring them
+  /// in failed, in which case the copy catches up at the next load.
   case applied
   /// The server could not be reached, or did not answer.
   case offline

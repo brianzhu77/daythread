@@ -51,7 +51,7 @@
 | Not saved — "…" was deleted elsewhere | The same, for a to-do that is gone ("it" when the label names nothing) |
 | Not saved — ticked "…" · changed since | The same, held because something changed since |
 | Not saved? — ticked "…" may already be in | The same, held because it may already be applied |
-| Not saved — can't do this now: ticked "…" | The same, refused for any other reason |
+| Not saved — can't do this now: ticked "…" | The same, refused for any other reason; the web's sentence with a straight apostrophe (the web's source writes a typographic one; the app keeps straight apostrophes, as its other strings do) |
 | Keep mine, Discard | Each held change's actions; "Keep mine" only when it was held, not refused; "Discard" destructive |
 | 1 later change waiting (N later changes waiting) | The held menu's last line, disabled, while changes wait behind a held one; the web's words |
 | Round trip · N of M pages fail | The account menu, Debug builds only, when any page's document does not write back |

@@ -2,7 +2,8 @@
   import DaythreadCore
   import UIKit
 
-  /// A page drawn from its stored document, read only: one list row per block.
+  /// A page drawn from its stored document: one list row per block. A to-do's circle reports a tick (`onTick`);
+  /// nothing else on the page edits.
   @MainActor
   public final class DocumentViewController: UIViewController {
     /// How far each level of nesting moves a row in.

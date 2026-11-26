@@ -71,10 +71,18 @@ app shows any type it does not know as "Block".
 
 - `task-status` (`status` `done` or `open`, with `today`, the account's day): a tick. It goes through the outbox, is
   kept on the device until the server answers, and is sent without him doing anything when the server can be reached
-  (after 2 s, 5 s, 15 s, then every 30 s, and at once when the network comes back). `readsBeyond` is false.
+  (after 2 s, 5 s, 15 s, then every 30 s, and at once when the network comes back). `readsBeyond` is false. When the
+  server holds or refuses one, the app loads the workspace in the same pass, so the row shows what the server has and
+  "Keep mine" is sent on it, as the web's resync does.
 - `ensure-day`: the engine asks for today's page when the copy has none and none is in Trash, through the outbox,
-  once per day. "Start this page", "Create page" and "Start a new page" send it for their day once, waiting for the
-  answer, not through the outbox.
-- `restore-batch` (the page's `trashId`): "Restore" on a day whose page is in Trash, once, waiting for the answer.
+  once per load while that holds. "Start this page", "Create page" and "Start a new page" send it for their day,
+  waiting for the answer, not through the outbox.
+- `restore-batch` (the page's `trashId`): "Restore" on a day whose page is in Trash, waiting for the answer.
+- A command waited for ("Start this page", "Create page", "Start a new page", "Restore") that the server holds
+  because the copy is behind is sent once more after a load, so it works after another device wrote; any other hold
+  or refusal is followed by a load before "Couldn't … · try again" shows, so trying again is built on what the
+  server has, as the web resyncs before a retry.
+- The network coming back after the app found itself offline loads the workspace, whether or not anything waits to
+  be sent, so "Offline · showing what was last loaded" goes when the outage does.
 
 Nothing else is sent: no edit, cancel, delete or Undo.

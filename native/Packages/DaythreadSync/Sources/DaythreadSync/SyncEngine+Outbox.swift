@@ -254,7 +254,8 @@ extension SyncEngine {
   /// server did. When the server holds it because the copy is behind, the workspace is loaded and it is sent once
   /// more, under the same operation id; any other hold or refusal is answered after a load. Never stored, so a command
   /// sent as the network drops is not sent again later. On `.applied` the reply's changes are in the published
-  /// workspace before it returns.
+  /// workspace before it returns, except when the server's changes did not start from the copy's revision and the
+  /// whole load that follows fails: the server applied it, and the copy catches up at the next load.
   public func perform(action: JSONValue) async -> Performed {
     await acquire()
     guard phase != .signedOut, !leaving else {
