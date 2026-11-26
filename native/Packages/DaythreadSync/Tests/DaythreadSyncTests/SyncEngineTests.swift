@@ -59,19 +59,23 @@ private func send(
 ) -> FakeTransport.Call {
   .send(
     token: token, operationId: operationId, action: tick(operationId), expectedOwner: owner,
-    basis: OutboxBasis(baseRevision: base, ownRevisions: own, readsBeyond: true))
+    basis: OutboxBasis(baseRevision: base, ownRevisions: own, readsBeyond: false))
 }
 
 /// `signedIn` is true unless the phase is signed out, as for every engine here that holds a session; tests of a server
 /// with sign-in off say false.
 private func state(
   _ phase: SyncState.Phase, _ workspace: Workspace?, offline: Bool = false, held: Int = 0,
-  failure: SyncFailure? = nil, signedIn: Bool? = nil
+  failure: SyncFailure? = nil, signedIn: Bool? = nil, address: String? = nil
 ) -> SyncState {
   SyncState(
     phase: phase, workspace: workspace, offline: offline, held: held, failure: failure,
-    signedIn: signedIn ?? (phase != .signedOut))
+    signedIn: signedIn ?? (phase != .signedOut), address: address)
 }
+
+/// The first account's address, as its account check tells it or as typed at sign-in; the second's, only ever typed.
+private let one = "one@example.com"
+private let two = "two@example.com"
 
 /// What an entry looks like to these tests: its operation, its state and what it learned.
 private func describe(_ entries: [OutboxEntry]) -> [String] {
@@ -204,7 +208,7 @@ private struct Harness {
 
     #expect(await seen.first == state(.starting, copy))
     #expect(await h.calls == [.account(token: "tok-1"), .workspace(token: "tok-1", have: 5)])
-    #expect(await current(h.engine) == state(.ready, copy))
+    #expect(await current(h.engine) == state(.ready, copy, address: one))
   }
 
   @Test func the_copy_of_another_owner_is_not_shown_before_the_first_request() async throws {
@@ -254,7 +258,7 @@ private struct Harness {
 
     #expect(await h.calls == [.account(token: "tok-1"), .workspace(token: "tok-1", have: 5)])
     #expect(await h.log == [])
-    #expect(await current(h.engine) == state(.ready, copy))
+    #expect(await current(h.engine) == state(.ready, copy, address: one))
   }
 
   @Test func another_owner_replaces_everything_and_drops_their_outbox() async throws {
@@ -269,7 +273,7 @@ private struct Harness {
     #expect(await h.log == ["replace user-2 9"])
     #expect(try await h.kept?.owner == "user-2")
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: one))
   }
 
   @Test func unchanged_under_another_owner_loads_the_workspace_whole() async throws {
@@ -287,7 +291,7 @@ private struct Harness {
         .account(token: "tok-1"), .workspace(token: "tok-1", have: 5), .workspace(token: "tok-1", have: nil),
       ])
     #expect(await h.log == ["replace user-2 5"])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: one))
   }
 
   @Test func ensures_today_in_the_accounts_zone_once() async throws {
@@ -343,7 +347,7 @@ private struct Harness {
     #expect(try await h.kept?.workspace == after)
     #expect(await h.log == ["write 6", "acknowledge 1 6", "update op-2"])
     #expect(try await h.entries == ["op-2 held(conflict) base 5 own [6]"])
-    #expect(await current(h.engine) == state(.ready, after, held: 1))
+    #expect(await current(h.engine) == state(.ready, after, held: 1, address: one))
   }
 
   @Test func changes_from_another_base_load_the_workspace_whole() async throws {
@@ -364,7 +368,7 @@ private struct Harness {
       ])
     #expect(await h.log == ["replace user-1 8", "acknowledge 1 8"])
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: one))
   }
 
   @Test func held_entry_stays_and_later_ones_still_go() async throws {
@@ -384,7 +388,7 @@ private struct Harness {
       await h.transport.sends == [send("op-1", base: 5), send("op-2", base: 5), send("op-3", base: 5)])
     #expect(
       try await h.entries == ["op-1 held(conflict) base 5 own []", "op-2 held(Not found) base 5 own []"])
-    #expect(await current(h.engine) == state(.ready, try required(copy.applying(applied)), held: 2))
+    #expect(await current(h.engine) == state(.ready, try required(copy.applying(applied)), held: 2, address: one))
   }
 
   @Test func already_applied_removes_the_entry_and_loads_whole() async throws {
@@ -399,7 +403,7 @@ private struct Harness {
 
     #expect(await h.calls.last == .workspace(token: "tok-1", have: nil))
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: one))
   }
 
   @Test func owner_mismatch_stops_and_loads_whole_under_the_new_owner() async throws {
@@ -416,7 +420,7 @@ private struct Harness {
     #expect(await h.calls.last == .workspace(token: "tok-1", have: nil))
     #expect(try await h.kept?.owner == "user-2")
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: one))
   }
 
   @Test func a_command_reply_under_another_owner_is_never_applied() async throws {
@@ -432,7 +436,7 @@ private struct Harness {
 
     #expect(await h.log == ["replace user-2 7"])
     #expect(try await h.kept?.owner == "user-2")
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: one))
   }
 
   @Test func offline_keeps_everything_and_says_so() async throws {
@@ -445,7 +449,7 @@ private struct Harness {
 
     await h.engine.start()
 
-    #expect(await current(h.engine) == state(.ready, copy, offline: true))
+    #expect(await current(h.engine) == state(.ready, copy, offline: true, address: one))
     #expect(try await h.entries == ["op-1 pending base 5 own []"])
     #expect(await h.log == [])
     #expect(await h.calls.count == 3)
@@ -457,7 +461,7 @@ private struct Harness {
     ])
     await h.engine.refresh()
     #expect(await h.transport.sends == [send("op-1", base: 5), send("op-1", base: 5)])
-    #expect(await current(h.engine) == state(.ready, copy, held: 1))
+    #expect(await current(h.engine) == state(.ready, copy, held: 1, address: one))
   }
 
   @Test func a_401_shows_sign_in_and_keeps_the_copy_until_the_next_owner() async throws {
@@ -479,7 +483,7 @@ private struct Harness {
     #expect(try h.tokens.read() == second)
     #expect(await h.transport.sends == [])
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: two))
   }
 
   @Test func signing_in_as_the_same_owner_keeps_the_copy_and_sends_its_outbox() async throws {
@@ -497,7 +501,7 @@ private struct Harness {
     #expect(await h.transport.sends == [send("op-1", base: 5, token: "tok-3")])
     #expect(await !h.log.contains("erase"))
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, try required(copy.applying(applied))))
+    #expect(await current(h.engine) == state(.ready, try required(copy.applying(applied)), address: one))
   }
 
   @Test func signing_in_as_another_account_while_signed_in_erases_the_first() async throws {
@@ -514,7 +518,7 @@ private struct Harness {
     #expect(await h.log == ["erase", "replace user-2 2"])
     #expect(await h.calls.last == .workspace(token: "tok-2", have: nil))
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: two))
   }
 
   @Test func sign_in_errors_are_thrown_unchanged() async throws {
@@ -532,7 +536,7 @@ private struct Harness {
 
     #expect(await h.log == [])
     #expect(try h.tokens.read() == first)
-    #expect(await current(h.engine) == state(.ready, copy))
+    #expect(await current(h.engine) == state(.ready, copy, address: one))
   }
 
   @Test func sign_out_erases_even_when_the_server_is_unreachable() async throws {
@@ -582,7 +586,8 @@ private struct Harness {
     #expect(try await store.entries() == [])
 
     await gate.open(.failure(TransportError.offline))
-    try await change.value
+    _ = try await change.value
+    await engine.settled()
   }
 }
 
@@ -647,7 +652,7 @@ private struct Harness {
 
     await h.engine.start()
 
-    #expect(await current(h.engine) == state(.ready, copy, failure: failure.shown))
+    #expect(await current(h.engine) == state(.ready, copy, failure: failure.shown, address: one))
     #expect(try await h.entries == ["op-1 pending base 5 own []"])
     #expect(await h.log == [])
 
@@ -657,7 +662,7 @@ private struct Harness {
     ])
     await h.engine.refresh()
     #expect(await h.transport.sends == [send("op-1", base: 5), send("op-1", base: 5)])
-    #expect(await current(h.engine) == state(.ready, copy, held: 1), "the next answer clears the failure")
+    #expect(await current(h.engine) == state(.ready, copy, held: 1, address: one), "the next answer clears the failure")
   }
 
   @Test(arguments: Failure.allCases)
@@ -668,10 +673,10 @@ private struct Harness {
       entries: [pending("op-1", base: 5)])
 
     await h.engine.start()
-    #expect(await current(h.engine) == state(.ready, copy, offline: true))
+    #expect(await current(h.engine) == state(.ready, copy, offline: true, address: one))
     await h.engine.refresh()
 
-    #expect(await current(h.engine) == state(.ready, copy, offline: true, failure: failure.shown))
+    #expect(await current(h.engine) == state(.ready, copy, offline: true, failure: failure.shown, address: one))
     #expect(await h.transport.sends == [])
     #expect(try await h.entries == ["op-1 pending base 5 own []"])
     #expect(await h.log == [])
@@ -707,9 +712,12 @@ private struct Harness {
     // The change's send is cancelled, then a refresh's load is.
     await h.transport.add([.failure(CancellationError()), .failure(CancellationError())])
     try await h.engine.enqueue(action: tick("t1"), label: "Tick t1")
+    await h.engine.settled()
     await h.engine.refresh()
 
-    #expect(await current(h.engine) == before)
+    var after = before
+    after?.enqueued = 1
+    #expect(await current(h.engine) == after)
     #expect(await h.log.count == 1)  // the enqueued entry, and nothing after it
     let entries = try await h.store.entries()
     #expect(entries.map(\.state) == [.held, .pending])
@@ -728,6 +736,7 @@ private struct Harness {
     await h.transport.onCall { _ in await seen.add((try? await store.entries()) ?? []) }
 
     try await h.engine.enqueue(action: tick("t1"), label: "Tick t1")
+    await h.engine.settled()
 
     let sends = await h.transport.sends
     #expect(sends.count == 1)
@@ -738,7 +747,7 @@ private struct Harness {
       sends.first
         == .send(
           token: "tok-1", operationId: operationId, action: tick("t1"), expectedOwner: "user-1",
-          basis: OutboxBasis(baseRevision: 5, ownRevisions: [], readsBeyond: true)))
+          basis: OutboxBasis(baseRevision: 5, ownRevisions: [], readsBeyond: false)))
     let kept = try required(await seen.first?.first)
     #expect(await seen.first?.count == 1)
     #expect(kept.operationId == operationId)
@@ -791,8 +800,8 @@ private struct Harness {
       seen.append(value)
       if value.phase == .ready { break }
     }
-    #expect(seen == [state(.starting, nil, signedIn: false), state(.starting, copy), state(.ready, copy)])
-    #expect(await current(h.engine) == state(.ready, copy))
+    #expect(seen == [state(.starting, nil, signedIn: false), state(.starting, copy), state(.ready, copy, address: one)])
+    #expect(await current(h.engine) == state(.ready, copy, address: one))
   }
 
   @Test func a_stream_whose_reader_stops_is_forgotten() async throws {
@@ -857,7 +866,7 @@ private struct Harness {
 
     #expect(await h.log == ["erase", "replace user-2 2"])
     #expect(try await h.kept?.owner == "user-2")
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: two))
     #expect(await !recorded.all.contains { $0.workspace?.revision == 9 })
   }
 
@@ -878,14 +887,15 @@ private struct Harness {
     let store = h.store
     await until { ((try? await store.entries().count) ?? 0) == 2 }
     await gate.open(.outcome(.applied(receipt: .object([:]), changes: applied, owner: "user-1")))
-    try await firstChange.value
-    try await secondChange.value
+    _ = try await firstChange.value
+    _ = try await secondChange.value
+    await h.engine.settled()
 
     let sends = await h.transport.sends
     #expect(sends.count == 2)
     guard case .send(_, _, let action, _, let basis)? = sends.last else { return }
     #expect(action == tick("b"))
-    #expect(basis == OutboxBasis(baseRevision: 5, ownRevisions: [6], readsBeyond: true))
+    #expect(basis == OutboxBasis(baseRevision: 5, ownRevisions: [6], readsBeyond: false))
     #expect(await h.transport.maxInFlight == 1)
   }
 }
@@ -918,7 +928,7 @@ private struct Harness {
 
     #expect(await h.transport.sends == [send("op-1", base: 5), send("op-1", base: 5)])
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, after))
+    #expect(await current(h.engine) == state(.ready, after, address: one))
   }
 
   /// An engine that met a 401, then a second engine opened on the same stores, as after a relaunch.
@@ -962,7 +972,7 @@ private struct Harness {
     #expect(await !h.log.contains("erase"))
     #expect(await transport.sends == [send("op-1", base: 5, token: "tok-3")])
     #expect(try await h.entries == [])
-    #expect(await current(next) == state(.ready, try required(copy.applying(applied))))
+    #expect(await current(next) == state(.ready, try required(copy.applying(applied)), address: one))
   }
 
   @Test func after_a_401_and_a_relaunch_another_owner_erases_first() async throws {
@@ -976,7 +986,7 @@ private struct Harness {
     #expect(await h.log == ["erase", "replace user-2 2"])
     #expect(await transport.sends == [])
     #expect(try await h.entries == [])
-    #expect(await current(next) == state(.ready, served))
+    #expect(await current(next) == state(.ready, served, address: two))
   }
 
   @Test func a_copy_an_erase_could_not_remove_stays_hidden_and_is_not_erased_at_launch() async throws {
@@ -1089,7 +1099,7 @@ private struct Harness {
     #expect(try h.tokens.read() == second)
     #expect(try await h.kept?.owner == "user-2")
     #expect(try await h.kept?.workspace == served)
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: two))
   }
 }
 
@@ -1118,7 +1128,7 @@ private struct Harness {
 
     #expect(await h.transport.sends == [send("op-1", base: 5), send("op-2", base: 5)])
     #expect(try await h.entries == ["op-1 held(bad-request) base 5 own []"])
-    #expect(await current(h.engine) == state(.ready, try required(copy.applying(applied)), held: 1))
+    #expect(await current(h.engine) == state(.ready, try required(copy.applying(applied)), held: 1, address: one))
 
     // Held, so no later pass sends it again.
     await h.transport.add([.workspace(.unchanged(revision: 6, owner: "user-1"))])
@@ -1158,7 +1168,7 @@ private struct Harness {
 
     #expect(await h.transport.sends == [])
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, address: one))
   }
 
   @Test func signed_in_follows_the_stored_session() async throws {
@@ -1174,7 +1184,7 @@ private struct Harness {
     #expect(await current(h.engine) == state(.ready, local, signedIn: false))
 
     try await h.engine.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
-    #expect(await current(h.engine) == state(.ready, served, signedIn: true))
+    #expect(await current(h.engine) == state(.ready, served, signedIn: true, address: one))
 
     await h.engine.signOut()
     #expect(await current(h.engine) == state(.signedOut, nil, signedIn: false))

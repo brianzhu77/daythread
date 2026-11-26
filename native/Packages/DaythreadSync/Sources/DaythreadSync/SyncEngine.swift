@@ -2,7 +2,8 @@ import DaythreadCore
 import Foundation
 
 /// Keeps the copy on the device, the outbox and the server in step. The server is the authority: its replies replace
-/// what the device holds, and nothing is shown that it did not send.
+/// the copy the device keeps, and the copy holds nothing it did not send. What is drawn is that copy with the changes
+/// not yet answered replayed over it (`drawn`), worked out again at each publish and never stored.
 ///
 /// How calls that overlap are kept apart (every `await` is a point where another call can enter the actor):
 /// - **One pass at a time.** Loading, draining and applying replies happen in a *pass*. `requestPass` counts the
@@ -15,6 +16,9 @@ import Foundation
 /// - **Epochs.** `signIn` and `signOut` move `epoch` on (and cancel the pass in flight) inside a store section. A pass
 ///   remembers the epoch and session it began with and checks the epoch at the start of each of its sections, so a
 ///   reply that arrives after the account changed is never applied, sent on or shown.
+/// - **The outbox in memory.** `outbox` is what the store's outbox holds, read again inside the same store section as
+///   every write to it, so no published state has an entry in neither the outbox (drawn as a prediction) nor the
+///   copy (applied by the server's answer).
 public actor SyncEngine {
   let transport: any ServerTransport
   let tokens: any TokenStore
@@ -26,8 +30,15 @@ public actor SyncEngine {
 
   var phase: SyncState.Phase = .starting
   var offline = false
-  var held = 0
   var failure: SyncFailure?
+  /// The stored owner's outbox entries by `seq`, as last read or written.
+  var outbox: [OutboxEntry] = []
+  var held: Int { outbox.count { $0.state == .held } }
+  /// Tickets given by `enqueue` in this engine's lifetime. Not an entry's `seq`, which restarts when the store is
+  /// erased.
+  private var enqueued = 0
+  /// The account's email, as the server last told it; nil until it has on this launch.
+  private var address: String?
   /// Whether a session is stored, as last read or written.
   private var signedIn = false
   /// What the store keeps, read once and then kept in step with every store call this engine makes.
@@ -92,7 +103,7 @@ public actor SyncEngine {
       hidden = true
       phase = .signedOut
       copyShown = false
-      held = 0
+      outbox = []
     }
     publish()
     release()
@@ -105,20 +116,31 @@ public actor SyncEngine {
     await requestPass(load: true)
   }
 
-  /// Writes the change to the outbox, then sends it; returns once that pass has run. Throws `SyncError.notReady` when
-  /// no workspace is shown (nothing can be changed before something is), and what the store threw when it refuses
-  /// the entry. Nothing is sent when it throws.
-  public func enqueue(action: JSONValue, label: String) async throws {
+  /// Stores the entry, publishes a state that draws it, asks for a pass without waiting for it, and returns the
+  /// entry's ticket: by then a state with `enqueued` at or past it has been published. Throws `SyncError.notReady`
+  /// when no workspace is shown (nothing can be changed before something is), and what the store threw when it
+  /// refuses the entry; either way nothing was stored, no ticket is given and nothing is sent.
+  @discardableResult
+  public func enqueue(action: JSONValue, label: String) async throws -> Int {
     await acquire()
     do {
       guard copyShown, phase != .signedOut else { throw SyncError.notReady }
-      _ = try await append(action: action, label: label)
+      outbox.append(try await append(action: action, label: label))
     } catch {
       release()
       throw error
     }
+    enqueued += 1
+    let ticket = enqueued
+    publish()
     release()
-    await requestPass(load: false)
+    askForPass(load: false)
+    return ticket
+  }
+
+  /// Returns when no pass is running or asked for. For tests and for sign-out.
+  public func settled() async {
+    while let driver { await driver.value }
   }
 
   /// Signs in, then loads. A session of another account than the stored copy's erases the copy and its outbox first;
@@ -136,7 +158,7 @@ public actor SyncEngine {
       if copy?.owner != session.owner {
         try await store.erase()
         copy = nil
-        held = 0
+        outbox = []
       }
       try tokens.write(session)
     } catch {
@@ -146,7 +168,8 @@ public actor SyncEngine {
       signedIn = false
       failure = nil
       copyShown = false
-      held = 0
+      outbox = []
+      address = nil
       publish()
       release()
       throw error
@@ -158,7 +181,9 @@ public actor SyncEngine {
     offline = false
     failure = nil
     copyShown = copy != nil
-    held = await heldCount()
+    // The sign-in reply names no email: the address he signed in with is the account's.
+    address = email
+    await readOutbox()
     publish()
     release()
     await requestPass(load: true)
@@ -207,7 +232,8 @@ public actor SyncEngine {
     phase = .signedOut
     signedIn = false
     failure = nil
-    held = 0
+    outbox = []
+    address = nil
     if let reachedServer { offline = !reachedServer }
     publish()
   }
@@ -225,11 +251,17 @@ public actor SyncEngine {
 
   /// Returns once a pass that started after this request has finished.
   private func requestPass(load: Bool) async {
+    let ticket = askForPass(load: load)
+    while finished < ticket, let driver { await driver.value }
+  }
+
+  /// Asks for a pass that starts after this request, without waiting for it; returns the request's number.
+  @discardableResult
+  private func askForPass(load: Bool) -> Int {
     requested += 1
-    let ticket = requested
     if load { loadWanted = true }
     if driver == nil { driver = Task { await self.drive() } }
-    while finished < ticket, let driver { await driver.value }
+    return requested
   }
 
   private func drive() async {
@@ -259,7 +291,7 @@ public actor SyncEngine {
       try await drain(pass)
       try await enter(pass)
       defer { release() }
-      held = await heldCount()
+      await readOutbox()
       SyncLog.logger.info(
         "Pass done: revision \(self.copy?.workspace.revision ?? -1, privacy: .public), held \(self.held, privacy: .public)")
       publish()
@@ -299,10 +331,11 @@ public actor SyncEngine {
       failure = nil
       copyShown = false
       offline = false
+      address = nil
     default:
       failure = SyncFailure(error)
     }
-    held = await heldCount()
+    await readOutbox()
     publish()
   }
 
@@ -315,8 +348,10 @@ public actor SyncEngine {
     if pass.session == nil && account.signIn {
       phase = .signedOut
       copyShown = false
+      address = nil
     } else {
       phase = .ready
+      address = account.email
     }
     publish()
   }
@@ -351,7 +386,7 @@ public actor SyncEngine {
     }
     copyShown = true
     await ensureToday()
-    held = await heldCount()
+    await readOutbox()
     publish()
     return true
   }
@@ -401,22 +436,31 @@ public actor SyncEngine {
       case .failure: copyShown = false
       }
     }
-    held = await heldCount()
+    await readOutbox()
   }
 
   private func readSession() -> Result<Session?, any Error> {
     Result { try tokens.read() }
   }
 
-  func heldCount() async -> Int {
-    guard let entries = try? await store.entries() else { return held }
-    return entries.count { $0.state == .held }
+  /// Reads the outbox again after a store call that may have changed it. Runs inside a store section. An outbox that
+  /// cannot be read keeps what was last read.
+  func readOutbox() async {
+    guard let entries = try? await store.entries() else { return }
+    outbox = entries
+  }
+
+  /// What is drawn: the copy with every pending entry's action replayed over it in `seq` order, including those this
+  /// build cannot predict (they change nothing). A held entry is not replayed, so the page shows what the server has.
+  var drawn: Workspace? {
+    guard copyShown, let copy else { return nil }
+    return outbox.lazy.filter { $0.state == .pending }.reduce(copy.workspace) { $0.predicting($1.action) }
   }
 
   func publish() {
     broadcast.publish(
       SyncState(
-        phase: phase, workspace: copyShown ? copy?.workspace : nil, offline: offline, held: held, failure: failure,
-        signedIn: signedIn))
+        phase: phase, workspace: drawn, offline: offline, held: held, failure: failure, signedIn: signedIn,
+        enqueued: enqueued, address: address))
   }
 }

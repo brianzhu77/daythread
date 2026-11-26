@@ -6,8 +6,8 @@ public struct SyncState: Sendable, Equatable {
   public enum Phase: Sendable, Equatable { case starting, signedOut, ready }
 
   public var phase: Phase
-  /// The copy kept on the device, as the server last sent it; nil when there is none to show (signed out, or a copy
-  /// that belongs to another account than the session's).
+  /// The server's copy with every pending outbox entry replayed over it, in the order made. Held entries are not.
+  /// Nil when there is none to show (signed out, or a copy that belongs to another account than the session's).
   public var workspace: Workspace?
   /// The last try to reach the server failed for lack of network.
   public var offline: Bool
@@ -18,10 +18,14 @@ public struct SyncState: Sendable, Equatable {
   public var failure: SyncFailure?
   /// A session is stored on the device: there is someone to sign out.
   public var signedIn: Bool
+  /// The highest ticket `enqueue` has given in this engine's lifetime; 0 before the first.
+  public var enqueued: Int
+  /// The account's email, once the server has told it on this launch.
+  public var address: String?
 
   public init(
     phase: Phase = .starting, workspace: Workspace? = nil, offline: Bool = false, held: Int = 0,
-    failure: SyncFailure? = nil, signedIn: Bool = false
+    failure: SyncFailure? = nil, signedIn: Bool = false, enqueued: Int = 0, address: String? = nil
   ) {
     self.phase = phase
     self.workspace = workspace
@@ -29,6 +33,8 @@ public struct SyncState: Sendable, Equatable {
     self.held = held
     self.failure = failure
     self.signedIn = signedIn
+    self.enqueued = enqueued
+    self.address = address
   }
 
   static let initial = SyncState()

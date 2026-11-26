@@ -17,9 +17,9 @@ extension SyncEngine {
   /// Sends pending entries one at a time, oldest first, until none is left. Held entries are passed over.
   func drain(_ pass: Pass) async throws {
     while let entry = try await nextPending(pass) {
-      // Every send states the entry's own basis; `readsBeyond` is stated conservatively until a command's reads are
-      // ported (design, outbox §5 and §6).
-      let basis = OutboxBasis(baseRevision: entry.baseRevision, ownRevisions: entry.ownRevisions, readsBeyond: true)
+      let basis = OutboxBasis(
+        baseRevision: entry.baseRevision, ownRevisions: entry.ownRevisions,
+        readsBeyond: Command.readsBeyond(entry.action))
       let outcome: CommandOutcome
       do {
         outcome = try await transport.send(
@@ -41,6 +41,7 @@ extension SyncEngine {
         defer { release() }
         // After a load under another owner, the entries left are that owner's; this revision is not theirs.
         try await store.acknowledge(seq: entry.seq, revision: copy?.owner == entry.owner ? revision : nil)
+        await readOutbox()
       case .loadWholeAndStop:
         try await loadWorkspace(pass, have: nil)
         return
@@ -59,7 +60,7 @@ extension SyncEngine {
     kept.state = .held
     kept.reason = reason
     try await store.update(kept)
-    held = await heldCount()
+    await readOutbox()
     publish()
   }
 
@@ -93,7 +94,7 @@ extension SyncEngine {
       try await store.acknowledge(seq: entry.seq, revision: changes.revision)
     case .alreadyApplied:
       try await store.acknowledge(seq: entry.seq, revision: nil)
-      held = await heldCount()
+      await readOutbox()
       publish()
       return .loadWhole
     case .held(let reason, _, _, _), .refused(let reason, _):
@@ -105,7 +106,8 @@ extension SyncEngine {
       publish()
       return .loadWholeAndStop
     }
-    held = await heldCount()
+    // The copy and the outbox have both moved on before this publish: the entry is drawn by one or the other.
+    await readOutbox()
     publish()
     return .send
   }
