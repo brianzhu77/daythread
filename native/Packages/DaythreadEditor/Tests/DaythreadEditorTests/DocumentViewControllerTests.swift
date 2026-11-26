@@ -111,9 +111,13 @@
         collection.layoutIfNeeded()
         return collection.cellForItem(at: IndexPath(item: row, section: 0))
       }
-      #expect(cell(1)?.accessibilityLabel == "Plan")
-      #expect(cell(1)?.accessibilityTraits.contains(.header) == true)
-      #expect(cell(0)?.accessibilityTraits.contains(.header) == false)
+      // A line's words are its text view, one element whose value is the words; a heading's says it is one.
+      let heading = (cell(1) as? LineBlockCell)?.line
+      #expect(heading?.accessibilityValue == "Plan")
+      #expect(heading?.isAccessibilityElement == true)
+      #expect(heading?.accessibilityTraits.contains(.header) == true)
+      #expect((cell(0) as? LineBlockCell)?.line.accessibilityTraits.contains(.header) == false)
+      #expect(cell(1)?.accessibilityElements as? [UIView] == heading.map { [$0] })
       // A to-do's button is the row's accessibility element, so the cell itself is not one.
       let open = (cell(2) as? TodoBlockCell)?.circle
       let done = (cell(5) as? TodoBlockCell)?.circle
@@ -121,6 +125,10 @@
       #expect(done?.accessibilityValue == "done")
       #expect(done?.accessibilityLabel == "Complete Call the dentist")
       #expect(cell(5)?.isAccessibilityElement == false)
+      // The circle comes first, then the to-do's words.
+      let todo = cell(5) as? TodoBlockCell
+      #expect(todo?.accessibilityElements as? [UIView] == todo.map { [$0.circle, $0.line] })
+      #expect(todo?.line.accessibilityValue == "Call the dentist")
     }
 
     @Test func theWorkspaceDecidesTheCheckmark() throws {
@@ -150,8 +158,9 @@
       try #require(try collection(controller).cellForItem(at: IndexPath(item: item, section: 0)))
     }
 
+    /// What a row's words show: its text view's text.
     private func text(of cell: UICollectionViewCell) -> NSAttributedString? {
-      (cell.contentConfiguration as? UIListContentConfiguration)?.attributedText
+      (cell as? LineBlockCell)?.line.attributedText
     }
 
     @Test(arguments: [
@@ -182,7 +191,7 @@
       default: #expect(changed is PlaceholderBlockCell)
       }
       switch to {
-      case "paragraph": #expect(changed.accessibilityLabel == "changing")
+      case "paragraph": #expect((changed as? LineBlockCell)?.line.accessibilityValue == "changing")
       case "task": #expect((changed as? TodoBlockCell)?.circle.accessibilityLabel == "Complete changing")
       case "database": #expect(changed.accessibilityLabel == "Database")
       default: break
@@ -287,7 +296,7 @@
       #expect(after === first)
       #expect(try cell(controller, 1) === second)
       #expect(text(of: after)?.string == "one, changed")
-      #expect(after.accessibilityLabel == "one, changed")
+      #expect((after as? LineBlockCell)?.line.accessibilityValue == "one, changed")
     }
 
     // MARK: the circle is a button
@@ -380,9 +389,9 @@
       let cell = try #require(try self.cell(controller, 2) as? TodoBlockCell)
       cell.layoutIfNeeded()
       let glyph = try #require(cell.circle.imageView)
-      let label = try #require(allSubviews(cell).compactMap { $0 as? UILabel }.first { $0.text?.isEmpty == false })
+      let words = cell.line
       let glyphEdge = glyph.convert(glyph.bounds, to: list).maxX
-      return (label.convert(label.bounds, to: list).minX - glyphEdge, cell.circle.bounds.size, glyph.bounds.size)
+      return (words.convert(words.bounds, to: list).minX - glyphEdge, cell.circle.bounds.size, glyph.bounds.size)
     }
 
     @Test func at_the_largest_text_size_the_glyph_does_not_reach_the_text_and_the_button_is_still_44_square() throws {
@@ -420,8 +429,8 @@
       let todo = try #require(try cell(controller, 1) as? TodoBlockCell)
       todo.layoutIfNeeded()
       func words(_ cell: UICollectionViewCell) throws -> CGRect {
-        let label = try #require(allSubviews(cell).compactMap { $0 as? UILabel }.first { $0.text?.isEmpty == false })
-        return label.convert(label.bounds, to: list)
+        let line = try #require((cell as? LineBlockCell)?.line)
+        return line.convert(line.bounds, to: list)
       }
       let glyph = try #require(todo.circle.imageView)
       let guide = (todo.contentView as? UIListContentView)?.imageLayoutGuide.map {
@@ -499,8 +508,8 @@
       let target: UIView?
       switch kind {
       case "divider": target = views.first { $0.bounds.height < 2 && $0.bounds.width > 100 }
-      default:
-        target = views.compactMap { $0 as? UILabel }.first
+      case "database": target = views.compactMap { $0 as? UILabel }.first
+      default: target = (cell as? LineBlockCell)?.line
       }
       let view = try #require(target, "no content for \(kind) at \(item)")
       return view.convert(view.bounds, to: list).minX
