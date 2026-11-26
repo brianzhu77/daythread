@@ -47,6 +47,24 @@ import Testing
     #expect(ws.writtenDays().isEmpty)
   }
 
+  /// `JSON.stringify` never writes `\/`, so the shared cases cannot hold this; another writer may.
+  @Test func a_file_whose_url_is_written_with_escaped_slashes_is_content() throws {
+    let ws = try workspace(
+      try json(
+        #"""
+        {"revision":1,"timezone":"UTC","tasks":[],"pages":[
+          {"id":"day:2026-10-21","type":"daily","date":"2026-10-21","title":"2026-10-21",
+           "document":"[{\"id\":\"f1\",\"type\":\"file\",\"props\":{\"url\":\"https:\\/\\/example.com\\/a.pdf\",\"name\":\"a.pdf\",\"caption\":\"\"},\"children\":[]}]"}]}
+        """#))
+    let url = Document.blocks(try #require(ws.pages.first).document).first?.props["url"]
+    guard case .verbatim(let text, _)? = url else {
+      Issue.record("The url was not read as written: \(String(describing: url))")
+      return
+    }
+    #expect(text == "https://example.com/a.pdf")
+    #expect(ws.writtenDays().map(\.value) == ["2026-10-21"])
+  }
+
   @Test func the_week_starts_on_monday_only_when_the_workspace_says_one() throws {
     let monday = try workspace(try json(#"{"revision":1,"timezone":"UTC","tasks":[],"pages":[],"weekStart":1}"#))
     let sunday = try workspace(try json(#"{"revision":1,"timezone":"UTC","tasks":[],"pages":[],"weekStart":0}"#))
