@@ -171,7 +171,8 @@ enum Lines {
       #expect(page.document == original)
 
       let ids = page.textBlocks
-      #expect(page.press(.backspace, at: EditablePage.Caret(block: ids.first ?? "missing", offset: 0)) == nil)
+      // Inside the words Backspace is the text view's: the key itself does nothing.
+      #expect(page.press(.backspace, at: EditablePage.Caret(block: ids.first ?? "missing", offset: 1)) == nil)
       #expect(page.press(.returnKey, at: EditablePage.Caret(block: "missing", offset: 0)) == nil)
       if let id = ids.first { _ = page.replaceText(in: id, range: 0..<0, with: "") }
       #expect(page.document == original)

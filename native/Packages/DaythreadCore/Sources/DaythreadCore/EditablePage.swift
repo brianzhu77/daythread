@@ -19,7 +19,7 @@ public struct EditablePage: Sendable {
 
   public private(set) var blocks: [Block]
   /// The rows he removed one at a time, in the web's two cases (spec §10.3).
-  public private(set) var singleDeleteIds: [String] = []
+  public internal(set) var singleDeleteIds: [String] = []
   /// The page's day, for a to-do made with no row to copy its role and plan date from.
   let pageDate: LocalDate?
   let makeID: @Sendable () -> String
@@ -30,6 +30,8 @@ public struct EditablePage: Sendable {
   /// rewritten (writing the blocks back can differ in spacing or escapes from what was stored).
   private let stored: String
   private var changed = false
+  /// The shortcut the last operation applied, so a Backspace straight after it can put the characters back.
+  var lastShortcut: TypedShortcut?
 
   public init(document: String, pageDate: LocalDate?, makeID: @escaping @Sendable () -> String = NewBlock.id) {
     isReadable = Document.parses(document)
@@ -44,6 +46,7 @@ public struct EditablePage: Sendable {
   /// Typing and deleting inside one line. Returns where the caret is afterwards. When the block is not in
   /// `textBlocks` (or the page is not readable) the page is unchanged and the returned caret means nothing.
   public mutating func replaceText(in block: String, range: Range<Int>, with text: String) -> Caret {
+    lastShortcut = nil
     guard isReadable, let path = editablePath(of: block) else { return Caret(block: block, offset: range.lowerBound) }
     var words = InlineContent(self[path].content)
     let start = Self.characterStart(range.lowerBound, in: words)
@@ -53,16 +56,25 @@ public struct EditablePage: Sendable {
       self[path].content = content
       changed = true
     }
-    return Caret(block: block, offset: start + text.utf16.count)
+    let caret = Caret(block: block, offset: start + text.utf16.count)
+    if let shortcut = applyShortcut(typed: text, at: caret, path: path) {
+      changed = true
+      return shortcut
+    }
+    return caret
   }
 
   /// A key at a caret. Nil when the key does nothing there; a key that does something always changes the page.
   public mutating func press(_ key: Key, at caret: Caret) -> Caret? {
     guard isReadable else { return nil }
+    let shortcut = lastShortcut
+    lastShortcut = nil
     let result: Caret? =
       switch key {
       case .returnKey: pressReturn(at: caret)
-      case .backspace, .tab, .shiftTab: nil
+      case .backspace: pressBackspace(at: caret, after: shortcut)
+      case .tab: indent(at: caret)
+      case .shiftTab: unindent(at: caret)
       }
     if result != nil { changed = true }
     return result

@@ -60,7 +60,7 @@ extension EditablePage {
 
   /// BlockNote's `liftItem` (`nestBlock.ts`), which Shift-Tab also uses: the block becomes the next sibling of
   /// its parent, and the lines after it at its old level come under it, after its own children.
-  private mutating func outdent(at path: Path) {
+  mutating func outdent(at path: Path) {
     let parent = Array(path.dropLast())
     let lifted: Block = modifyChildren(of: parent) { siblings in
       let index = path[path.count - 1]
