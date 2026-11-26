@@ -117,6 +117,17 @@ public struct JSONObject: Hashable, Sendable {
       }
     }
   }
+
+  /// Sets a key that is not there yet just before `successor`, or last when the object has no such key.
+  /// A key that is already there keeps its place and takes the value.
+  mutating func set(_ key: String, to value: JSONValue, before successor: String) {
+    guard storage[key] == nil, let index = keys.firstIndex(of: successor) else {
+      self[key] = value
+      return
+    }
+    storage[key] = value
+    keys.insert(key, at: index)
+  }
 }
 
 extension JSONObject: ExpressibleByDictionaryLiteral {

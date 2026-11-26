@@ -89,6 +89,31 @@ import Testing
     )
   }
 
+  @Test func content_given_to_a_block_that_had_none_is_written_before_children() throws {
+    let s = #"[{"id":"a","type":"paragraph","props":{},"children":[]}]"#
+    var blocks = Document.blocks(s)
+    #expect(Document.write(blocks) == s)
+    blocks[0].content = .array([.object(textRun("hi"))])
+    #expect(
+      Document.write(blocks)
+        == #"[{"id":"a","type":"paragraph","props":{},"content":[{"type":"text","text":"hi","styles":{}}],"children":[]}]"#
+    )
+  }
+
+  @Test func content_given_to_a_node_with_no_content_and_no_children_is_written_last() throws {
+    let s = #"[{"id":"a","type":"paragraph","props":{}}]"#
+    var blocks = Document.blocks(s)
+    blocks[0].content = .array([])
+    #expect(Document.write(blocks) == #"[{"id":"a","type":"paragraph","props":{},"content":[]}]"#)
+  }
+
+  @Test func unedited_blocks_still_write_back_identically() throws {
+    for name in try Fixtures.documentNames() {
+      let s = try Fixtures.document(name)
+      #expect(Document.write(Document.blocks(s)) == s, "\(name)")
+    }
+  }
+
   @Test func clearing_content_removes_the_key() throws {
     let s = #"[{"id":"a","type":"paragraph","props":{},"content":[],"children":[]}]"#
     var blocks = Document.blocks(s)
