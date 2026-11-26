@@ -348,6 +348,52 @@
       #expect(largest.button.width >= 44 && largest.button.height >= 44)
     }
 
+    /// Where a to-do's circle is drawn beside a paragraph, in the list's coordinates, in a window `width` wide with
+    /// `safeArea` points of horizontal safe area on each side.
+    private func circleLayout(width: CGFloat, safeArea: CGFloat, regular: Bool) throws -> (
+      glyph: CGRect, guide: CGRect?, words: CGRect, paragraph: CGRect
+    ) {
+      let controller = DocumentViewController()
+      let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 844))
+      if regular { window.traitOverrides.horizontalSizeClass = .regular }
+      window.rootViewController = controller
+      window.makeKeyAndVisible()
+      controller.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: safeArea, bottom: 0, right: safeArea)
+      controller.view.layoutIfNeeded()
+      controller.show(
+        page: try makePage([
+          block("a", "paragraph", text: "Plain words"), block("b", "task", ["taskId": .string("k")], text: "Water the plants"),
+        ]),
+        in: try makeWorkspace(tasks: [taskJSON("k", status: "open")]))
+      let list = try collection(controller)
+      #expect(list.safeAreaInsets.left == safeArea, "the inset did not reach the list")
+      let todo = try #require(try cell(controller, 1) as? TodoBlockCell)
+      todo.layoutIfNeeded()
+      func words(_ cell: UICollectionViewCell) throws -> CGRect {
+        let label = try #require(allSubviews(cell).compactMap { $0 as? UILabel }.first { $0.text?.isEmpty == false })
+        return label.convert(label.bounds, to: list)
+      }
+      let glyph = try #require(todo.circle.imageView)
+      let guide = (todo.contentView as? UIListContentView)?.imageLayoutGuide.map {
+        todo.contentView.convert($0.layoutFrame, to: list)
+      }
+      return (glyph.convert(glyph.bounds, to: list), guide, try words(todo), try words(try cell(controller, 0)))
+    }
+
+    /// The circle sits where the system puts a row's image: at the words' leading edge, inside the safe area and the
+    /// margins of a regular width as much as in portrait on a phone.
+    @Test(arguments: [(390, 0, false), (844, 62, false), (1024, 0, true)] as [(CGFloat, CGFloat, Bool)])
+    func the_circle_sits_in_its_rows_image_slot(width: CGFloat, safeArea: CGFloat, regular: Bool) throws {
+      let layout = try circleLayout(width: width, safeArea: safeArea, regular: regular)
+      #expect(
+        layout.glyph.minX >= layout.paragraph.minX - 1 && layout.glyph.minX <= layout.paragraph.minX + 4,
+        "glyph at \(layout.glyph.minX), a paragraph's words at \(layout.paragraph.minX)")
+      #expect(layout.glyph.maxX < layout.words.minX, "the glyph reaches the words")
+      let guide = try #require(layout.guide, "the row has no image slot")
+      #expect(abs(layout.glyph.midX - guide.midX) <= 1, "glyph centre \(layout.glyph.midX), slot centre \(guide.midX)")
+      #expect(abs(layout.glyph.midY - guide.midY) <= 1, "glyph centre \(layout.glyph.midY), slot centre \(guide.midY)")
+    }
+
     @Test func the_button_is_at_least_44_points_square() throws {
       let controller = hosted()
       controller.show(page: try EditorFixtures.dayPage(), in: try EditorFixtures.workspace())
