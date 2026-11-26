@@ -2,6 +2,7 @@ import DaythreadCore
 import DaythreadSync
 import Foundation
 import Testing
+import UIKit
 
 @testable import DaythreadUI
 
@@ -177,5 +178,60 @@ private final class Samples {
     #expect(sent.count == 1)
     #expect(sent.first?.objectValue?["today"]?.stringValue == h.model.today.value)
     await h.server.release()
+  }
+}
+
+/// The day screen with the server holding every reply: a tap on the circle, through the screen, the model and the
+/// engine, is drawn in the cell before the turn ends.
+@MainActor
+@Suite struct DayTickTests {
+  /// Today's page holding the open to-do as its one block.
+  private func copyWithTheToDoOnTodaysPage() throws -> Workspace {
+    let block = Block(
+      id: "b1", type: "task", props: ["taskId": .string("t-open")],
+      content: .array([.object(["type": .string("text"), "text": .string("Water the plants"), "styles": .object([:])])]),
+      children: [])
+    let page: JSONValue = .object([
+      "id": .string("day:2026-11-25"), "type": .string("daily"), "date": .string("2026-11-25"), "title": .string(""),
+      "document": .string(Document.write([block])),
+    ])
+    let todo = task("t-open", "Water the plants", "open")
+    let text = #"{"revision":1,"timezone":"UTC","pages":[\#(JSON.write(page))],"tasks":[\#(todo)]}"#
+    return try #require(Workspace(try JSON.parse(text)))
+  }
+
+  private func circle(in view: UIView) -> UIButton? {
+    if let button = view as? UIButton, button.accessibilityLabel == "Complete Water the plants" { return button }
+    return view.subviews.lazy.compactMap { circle(in: $0) }.first
+  }
+
+  @Test func a_tap_on_the_circle_is_drawn_in_the_same_turn() async throws {
+    let h = try await Harness(copy: try copyWithTheToDoOnTodaysPage())
+    await h.server.hold()
+    let screen = DayViewController(model: h.model)
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+    window.rootViewController = screen
+    window.makeKeyAndVisible()
+    screen.loadViewIfNeeded()
+    screen.updatePropertiesIfNeeded()
+    screen.view.layoutIfNeeded()
+    let before = try #require(circle(in: screen.view), "no circle for the to-do")
+    #expect(before.accessibilityValue == "not done")
+
+    before.sendActions(for: .primaryActionTriggered)
+
+    // Before any await, so the engine has not even stored the entry. Read before a layout pass too: a layout pass
+    // runs the screen's observed update, which would redraw it even if the tap's own redraw were gone.
+    #expect(before.accessibilityValue == "done", "redrawn by the tap itself")
+    screen.view.layoutIfNeeded()
+    let after = try #require(circle(in: screen.view))
+    #expect(after === before, "the same cell, redrawn in place")
+    #expect(after.accessibilityValue == "done")
+    let done = try #require(UIImage(systemName: "checkmark.circle.fill"))
+    #expect(after.configuration?.image?.isEqual(done) == true)
+
+    // Not waited for: with the wiring broken nothing reaches the server, and the test must still end.
+    await h.server.release()
+    await h.engine.settled()
   }
 }
