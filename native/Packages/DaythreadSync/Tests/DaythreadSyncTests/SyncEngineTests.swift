@@ -1912,6 +1912,47 @@ struct Answer: Sendable, CustomTestStringConvertible {
     #expect(await h.transport.unscripted == [])
   }
 
+  @Test func a_queued_command_is_never_answered_with_another_commands_refusal() async throws {
+    let forbidden = TransportError.refused(status: 403, reason: "forbidden")
+    let added = try addingDay(from: 6, to: 7, "2026-11-24")
+    let tickAnswer = try upserting(from: 5, to: 6, [row("t1", status: "done", version: 2)])
+
+    // Two commands wait behind a tick in flight; the server refuses the first outright.
+    let gate = Gate()
+    let h = try await Harness(opening + [.gated(gate), .failure(forbidden), applied(added)], copy: try board(5, rows: [row("t1")]))
+    await h.engine.start()
+    try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
+    await gate.reached()
+    let requested = await h.engine.passRequests
+    let restoring = Task { await h.engine.perform(action: Command.restoreBatch(trashId: "trash-1")) }
+    await until { await h.engine.passRequests == requested + 1 }
+    let starting = Task { await h.engine.perform(action: Command.ensureDay(yesterday)) }
+    await until { await h.engine.passRequests == requested + 2 }
+    await gate.open(applied(tickAnswer))
+
+    #expect(await restoring.value == .refused("forbidden"))
+    #expect(await starting.value == .applied, "sent, and answered with its own outcome")
+    #expect(await h.transport.sends.count == 3)
+  }
+
+  @Test func a_command_not_sent_after_a_refused_tick_reads_offline() async throws {
+    let gate = Gate()
+    let h = try await Harness(opening + [.gated(gate)], copy: try board(5, rows: [row("t1")]))
+    await h.engine.start()
+    try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
+    await gate.reached()
+    let requested = await h.engine.passRequests
+    let performing = Task { await h.engine.perform(action: Command.ensureDay(yesterday)) }
+    await until { await h.engine.passRequests == requested + 1 }
+
+    await gate.open(.failure(TransportError.refused(status: 403, reason: "forbidden")))
+
+    let performed = await performing.value
+    let sends = await h.transport.sends.count
+    #expect(performed == .offline, "never the tick's reason")
+    #expect(sends == 1)
+  }
+
   @Test func perform_while_signed_out_answers_signedOut() async throws {
     let h = try await Harness([.failure(TransportError.signedOut)], copy: try board(5, rows: []))
     await h.engine.start()
