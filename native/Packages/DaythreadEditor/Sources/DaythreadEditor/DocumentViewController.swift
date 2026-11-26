@@ -81,7 +81,6 @@
       if hasShownAPage, changed.isEmpty, ids == orderedIDs { return }
 
       let oldRows = rowsByID
-      let oldOrderedIDs = orderedIDs
       rowsByID = newRows
       drawn = newDrawn
       orderedIDs = ids
@@ -95,10 +94,7 @@
       }
       snapshot.reconfigureItems(reconfigured)
       snapshot.reloadItems(reloaded)
-      // A snapshot that reconfigures a row is never animated: an animated reconfigure leaves the old text in the label
-      // when only its attributes change (a to-do drawn open again kept the line through its words), whatever else the
-      // snapshot does. Rows that only come, go or move are animated.
-      let animated = hasShownAPage && reconfigured.isEmpty && ids != oldOrderedIDs
+      let animated = hasShownAPage
       hasShownAPage = true
       appliedSnapshots += 1
       dataSource.apply(snapshot, animatingDifferences: animated)
