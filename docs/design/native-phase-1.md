@@ -29,7 +29,7 @@ then what surrounds the day.
 | **1f. Chips, menus, moving lines** | `@date` chips drawn and made, the `/` and `@` lists, the formatting bar, drag to move lines | Write as he does on the web |
 | **1g. The day keeps running** | Reminders scheduled on the device; `run-repeats` on opening | Stop opening the web app |
 
-- Only 1a is designed in full here (§3 to §8). Each later slice gets its own section in this document when its turn
+- 1a is designed in §3 to §8 and 1b in §10. Each later slice gets its own section in this document when its turn
   comes, written against what the earlier slices built, as phase 1 was written against phase 0.
 - 1b follows 1a whatever happens. The order after 1b is looked at again then.
 - **Changed from `native-app.md`:** it lists Tomorrow in phase 1. The web's Tomorrow block is gone (B76); the day
@@ -331,3 +331,275 @@ Every string below goes into `docs/design/native-system.md` in the same change.
   answers with a 5xx every time, blocks every entry behind it, with no way to discard it; nothing is sent while
   the app is suspended; the Mac build has no way to refresh and cannot keep a session under its current signing;
   today's page that cannot be made shows a blank page with no words; the day title has no year.
+
+## 10. Slice 1b: writing
+
+- Written 2026-11-26 from the code at the head of the three changes after 1a, and from two fact sheets read out of
+  the web app and the Swift app. Brian has not read it. Every call is mine unless it names him.
+
+### 10.1 Goals, non-goals, anti-goals
+
+**Goals**
+
+1. He taps a line of a day page and types. The words appear as he types them, with no stutter, and Return,
+   Backspace and the typed shortcuts do what they do on the web.
+2. Chinese input never splits a line, loses a character or doubles one.
+3. What he writes is on the device the moment he writes it and is saved on its own. Writing done offline is still
+   there after the app is quit, and is saved when the server can be reached.
+4. When the page changed on the server while he wrote, his lines and the server's are merged line by line, by the
+   app, without asking (Brian, 2026-11-26, §5 "Merging, not overwriting").
+5. A page saved by the app opens in the web app with nothing missing, and the reverse.
+
+**Non-goals**
+
+- Making `@date` chips, page links, `/`, `@` and `[[` lists, the formatting bar, bold and the other styles from the
+  keyboard, moving lines by drag (1f). A chip or link already in a line is kept and drawn as now.
+- Selecting across lines, and pasting anything but plain text.
+- Nesting from the phone's keyboard. Tab and Shift-Tab work from a hardware keyboard and on the Mac; the phone gets
+  its buttons with the formatting bar (1f).
+- Undo of a split, a join or a deleted row (1c, with the notice). Undo of typing inside one line is the text
+  view's own.
+- Pages that are not days (phase 2).
+
+**Anti-goals**
+
+- A keystroke that waits on the network, the store or a redraw of the list.
+- A save that replaces what the server has, or a load that replaces what he wrote.
+- A line the web then shows differently from how the app showed it.
+
+### 10.2 The page while it is edited
+
+**One editable document per open page**, in `DaythreadCore`, with no UIKit: the page's blocks as a tree, and the
+operations of §10.3 as pure functions that return the new tree, where the caret goes, and the rows whose to-dos
+were let go. The screen draws from it and the engine saves from it.
+
+**What is written back.**
+
+- A block he did not touch is written exactly as it was read. A block whose words he changed keeps its id, type and
+  props; only `content` changes.
+- A block is written with its keys in the web's order: `id`, `type`, `props`, `content`, `children`. Phase 0 put a
+  key the app added after `children`; fixed here, before the first save is sent.
+- A block the app makes gets a lowercase UUID, as the web's do, and the props BlockNote writes for that type:
+
+  | Type | `props` as written |
+  |---|---|
+  | paragraph, bulletListItem, numberedListItem | `{"backgroundColor":"default","textColor":"default","textAlignment":"left"}` |
+  | heading | the same three, then `"level":N,"isToggleable":false` |
+  | quote | `{"backgroundColor":"default","textColor":"default"}` |
+  | divider | `{}`, and no `content` key |
+  | task | `{"taskId":"editor-task:<block id>","role":…,"planDate":…}`: `plan` and the page's date on a day page, `reference` and `""` otherwise |
+
+  These come from BlockNote 0.56's source and from pages the web saved; they cannot be made by the fixtures script,
+  which has no editor, so they are constants with a test each, and a comment saying where they were read.
+- The web rewrites every block's props to its defaults the next time it saves the page. That is the web's doing
+  and changes nothing he sees.
+
+**Words.** A line's `content` becomes a typed list of runs for editing: text with its styles, a link holding runs,
+and a token for anything else (a date chip, a page reference, an item this build does not know). Typing inside a
+run keeps the run's styles; typing between two runs takes the styles of the one before the caret. A token is one
+position wide in the line: it can be deleted, and it cannot be typed into. Whatever the app does not understand in
+a run or an item is kept as it was read and written back. A line break inside a run (`\n`, the web's
+Shift-Return) is kept and drawn; the app does not make one.
+
+### 10.3 The keys
+
+The web's rules, read from its editor (BlockNote 0.56's keyboard handling and the app's own handlers in
+`page-editor.tsx`). Where the web has a rule, the app has the same one, so a page behaves the same in both.
+
+| Key | Where | What happens |
+|---|---|---|
+| Return | in or at the end of a paragraph, bullet, numbered item or quote | The line splits. The first half keeps its id; the second is a new block after it: the same type for a list item, a paragraph otherwise. Lines nested under it go with the second half |
+| Return | at the start of a line that has words | An empty line goes in above (a list item for a list item, a paragraph otherwise); the line itself is untouched |
+| Return | in a heading | The words after the caret become a paragraph below |
+| Return | on an empty list item | It becomes a paragraph at the same depth |
+| Return | on an empty nested paragraph | It moves out one level |
+| Return | in or at the end of a to-do's words | A new to-do after it and everything nested under it, holding the words after the caret, with its own `taskId`. Styles are kept in both halves (the web drops them; that is not a rule worth copying) |
+| Return | at the start of a to-do that has words | An empty to-do goes in above; the row and its to-do are untouched. **Not as the web**, which leaves the old to-do with no words and moves the words to a new one, so a done or dated to-do would lose its words |
+| Return | on an empty to-do | It becomes a paragraph; no to-do is made |
+| Backspace | at the start of a bullet, numbered item, quote, heading or to-do | It becomes a paragraph; words and nested lines stay. A to-do lets go of its to-do (below) |
+| Backspace | at the start of a paragraph | It joins the line above: that line's id, type and props stay and the words are added to it; lines nested under the lower one move up a level. If the line above is empty and of the same kind, the lower line takes its place instead and keeps its id |
+| Backspace | at the start of a paragraph under a block that holds no words (an image, a database, a placeholder) | Nothing, if the paragraph has words; if it is empty it is removed |
+| Backspace | at the start of a line with words under a divider | The divider is removed |
+| Backspace | on an empty line under a divider | The line is removed |
+| Backspace | at the start of a line under a synced block or a database | Nothing. The web joins it into the synced block's last line, which would write it into every page showing that block |
+| Backspace | on a to-do with no words | The row is removed |
+| Tab | hardware keyboard | The line moves under the line before it, with its own nested lines. Not on a heading, not right under a heading, not on the first line of its group, and not under a block the app does not draw the inside of (a database, a synced block, an image): the line would vanish, or be written into a shared block |
+| Shift-Tab | hardware keyboard | The line moves out one level; the lines after it at its old level come under it, as on the web |
+| `# `, `## `, `### `, `- `, `* `, `1. `, `[] `, `> ` at the start of a paragraph | | The line becomes that kind, keeping its id, depth and nested lines. `7. ` starts a numbered list at 7 (`"start":7` in its props, as the web stores it). Backspace straight after puts the characters back. Inside a to-do they are just characters |
+| `---` on a line of its own | | The line becomes a divider and the caret goes to an empty paragraph after it |
+
+- **The caret** goes where the web puts it: the start of the second half after a split, the joining point after a
+  join, the same place in the words after nesting.
+- **A to-do let go.** When a to-do's row leaves the page, the server decides what becomes of the to-do, as it
+  does for the web: it goes to the to-dos' Trash unless it still has a row on another page. The save names the
+  rows he removed one at a time (`singleDeleteIds`) in exactly the web's two cases: Backspace on an empty to-do,
+  and Backspace turning the page's first line from a to-do into a paragraph. The list is emptied after a merge.
+- **A new to-do can be ticked at once**, offline too. The server will make its to-do under the row's own
+  `taskId` when the save lands, so the app draws it as an open to-do from the draft, and a tick on it waits in the
+  outbox behind that page's save (`native-app.md` §7: one ordered queue). The web cannot tick it until the save
+  lands; an app whose point is working offline should.
+- **While an input method is composing**, none of these run: Return commits the composition and nothing else.
+
+### 10.4 The cells
+
+- A line's words are a `UITextView` on TextKit 2 in the row's cell, not scrolling, sized by its content. It is
+  added to the cell as the circle is, because a view inside the list's content view gets no touches (found in 1a).
+  Bullets, numbers, the quote bar and the circle stay as they are.
+- A tap in a line puts the caret there. A tap in the empty space under the last line puts it at the end of the
+  last line that holds words, or in a new paragraph when the page ends with a block that holds none.
+- **Typing touches one row.** A keystroke changes that line in the document and lets the text view lay itself
+  out. The list is told a row's height changed only when it did. Nothing else is redrawn, and nothing is awaited.
+- **Input methods come first** (`native-app.md` §7). While a text view holds marked text: its row is never
+  reconfigured or reloaded; nothing from outside (a load, a save's answer, a merge) changes its words; no shortcut
+  is looked for; and what is being composed is not yet the document. When the composition ends the line is read
+  once. Anything that arrived for that row meanwhile is applied then.
+- **What arrives from outside** while he writes (the answer to his own save, a load) changes only rows whose
+  block really changed, and the row holding the caret keeps its caret.
+- **The keyboard.** The list follows the system's keyboard layout guide, so the line being typed is never under
+  it, and dragging the list down dismisses it. The toolbar of §6 is under the keyboard while it is up.
+- The Mac build takes the same code: a hardware Return, Backspace, Tab and the arrow keys moving from one line to
+  the next at the top and bottom of a line.
+
+### 10.5 The draft and the save
+
+**Who holds the words.** The open page's document lives with the screen, on the main actor, and only the screen
+changes it. The engine stores and sends; it never rewrites a page he is typing in. So a keystroke can never meet a
+copy of itself coming back, and nothing computed a moment ago can overwrite what he typed since.
+
+**The draft.** Each change is handed to the engine, which writes it to the store at once, as that page's draft
+under his account: the document; the page it started from (its text and its key); the rows he removed; and, while
+a save is on its way, exactly what was sent and under which operation. A crash or a quit loses nothing. This is a
+new kind of row in the store, added with a migration that keeps what the store already holds.
+
+- A draft belongs to its account. Day pages and their template lines have the same ids in every account, so a
+  draft is never drawn, merged or sent under another one. It is kept, out of sight, until its own account is back;
+  signing out asks first, as for any change not sent.
+
+**What is drawn.** Where a page has a draft, the workspace the engine publishes has the draft's document for that
+page, and an open to-do for each new to-do row that has words. So every screen and a relaunch show what he wrote.
+
+**The save** is the web's command through the route phase 0 made for it:
+`POST /api/v1/saves` with `{ operationId, expectedRevision, expectedOwner, action }`, the action being
+`{ "type": "save-editor", "pageId", "expectedContent", "document", "singleDeleteIds", "today", "at" }`.
+
+- `expectedContent` is the key of the page the draft started from: the web's `pageContentKey`, a hash of the
+  stored text, ported to `DaythreadCore` and held to the web's by shared cases.
+- `expectedRevision` is the copy's revision when the save is sent, not when he typed.
+- `expectedOwner` is new and optional on the route (the one server change of this slice): a save made under one
+  account is refused under another, as a command already is, and the engine then loads and stops, as for a command.
+- **One save per page is on its way at a time.** Until it is answered, the same document goes again under the same
+  operation id, however much he has typed since. The server answers a repeated operation with what it answered
+  the first time, so a save that landed while its answer was lost is recognised, not sent as a second change.
+  Newer words wait for the answer, then go as the next save.
+
+**When.** 450 ms after the last change, as on the web; at once when he leaves the day, when the app leaves the
+foreground, and when the network returns; never while an input method is composing.
+
+**In a pass** the saves go in the same queue as the outbox, each in the order it was made, so a tick on a to-do
+that exists only in a draft is sent after that draft's save. A save's answer is applied to the copy as a
+command's is. Then:
+
+- If he typed nothing since it was sent, the draft is removed and the page is the server's.
+- If he did, the draft stays and now starts from the server's page, and the server's page and his newer words are
+  put together by the merge of §10.6 (the server may have changed what he sent: it marks a new to-do's row as
+  planned for the day, and stamps links).
+
+### 10.6 When the page changed on the server
+
+**Brian's rule (§5): neither side replaces the other, and he is not asked.** It applies when a save is refused
+because the page changed, when a load brings a changed page while a draft is waiting, and when a save's answer
+comes back to newer words. In each, three versions are known: the page the draft started from, his draft, and
+the page as the server now has it. The app merges them line by line, by line id.
+
+**This is not the web's "Load latest".** The web's `mergeDraft` was written for a button he presses rarely: it
+starts from the server's page and adds each line he touched as a copy below it, brings back what he deleted, and
+turns a changed to-do into a bullet. Run without being asked, it would double the line he is typing in at every
+merge. The app's merge is a three-way merge, written for running unasked, in `DaythreadCore`, with no TypeScript
+twin. The web keeps its button until it is given the same merge; the parity list says so.
+
+| The line | In the merged page |
+|---|---|
+| Changed only by him | His |
+| Changed only on the server | The server's |
+| Changed by both to the same words | Those words, once |
+| Changed by both, differently | The server's stays, and his words go in as a new line right below it. Nothing of either is lost, and the one place where the app cannot know which he wants is on the page for him to see, not in a dialog |
+| Added by him | After the line it followed in his draft, or the nearest line before that which still exists |
+| Added on the server | Where the server has it |
+| Deleted by him, untouched on the server | Deleted |
+| Deleted by him, changed on the server | The server's line stays |
+| Deleted on the server, untouched by him | Deleted |
+| Deleted on the server, changed by him | His words go back in where the line was |
+
+- **To-dos.** A to-do's row is a line like any other, and its `taskId` travels with it. When both changed a
+  to-do's words, the server's row keeps the to-do and his words go below it as a plain line: one to-do must not
+  become two.
+- **Nesting and order.** If only one side moved or nested lines, that side's arrangement is kept and the other's
+  words and added lines are fitted into it. If both rearranged, the server's arrangement is kept and his words,
+  additions and deletions are applied to it; his rearrangement is the one thing given up, and it is the rarest.
+- **What must always hold**, and is tested as such: merging with an unchanged server page gives his draft
+  exactly; merging an unchanged draft gives the server's page exactly; when both made the same change the result
+  is that change; and every line's words that either side wrote and the other did not delete are in the result.
+- **Who runs it.** The screen, at a moment when no input method is composing, with the document as it is then,
+  and it becomes his draft on the server's page and is saved. For a page that is not open, the model runs it on
+  the stored draft. The engine only says that a draft is behind the server's page and holds the save until the
+  merge has run.
+- **Two devices both writing** each merge against what the other saved, and the page settles: a line both typed
+  in differently ends as two lines, once.
+- The line under the title reads `Latest loaded · your changes are below their lines` (the web's words) until he
+  types again, only when some line was changed by both, differently. Otherwise nothing is said.
+
+**When a save cannot be taken at all.**
+
+| The server says | The app |
+|---|---|
+| nothing (no connection, a 5xx, a 429) | Keeps the draft and tries again on the schedule of §5 and when the network returns |
+| "Saved elsewhere…" (something in the workspace changed since the copy was loaded) | Loads. If this page is as it was, sends the same save once more; he sees nothing. If the page changed, merges |
+| "Page changed elsewhere…" | Loads and merges |
+| the page is gone, or is in Trash | Keeps the draft and does not save into a page he cannot see. The "Not saved" button of §7 offers "Copy draft" and "Discard draft" |
+| the document is not acceptable (it never should be) | The same: keeps the draft, stops sending it, offers "Copy draft" and "Discard draft" |
+
+**What he sees otherwise.** Nothing while a save is on its way or has landed. Under the title, only when it
+matters: `Offline · saves when you're back`; `Not saved yet · trying again`; `Couldn't save · draft kept`. These
+are the web's words.
+
+### 10.7 How 1b is checked
+
+- **Shared cases** from the TypeScript: the content key (CJK, emoji, a page with a synced block); saves
+  (`before`, `action`, `after`: typed words; a new to-do with words, which the server makes a to-do with the
+  row's own id; a to-do's words deleted; a row removed, whose to-do goes to Trash; a row removed whose to-do has
+  a row on another page; a page holding a synced block and a database block the app did not touch; a stale key
+  refused; the same operation sent twice, answered the same).
+- **The merge**, in Swift alone: each row of §10.6's table; the four things that must always hold, over many
+  generated pages; a to-do changed by both ends as one to-do and a line; nested lines under each rule; a merge of
+  a merge (two devices) settles.
+- **The keys:** one test per row of §10.3 on the document alone, with the caret; each block kind as first and
+  second half; nested lines following the right half.
+- **What is written:** a document typed into by the app is accepted by the server's own `save-editor` in a shared
+  case; an untouched block is byte for byte as read; a new block has the props of §10.2.
+- **The engine:** a draft is in the store before the call returns and is drawn by a new engine on the same store;
+  the save goes 450 ms after the last change with a clock the test owns; a retry carries the same operation id;
+  "Saved elsewhere" resends once; a save whose answer was lost is sent again as it was and recognised; a draft
+  behind the server's page is held until merged; the answer to a save while he typed more leaves his newer words;
+  a tick on a to-do typed offline is sent after its page's save; a draft is never drawn or sent under another
+  account; sign-out counts drafts; a store written by 1a opens
+  and keeps its workspace and outbox.
+- **The cells:** typing changes the document and only that row; marked text is never reconfigured, never read
+  early, and Return during it only commits (driven through the text view's own marked-text calls); a load during
+  composition is applied after it; the caret survives an outside change to another row.
+- **The screens:** UI tests on the seeded local servers: type a line, see it on the server; type offline,
+  relaunch, see it, come back, see it saved; Return and Backspace; a to-do typed and then ticked; a page changed
+  on the server while he typed is merged. Chinese is typed with the simulator's Pinyin keyboard if a UI test can
+  drive it; if it cannot, that check is his, by hand, and the plan says so.
+- **Feel:** the time from a keystroke to the next frame on a page of 300 lines, measured with XCTest's metrics.
+  The first measurement sets the budget, which is then written here.
+- **His data:** as before, by him: a line typed in the app is on the web, and one typed on the web is in the app.
+
+### 10.8 Not in 1b, recorded
+
+- Document-wide Undo. A split, a join and a removed row cannot be undone in 1b; the text view's own undo is cleared
+  when the structure changes, so it can never put back words that are no longer that line's.
+- `receipt.renamed` (the server renames a line whose id another page holds). It cannot arise from what 1b can do
+  (no paste of lines); if it arrives, the page is merged as a changed page.
+- A repeating to-do ticked while the next day's page has a draft: the server writes that page, and the draft is
+  merged at its next save.
+- Every save takes the server's one Undo slot, as on the web. 1c's Undo must know.
