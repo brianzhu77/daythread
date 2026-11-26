@@ -78,7 +78,7 @@ public final class AppModel {
   }
 
   public func signOut() async {
-    await engine.signOut()
+    await engine.signOut(discardingUnsent: true)
     address = nil
   }
 

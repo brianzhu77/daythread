@@ -1114,7 +1114,7 @@ private struct Harness {
     await gate.reached()
     try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
     await gate.open(.done)
-    await signingOut.value
+    _ = await signingOut.value
 
     #expect(try h.tokens.read() == second)
     #expect(try await h.kept?.owner == "user-2")
@@ -1174,7 +1174,7 @@ private struct Harness {
       try await engine.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
     }
     await gate.open(.done)
-    await signingOut.value
+    _ = await signingOut.value
 
     #expect(await store.log == ["erase"])
     #expect(try await store.load() == nil)
