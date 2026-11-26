@@ -54,7 +54,7 @@ public struct SyncState: Sendable, Equatable {
 /// Where a page's unsaved words stand.
 public struct DraftStatus: Sendable, Equatable, Identifiable {
   public enum State: Sendable, Equatable {
-    /// Kept, and not on its way: within the wait after his last change, or not to be sent until he types again.
+    /// Kept, and not on its way: within the wait after his last change.
     case waiting
     /// A save is on its way to the server.
     case sending
@@ -62,9 +62,11 @@ public struct DraftStatus: Sendable, Equatable, Identifiable {
     case offline
     /// The last try failed for another reason; it goes again on the schedule.
     case retrying
-    /// The server's page changed since the draft started from it.
+    /// The server's page changed since the draft started from it: not sent until the screen has merged it onto that
+    /// page (`SyncEngine.rebaseDraft`).
     case behind
-    /// The server will not take it as it is.
+    /// Kept and not sent until he acts (types again, discards it, or the page comes back): the page is gone or in
+    /// Trash, or the server would not take the document. The reason, in the app's words or the server's.
     case stuck(String)
   }
 

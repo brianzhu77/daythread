@@ -89,6 +89,10 @@ public actor MemoryWorkspaceStore: WorkspaceStore {
 
   public func erase() async throws {
     draftsKept = [:]
+    try await eraseKeepingDrafts()
+  }
+
+  public func eraseKeepingDrafts() async throws {
     kept = nil
     outbox = []
     nextSeq = 1

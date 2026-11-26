@@ -24,15 +24,18 @@ extension SyncEngine {
   /// When the server held or refused one of his entries, the workspace is loaded once, so the page shows what the
   /// server has, a held tick is settled against it (`settleHeldTicks`) and Keep mine is built on it; then what that
   /// load sent again or asked for (today's page) is sent, with no second load whatever its answer, so a pass never
-  /// loops between holding and loading. A tick held after that load is settled by the next pass's.
-  func drain(_ pass: Pass) async throws {
-    guard try await sendPending(pass) == .copyBehind else { return }
+  /// loops between holding and loading. A tick held after that load is settled by the next pass's. Returns whether it
+  /// loaded.
+  @discardableResult
+  func drain(_ pass: Pass) async throws -> Bool {
+    guard try await sendPending(pass) == .copyBehind else { return false }
     let owner = copy?.owner
     try await loadWorkspace(pass, have: copy?.workspace.revision)
     // A load under another owner leaves nothing of this owner's to send in this pass.
-    guard copy?.owner == owner else { return }
+    guard copy?.owner == owner else { return true }
     _ = try await sendPending(pass)
     if !unsettled.isEmpty { askForPass(load: true) }
+    return true
   }
 
   private enum Drained {

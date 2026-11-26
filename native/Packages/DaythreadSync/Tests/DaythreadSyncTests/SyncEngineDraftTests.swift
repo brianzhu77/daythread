@@ -912,7 +912,7 @@ private struct DraftHarness {
     #expect(saves.first?.expectedRevision == 7)
     #expect(saves.first?.document == merged)
     let action = try saves.first.map { try JSON.parse($0.action) }
-    #expect(action?.objectValue?["singleDeleteIds"] == .array([]), "the merge names no rows")
+    #expect(action?.objectValue?["singleDeleteIds"] == nil, "the merge names no rows")
     #expect(await h.waits.asked.count == asked, "saved at once, with no wait")
     #expect(try await h.drafts == [])
     #expect(await current(h.engine)?.workspace?.page(day)?.document == merged)

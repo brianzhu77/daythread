@@ -75,9 +75,9 @@ public actor SyncEngine {
   var draftWaitNumber = 0
   /// Pages whose save is on its way.
   var savesInFlight: Set<String> = []
-  /// Pages whose draft is not sent again until he types or `saveNow` is called: the server refused it, or changed what
-  /// it was sent while he typed more.
-  var setAside: Set<String> = []
+  /// Pages whose document the server refused, with its reason: not sent again until he acts. Kept in memory only, so
+  /// such a draft is sent once more at the next launch; everything else that holds a draft is read from the store.
+  var refusedDrafts: [String: String] = [:]
 
   // MARK: One pass at a time
 
@@ -211,10 +211,11 @@ public actor SyncEngine {
     while let driver { await driver.value }
   }
 
-  /// Signs in, then loads. A session of another account than the stored copy's erases the copy and its outbox first;
-  /// the same account's are kept and sent. The transport's errors are thrown unchanged. If the device cannot erase or
-  /// keep the session after the server accepted it, it ends signed out with nothing shown and the token cleared, and
-  /// that error is thrown: a new account is never signed in over another account's rows.
+  /// Signs in, then loads. A session of another account than the stored copy's erases the copy and its outbox first,
+  /// and keeps every account's drafts for their own account; the same account's are kept and sent. The transport's
+  /// errors are thrown unchanged. If the device cannot erase or keep the session after the server accepted it, it ends
+  /// signed out with nothing shown and the token cleared, and that error is thrown: a new account is never signed in
+  /// over another account's rows.
   public func signIn(email: String, password: String, timezone: String) async throws {
     let session = try await transport.signIn(email: email, password: password, timezone: timezone)
     await acquire()
@@ -227,10 +228,9 @@ public actor SyncEngine {
       await readCopyIfNeeded()
       // A copy that could not be read may still be someone else's, so nothing known erases too.
       if copy?.owner != session.owner {
-        try await store.erase()
+        try await store.eraseKeepingDrafts()
         copy = nil
         outbox = []
-        drafts = []
       }
       try tokens.write(session)
     } catch {
@@ -264,21 +264,28 @@ public actor SyncEngine {
     await requestPass(load: true)
   }
 
-  /// Unless `discardingUnsent`, first tries one pass; then, when changes are still unsent (pending, waiting or held;
-  /// the engine's own request for today's page is not his), signs nobody out and returns how many, so he can be asked.
-  /// Otherwise tells the server, erases the copy, the outbox and the session whatever it answered (a shared device must
-  /// not keep someone's notes), and returns 0. Discarding tries no pass: he has said yes, and sign-out does not wait
-  /// for the network beyond telling the server. The last action wins: a sign-in that completes while the server is
-  /// being told is kept.
+  /// Unless `discardingUnsent`, first tries one pass, with the waits after his last changes cut short; then, when
+  /// changes are still unsent (pending, waiting or held entries, the engine's own request for today's page not being
+  /// his, and each draft of the account shown, whatever it waits for), signs nobody out and returns how many, so he
+  /// can be asked. Otherwise tells the server, erases the copy, the outbox, every account's drafts and the session
+  /// whatever it answered (a shared device must not keep someone's notes), and returns 0. Discarding tries no pass:
+  /// he has said yes, and sign-out does not wait for the network beyond telling the server. The last action wins: a
+  /// sign-in that completes while the server is being told is kept.
   ///
   /// If `erase` throws, it is tried once more; if it still throws, this ends signed out anyway. The copy then stays on
   /// disk but hidden (`start` shows no copy without its session), and is erased at the next sign-in under another
   /// owner.
   @discardableResult
   public func signOut(discardingUnsent: Bool) async -> Int {
-    if !discardingUnsent { await requestPass(load: false) }
+    if !discardingUnsent {
+      await acquire()
+      cutDraftWaitsShort()
+      release()
+      await requestPass(load: false)
+    }
     await acquire()
-    let unsent = outbox.count { !$0.asksForADay }
+    // A draft only waiting out its 450 ms is his words not yet on the server too.
+    let unsent = outbox.count { !$0.asksForADay } + accountDrafts.count
     if !discardingUnsent, unsent > 0 {
       release()
       SyncLog.logger.notice("Sign-out waits for a yes: \(unsent, privacy: .public) changes not sent")
@@ -406,14 +413,19 @@ public actor SyncEngine {
         coverRequestsSoFar(pass)
         try await loadWorkspace(pass, have: copy?.workspace.revision)
       }
-      try await drain(pass)
+      let loadedForHolds = try await drain(pass)
+      let saves = try await saveDrafts(pass, loaded: loadedForHolds)
       // A save that landed may have made the to-do a waiting tick is for.
-      if try await saveDrafts(pass) { try await drain(pass) }
+      if saves.landed { try await drain(pass) }
       try await performQueued(pass)
       try await enter(pass)
       defer { release() }
       await readOutbox()
-      stopRetrying()
+      if saves.leftForRetry {
+        planRetry(after: nil)
+      } else {
+        stopRetrying()
+      }
       let held = outbox.count { $0.state == .held }
       SyncLog.logger.info(
         "Pass done: revision \(self.copy?.workspace.revision ?? -1, privacy: .public), held \(held, privacy: .public)")
@@ -560,8 +572,9 @@ public actor SyncEngine {
     try await Task.sleep(nanoseconds: UInt64(nanoseconds))
   }
 
-  /// Plans the next try after the schedule's wait, or a 429's when longer, replacing any wait in progress.
-  private func planRetry(after error: any Error) {
+  /// Plans the next try after the schedule's wait, or a 429's when longer, replacing any wait in progress. Nil when
+  /// the pass ended well but left a save for later.
+  private func planRetry(after error: (any Error)?) {
     var wait = Self.retryWaits[min(failedPasses, Self.retryWaits.count - 1)]
     if case .wait(let seconds)? = error as? TransportError, .seconds(seconds) > wait { wait = .seconds(seconds) }
     failedPasses += 1

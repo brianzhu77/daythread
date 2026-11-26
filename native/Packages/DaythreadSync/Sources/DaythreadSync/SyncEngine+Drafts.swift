@@ -9,14 +9,28 @@ import Foundation
 ///   takes it out, before the request leaves. Until it is answered, every try sends that document under that
 ///   operation id, however much he typed since, so a save that landed with its answer lost is recognised by the
 ///   server rather than applied twice. His newer words wait for the answer.
-/// - **When.** 450 ms after his last change to the page, through the injected `sleep`; at once on `saveNow`; and in
-///   any pass, after the outbox entries, for a draft with no wait running (a relaunch, a retry, the network back).
+/// - **When.** 450 ms after his last change to the page, through the injected `sleep`; at once on `saveNow` and
+///   `rebaseDraft`; and in any pass, after the outbox entries, for a draft with no wait running (a relaunch, a retry,
+///   the network back).
+/// - **Behind the server's page.** A draft with no save on its way whose page in the copy has another content key
+///   than the draft's `base` is behind: the server's page changed since the draft started from it. It is never sent
+///   so; the screen merges it (`PageMerge`, with the draft's `baseDocument`, its `document` and the copy's page) and
+///   hands the result back with `rebaseDraft`. A draft with a save on its way is never behind: that save goes again
+///   as recorded until it is answered, whatever a load brought.
+/// - **Stuck.** A draft whose page is gone from the copy or is in Trash, or whose document the server refused, is
+///   kept and not sent until he acts. Behind, gone and in Trash are read from the store's copy and drafts, so they
+///   hold after a relaunch; a refused document is remembered for the launch only.
 extension SyncEngine {
   /// The wait after his last change before the page is saved, as on the web.
   static let draftWait: Duration = .milliseconds(450)
 
+  /// Why a draft is held, in his words.
+  static let pageInTrash = "This page is in Trash"
+  static let pageGone = "This page is gone"
+
   /// Stores the draft at once and publishes a state that draws it; the save goes 450 ms after the last call.
-  /// The first call for a page records the page as the copy has it then as the draft's base.
+  /// The first call for a page records the page as the copy has it then as the draft's base. A draft the server
+  /// refused is sent again with these words.
   ///
   /// A document equal to that base removes the draft and sends nothing, unless a save is on its way: then the draft
   /// stays until its answer. Throws `SyncError.notReady` when no workspace is shown, the copy has no such page, or a
@@ -29,12 +43,12 @@ extension SyncEngine {
     }
     let kept = accountDraft(page.id)
     let baseDocument = kept?.baseDocument ?? page.document
-    setAside.remove(page.id)
     if kept?.sent == nil, document.utf8.elementsEqual(baseDocument.utf8) {
       stopDraftWait(page.id)
       guard kept != nil else { return }
       try await store.removeDraft(pageId: page.id, owner: copy.owner)
       forgetDraft(pageId: page.id, owner: copy.owner)
+      refusedDrafts[page.id] = nil
       publish()
       return
     }
@@ -43,23 +57,86 @@ extension SyncEngine {
         pageId: page.id, owner: copy.owner, base: kept?.base ?? ContentKey.of(baseDocument),
         baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds, sent: kept?.sent,
         changedAt: now()))
+    refusedDrafts[page.id] = nil
     publish()
     waitThenSave(page.id)
   }
 
-  /// Sends what is waiting now (leaving the day, leaving the foreground): the waits after his changes are cut short,
-  /// and drafts set aside go again. Returns when that pass has ended.
+  /// After the screen merged: the draft now starts from `baseDocument` (the server's page it was merged with),
+  /// holds `document`, has no rows named, and is saved at once. Refused when the copy's page is no longer that one.
+  ///
+  /// Answers false, changing nothing, when the copy's page is not `baseDocument` in its stored form (the page moved
+  /// again while the screen merged) or a save of the draft is on its way. A `document` equal to `baseDocument`
+  /// removes the draft. Throws as `keepDraft` does.
+  @discardableResult
+  public func rebaseDraft(pageId: String, baseDocument: String, document: String) async throws -> Bool {
+    await acquire()
+    defer { release() }
+    guard copyShown, phase != .signedOut, !leaving, let copy, let page = copy.workspace.page(pageId) else {
+      throw SyncError.notReady
+    }
+    let kept = accountDraft(page.id)
+    guard kept?.sent == nil,
+      ContentKey.storedDocument(page.document).utf8.elementsEqual(ContentKey.storedDocument(baseDocument).utf8)
+    else { return false }
+    if document.utf8.elementsEqual(baseDocument.utf8) {
+      if kept != nil {
+        try await store.removeDraft(pageId: page.id, owner: copy.owner)
+        forgetDraft(pageId: page.id, owner: copy.owner)
+      }
+    } else {
+      try await keep(
+        PageDraft(
+          pageId: page.id, owner: copy.owner, base: ContentKey.of(baseDocument), baseDocument: baseDocument,
+          document: document, singleDeleteIds: [], sent: nil, changedAt: now()))
+    }
+    stopDraftWait(page.id)
+    refusedDrafts[page.id] = nil
+    publish()
+    askForPass(load: false)
+    return true
+  }
+
+  /// Removes the account's draft of the page: the page is drawn as the server has it. A save already on its way is
+  /// still answered into the copy.
+  public func discardDraft(pageId: String) async {
+    await acquire()
+    defer { release() }
+    guard copyShown, phase != .signedOut, !leaving, let owner = copy?.owner, let kept = accountDraft(pageId) else {
+      return
+    }
+    do {
+      try await store.removeDraft(pageId: kept.pageId, owner: owner)
+    } catch {
+      SyncLog.logger.error("A draft could not be discarded: \(SyncLog.describe(error), privacy: .public)")
+      return
+    }
+    forgetDraft(pageId: kept.pageId, owner: owner)
+    stopDraftWait(kept.pageId)
+    refusedDrafts[kept.pageId] = nil
+    publish()
+  }
+
+  /// The signed-in account's draft of the page, while its copy is shown; nil when it has none.
+  public func draft(of pageId: String) async -> PageDraft? {
+    accountDraft(pageId)
+  }
+
+  /// Sends what is waiting now (leaving the day, leaving the foreground): the waits after his changes are cut short.
+  /// Returns when that pass has ended.
   public func saveNow() async {
     await acquire()
     let ready = copyShown && phase != .signedOut && !leaving
-    if ready {
-      for wait in draftWaits.values { wait.task.cancel() }
-      draftWaits = [:]
-      setAside = []
-    }
+    if ready { cutDraftWaitsShort() }
     release()
     guard ready else { return }
     await requestPass(load: false)
+  }
+
+  /// Ends every wait after a change, so the next pass sends what they held. Runs inside a store section.
+  func cutDraftWaitsShort() {
+    for wait in draftWaits.values { wait.task.cancel() }
+    draftWaits = [:]
   }
 
   // MARK: What is drawn and said
@@ -75,27 +152,71 @@ extension SyncEngine {
     accountDrafts.first { $0.pageId.utf8.elementsEqual(pageId.utf8) }
   }
 
+  /// Whether a draft may be sent, as far as the copy and the server's refusals say.
+  enum Standing: Equatable {
+    case free
+    /// The copy's page changed since the draft started from it: the screen merges before it is sent.
+    case behind
+    /// Kept, and not sent until he acts; why, in his words or the server's.
+    case stuck(String)
+  }
+
+  func standing(of draft: PageDraft) -> Standing {
+    guard let page = copy?.workspace.page(draft.pageId) else { return .stuck(Self.pageGone) }
+    // A page in Trash is out of his sight: the server would take the save, into a page he cannot see.
+    if page.trashedAt != nil { return .stuck(Self.pageInTrash) }
+    if let reason = refusedDrafts[draft.pageId] { return .stuck(reason) }
+    if draft.sent == nil, !Self.document(page.document, hasKey: draft.base, keyOf: draft.baseDocument) {
+      return .behind
+    }
+    return .free
+  }
+
+  /// Whether `document` has the content key `key`, which is `keyed`'s; the same text needs no hash.
+  private static func document(_ document: String, hasKey key: String, keyOf keyed: String) -> Bool {
+    document.utf8.elementsEqual(keyed.utf8) || ContentKey.of(document) == key
+  }
+
   /// `workspace` with each of the account's drafts drawn on it.
   func drawingDrafts(over workspace: Workspace) -> Workspace {
     accountDrafts.reduce(workspace) { $0.drawing(draft: $1.document, of: $1.pageId) }
   }
 
-  /// The pending ticks of `entries` for a to-do that exists only in a draft: they wait for that draft's save, which
-  /// makes the to-do on the server.
+  /// The pending ticks of `entries` that wait for a draft's save: on a to-do that exists only in a draft, which that
+  /// draft's save makes on the server; and on a to-do that a save on its way made, until it is answered, even when a
+  /// load has meanwhile brought the to-do into the copy. Sent before that answer, the tick would carry none of the
+  /// save's revision as its own, and the server would hold it for a change that is his.
   func waitingForDrafts(_ entries: [OutboxEntry]) -> Set<Int> {
     guard let copy, !accountDrafts.isEmpty else { return [] }
     let typed = drawingDrafts(over: copy.workspace)
+    let madeBySaves = Set(accountDrafts.flatMap { Self.todosMade(by: $0) }.map { Array($0.utf8) })
     return Set(
       entries.filter { entry in
         guard entry.state == .pending, let taskId = Command.taskId(of: entry.action) else { return false }
-        return copy.workspace.task(taskId) == nil && typed.task(taskId) != nil
+        return (copy.workspace.task(taskId) == nil && typed.task(taskId) != nil)
+          || madeBySaves.contains(Array(taskId.utf8))
       }.map(\.seq))
   }
 
+  /// The to-dos the save on its way of `draft` makes: those of its rows that the page it started from did not have.
+  private static func todosMade(by draft: PageDraft) -> [String] {
+    guard let sent = draft.sent else { return [] }
+    let before = Set(todoIds(in: Document.blocks(draft.baseDocument)).map { Array($0.utf8) })
+    return todoIds(in: Document.blocks(sent.document)).filter { !before.contains(Array($0.utf8)) }
+  }
+
+  /// The `taskId` of every to-do row, nested ones included.
+  private static func todoIds(in blocks: [Block]) -> [String] {
+    blocks.flatMap { block -> [String] in
+      let own = block.type == "task" ? block.props["taskId"]?.stringValue.map { [$0] } ?? [] : []
+      return own + todoIds(in: block.children)
+    }
+  }
+
   /// Whether a pass sends `draft` now: a save on its way is sent again as it was; newer words go once the wait
-  /// after his last change has ended.
+  /// after his last change has ended. Never a draft behind the server's page or stuck.
   func isDue(_ draft: PageDraft) -> Bool {
-    guard !setAside.contains(draft.pageId), !savesInFlight.contains(draft.pageId) else { return false }
+    guard standing(of: draft) == .free, !savesInFlight.contains(draft.pageId) else { return false }
     return draft.sent != nil || draftWaits[draft.pageId] == nil
   }
 
@@ -104,14 +225,12 @@ extension SyncEngine {
       let state: DraftStatus.State =
         if savesInFlight.contains(draft.pageId) {
           .sending
-        } else if setAside.contains(draft.pageId) {
-          .waiting
-        } else if offline {
-          .offline
-        } else if retrying {
-          .retrying
         } else {
-          .waiting
+          switch standing(of: draft) {
+          case .stuck(let reason): .stuck(reason)
+          case .behind: .behind
+          case .free: offline ? .offline : retrying ? .retrying : .waiting
+          }
         }
       return DraftStatus(id: draft.pageId, state: state)
     }
@@ -167,10 +286,9 @@ extension SyncEngine {
   /// Drops every wait and mark of the account that was shown, when the account changes or a sign-out begins. The
   /// drafts themselves stay in the store.
   func forgetDraftWork() {
-    for wait in draftWaits.values { wait.task.cancel() }
-    draftWaits = [:]
+    cutDraftWaitsShort()
     savesInFlight = []
-    setAside = []
+    refusedDrafts = [:]
   }
 
   // MARK: Saving
@@ -192,21 +310,43 @@ extension SyncEngine {
     case loadWholeThenSettle(revision: Int?)
     /// The answer is another account's: nothing more of this owner's is saved; the new owner's workspace is loaded.
     case loadWholeAndStop
+    /// "Saved elsewhere": the workspace moved on since the copy was loaded. The save is kept as sent.
+    case savedElsewhere
+    /// "Page changed elsewhere": the page moved on since the draft started from it.
+    case pageChanged
   }
 
-  /// Saves the account's due drafts one at a time, oldest change first, until none is due. Returns whether a save
-  /// landed, so the ticks waiting for one go.
-  func saveDrafts(_ pass: Pass) async throws -> Bool {
+  /// What the saves of a pass came to.
+  struct SavesDone {
+    /// A save landed, so the ticks waiting for one may go.
     var landed = false
-    while let save = try await nextSave(pass) {
+    /// A save the server turned away for now is left for the retry schedule.
+    var leftForRetry = false
+  }
+
+  /// Saves the account's due drafts one at a time, oldest change first, until none is due.
+  ///
+  /// When the server says the workspace or the page moved on, the workspace is loaded once in the pass, never
+  /// more: after "Saved elsewhere" with the page as it was, the same save goes once more on the new revision (a
+  /// refused operation left no receipt, so its id is free); with the page changed, the draft is behind. A second
+  /// such answer in the pass, or "Page changed elsewhere" over a page that has the draft's key after all, leaves
+  /// the save for the retry schedule. `loaded`: the pass already loaded after the server held an outbox entry, so
+  /// the copy is as new as this pass will make it.
+  func saveDrafts(_ pass: Pass, loaded: Bool) async throws -> SavesDone {
+    var done = SavesDone()
+    var loaded = loaded
+    var later: Set<String> = []
+    var sentAgain: Set<String> = []
+    while let save = try await nextSave(pass, leaving: later) {
       let outcome: SaveOutcome
       do {
         outcome = try await transport.save(
           token: pass.session?.token, operationId: save.operationId, expectedRevision: save.expectedRevision,
           expectedOwner: save.owner, action: save.action)
       } catch TransportError.refused(let status, let reason) {
-        // The server will never take this body: trying it again would only be refused again.
-        try await putAside(save, because: "\(status) \(reason ?? "")", pass)
+        // The server will never take this body: trying it again would only be refused again. Worded as a
+        // command's refusal is.
+        try await hold(save, because: status == 400 ? "bad-request" : reason ?? "refused", status: status, pass)
         continue
       } catch {
         // Kept as sent; the pass's failure plans the next try.
@@ -215,39 +355,74 @@ extension SyncEngine {
       }
       switch try await settle(outcome, of: save, pass) {
       case .next:
-        if case .applied = outcome { landed = true }
+        if case .applied = outcome { done.landed = true }
       case .loadWholeThenSettle(let revision):
         try await loadWorkspace(pass, have: nil)
         try await enter(pass)
         defer { release() }
         // After a load under another owner the draft is not this copy's to settle.
-        guard copy?.owner == save.owner else { return landed }
+        guard copy?.owner == save.owner else { return done }
         try await learn(revision)
         try await settleDraft(save)
         await readOutbox()
         publish()
-        landed = true
+        done.landed = true
       case .loadWholeAndStop:
         try await loadWorkspace(pass, have: nil)
-        return landed
+        return done
+      case .savedElsewhere:
+        guard !loaded, !sentAgain.contains(save.pageId) else {
+          later.insert(save.pageId)
+          done.leftForRetry = true
+          continue
+        }
+        try await loadWorkspace(pass, have: copy?.workspace.revision)
+        loaded = true
+        try await enter(pass)
+        defer { release() }
+        guard copy?.owner == save.owner else { return done }
+        if pageHasBase(of: save) {
+          // Still due, as sent: the next turn of the loop takes it out again on the copy's new revision.
+          sentAgain.insert(save.pageId)
+        } else {
+          try await clearSent(save)
+        }
+        publish()
+      case .pageChanged:
+        if !loaded {
+          try await loadWorkspace(pass, have: copy?.workspace.revision)
+          loaded = true
+        }
+        try await enter(pass)
+        defer { release() }
+        guard copy?.owner == save.owner else { return done }
+        try await clearSent(save)
+        if pageHasBase(of: save) {
+          // The load shows the page it was built on after all: not behind, so tried again later, not in this pass.
+          later.insert(save.pageId)
+          done.leftForRetry = true
+        }
+        publish()
       }
     }
-    return landed
+    return done
   }
 
-  /// The first due draft, marked as sending. A save already on its way goes again as its action was first written;
-  /// otherwise the action is made now and recorded with a new operation id before anything leaves.
-  private func nextSave(_ pass: Pass) async throws -> DraftSave? {
+  /// The first due draft not left for later, marked as sending. A save already on its way goes again as its action
+  /// was first written; otherwise the action is made now and recorded with a new operation id before anything
+  /// leaves.
+  private func nextSave(_ pass: Pass, leaving later: Set<String>) async throws -> DraftSave? {
     try await enter(pass)
     defer { release() }
-    while let copy, var draft = accountDrafts.first(where: isDue) {
+    while let copy, var draft = accountDrafts.first(where: { isDue($0) && !later.contains($0.pageId) }) {
       let sent: PageDraft.Sent
       let action: JSONValue
       if let recorded = draft.sent {
         guard let parsed = try? JSON.parse(recorded.action) else {
-          // Not the same request any more, so not sent as one: kept for him, as a refusal is.
-          SyncLog.logger.error("A recorded save could not be read; kept, not sent")
-          setAside.insert(draft.pageId)
+          // Not the same request any more, so not sent as one: read as never sent, as the store reads a damaged
+          // record. That cannot apply anything twice: the next save carries the old `expectedContent`, refused if
+          // the first landed.
+          SyncLog.logger.error("A recorded save could not be read; read as not sent")
           draft.sent = nil
           try await keep(draft)
           continue
@@ -287,7 +462,7 @@ extension SyncEngine {
     case .applied(let receipt, let changes, let owner):
       // A reply under another owner than the copy's is never applied to it.
       guard owner == copy.owner else {
-        try await putAside(save)
+        try await clearSent(save)
         publish()
         return .loadWholeAndStop
       }
@@ -303,13 +478,24 @@ extension SyncEngine {
       // Not `changes.revision`: a replay's changes end at the workspace as it is now, others' writes included.
       try await learn(Self.revision(of: receipt))
       try await settleDraft(save)
-    case .refused:
-      // The message is the server's words about his page; the log says only that it was refused.
+    case .refused(let message):
+      // The message is the server's words about his page; the log says only which refusal it was.
+      if message.hasPrefix(Self.savedElsewhere) {
+        SyncLog.logger.notice("Save of a page: saved elsewhere, loading")
+        publish()
+        return .savedElsewhere
+      }
+      if message.hasPrefix(Self.pageChangedElsewhere) {
+        SyncLog.logger.notice("Save of a page: page changed elsewhere, loading")
+        publish()
+        return .pageChanged
+      }
       SyncLog.logger.notice("Save of a page: refused, kept")
-      try await putAside(save)
+      refusedDrafts[save.pageId] = message
+      try await clearSent(save)
     case .ownerMismatch:
       SyncLog.logger.notice("Save of a page: owner-mismatch, kept")
-      try await putAside(save)
+      try await clearSent(save)
       publish()
       return .loadWholeAndStop
     }
@@ -318,12 +504,23 @@ extension SyncEngine {
     return .next
   }
 
+  /// The beginnings of the server's two messages (`workspace.ts`) that say the copy is behind, not that the
+  /// document is wrong.
+  private static let savedElsewhere = "Saved elsewhere"
+  private static let pageChangedElsewhere = "Page changed elsewhere"
+
+  /// Whether the copy's page still has the content key the save's draft started from. Runs inside a store section.
+  private func pageHasBase(of save: DraftSave) -> Bool {
+    guard let draft = recordedDraft(of: save), let page = copy?.workspace.page(save.pageId) else { return false }
+    return Self.document(page.document, hasKey: draft.base, keyOf: draft.baseDocument)
+  }
+
   /// The draft after its save's answer is in the copy: removed when he typed nothing since; otherwise it starts from
-  /// the server's page, and goes as the next save when that page is what was sent. When the server changed what it
-  /// was sent, the draft starts from what was sent and is set aside for the screen to merge. Runs inside a store
-  /// section.
+  /// the server's page when that page is what was sent, and goes as the next save. When the server changed what it
+  /// was sent, the draft starts from what was sent, which leaves it behind the server's page for the screen to
+  /// merge. Runs inside a store section.
   private func settleDraft(_ save: DraftSave) async throws {
-    guard var draft = draft(of: save), let sent = draft.sent, sent.operationId == save.operationId
+    guard var draft = recordedDraft(of: save), let sent = draft.sent, sent.operationId == save.operationId
     else { return }
     if draft.document.utf8.elementsEqual(sent.document.utf8) {
       try await store.removeDraft(pageId: draft.pageId, owner: draft.owner)
@@ -334,7 +531,6 @@ extension SyncEngine {
         draft.baseDocument = page
       } else {
         draft.baseDocument = sent.document
-        setAside.insert(draft.pageId)
       }
       draft.base = ContentKey.of(draft.baseDocument)
       draft.sent = nil
@@ -342,26 +538,27 @@ extension SyncEngine {
     }
   }
 
-  private func draft(of save: DraftSave) -> PageDraft? {
+  private func recordedDraft(of save: DraftSave) -> PageDraft? {
     drafts.first { $0.owner == save.owner && $0.pageId.utf8.elementsEqual(save.pageId.utf8) }
   }
 
-  /// Clears the draft's `sent` and leaves it waiting, not sent again until he types or `saveNow`.
-  private func putAside(_ save: DraftSave, because reason: String, _ pass: Pass) async throws {
+  /// Holds the draft for him after the server refused the request itself: kept, and not sent until he acts.
+  private func hold(_ save: DraftSave, because reason: String, status: Int, _ pass: Pass) async throws {
     try await enter(pass)
     defer { release() }
     savesInFlight.remove(save.pageId)
     offline = false
     failure = nil
-    SyncLog.logger.notice("Save of a page: \(reason, privacy: .public), kept")
-    try await putAside(save)
+    SyncLog.logger.notice("Save of a page: refused with \(status, privacy: .public), kept")
+    refusedDrafts[save.pageId] = reason
+    try await clearSent(save)
     publish()
   }
 
-  /// Runs inside a store section.
-  private func putAside(_ save: DraftSave) async throws {
-    setAside.insert(save.pageId)
-    guard var draft = draft(of: save), draft.sent?.operationId == save.operationId
+  /// Forgets what was sent: the server refused it, so it left no receipt and the next save is made anew. Runs
+  /// inside a store section.
+  private func clearSent(_ save: DraftSave) async throws {
+    guard var draft = recordedDraft(of: save), draft.sent?.operationId == save.operationId
     else { return }
     draft.sent = nil
     try await keep(draft)

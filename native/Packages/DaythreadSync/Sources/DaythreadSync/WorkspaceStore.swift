@@ -41,4 +41,7 @@ public protocol WorkspaceStore: Sendable {
   func removeDraft(pageId: String, owner: String) async throws
   /// Forgets everything, `seq` and every owner's drafts included.
   func erase() async throws
+  /// Forgets the workspace, its owner, the outbox and `seq`, in one transaction, and keeps every owner's drafts: a
+  /// sign-in under another account, whose drafts wait for that account to come back.
+  func eraseKeepingDrafts() async throws
 }
