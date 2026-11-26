@@ -1901,6 +1901,55 @@ private func applied(_ changes: WorkspaceChanges) -> FakeTransport.Reply {
     #expect(await current(nobody.engine) == state(.signedOut, nil))
   }
 
+  @Test func a_hidden_copy_learns_that_sign_in_is_off() async throws {
+    // A copy with no session is hidden at launch and asks nothing; the scene's refresh still asks who the server is.
+    let served = try board(3, rows: [])
+    let h = try await Harness(
+      [.account(localAccount), .workspace(.full(served, owner: "local"))], session: nil,
+      copy: try board(5, rows: []))
+    await h.engine.start()
+    #expect(await h.calls == [])
+    #expect(await current(h.engine) == state(.signedOut, nil))
+
+    await h.engine.refresh()
+
+    #expect(await h.calls == [.account(token: nil), .workspace(token: nil, have: 5)])
+    #expect(await current(h.engine) == state(.ready, served, signedIn: false))
+  }
+
+  @Test func nothing_of_the_account_is_sent_once_a_sign_out_has_begun() async throws {
+    let answer = try upserting(from: 5, to: 6, [row("t1", status: "done", version: 2)])
+    let gate = Gate()
+    let h = try await Harness(
+      opening + [offline], copy: try board(5, rows: [row("t1"), row("t2")]), entries: [stored("op-1", done("t1"))])
+    await h.engine.start()
+    let sentBefore = await h.transport.sends.count
+
+    // What a pass in the window would get, were it to ask.
+    await h.transport.add([
+      .gated(gate), .workspace(.unchanged(revision: 5, owner: "user-1")), applied(answer), applied(answer),
+      applied(answer),
+    ])
+    let signingOut = Task { await h.engine.signOut(discardingUnsent: true) }
+    await gate.reached()
+
+    await #expect(throws: SyncError.notReady) { try await h.engine.enqueue(action: done("t2"), label: "t2") }
+    let performing = Task { await h.engine.perform(action: Command.ensureDay(yesterday)) }
+    let refreshing = Task { await h.engine.refresh() }
+    #expect(await performing.value == .signedOut)
+    await refreshing.value
+    await h.engine.settled()
+    #expect(await h.transport.sends.count == sentBefore, "nothing of his is sent while he signs out")
+
+    await gate.open(.done)
+    #expect(await signingOut.value == 0)
+    await h.engine.settled()
+    #expect(await h.transport.sends.count == sentBefore)
+    #expect(try await h.entries == [])
+    #expect(try await h.kept == nil)
+    #expect(await current(h.engine) == state(.signedOut, nil))
+  }
+
   @Test func signing_out_with_changes_not_sent_asks_first() async throws {
     let h = try await Harness(
       opening + [offline], copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"))])
