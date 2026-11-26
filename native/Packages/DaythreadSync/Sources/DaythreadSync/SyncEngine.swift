@@ -44,6 +44,12 @@ public actor SyncEngine {
   var outbox: [OutboxEntry] = []
   /// Commands `perform` is waiting on, in the order asked.
   var performances: [Performance] = []
+  /// Ticks the server held that the next load settles, by operation id, with the server's reason. They stay pending
+  /// until then, so they stay drawn, and nothing for the same to-do is sent before them.
+  var unsettled: [String: String] = [:]
+  /// Ticks sent again after a merge, by operation id: held a second time, they are held for him. Kept in memory only,
+  /// so a relaunch may merge one once more.
+  var merged: Set<String> = []
   /// Tickets given by `enqueue` in this engine's lifetime. Not an entry's `seq`, which restarts when the store is
   /// erased.
   private var enqueued = 0
@@ -413,6 +419,8 @@ public actor SyncEngine {
         interrupted(error, pass) ?? Performed(error)
       }
     answerPerformances(of: pass, with: unsent)
+    // Without the load that settles them they are plain pending entries, sent again by the next pass.
+    unsettled = [:]
     if error is CancellationError || error is Superseded {
       SyncLog.logger.info("Pass dropped: \(SyncLog.describe(error), privacy: .public)")
       return
@@ -498,6 +506,7 @@ public actor SyncEngine {
       try await store.replace(with: workspace, owner: owner)
       copy = (workspace, owner)
     }
+    try await settleHeldTicks()
     copyShown = true
     await ensureToday()
     await readOutbox()

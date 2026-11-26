@@ -42,21 +42,32 @@ public struct OutboxEntry: Sendable, Equatable, Identifiable {
 extension OutboxEntry {
   /// The engine's own request for today's page: never shown, and removed rather than held.
   var asksForADay: Bool { Command.type(of: action) == "ensure-day" }
+
+  /// The status a `task-status` asks for; nil for any other action.
+  var wantedStatus: TodoTask.Status? {
+    guard Command.taskId(of: action) != nil, let status = action.objectValue?["status"]?.stringValue else { return nil }
+    return TodoTask.Status(rawValue: status)
+  }
 }
 
 extension [OutboxEntry] {
   /// The `seq`s of pending entries behind a held one for the same to-do, for entries in `seq` order. Such an entry
   /// is drawn but not sent, so it is not answered before the held one he has not decided on yet.
-  var waiting: Set<Int> {
+  var waiting: Set<Int> { waiting(behind: []) }
+
+  /// As `waiting`, with the pending entries whose operation ids are in `unsettled` holding back those behind them as a
+  /// held one does, while the engine settles them.
+  func waiting(behind unsettled: Set<String>) -> Set<Int> {
     var heldTasks = Set<[UInt8]>()
     var waiting = Set<Int>()
     for entry in self {
       // Ids compare by code units, as they do in the domain.
       guard let id = Command.taskId(of: entry.action) else { continue }
       let taskId = [UInt8](id.utf8)
-      switch entry.state {
-      case .held: heldTasks.insert(taskId)
-      case .pending: if heldTasks.contains(taskId) { waiting.insert(entry.seq) }
+      if entry.state == .held || unsettled.contains(entry.operationId) {
+        heldTasks.insert(taskId)
+      } else if heldTasks.contains(taskId) {
+        waiting.insert(entry.seq)
       }
     }
     return waiting

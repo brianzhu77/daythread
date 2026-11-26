@@ -22,8 +22,9 @@ extension SyncEngine {
   /// those waiting behind one.
   ///
   /// When the server held or refused one of his entries, the workspace is loaded once, so the page shows what the
-  /// server has and Keep mine is built on it; then what that load asked for (today's page) is sent, with no second
-  /// load whatever its answer, so a pass never loops between holding and loading.
+  /// server has, a held tick is settled against it (`settleHeldTicks`) and Keep mine is built on it; then what that
+  /// load sent again or asked for (today's page) is sent, with no second load whatever its answer, so a pass never
+  /// loops between holding and loading. A tick held after that load is settled by the next pass's.
   func drain(_ pass: Pass) async throws {
     guard try await sendPending(pass) == .copyBehind else { return }
     let owner = copy?.owner
@@ -31,6 +32,7 @@ extension SyncEngine {
     // A load under another owner leaves nothing of this owner's to send in this pass.
     guard copy?.owner == owner else { return }
     _ = try await sendPending(pass)
+    if !unsettled.isEmpty { askForPass(load: true) }
   }
 
   private enum Drained {
@@ -107,12 +109,59 @@ extension SyncEngine {
     try await store.update(kept)
   }
 
+  // MARK: Merging a held tick
+
+  /// Whether a hold of `entry` is settled by the app rather than asked about: a tick or an untick the server held
+  /// because its row changed, not one already sent again after a merge. An action to `cancelled` is not merged.
+  private func canMerge(_ entry: OutboxEntry, heldFor reason: String) -> Bool {
+    guard ["conflict", "changed-since", "maybe-applied"].contains(reason), !merged.contains(entry.operationId),
+      let wanted = entry.wantedStatus
+    else { return false }
+    return wanted == .done || wanted == .open
+  }
+
+  /// Settles each held tick in `unsettled` against the copy just loaded: dropped when the to-do already has the status
+  /// he asked for; sent again on the copy's revision with no revisions of its own (Keep mine, unasked) when it still
+  /// has the status he tapped it from, so his status and the other change both stand; held for him when the to-do has
+  /// any other status or is gone. Runs inside a store section, before the load is published.
+  func settleHeldTicks() async throws {
+    guard !unsettled.isEmpty else { return }
+    let reasons = unsettled
+    unsettled = [:]
+    guard let copy else { return }
+    for entry in try await store.entries() where entry.state == .pending {
+      guard let reason = reasons[entry.operationId], let taskId = Command.taskId(of: entry.action),
+        let wanted = entry.wantedStatus
+      else { continue }
+      // Ids compare by code units, as they do in the domain.
+      guard let task = copy.workspace.tasks.first(where: { $0.id.utf8.elementsEqual(taskId.utf8) }) else {
+        try await keepHeld(entry, reason: "gone")
+        continue
+      }
+      let tappedFrom: TodoTask.Status = wanted == .done ? .open : .done
+      if task.status == wanted {
+        SyncLog.logger.notice("Outbox \(entry.operationId, privacy: .public): the server has it already, dropped")
+        try await store.remove(seq: entry.seq)
+      } else if task.status == tappedFrom {
+        SyncLog.logger.notice("Outbox \(entry.operationId, privacy: .public): merged, sent again")
+        var again = entry
+        again.baseRevision = copy.workspace.revision
+        again.ownRevisions = []
+        try await store.update(again)
+        merged.insert(entry.operationId)
+      } else {
+        SyncLog.logger.notice("Outbox \(entry.operationId, privacy: .public): \(reason, privacy: .public), held")
+        try await keepHeld(entry, reason: reason)
+      }
+    }
+  }
+
   private func nextPending(_ pass: Pass) async throws -> OutboxEntry? {
     try await enter(pass)
     defer { release() }
     let entries = try await store.entries()
-    let waiting = entries.waiting
-    return entries.first { $0.state == .pending && !waiting.contains($0.seq) }
+    let waiting = entries.waiting(behind: Set(unsettled.keys))
+    return entries.first { $0.state == .pending && unsettled[$0.operationId] == nil && !waiting.contains($0.seq) }
   }
 
   private func settle(_ outcome: CommandOutcome, of entry: OutboxEntry, _ pass: Pass) async throws -> Next {
@@ -141,6 +190,10 @@ extension SyncEngine {
     case .alreadyApplied:
       publish()
       return .loadWholeThenAcknowledge(revision: nil)
+    case .held(let reason, _, _, _) where canMerge(entry, heldFor: reason):
+      // Left pending, so the tick stays drawn, until the load that follows settles it.
+      unsettled[entry.operationId] = reason
+      next = .sendThenLoad
     case .held(let reason, _, _, _), .refused(let reason, _):
       try await keepHeld(entry, reason: reason)
       // The engine's own request for today's page is removed, and a load would only ask for it again.
