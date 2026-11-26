@@ -1,5 +1,10 @@
 import DaythreadCore
 import Foundation
+import Testing
+
+/// The suites that put a page on screen, run one test at a time. A test that waits for the keyboard lets the run loop
+/// turn, and a test run meanwhile would put its own window in front and take the keyboard from it.
+@Suite(.serialized) struct OnScreen {}
 
 /// Reads the shared cases under `fixtures/core` at the repository root.
 enum EditorFixtures {

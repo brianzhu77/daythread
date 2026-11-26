@@ -6,7 +6,11 @@ public enum BlockRows {
   /// followed by `#2`, `#3` and so on, in document order, so every row's id is unique. A document that
   /// does not parse has no rows.
   public static func rows(for page: Page, in workspace: Workspace) -> [BlockRow] {
-    let blocks = Document.blocks(page.document)
+    rows(for: Document.blocks(page.document), in: workspace)
+  }
+
+  /// The rows of a page's blocks, as `rows(for:in:)` gives them: the page being edited is drawn from its blocks.
+  static func rows(for blocks: [Block], in workspace: Workspace) -> [BlockRow] {
     var ids = RowIDs(blocks)
     var rows: [BlockRow] = []
 
