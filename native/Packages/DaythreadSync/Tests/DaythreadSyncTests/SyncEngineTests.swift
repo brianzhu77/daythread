@@ -1600,7 +1600,8 @@ struct Answer: Sendable, CustomTestStringConvertible {
   func each_answer_reads_as_its_reason(_ answer: Answer) async throws {
     let tick = stored("op-1", done("t1"), label: #"ticked "t1""#, heldFor: answer.stored)
     let h = try await Harness(
-      opening + (answer.reply.map { [$0] } ?? []) + (answer.loads ? [.workspace(.unchanged(revision: 5, owner: "user-1"))] : []),
+      opening + (answer.reply.map { [$0] } ?? [])
+        + (answer.loads ? [.workspace(.unchanged(revision: 5, owner: "user-1"))] : []),
       copy: try board(5, rows: [row("t1")]), entries: [tick])
 
     await h.engine.start()

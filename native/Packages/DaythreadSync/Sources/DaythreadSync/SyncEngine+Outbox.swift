@@ -248,9 +248,11 @@ extension SyncEngine {
     let answer: CheckedContinuation<Performed, Never>
   }
 
-  /// Sends `action` once, after everything pending, on the copy's revision, `readsBeyond: true`, and returns what the
-  /// server did. Never stored, so a command sent as the network drops is not sent again later. On `.applied` the
-  /// reply's changes are in the published workspace before it returns.
+  /// Sends `action` after everything pending, on the copy's revision, `readsBeyond: true`, and returns what the
+  /// server did. When the server holds it because the copy is behind, the workspace is loaded and it is sent once
+  /// more, under the same operation id; any other hold or refusal is answered after a load. Never stored, so a command
+  /// sent as the network drops is not sent again later. On `.applied` the reply's changes are in the published
+  /// workspace before it returns.
   public func perform(action: JSONValue) async -> Performed {
     await acquire()
     guard phase != .signedOut, !leaving else {
@@ -278,32 +280,62 @@ extension SyncEngine {
         return
       }
       let performance = performances.removeFirst()
-      let revision = copy?.workspace.revision
       release()
-      guard performance.epoch == pass.epoch, let revision else {
+      guard performance.epoch == pass.epoch else {
         performance.answer.resume(returning: .signedOut)
         continue
       }
+      try await answer(performance, pass)
+    }
+  }
+
+  /// Sends `performance`, sends it once more when the server held it only because the copy was behind, and answers
+  /// it. Every hold or refusal is followed by a load before the answer, so a second tap is built on what the server
+  /// has, as the web resyncs before a retry. Throws, with the command answered, when the pass cannot go on.
+  private func answer(_ performance: Performance, _ pass: Pass) async throws {
+    // One operation for both sends: a held command wrote nothing on the server, so it has no receipt to replay.
+    let operationId = UUID().uuidString.lowercased()
+    var sentAgain = false
+    while true {
+      try await enter(pass)
+      let revision = copy?.workspace.revision
+      release()
+      guard let revision else {
+        performance.answer.resume(returning: .signedOut)
+        return
+      }
       let step: PerformStep
       do {
-        step = try await send(performance, on: revision, pass)
+        step = try await send(performance, operationId: operationId, on: revision, pass)
       } catch {
         performance.answer.resume(returning: Performed(error))
         throw error
       }
+      let performed: Performed
+      let have: Int?
       switch step {
-      case .answer(let performed):
-        performance.answer.resume(returning: performed)
-      case .loadWholeThenAnswer(let performed):
-        do {
-          try await loadWorkspace(pass, have: nil)
-        } catch {
-          // The server's answer stands; only the copy is behind, and the pass's failure says so.
-          performance.answer.resume(returning: performed)
-          throw error
-        }
-        performance.answer.resume(returning: performed)
+      case .answer(let answered):
+        performance.answer.resume(returning: answered)
+        return
+      case .loadWholeThenAnswer(let answered):
+        (performed, have) = (answered, nil)
+      case .loadThenAnswer(let answered):
+        (performed, have) = (answered, revision)
+      case .loadThenSendAgain(let answered):
+        (performed, have) = (answered, revision)
       }
+      do {
+        try await loadWorkspace(pass, have: have)
+      } catch {
+        // The server's answer stands; only the copy is behind, and the pass's failure says so.
+        performance.answer.resume(returning: performed)
+        throw error
+      }
+      guard case .loadThenSendAgain = step, !sentAgain, copy?.owner == performance.owner else {
+        performance.answer.resume(returning: performed)
+        return
+      }
+      sentAgain = true
     }
   }
 
@@ -312,13 +344,19 @@ extension SyncEngine {
     /// The copy lacks what the server did, or the reply is another account's: the answer is given once the whole
     /// workspace is loaded.
     case loadWholeThenAnswer(Performed)
+    /// The server held or refused it: the copy may be behind, and is loaded before the answer.
+    case loadThenAnswer(Performed)
+    /// The server held it only because the copy is behind: loaded, then sent once more on the new revision.
+    case loadThenSendAgain(Performed)
   }
 
-  private func send(_ performance: Performance, on revision: Int, _ pass: Pass) async throws -> PerformStep {
+  private func send(
+    _ performance: Performance, operationId: String, on revision: Int, _ pass: Pass
+  ) async throws -> PerformStep {
     let outcome: CommandOutcome
     do {
       outcome = try await transport.send(
-        token: pass.session?.token, operationId: UUID().uuidString.lowercased(), action: performance.action,
+        token: pass.session?.token, operationId: operationId, action: performance.action,
         expectedOwner: performance.owner,
         basis: OutboxBasis(baseRevision: revision, ownRevisions: [], readsBeyond: true))
     } catch TransportError.refused(status: 400, reason: _) {
@@ -348,9 +386,14 @@ extension SyncEngine {
       // Not expected for an operation id never sent before; the copy is loaded whole to be sure of it.
       publish()
       return .loadWholeThenAnswer(.applied)
-    case .held(let reason, _, _, _), .refused(let reason, _):
+    case .held(let reason, _, let stale, _):
       publish()
-      return .answer(.refused(reason))
+      // The server's `stale` says it may be built again on the latest state; `changed-since` is the copy behind.
+      let behind = stale || reason == "changed-since"
+      return behind ? .loadThenSendAgain(.refused(reason)) : .loadThenAnswer(.refused(reason))
+    case .refused(let reason, _):
+      publish()
+      return .loadThenAnswer(.refused(reason))
     case .ownerMismatch:
       publish()
       return .loadWholeThenAnswer(.refused("owner-mismatch"))
