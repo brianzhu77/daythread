@@ -557,6 +557,10 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
     var sent: PageDraft.Sent?
     if let operationId = row.sentOperationId, let document = row.sentDocument, let action = row.sentAction {
       sent = PageDraft.Sent(operationId: operationId, document: document, action: action)
+    } else if row.sentOperationId != nil || row.sentDocument != nil || row.sentAction != nil {
+      // `put` writes the three together, so only a damaged row holds some of them. It reads as never sent, which
+      // cannot apply anything twice: the next save carries the old `expectedContent`, refused if the first landed.
+      SyncLog.logger.error("A draft's record of its save is incomplete; read as not sent")
     }
     return PageDraft(
       pageId: row.pageId, owner: row.owner, base: row.base, baseDocument: row.baseDocument,

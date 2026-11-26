@@ -340,7 +340,9 @@ enum WorkspaceStoreContract {
 
   static func putting_again_replaces_that_owners_draft_of_that_page(_ store: any WorkspaceStore) async throws {
     try await store.put(draft(document: "[1]"))
-    let later = draft(document: "[2]", changedAt: 1_798_194_700, sent: .init(operationId: "op", document: "[1]", action: #"{"document":"[1]"}"#))
+    let later = draft(
+      document: "[2]", changedAt: 1_798_194_700,
+      sent: .init(operationId: "op", document: "[1]", action: #"{"document":"[1]"}"#))
     try await store.put(later)
     #expect(try await store.drafts() == [later])
   }

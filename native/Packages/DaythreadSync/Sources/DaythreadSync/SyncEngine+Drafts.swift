@@ -222,7 +222,7 @@ extension SyncEngine {
         defer { release() }
         // After a load under another owner the draft is not this copy's to settle.
         guard copy?.owner == save.owner else { return landed }
-        try await learn(revision, savedOn: save.expectedRevision)
+        try await learn(revision)
         try await settleDraft(save)
         await readOutbox()
         publish()
@@ -301,7 +301,7 @@ extension SyncEngine {
       try await store.write(updated, changed: changes)
       self.copy = (updated, copy.owner)
       // Not `changes.revision`: a replay's changes end at the workspace as it is now, others' writes included.
-      try await learn(Self.revision(of: receipt), savedOn: save.expectedRevision)
+      try await learn(Self.revision(of: receipt))
       try await settleDraft(save)
     case .refused:
       // The message is the server's words about his page; the log says only that it was refused.
@@ -372,18 +372,23 @@ extension SyncEngine {
     receipt.objectValue?["revision"]?.intValue
   }
 
-  /// The save that made `revision` is his own change, sent on `savedOn`. A pending entry learns it only when every
-  /// revision after its base up to `savedOn` is already its own (the server's rule for `ownRevisions`): then nothing
-  /// another device wrote lies between the entry and the save, and the save is all that changed its rows. An entry
-  /// built further back keeps seeing what came between. Runs inside a store section.
-  private func learn(_ revision: Int?, savedOn: Int) async throws {
+  /// The save that made `revision` is his own change. The server applies a save only on the revision it holds and
+  /// names the next one in the receipt, so the save was made on `revision - 1`, whatever revision a resend carried.
+  /// A pending entry learns it only when every revision after its base up to that one is already its own (the
+  /// server's rule for `ownRevisions`): then nothing another device wrote lies between the entry and the save. An
+  /// entry built further back keeps seeing what came between. Runs inside a store section.
+  private func learn(_ revision: Int?) async throws {
     guard let revision, let owner = copy?.owner else { return }
+    let savedOn = revision - 1
     for var entry in try await store.entries()
     where entry.owner == owner && entry.state == .pending && entry.baseRevision < revision
       && !entry.ownRevisions.contains(revision)
     {
-      let between = entry.baseRevision < savedOn ? Array(entry.baseRevision + 1...savedOn) : []
-      guard between.allSatisfy(entry.ownRevisions.contains) else { continue }
+      // As `outbox-replay.ts` checks it: a gap longer than its own revisions cannot be covered by them.
+      let gap = max(0, savedOn - entry.baseRevision)
+      guard gap <= entry.ownRevisions.count else { continue }
+      let own = Set(entry.ownRevisions)
+      guard gap == 0 || (entry.baseRevision + 1...savedOn).allSatisfy(own.contains) else { continue }
       entry.ownRevisions.append(revision)
       try await store.update(entry)
     }

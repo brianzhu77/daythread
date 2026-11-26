@@ -61,7 +61,9 @@ import Testing
       let url = directory.appending(path: "store.sqlite")
       let draft = PageDraft(
         pageId: "p1", owner: "user-1", base: "key", baseDocument: "[\"caf\u{E9} \u{1F600}\"]", document: "[]",
-        singleDeleteIds: ["a"], sent: .init(operationId: "op-1", document: "[\"sent\"]", action: #"{"document":"[\"sent\"]","at":"caf\#u{E9}"}"#),
+        singleDeleteIds: ["a"],
+        sent: .init(
+          operationId: "op-1", document: "[\"sent\"]", action: #"{"document":"[\"sent\"]","at":"caf\#u{E9}"}"#),
         changedAt: Date(timeIntervalSince1970: 1_798_194_615.125))
       do {
         let first = try SwiftDataWorkspaceStore.open(at: url)

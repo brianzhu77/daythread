@@ -230,6 +230,7 @@ public actor SyncEngine {
         try await store.erase()
         copy = nil
         outbox = []
+        drafts = []
       }
       try tokens.write(session)
     } catch {
