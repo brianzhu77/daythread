@@ -69,7 +69,8 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
   a bullet or number is a drawn image in a column set by the widest number; a quote adds a separator-coloured bar.
 - **To-do:** a system button holding an SF Symbol (`circle`, `checkmark.circle.fill`, `xmark.circle`, changed with the
   symbol replace transition), at least 44 points square, and the text; a finished one in secondary colour, struck
-  through.
+  through. It keeps the system's pressed look; one that cannot be ticked keeps its status's colour, not the system's
+  disabled grey, since a cancelled to-do's `xmark.circle` is its status, not a control turned off.
 - **Separator:** one hairline in the system's separator colour.
 - **Placeholder:** a `rectangle.dashed` symbol and the block's name in secondary colour.
 

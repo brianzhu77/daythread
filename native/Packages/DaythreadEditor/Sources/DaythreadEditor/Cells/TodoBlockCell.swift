@@ -91,8 +91,10 @@
       button.image = symbol
       button.preferredSymbolConfigurationForImage = symbolConfiguration
       button.contentInsets = .zero
-      // A circle that cannot be ticked looks as it does for its status; the system must not grey it further.
-      button.imageColorTransformer = UIConfigurationColorTransformer { _ in tint }
+      button.baseForegroundColor = tint
+      // A circle that cannot be ticked looks as it does for its status, not the system's disabled grey; one that can
+      // keeps the system's pressed look (docs/design/native-system.md).
+      if !circle.isEnabled { button.imageColorTransformer = UIConfigurationColorTransformer { _ in tint } }
       button.symbolContentTransition = UISymbolContentTransition(.replace)
       circle.configuration = button
 
