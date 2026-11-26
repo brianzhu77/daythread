@@ -14,6 +14,41 @@
         line.setMarkedText(text, selectedRange: NSRange(location: (text as NSString).length, length: 0))
       }
 
+      /// `onComposingChange` says once when composing begins and once when it ends, after the committed words were
+      /// reported; also for a composition cancelled with nothing typed, and one ended by the line losing the keyboard.
+      @Test func the_screen_says_when_composing_begins_and_ends() throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        var events: [String] = []
+        screen.controller.onChange = { _, _ in events.append("change") }
+        screen.controller.onComposingChange = { composing in
+          #expect(composing == screen.controller.isComposing)
+          events.append(composing ? "composing" : "done")
+        }
+        let line = try screen.focus(1)
+        for step in ["j", "jin", "今"] { compose(step, in: line) }
+        #expect(events == ["composing"])
+        line.unmarkText()
+        _ = screen.wait(0.2) { false }
+        #expect(events == ["composing", "change", "done"])
+
+        // Cancelled: the marked text is taken away and nothing is committed.
+        events = []
+        compose("a", in: line)
+        line.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
+        line.unmarkText()
+        _ = screen.wait(0.2) { false }
+        #expect(events == ["composing", "done"])
+        #expect(try screen.words() == ["one", "two今"])
+
+        // Ended by the keyboard going to another line.
+        events = []
+        compose("天", in: line)
+        try screen.line(0).becomeFirstResponder()
+        _ = screen.wait(0.2) { false }
+        #expect(events == ["composing", "change", "done"])
+        #expect(try screen.words() == ["one", "two今天"])
+      }
+
       @Test func marked_text_is_not_the_document() throws {
         let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
         let before = screen.controller.document

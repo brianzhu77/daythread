@@ -138,6 +138,44 @@
         #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
       }
 
+      /// A redraw from outside that is not about his words (a tick) leaves the save naming the row he removed one at a
+      /// time, as does the merge after a composition; once the row is back in the page it is no longer named.
+      @Test func a_row_removed_one_at_a_time_is_still_named_after_a_change_from_outside() throws {
+        let original = [
+          block("a", "paragraph", text: "one"), todo("t", nil),
+          block("c", "task", ["taskId": .string("k2")], text: "three"),
+        ]
+        let screen = try Screen.editing(original, tasks: [taskJSON("k2", status: "open")])
+        var reports: [[String]] = []
+        screen.controller.onChange = { _, ids in reports.append(ids) }
+        try screen.focus(1, at: 0).deleteBackward()
+        #expect(reports.last == ["t"])
+
+        let ticked = try makeWorkspace(tasks: [taskJSON("k2", status: "done")])
+        screen.controller.replace(document: try #require(screen.controller.document), in: ticked)
+        _ = screen.list
+        try screen.focus(0).insertText("!")
+        #expect(reports.last == ["t"], "the tick's redraw forgot the row he removed")
+
+        // Composing while the page changes from outside: the merge when it ends still names the row.
+        let line = try screen.focus(0)
+        line.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
+        let elsewhere = Document.write([
+          block("a", "paragraph", text: "one!"), block("c", "task", ["taskId": .string("k2")], text: "three, later"),
+        ])
+        screen.controller.replace(document: elsewhere, in: ticked)
+        line.unmarkText()
+        _ = screen.list
+        #expect(try screen.words() == ["one!今", "three, later"])
+        #expect(reports.last == ["t"], "the merge forgot the row he removed")
+
+        // The row is back: it is no longer removed.
+        screen.controller.replace(document: Document.write(original), in: ticked)
+        _ = screen.list
+        try screen.focus(0).insertText("?")
+        #expect(reports.last == [])
+      }
+
       @Test func tab_and_shift_tab_nest_and_unnest_and_the_caret_stays_in_its_words() throws {
         let screen = try Screen.editing([
           block("a", "paragraph", text: "one"), block("b", "bulletListItem", text: "two words"),
