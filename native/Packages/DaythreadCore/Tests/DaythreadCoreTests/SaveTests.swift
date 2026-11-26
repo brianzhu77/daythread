@@ -25,19 +25,28 @@ import Testing
     )
   }
 
-  @Test func the_command_is_the_shared_cases_action() throws {
-    for name in try Fixtures.saveNames() {
+  private func command(from entry: SaveCase) throws -> JSONValue {
+    let ids = (entry.action["singleDeleteIds"]?.arrayValue ?? []).compactMap(\.stringValue)
+    let at = try #require(entry.action["at"]?.stringValue)
+    return Command.saveEditor(
+      pageId: entry.pageId, expectedContent: try #require(entry.action["expectedContent"]?.stringValue),
+      document: entry.document, singleDeleteIds: ids,
+      today: try day(try #require(entry.action["today"]?.stringValue)), at: try #require(Self.parse(at)))
+  }
+
+  /// The fixture script writes `singleDeleteIds` after `at` in this one case; every other case is in the web's order.
+  private static let singleDeleteIdsAfterAt = "row-removed-kept-elsewhere"
+
+  @Test func the_command_is_written_exactly_as_every_shared_cases_action() throws {
+    for name in try Fixtures.saveNames() where name != Self.singleDeleteIdsAfterAt {
       let entry = try Fixtures.saveCase(name)
-      let ids = (entry.action["singleDeleteIds"]?.arrayValue ?? []).compactMap(\.stringValue)
-      let at = try #require(entry.action["at"]?.stringValue)
-      let date = try #require(Self.parse(at))
-      let command = Command.saveEditor(
-        pageId: entry.pageId, expectedContent: try #require(entry.action["expectedContent"]?.stringValue),
-        document: entry.document, singleDeleteIds: ids,
-        today: try day(try #require(entry.action["today"]?.stringValue)), at: date)
-      // The fixture script puts `singleDeleteIds` after `at`; the server reads fields by name, so only the values are compared.
-      #expect(equalIgnoringTopLevelKeyOrder(command, .object(entry.action)), "\(name)")
+      #expect(JSON.write(try command(from: entry)) == JSON.write(.object(entry.action)), "\(name)")
     }
+  }
+
+  @Test func the_command_has_the_fields_of_the_case_that_puts_single_delete_ids_last() throws {
+    let entry = try Fixtures.saveCase(Self.singleDeleteIdsAfterAt)
+    #expect(equalIgnoringTopLevelKeyOrder(try command(from: entry), .object(entry.action)))
   }
 
   private static func parse(_ text: String) -> Date? {
@@ -169,6 +178,31 @@ import Testing
     #expect(predicted.status == made.status)
     #expect(predicted.title == made.title)
     #expect(predicted.version == made.version)
+  }
+
+  private func character(_ value: UInt32) -> String { String(Character(UnicodeScalar(value)!)) }
+
+  @Test func a_row_is_blank_by_javascripts_rule_not_foundations() throws {
+    let workspace = try Fixtures.saveCase("new-to-do").before
+    // U+FEFF is whitespace to `trim()`; U+0085 is not.
+    let drawn = workspace.drawing(
+      draft: draft(
+        row("n1", taskId: .string("editor-task:n1"), words: character(0xFEFF)),
+        row("n2", taskId: .string("editor-task:n2"), words: character(0x85))),
+      of: Self.dayPage)
+    #expect(drawn.task("editor-task:n1") == nil)
+    #expect(drawn.task("editor-task:n2") != nil)
+  }
+
+  @Test func a_row_of_a_deleted_to_do_gets_no_drawn_to_do() throws {
+    let entry = try Fixtures.saveCase("row-removed")
+    let after = try #require(entry.after)
+    let buried = try #require(
+      after.json().objectValue?["deletedTasks"]?.arrayValue?.first?.objectValue?["id"]?.stringValue)
+    #expect(after.task(buried) == nil)
+    let drawn = after.drawing(draft: draft(row("again", taskId: .string(buried), words: "Back")), of: entry.pageId)
+    #expect(drawn.task(buried) == nil)
+    #expect(drawn.tasks == after.tasks)
   }
 
   @Test func a_row_with_no_words_in_the_shared_case_is_not_drawn() throws {

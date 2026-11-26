@@ -39,6 +39,17 @@ import Testing
     #expect(ContentKey.storedDocument(document) == document)
   }
 
+  // A stored-form page with nothing to strip is keyed as the string itself, whatever the JSON writer would spell
+  // differently (an escaped `/` in a key, `1.50`). Expected keys: the web's `textKey` over these literals.
+  @Test func a_document_with_nothing_to_strip_is_keyed_as_given() {
+    let escapedKey =
+      #"[{"id":"p","type":"paragraph","props":{"x\/y":1},"content":[],"children":[]},{"id":"s1","type":"syncedBlock","props":{"syncId":"s","roles":""},"children":[]}]"#
+    #expect(ContentKey.of(escapedKey) == "d:158:d3028cc6e7ed12070957e336e0c800ea")
+    let number =
+      #"[{"id":"p","type":"heading","props":{"level":1.50},"content":[],"children":[]},{"id":"s1","type":"syncedBlock","props":{"syncId":"s","roles":""},"children":[]}]"#
+    #expect(ContentKey.of(number) == "d:160:b9b98967f3d0950ea325d239b93fad47")
+  }
+
   @Test func a_synced_block_without_roles_gets_an_empty_roles_prop() {
     let bare = #"[{"id":"s1","type":"syncedBlock","props":{"syncId":"s","rev":2},"children":[]}]"#
     #expect(ContentKey.of(bare) == "d:82:cb8199e1abfcb7c6f407e4fbe86ed400")
