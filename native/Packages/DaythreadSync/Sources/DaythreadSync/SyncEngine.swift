@@ -228,7 +228,7 @@ public actor SyncEngine {
       await readCopyIfNeeded()
       // A copy that could not be read may still be someone else's, so nothing known erases too.
       if copy?.owner != session.owner {
-        try await store.eraseKeepingDrafts()
+        try await store.eraseKeepingDrafts(except: nil)
         copy = nil
         outbox = []
       }
@@ -267,12 +267,14 @@ public actor SyncEngine {
   /// Unless `discardingUnsent`, first tries one pass, with the waits after his last changes cut short; then, when
   /// changes are still unsent (pending, waiting or held entries, the engine's own request for today's page not being
   /// his, and each draft of the account shown, whatever it waits for), signs nobody out and returns how many, so he
-  /// can be asked. Otherwise tells the server, erases the copy, the outbox, every account's drafts and the session
-  /// whatever it answered (a shared device must not keep someone's notes), and returns 0. Discarding tries no pass:
+  /// can be asked. Otherwise tells the server, erases the copy, the outbox and the session whatever it answered (a
+  /// shared device must not keep someone's notes), and returns 0. Another account's drafts are never erased: when
+  /// discarding, the signing-out account's drafts go with the copy, in the same transaction; without discarding it
+  /// has none left to erase, and a draft not shown (a session that ended) is not erased uncounted. Discarding tries no pass:
   /// he has said yes, and sign-out does not wait for the network beyond telling the server. The last action wins: a
   /// sign-in that completes while the server is being told is kept.
   ///
-  /// If `erase` throws, it is tried once more; if it still throws, this ends signed out anyway. The copy then stays on
+  /// If the erase throws, it is tried once more; if it still throws, this ends signed out anyway. The copy then stays on
   /// disk but hidden (`start` shows no copy without its session), and is erased at the next sign-in under another
   /// owner.
   @discardableResult
@@ -299,6 +301,8 @@ public actor SyncEngine {
     answerStalePerformances()
     let signInsBefore = signIns
     let session = try? tokens.read()
+    // With sign-in off there is no session, and the account shown is the Mac's.
+    let discarded = discardingUnsent ? session?.owner ?? (copyShown ? copy?.owner : nil) : nil
     release()
 
     var reachedServer: Bool?
@@ -321,8 +325,8 @@ public actor SyncEngine {
     leaving = false
     running?.cancel()
     stopRetrying()
-    var erased = (try? await store.erase()) != nil
-    if !erased { erased = (try? await store.erase()) != nil }
+    var erased = (try? await store.eraseKeepingDrafts(except: discarded)) != nil
+    if !erased { erased = (try? await store.eraseKeepingDrafts(except: discarded)) != nil }
     try? tokens.clear()
     let told = reachedServer.map { $0 ? "told" : "offline" } ?? "not told"
     SyncLog.logger.notice("Signed out; server \(told, privacy: .public); copy erased: \(erased, privacy: .public)")
@@ -333,7 +337,7 @@ public actor SyncEngine {
     signedIn = false
     failure = nil
     outbox = []
-    drafts = []
+    await readDrafts()
     forgetDraftWork()
     address = nil
     if let reachedServer { offline = !reachedServer }

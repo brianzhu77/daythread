@@ -87,12 +87,11 @@ public actor MemoryWorkspaceStore: WorkspaceStore {
     draftsKept.removeValue(forKey: DraftKey(owner: owner, pageId: pageId))
   }
 
-  public func erase() async throws {
-    draftsKept = [:]
-    try await eraseKeepingDrafts()
-  }
-
-  public func eraseKeepingDrafts() async throws {
+  public func eraseKeepingDrafts(except owner: String?) async throws {
+    if let owner {
+      let gone = Array(owner.utf8)
+      draftsKept = draftsKept.filter { $0.key.owner != gone }
+    }
     kept = nil
     outbox = []
     nextSeq = 1

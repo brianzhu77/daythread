@@ -39,9 +39,9 @@ public protocol WorkspaceStore: Sendable {
   func put(_ draft: PageDraft) async throws
   /// Removes the draft of this owner and page; one that is not there is not an error.
   func removeDraft(pageId: String, owner: String) async throws
-  /// Forgets everything, `seq` and every owner's drafts included.
-  func erase() async throws
-  /// Forgets the workspace, its owner, the outbox and `seq`, in one transaction, and keeps every owner's drafts: a
-  /// sign-in under another account, whose drafts wait for that account to come back.
-  func eraseKeepingDrafts() async throws
+  /// Forgets the workspace, its owner, the outbox and `seq`, and keeps every owner's drafts but `owner`'s, which go
+  /// too; all in one transaction, so a crash cannot leave the discarded account's drafts behind. A sign-in under
+  /// another account passes nil (each account's drafts wait for it); a sign-out passes the account it discards.
+  /// Another account's drafts are never erased here.
+  func eraseKeepingDrafts(except owner: String?) async throws
 }

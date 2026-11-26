@@ -29,20 +29,25 @@ extension SyncEngine {
   static let pageGone = "This page is gone"
 
   /// Stores the draft at once and publishes a state that draws it; the save goes 450 ms after the last call.
-  /// The first call for a page records the page as the copy has it then as the draft's base. A draft the server
-  /// refused is sent again with these words.
+  /// `startedFrom` is the page the screen typed onto. The first call for a page records it as the draft's base, never
+  /// the copy's page now: a load may have changed that page between his keystroke and this call, and his document
+  /// would then replace another device's lines. When the copy's page is not `startedFrom`, the draft is behind and
+  /// waits for the screen's merge. Once a draft exists, its base stands and `startedFrom` is not read. A draft the
+  /// server refused is sent again with these words.
   ///
-  /// A document equal to that base removes the draft and sends nothing, unless a save is on its way: then the draft
-  /// stays until its answer. Throws `SyncError.notReady` when no workspace is shown, the copy has no such page, or a
-  /// sign-out has begun, and what the store threw when it refuses the draft; either way nothing was kept.
-  public func keepDraft(pageId: String, document: String, singleDeleteIds: [String]) async throws {
+  /// A document equal to the draft's base removes the draft and sends nothing, unless a save is on its way: then the
+  /// draft stays until its answer. Throws `SyncError.notReady` when no workspace is shown, the copy has no such page,
+  /// or a sign-out has begun, and what the store threw when it refuses the draft; either way nothing was kept.
+  public func keepDraft(
+    pageId: String, document: String, singleDeleteIds: [String], startedFrom: String
+  ) async throws {
     await acquire()
     defer { release() }
     guard copyShown, phase != .signedOut, !leaving, let copy, let page = copy.workspace.page(pageId) else {
       throw SyncError.notReady
     }
     let kept = accountDraft(page.id)
-    let baseDocument = kept?.baseDocument ?? page.document
+    let baseDocument = kept?.baseDocument ?? startedFrom
     if kept?.sent == nil, document.utf8.elementsEqual(baseDocument.utf8) {
       stopDraftWait(page.id)
       guard kept != nil else { return }
@@ -65,9 +70,10 @@ extension SyncEngine {
   /// After the screen merged: the draft now starts from `baseDocument` (the server's page it was merged with),
   /// holds `document`, has no rows named, and is saved at once. Refused when the copy's page is no longer that one.
   ///
-  /// Answers false, changing nothing, when the copy's page is not `baseDocument` in its stored form (the page moved
-  /// again while the screen merged) or a save of the draft is on its way. A `document` equal to `baseDocument`
-  /// removes the draft. Throws as `keepDraft` does.
+  /// Answers false, changing nothing, when the page has no draft (it was saved or discarded while the screen
+  /// merged: what it merged must not bring back words just thrown away), when the copy's page is not `baseDocument`
+  /// in its stored form (the page moved again while the screen merged), or when a save of the draft is on its way. A
+  /// `document` equal to `baseDocument` removes the draft. Throws as `keepDraft` does.
   @discardableResult
   public func rebaseDraft(pageId: String, baseDocument: String, document: String) async throws -> Bool {
     await acquire()
@@ -75,15 +81,12 @@ extension SyncEngine {
     guard copyShown, phase != .signedOut, !leaving, let copy, let page = copy.workspace.page(pageId) else {
       throw SyncError.notReady
     }
-    let kept = accountDraft(page.id)
-    guard kept?.sent == nil,
+    guard let kept = accountDraft(page.id), kept.sent == nil,
       ContentKey.storedDocument(page.document).utf8.elementsEqual(ContentKey.storedDocument(baseDocument).utf8)
     else { return false }
     if document.utf8.elementsEqual(baseDocument.utf8) {
-      if kept != nil {
-        try await store.removeDraft(pageId: page.id, owner: copy.owner)
-        forgetDraft(pageId: page.id, owner: copy.owner)
-      }
+      try await store.removeDraft(pageId: page.id, owner: copy.owner)
+      forgetDraft(pageId: page.id, owner: copy.owner)
     } else {
       try await keep(
         PageDraft(
@@ -98,20 +101,31 @@ extension SyncEngine {
   }
 
   /// Removes the account's draft of the page: the page is drawn as the server has it. A save already on its way is
-  /// still answered into the copy.
+  /// still answered into the copy. The pending ticks on a to-do that only this draft had go with it: sent, they
+  /// would only be held as gone.
   public func discardDraft(pageId: String) async {
     await acquire()
     defer { release() }
-    guard copyShown, phase != .signedOut, !leaving, let owner = copy?.owner, let kept = accountDraft(pageId) else {
+    guard copyShown, phase != .signedOut, !leaving, let copy, let kept = accountDraft(pageId) else {
       return
     }
+    let onlyHere = Set(
+      Self.todoIds(in: Document.blocks(kept.document)).filter { copy.workspace.task($0) == nil }.map { Array($0.utf8) })
     do {
-      try await store.removeDraft(pageId: kept.pageId, owner: owner)
+      try await store.removeDraft(pageId: kept.pageId, owner: copy.owner)
+      for entry in outbox where entry.state == .pending {
+        guard let taskId = Command.taskId(of: entry.action), onlyHere.contains(Array(taskId.utf8)) else { continue }
+        try await store.remove(seq: entry.seq)
+      }
     } catch {
       SyncLog.logger.error("A draft could not be discarded: \(SyncLog.describe(error), privacy: .public)")
+      await readOutbox()
+      await readDrafts()
+      publish()
       return
     }
-    forgetDraft(pageId: kept.pageId, owner: owner)
+    await readOutbox()
+    forgetDraft(pageId: kept.pageId, owner: copy.owner)
     stopDraftWait(kept.pageId)
     refusedDrafts[kept.pageId] = nil
     publish()
@@ -120,6 +134,16 @@ extension SyncEngine {
   /// The signed-in account's draft of the page, while its copy is shown; nil when it has none.
   public func draft(of pageId: String) async -> PageDraft? {
     accountDraft(pageId)
+  }
+
+  /// The pair the screen merges with, read in one turn: the document the draft started from and the server's
+  /// page now. Nil unless the signed-in account's draft for the page is behind.
+  public func merging(_ pageId: String) async -> (baseDocument: String, theirs: String)? {
+    // Nothing here awaits, so both halves are from one moment of the actor.
+    guard let draft = accountDraft(pageId), standing(of: draft) == .behind,
+      let page = copy?.workspace.page(draft.pageId)
+    else { return nil }
+    return (draft.baseDocument, page.document)
   }
 
   /// Sends what is waiting now (leaving the day, leaving the foreground): the waits after his changes are cut short.
@@ -358,6 +382,7 @@ extension SyncEngine {
         if case .applied = outcome { done.landed = true }
       case .loadWholeThenSettle(let revision):
         try await loadWorkspace(pass, have: nil)
+        loaded = true
         try await enter(pass)
         defer { release() }
         // After a load under another owner the draft is not this copy's to settle.
@@ -485,7 +510,9 @@ extension SyncEngine {
         publish()
         return .savedElsewhere
       }
-      if message.hasPrefix(Self.pageChangedElsewhere) {
+      // An expired receipt says the save went in long ago, not that the document is wrong: the page is not what
+      // the draft started from any more.
+      if message.hasPrefix(Self.pageChangedElsewhere) || message.hasPrefix(Self.alreadyApplied) {
         SyncLog.logger.notice("Save of a page: page changed elsewhere, loading")
         publish()
         return .pageChanged
@@ -504,10 +531,11 @@ extension SyncEngine {
     return .next
   }
 
-  /// The beginnings of the server's two messages (`workspace.ts`) that say the copy is behind, not that the
-  /// document is wrong.
+  /// The beginnings of the server's messages (`workspace.ts`) that say the copy is behind, not that the document is
+  /// wrong.
   private static let savedElsewhere = "Saved elsewhere"
   private static let pageChangedElsewhere = "Page changed elsewhere"
+  private static let alreadyApplied = "This change was already applied"
 
   /// Whether the copy's page still has the content key the save's draft started from. Runs inside a store section.
   private func pageHasBase(of save: DraftSave) -> Bool {

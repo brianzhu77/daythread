@@ -476,23 +476,18 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
     }
   }
 
-  public func erase() async throws {
+  public func eraseKeepingDrafts(except owner: String?) async throws {
     try commit {
-      for row in try modelContext.fetch(FetchDescriptor<DraftRow>()) { modelContext.delete(row) }
-      try deleteAllButDrafts()
+      if let owner {
+        let theirs = FetchDescriptor<DraftRow>(predicate: #Predicate { $0.owner == owner })
+        for row in try modelContext.fetch(theirs) { modelContext.delete(row) }
+      }
+      // The meta row goes too, and `seq` with it.
+      for row in try modelContext.fetch(FetchDescriptor<PageRow>()) { modelContext.delete(row) }
+      for row in try modelContext.fetch(FetchDescriptor<TaskRow>()) { modelContext.delete(row) }
+      for row in try modelContext.fetch(FetchDescriptor<OutboxRow>()) { modelContext.delete(row) }
+      for row in try modelContext.fetch(FetchDescriptor<MetaRow>()) { modelContext.delete(row) }
     }
-  }
-
-  public func eraseKeepingDrafts() async throws {
-    try commit { try deleteAllButDrafts() }
-  }
-
-  /// The meta row goes too, and `seq` with it.
-  private func deleteAllButDrafts() throws {
-    for row in try modelContext.fetch(FetchDescriptor<PageRow>()) { modelContext.delete(row) }
-    for row in try modelContext.fetch(FetchDescriptor<TaskRow>()) { modelContext.delete(row) }
-    for row in try modelContext.fetch(FetchDescriptor<OutboxRow>()) { modelContext.delete(row) }
-    for row in try modelContext.fetch(FetchDescriptor<MetaRow>()) { modelContext.delete(row) }
   }
 
   // MARK: Helpers
