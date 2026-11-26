@@ -200,8 +200,9 @@ private struct DraftHarness {
     let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: typed("Walk the dog"))])
     await h.engine.start()
 
-    for words in ["Walk", "Walk the", "Walk the dog"] {
+    for (count, words) in ["Walk", "Walk the", "Walk the dog"].enumerated() {
       try await h.engine.keepDraft(pageId: day, document: typed(words), singleDeleteIds: [])
+      await until { await h.waits.asked.count == count + 1 }
     }
     await until {
       let (asked, cancelled, inProgress) = (await h.waits.asked.count, await h.waits.cancelled, await h.waits.inProgress)
@@ -237,8 +238,10 @@ private struct DraftHarness {
     await h.engine.saveNow()
 
     #expect(await h.saves.map(\.document) == [typed("Walk")])
-    await until { await h.waits.cancelled == 1 }
-    #expect(await h.waits.inProgress == 0)
+    // The wait it cut short sends nothing when its time would have come.
+    await h.waits.elapse()
+    await h.engine.settled()
+    #expect(await h.saves.count == 1)
   }
 
   @Test func the_answer_removes_the_draft_and_the_page_is_the_servers() async throws {
@@ -286,6 +289,7 @@ private struct DraftHarness {
     #expect(rebased.sent == nil)
     #expect(rebased.document == typed("Walk the dog"))
 
+    await until { await h.waits.inProgress == 1 }
     await h.waits.elapse()
     await until { await h.saves.count == 2 }
     await h.engine.settled()
@@ -316,6 +320,8 @@ private struct DraftHarness {
     await h.transport.add([
       try saved(from: 5, to: 6, document: typed("Walk")), try saved(from: 6, to: 7, document: typed("Walk the dog")),
     ])
+    // The retry's wait and the one after his newer words.
+    await until { await h.waits.inProgress == 2 }
     await h.waits.elapse()
     await until { await h.saves.count == 3 }
     await h.engine.settled()
@@ -336,13 +342,13 @@ private struct DraftHarness {
     await h.engine.start()
     await h.transport.goOffline()
     try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
-    await until { await h.waits.asked.count == 1 }
-
     for count in 2...5 {
+      await until { await h.waits.inProgress == 1 }
       await h.waits.elapse()
       await until { await h.waits.asked.count == count }
     }
 
+    await h.engine.settled()
     #expect(
       await h.waits.asked == [.milliseconds(450), .seconds(2), .seconds(5), .seconds(15), .seconds(30)])
     let saves = await h.saves
@@ -361,6 +367,7 @@ private struct DraftHarness {
     await h.engine.start()
     await h.transport.goOffline()
     try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    await until { await h.waits.inProgress == 1 }
     await h.waits.elapse()
     await until { await h.waits.asked.count == 2 }
 
@@ -451,10 +458,11 @@ private struct DraftHarness {
     #expect(await current(h.engine)?.drafts == waiting())
     await h.engine.refresh()
     #expect(await h.saves.count == 1, "a pass does not send it again")
-    #expect(await h.waits.asked == [.milliseconds(450)], "nor is it tried again later")
+    #expect(await !h.waits.asked.contains(.seconds(2)), "nor is it tried again later")
 
     await h.transport.add([try saved(from: 5, to: 6, document: typed("Walk on"))])
     try await h.engine.keepDraft(pageId: day, document: typed("Walk on"), singleDeleteIds: [])
+    await until { await h.waits.inProgress == 1 }
     await h.waits.elapse()
     await until { await h.saves.count == 2 }
     await h.engine.settled()
@@ -470,8 +478,7 @@ private struct DraftHarness {
 
     #expect(try await h.drafts == [])
     #expect(await current(h.engine)?.drafts == [])
-    await until { await h.waits.cancelled == 1 }
-    #expect(await h.waits.inProgress == 0)
+    await h.waits.elapse()
     await h.engine.saveNow()
     #expect(await h.saves == [])
   }

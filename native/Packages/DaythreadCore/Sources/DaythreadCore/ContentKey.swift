@@ -39,7 +39,7 @@ public enum ContentKey {
   /// `storedDocument` in `src/domain/synced.ts`: a document that mentions a synced block, with each block
   /// stripped of its lines, `rev` and `key`, and its rows' roles kept in `roles`. Any other string is returned
   /// unchanged, as is one that does not parse (the web would throw; the server never holds such a page).
-  static func storedDocument(_ document: String) -> String {
+  public static func storedDocument(_ document: String) -> String {
     guard document.contains("\"\(syncedBlockType)\""),
       let nodes = try? JSON.parse(document).arrayValue
     else { return document }

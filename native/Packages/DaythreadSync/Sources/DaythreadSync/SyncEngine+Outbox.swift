@@ -164,7 +164,7 @@ extension SyncEngine {
     try await enter(pass)
     defer { release() }
     let entries = try await store.entries()
-    let waiting = entries.waiting(behind: Set(unsettled.keys))
+    let waiting = entries.waiting(behind: Set(unsettled.keys)).union(waitingForDrafts(entries))
     return entries.first { $0.state == .pending && unsettled[$0.operationId] == nil && !waiting.contains($0.seq) }
   }
 

@@ -114,6 +114,15 @@ public enum CommandOutcome: Sendable {
   case ownerMismatch(owner: String)
 }
 
+/// What the server did with a page's save (`POST /api/v1/saves`).
+public enum SaveOutcome: Sendable {
+  case applied(receipt: JSONValue, changes: WorkspaceChanges, owner: String)
+  /// 409 `{ error: "refused" }`: the server's message, which says why ("Page changed elsewhere…", "Saved elsewhere…").
+  case refused(message: String)
+  /// 409 `{ error: "owner-mismatch" }`: the session is another account than the save was made under.
+  case ownerMismatch(owner: String)
+}
+
 /// The server as the sync engine sees it. A `nil` token is for a server with sign-in off.
 public protocol ServerTransport: Sendable {
   func signIn(email: String, password: String, timezone: String) async throws -> Session
@@ -123,4 +132,8 @@ public protocol ServerTransport: Sendable {
   func send(
     token: String?, operationId: String, action: JSONValue, expectedOwner: String, basis: OutboxBasis
   ) async throws -> CommandOutcome
+  /// A 400 (a body the server will never accept) throws `TransportError.refused(status: 400, …)`.
+  func save(
+    token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
+  ) async throws -> SaveOutcome
 }
