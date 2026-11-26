@@ -2045,9 +2045,14 @@ struct Answer: Sendable, CustomTestStringConvertible {
     await gate.open(.failure(TransportError.refused(status: 403, reason: "forbidden")))
 
     let performed = await performing.value
-    let sends = await h.transport.sends.count
     #expect(performed == .offline, "never the tick's reason")
-    #expect(sends == 1)
+    // The pass the command asked for may already be sending the tick again by now, so the count of sends is not
+    // fixed; what must hold is that the command itself was never sent.
+    let sent = await h.transport.sends.compactMap { call -> String? in
+      guard case .send(_, _, let action, _, _) = call else { return nil }
+      return Command.type(of: action)
+    }
+    #expect(!sent.isEmpty && !sent.contains("ensure-day"))
   }
 
   @Test func a_command_taken_from_the_queue_as_a_sign_out_begins_is_answered_signed_out() async throws {
