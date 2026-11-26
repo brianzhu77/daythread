@@ -61,14 +61,20 @@ public struct Block: Hashable, Sendable, Identifiable {
   }
 
   /// The node to write: `raw`, with each named field that differs from what the node reads as
-  /// replacing its key in place, or appended when the node had no such key. A field that was not
+  /// replacing its key in place, or appended when the node had no such key (`content` goes before
+  /// `children`, as the web writes it). A field that was not
   /// changed is never re-emitted, so an id written with an escape keeps its escape.
   var value: JSONValue {
     var node = raw
     if !(node["id"]?.stringValue?.hasSameCodeUnits(as: id) ?? false) { node["id"] = .string(id) }
     if !(node["type"]?.stringValue?.hasSameCodeUnits(as: type) ?? false) { node["type"] = .string(type) }
     if node["props"] != nil || !props.keys.isEmpty { replace("props", with: .object(props), in: &node) }
-    replace("content", with: content, in: &node)
+    if node["content"] == nil, let content, node["children"] != nil {
+      // The web writes `content` before `children`.
+      node.set("content", to: content, before: "children")
+    } else {
+      replace("content", with: content, in: &node)
+    }
     if node["children"] != nil || !children.isEmpty {
       replace("children", with: .array(children.map(\.value)), in: &node)
     }
