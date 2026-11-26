@@ -16,6 +16,9 @@ import Foundation
 /// - **Epochs.** `signIn` and `signOut` move `epoch` on (and cancel the pass in flight) inside a store section. A pass
 ///   remembers the epoch and session it began with and checks the epoch at the start of each of its sections, so a
 ///   reply that arrives after the account changed is never applied, sent on or shown.
+/// - **Commands waited for.** `perform` queues its command and asks for a pass; the pass sends it after its drain,
+///   under the pass's epoch, and answers it. Every queued command is answered: by its pass, by the failure that ended
+///   that pass, or with `signedOut` by the sign-in or sign-out that moved the epoch on. None is ever stored.
 /// - **The outbox in memory.** `outbox` is what the store's outbox holds, read again inside the same store section as
 ///   every write to it, so no published state has an entry in neither the outbox (drawn as a prediction) nor the
 ///   copy (applied by the server's answer).
@@ -33,7 +36,8 @@ public actor SyncEngine {
   var failure: SyncFailure?
   /// The stored owner's outbox entries by `seq`, as last read or written.
   var outbox: [OutboxEntry] = []
-  var held: Int { outbox.count { $0.state == .held } }
+  /// Commands `perform` is waiting on, in the order asked.
+  var performances: [Performance] = []
   /// Tickets given by `enqueue` in this engine's lifetime. Not an entry's `seq`, which restarts when the store is
   /// erased.
   private var enqueued = 0
@@ -97,6 +101,7 @@ public actor SyncEngine {
   public func start() async {
     await acquire()
     await readCopyIfNeeded()
+    await removeHeldDayRequests()
     signedIn = (try? tokens.read()) != nil
     var hidden = false
     if let copy, case .success(nil) = readSession(), copy.owner != Self.localOwner {
@@ -152,6 +157,7 @@ public actor SyncEngine {
     await acquire()
     epoch += 1
     running?.cancel()
+    answerStalePerformances()
     do {
       await readCopyIfNeeded()
       // A copy that could not be read may still be someone else's, so nothing known erases too.
@@ -199,6 +205,7 @@ public actor SyncEngine {
     await acquire()
     epoch += 1
     running?.cancel()
+    answerStalePerformances()
     let signInsBefore = signIns
     let session = try? tokens.read()
     release()
@@ -257,7 +264,7 @@ public actor SyncEngine {
 
   /// Asks for a pass that starts after this request, without waiting for it; returns the request's number.
   @discardableResult
-  private func askForPass(load: Bool) -> Int {
+  func askForPass(load: Bool) -> Int {
     requested += 1
     if load { loadWanted = true }
     if driver == nil { driver = Task { await self.drive() } }
@@ -284,16 +291,21 @@ public actor SyncEngine {
       var load = load
       if phase != .ready {
         try await checkAccount(pass)
-        guard phase == .ready else { return }
+        guard phase == .ready else {
+          answerPerformances(of: pass, with: .signedOut)
+          return
+        }
         load = true
       }
       if load { try await loadWorkspace(pass, have: copy?.workspace.revision) }
       try await drain(pass)
+      try await performQueued(pass)
       try await enter(pass)
       defer { release() }
       await readOutbox()
+      let held = outbox.count { $0.state == .held }
       SyncLog.logger.info(
-        "Pass done: revision \(self.copy?.workspace.revision ?? -1, privacy: .public), held \(self.held, privacy: .public)")
+        "Pass done: revision \(self.copy?.workspace.revision ?? -1, privacy: .public), held \(held, privacy: .public)")
       publish()
     } catch {
       await end(pass, after: error)
@@ -313,6 +325,7 @@ public actor SyncEngine {
   /// and sign-in is shown, with the copy and the outbox kept for the next sign-in to claim or erase; any other reason
   /// is kept in `failure` until the server next answers.
   private func end(_ pass: Pass, after error: any Error) async {
+    answerPerformances(of: pass, with: Performed(error))
     if error is CancellationError || error is Superseded {
       SyncLog.logger.info("Pass dropped: \(SyncLog.describe(error), privacy: .public)")
       return
@@ -393,7 +406,7 @@ public actor SyncEngine {
 
   // MARK: Store sections
 
-  private func acquire() async {
+  func acquire() async {
     guard busy else {
       busy = true
       return
@@ -451,7 +464,8 @@ public actor SyncEngine {
   }
 
   /// What is drawn: the copy with every pending entry's action replayed over it in `seq` order, including those this
-  /// build cannot predict (they change nothing). A held entry is not replayed, so the page shows what the server has.
+  /// build cannot predict (they change nothing) and those waiting behind a held one. A held entry is not replayed, so
+  /// the page shows what the server has.
   ///
   /// An entry can be replayed over a copy that already holds its change: after a store call fails between writing
   /// the copy and acknowledging the entry, and while a load-then-acknowledge has the load in the copy. That is
@@ -462,10 +476,16 @@ public actor SyncEngine {
     return outbox.lazy.filter { $0.state == .pending }.reduce(copy.workspace) { $0.predicting($1.action) }
   }
 
+  /// Held, pending and waiting entries are said only while the copy they belong to is shown.
   func publish() {
+    let shown = copyShown && copy != nil
+    let behind = outbox.waiting
+    let held = outbox.filter { $0.state == .held && !$0.asksForADay }.map(HeldChange.init)
+    let pending = outbox.count { $0.state == .pending && !behind.contains($0.seq) }
     broadcast.publish(
       SyncState(
-        phase: phase, workspace: drawn, offline: offline, held: held, failure: failure, signedIn: signedIn,
-        enqueued: enqueued, address: address))
+        phase: phase, workspace: drawn, offline: offline, held: shown ? held : [], pending: shown ? pending : 0,
+        waiting: shown ? behind.count : 0, failure: failure, signedIn: signedIn, enqueued: enqueued,
+        address: address))
   }
 }

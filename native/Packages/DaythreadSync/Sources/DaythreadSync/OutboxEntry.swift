@@ -13,7 +13,8 @@ public struct OutboxEntry: Sendable, Equatable, Identifiable {
   public let owner: String
   public let operationId: String
   public let action: JSONValue
-  public let baseRevision: Int
+  /// Moves only when he keeps a held entry: it is sent again on the copy's revision then.
+  public var baseRevision: Int
   public var ownRevisions: [Int]
   public let label: String
   public let createdAt: Date
@@ -35,6 +36,30 @@ public struct OutboxEntry: Sendable, Equatable, Identifiable {
     self.createdAt = createdAt
     self.state = state
     self.reason = reason
+  }
+}
+
+extension OutboxEntry {
+  /// The engine's own request for today's page: never shown, and removed rather than held.
+  var asksForADay: Bool { Command.type(of: action) == "ensure-day" }
+}
+
+extension [OutboxEntry] {
+  /// The `seq`s of pending entries behind a held one for the same to-do, for entries in `seq` order. Such an entry
+  /// is drawn but not sent, so it is not answered before the held one he has not decided on yet.
+  var waiting: Set<Int> {
+    var heldTasks = Set<[UInt8]>()
+    var waiting = Set<Int>()
+    for entry in self {
+      // Ids compare by code units, as they do in the domain.
+      guard let id = Command.taskId(of: entry.action) else { continue }
+      let taskId = [UInt8](id.utf8)
+      switch entry.state {
+      case .held: heldTasks.insert(taskId)
+      case .pending: if heldTasks.contains(taskId) { waiting.insert(entry.seq) }
+      }
+    }
+    return waiting
   }
 }
 

@@ -1440,6 +1440,9 @@ private func stored(
     ownRevisions: own, label: label, createdAt: noon, state: reason == nil ? .pending : .held, reason: reason)
 }
 
+/// The day before `noon`'s, a day with no page in these tests.
+private let yesterday = LocalDate("2026-11-24")!
+
 private let conflict: FakeTransport.Reply = .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1"))
 
 /// Changes from `from` to `revision` that add the day page for `date`.
@@ -1639,7 +1642,7 @@ struct Answer: Sendable, CustomTestStringConvertible {
   }
 
   @Test func a_held_ensure_day_left_in_the_store_is_removed_at_start() async throws {
-    let leftover = stored("op-day", Command.ensureDay(LocalDate("2026-11-24")), heldFor: "conflict")
+    let leftover = stored("op-day", Command.ensureDay(yesterday), heldFor: "conflict")
     let h = try await Harness(opening, copy: try board(5, rows: []), entries: [leftover])
     let seen = SeenEntries()
     let store = h.store
@@ -1684,11 +1687,11 @@ struct Answer: Sendable, CustomTestStringConvertible {
       .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1")),
       .outcome(.applied(receipt: .object([:]), changes: added, owner: "user-1")),
     ])
-    let action = Command.ensureDay(LocalDate("2026-11-24"))
+    let action = Command.ensureDay(yesterday)
     let performed = await h.engine.perform(action: action)
 
     #expect(performed == .applied)
-    #expect(await current(h.engine)?.workspace?.dayPage(LocalDate("2026-11-24")) != nil, "in before it returns")
+    #expect(await current(h.engine)?.workspace?.dayPage(yesterday) != nil, "in before it returns")
     let sends = await h.transport.sends
     #expect(sends.count == 3)
     #expect(sends.dropFirst().first?.operationId == "op-tick")
@@ -1709,7 +1712,7 @@ struct Answer: Sendable, CustomTestStringConvertible {
     await h.engine.start()
     await h.transport.goOffline()
 
-    let performed = await h.engine.perform(action: Command.ensureDay(LocalDate("2026-11-24")))
+    let performed = await h.engine.perform(action: Command.ensureDay(yesterday))
 
     #expect(performed == .offline)
     #expect(try await h.entries == [])
@@ -1744,7 +1747,7 @@ struct Answer: Sendable, CustomTestStringConvertible {
     let h = try await Harness([.failure(TransportError.signedOut)], copy: try board(5, rows: []))
     await h.engine.start()
 
-    #expect(await h.engine.perform(action: Command.ensureDay(LocalDate("2026-11-24"))) == .signedOut)
+    #expect(await h.engine.perform(action: Command.ensureDay(yesterday)) == .signedOut)
     #expect(await h.calls == [.account(token: "tok-1")])
   }
 }
