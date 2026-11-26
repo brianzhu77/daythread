@@ -310,6 +310,13 @@ enum WorkspaceStoreContract {
     #"[{"id":"b","content":[{"type":"text","text":"café 😀 \u0000 \\ \/ \"q\" 你好"}]}]"#
     + " \u{1F600} caf\u{E9}"
 
+  /// A save's action as first sent, holding the awkward document, as `JSON.write` gives it.
+  private static let awkwardAction = JSON.write(
+    .object([
+      "type": .string("save-editor"), "pageId": .string("p2"), "document": .string(awkwardDocument),
+      "today": .string("2026-11-25"),
+    ]))
+
   private static func draft(
     _ pageId: String = "p1", owner: String = owner, document: String = "[]", changedAt: Double = 1_798_194_615.125,
     sent: PageDraft.Sent? = nil
@@ -321,18 +328,19 @@ enum WorkspaceStoreContract {
 
   static func a_draft_is_kept_and_read_back(_ store: any WorkspaceStore) async throws {
     #expect(try await store.drafts().isEmpty)
-    let sent = PageDraft.Sent(operationId: "op-9", document: awkwardDocument)
+    let sent = PageDraft.Sent(operationId: "op-9", document: awkwardDocument, action: awkwardAction)
     let plain = draft("p1", document: awkwardDocument)
     let sending = draft("p2", document: awkwardDocument, changedAt: 1_798_194_616.5, sent: sent)
     try await store.put(plain)
     try await store.put(sending)
     #expect(try await store.drafts() == [plain, sending])
     #expect(try await store.drafts().last?.sent?.document == awkwardDocument)
+    #expect(try await store.drafts().last?.sent?.action.utf8.elementsEqual(awkwardAction.utf8) == true)
   }
 
   static func putting_again_replaces_that_owners_draft_of_that_page(_ store: any WorkspaceStore) async throws {
     try await store.put(draft(document: "[1]"))
-    let later = draft(document: "[2]", changedAt: 1_798_194_700, sent: .init(operationId: "op", document: "[1]"))
+    let later = draft(document: "[2]", changedAt: 1_798_194_700, sent: .init(operationId: "op", document: "[1]", action: #"{"document":"[1]"}"#))
     try await store.put(later)
     #expect(try await store.drafts() == [later])
   }

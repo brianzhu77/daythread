@@ -1,5 +1,6 @@
 import DaythreadCore
 import Foundation
+import Synchronization
 import Testing
 
 @testable import DaythreadSync
@@ -54,11 +55,11 @@ private func todo(_ status: String, version: Int = 1) -> JSONValue {
   ])
 }
 
-private func served(_ revision: Int = 5, document: String = baseDocument) -> Workspace {
+private func served(_ revision: Int = 5, document: String = baseDocument, tasks: [JSONValue] = []) -> Workspace {
   Workspace(
     .object([
       "revision": .number(String(revision)), "timezone": .string("UTC"), "pages": .array([dayPage(document)]),
-      "tasks": .array([]),
+      "tasks": .array(tasks),
     ]))!
 }
 
@@ -75,23 +76,25 @@ private func changes(
       ])))
 }
 
-/// The server's answer to a save that left the page holding `document`.
+/// The server's answer to a save that left the page holding `document`. Its receipt names the revision the save
+/// made: `revision`, unless `receipt` says otherwise (a replay answers with the workspace as it is now).
 private func saved(
-  from: Int, to revision: Int, document: String? = nil, tasks: [JSONValue] = []
+  from: Int, to revision: Int, document: String? = nil, tasks: [JSONValue] = [], receipt: Int? = nil
 ) throws -> FakeTransport.Reply {
   .saved(
     .applied(
-      receipt: .object([:]), changes: try changes(from: from, to: revision, document: document, tasks: tasks),
-      owner: "user-1"))
+      receipt: .object(["revision": .number(String(receipt ?? revision))]),
+      changes: try changes(from: from, to: revision, document: document, tasks: tasks), owner: "user-1"))
 }
 
-/// A save as the server received it.
+/// A save as the server received it; `action` is the whole action as written text, which the server fingerprints.
 private struct ReceivedSave: Equatable {
   let operationId: String
   let expectedRevision: Int
   let expectedOwner: String
   let expectedContent: String?
   let document: String?
+  let action: String
 }
 
 private func received(_ calls: [FakeTransport.Call]) -> [ReceivedSave] {
@@ -102,7 +105,8 @@ private func received(_ calls: [FakeTransport.Call]) -> [ReceivedSave] {
     let object = action.objectValue
     return ReceivedSave(
       operationId: operationId, expectedRevision: expectedRevision, expectedOwner: expectedOwner,
-      expectedContent: object?["expectedContent"]?.stringValue, document: object?["document"]?.stringValue)
+      expectedContent: object?["expectedContent"]?.stringValue, document: object?["document"]?.stringValue,
+      action: JSON.write(action))
   }
 }
 
@@ -110,9 +114,16 @@ private func tick(_ taskId: String) -> JSONValue {
   Command.taskStatus(taskId: taskId, status: .done, today: today)
 }
 
-/// Waits, without sleeping, until `condition` holds; it holds once the tasks already started have run.
-private func until(_ condition: () async -> Bool) async {
-  while !(await condition()) { await Task.yield() }
+/// Waits, without sleeping, until `condition` holds; it holds once the tasks already started have run. Gives up
+/// after a bounded number of turns and records it, so a test of the wrong code fails rather than hangs.
+private func until(
+  _ condition: () async -> Bool, sourceLocation: SourceLocation = #_sourceLocation
+) async {
+  for _ in 0..<100_000 {
+    if await condition() { return }
+    await Task.yield()
+  }
+  Issue.record("the condition never came to hold", sourceLocation: sourceLocation)
 }
 
 /// The state a new reader of `states` gets at once.
@@ -122,6 +133,23 @@ private func current(_ engine: SyncEngine) async -> SyncState? {
 
 private func waiting(_ pageId: String = day) -> [DraftStatus] { [DraftStatus(id: pageId, state: .waiting)] }
 
+/// The engine's clock, which a test moves on.
+private final class TestClock: Sendable {
+  private let current = Mutex(noon)
+  var now: Date { current.withLock { $0 } }
+  func set(_ date: Date) { current.withLock { $0 = date } }
+}
+
+/// A tick stored before the engine opens, for `taskId`, built on `base`.
+private func storedTick(
+  _ operationId: String, _ taskId: String, base: Int, heldFor reason: String? = nil
+) -> NewOutboxEntry {
+  NewOutboxEntry(
+    kind: .command, owner: "user-1", operationId: operationId, action: tick(taskId), baseRevision: base,
+    ownRevisions: [], label: "Tick \(taskId)", createdAt: noon, state: reason == nil ? .pending : .held,
+    reason: reason)
+}
+
 /// An engine over a fake server, a recording store holding `copy` and a memory token store holding `session`.
 private struct DraftHarness {
   let transport: FakeTransport
@@ -130,20 +158,23 @@ private struct DraftHarness {
   /// The engine's waits, the 450 ms after a change and those before it tries again: none ends unless the test
   /// ends it.
   let waits = Waits()
+  let clock = TestClock()
   let engine: SyncEngine
 
   init(
     _ script: [FakeTransport.Reply] = [], session signedIn: Session? = session, copy: Workspace? = served(),
-    reachability: any Reachability = NoReachability()
+    entries: [NewOutboxEntry] = [], reachability: any Reachability = NoReachability()
   ) async throws {
     transport = FakeTransport(script)
     if let signedIn { try tokens.write(signedIn) }
     if let copy { try await store.replace(with: copy, owner: "user-1") }
+    for entry in entries { _ = try await store.append(entry) }
     await store.forget()
     let waits = waits
+    let clock = clock
     engine = SyncEngine(
       transport: transport, tokens: tokens, store: store, reachability: reachability,
-      sleep: { try await waits.sleep($0) }, now: { noon })
+      sleep: { try await waits.sleep($0) }, now: { clock.now })
   }
 
   var drafts: [PageDraft] { get async throws { try await store.drafts() } }
@@ -234,11 +265,14 @@ private struct DraftHarness {
     let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: typed("Walk"))])
     await h.engine.start()
     try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    await until { await h.waits.inProgress == 1 }
 
     await h.engine.saveNow()
 
     #expect(await h.saves.map(\.document) == [typed("Walk")])
-    // The wait it cut short sends nothing when its time would have come.
+    await until { await h.waits.cancelled == 1 }
+    #expect(await h.waits.inProgress == 0, "the wait it cut short was cancelled")
+    // And ending it now sends nothing.
     await h.waits.elapse()
     await h.engine.settled()
     #expect(await h.saves.count == 1)
@@ -272,7 +306,9 @@ private struct DraftHarness {
 
     #expect(await current(h.engine)?.drafts == [DraftStatus(id: day, state: .sending)])
     let first = try #require(await h.saves.first)
-    #expect(try await h.drafts.first?.sent == PageDraft.Sent(operationId: first.operationId, document: typed("Walk")))
+    #expect(
+      try await h.drafts.first?.sent
+        == PageDraft.Sent(operationId: first.operationId, document: typed("Walk"), action: first.action))
 
     try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [])
     #expect(try await h.drafts.first?.document == typed("Walk the dog"), "kept at once, while the save is away")
@@ -309,13 +345,23 @@ private struct DraftHarness {
     // The server took the request, and its answer was lost on the way back.
     let h = try await DraftHarness(opening + [.failure(TransportError.offline)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["r-a", "r-b"])
     await h.engine.saveNow()
     let first = try #require(await h.saves.first)
+    #expect(
+      first.action
+        == JSON.write(
+          Command.saveEditor(
+            pageId: day, expectedContent: ContentKey.of(baseDocument), document: typed("Walk"),
+            singleDeleteIds: ["r-a", "r-b"], today: today, at: noon)))
     #expect(await current(h.engine)?.drafts == [DraftStatus(id: day, state: .offline)])
 
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [])
-    #expect(try await h.drafts.first?.sent == PageDraft.Sent(operationId: first.operationId, document: typed("Walk")))
+    // Past midnight he types more, and one row he had removed is back while another is gone.
+    h.clock.set(noon.addingTimeInterval(12 * 3600 + 300))
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: ["r-b", "r-c"])
+    #expect(
+      try await h.drafts.first?.sent
+        == PageDraft.Sent(operationId: first.operationId, document: typed("Walk"), action: first.action))
 
     await h.transport.add([
       try saved(from: 5, to: 6, document: typed("Walk")), try saved(from: 6, to: 7, document: typed("Walk the dog")),
@@ -328,7 +374,8 @@ private struct DraftHarness {
 
     let saves = await h.saves
     #expect(saves[1] == first, "the retry is the same request")
-    #expect(saves[1].document == typed("Walk"))
+    #expect(saves[1].action.utf8.elementsEqual(first.action.utf8), "its action is the first one's, as written")
+    #expect(saves[2].action.contains(#""today":"2026-11-26""#), "the next save is made now")
     #expect(saves[2].operationId != first.operationId)
     #expect(saves[2].document == typed("Walk the dog"))
     #expect(saves[2].expectedContent == ContentKey.of(typed("Walk")))
@@ -386,7 +433,7 @@ private struct DraftHarness {
   }
 
   @Test func a_tick_on_a_to_do_typed_into_a_draft_is_sent_after_that_drafts_save() async throws {
-    let answer = try saved(from: 5, to: 6, document: withTodo(planned: true), tasks: [todo("open")])
+    let answer = try saved(from: 5, to: 6, document: withTodo(planned: true), tasks: [todo("open")], receipt: 6)
     let ticked = try changes(from: 6, to: 7, tasks: [todo("done", version: 2)])
     let h = try await DraftHarness(
       opening + [answer, .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1"))])
@@ -458,7 +505,7 @@ private struct DraftHarness {
     #expect(await current(h.engine)?.drafts == waiting())
     await h.engine.refresh()
     #expect(await h.saves.count == 1, "a pass does not send it again")
-    #expect(await !h.waits.asked.contains(.seconds(2)), "nor is it tried again later")
+    #expect(await h.waits.asked.allSatisfy { $0 == .milliseconds(450) }, "nor is it tried again later")
 
     await h.transport.add([try saved(from: 5, to: 6, document: typed("Walk on"))])
     try await h.engine.keepDraft(pageId: day, document: typed("Walk on"), singleDeleteIds: [])
@@ -473,11 +520,14 @@ private struct DraftHarness {
     let h = try await DraftHarness(opening)
     await h.engine.start()
     try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    await until { await h.waits.inProgress == 1 }
 
     try await h.engine.keepDraft(pageId: day, document: baseDocument, singleDeleteIds: [])
 
     #expect(try await h.drafts == [])
     #expect(await current(h.engine)?.drafts == [])
+    await until { await h.waits.cancelled == 1 }
+    #expect(await h.waits.inProgress == 0, "its wait was cancelled")
     await h.waits.elapse()
     await h.engine.saveNow()
     #expect(await h.saves == [])
@@ -521,5 +571,130 @@ private struct DraftHarness {
 
     await gate.open(.failure(TransportError.offline))
     await starting.value
+  }
+
+  @Test func a_replayed_answer_teaches_the_saves_own_revision_not_the_servers_current_one() async throws {
+    // A replay answers with the workspace as it is now (revision 8: others wrote since), and its receipt with the
+    // revision the save made (6).
+    let replay = try saved(from: 5, to: 8, document: withTodo(planned: true), tasks: [todo("open")], receipt: 6)
+    let ticked = try changes(from: 8, to: 9, tasks: [todo("done", version: 2)])
+    let h = try await DraftHarness(
+      opening + [replay, .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1"))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [])
+    try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
+    await h.engine.settled()
+
+    await h.engine.saveNow()
+
+    guard case .send(_, _, _, _, let basis)? = await h.transport.sends.last else {
+      Issue.record("the tick was not sent")
+      return
+    }
+    #expect(basis.baseRevision == 5)
+    #expect(basis.ownRevisions == [6])
+  }
+
+  @Test func an_entry_that_did_not_wait_for_the_save_does_not_learn_its_revision() async throws {
+    // Built at revision 3 and waiting behind a held tick on the same to-do: revisions 4 and 5 are not its own, and
+    // the save was checked against the copy's revision, not against the entry's base.
+    let h = try await DraftHarness(
+      opening + [try saved(from: 5, to: 6, document: typed("Walk"))], copy: served(5, tasks: [todo("open")]),
+      entries: [
+        storedTick("op-held", "editor-task:r1", base: 3, heldFor: "conflict"),
+        storedTick("op-waiting", "editor-task:r1", base: 3),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+
+    await h.engine.saveNow()
+
+    #expect(await h.saves.count == 1)
+    let waiting = try #require(try await h.store.entries().first { $0.operationId == "op-waiting" })
+    #expect(waiting.ownRevisions == [], "it must still see what revisions 4 and 5 did to its row")
+    #expect(await h.transport.sends == [])
+  }
+
+  @Test func a_store_that_cannot_be_read_back_does_not_lose_what_was_sent() async throws {
+    let gate = Gate()
+    let h = try await DraftHarness(opening + [.gated(gate)])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    // The write that records what is sent lands; reading the drafts back after it does not.
+    await h.store.fail("drafts")
+    let saving = Task { await h.engine.saveNow() }
+    await gate.reached()
+    let first = try #require(await h.saves.first)
+
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [])
+    await h.store.heal()
+    #expect(try await h.drafts.first?.sent?.operationId == first.operationId, "his newer words kept what was sent")
+
+    await h.transport.add([
+      try saved(from: 5, to: 6, document: typed("Walk")), try saved(from: 6, to: 7, document: typed("Walk the dog")),
+    ])
+    await gate.open(.failure(TransportError.offline))
+    await saving.value
+    await until { await h.waits.inProgress == 2 }
+    await h.waits.elapse()
+    await until { await h.saves.count == 3 }
+    await h.engine.settled()
+
+    let saves = await h.saves
+    #expect(saves[1].operationId == first.operationId)
+    #expect(saves[1].document == typed("Walk"))
+    #expect(try await h.drafts == [])
+  }
+
+  @Test func an_answer_that_arrives_after_a_sign_in_to_another_account_is_dropped() async throws {
+    let gate = Gate()
+    let other = Session(token: "tok-2", owner: "user-2", expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
+    let theirs = served(1, document: typed("Theirs"))
+    let h = try await DraftHarness(
+      opening + [.gated(gate), .session(other), .workspace(.full(theirs, owner: "user-2"))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    let saving = Task { await h.engine.saveNow() }
+    await gate.reached()
+
+    let signingIn = Task { try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC") }
+    await until { await h.store.log.contains("erase") }
+    await gate.open(try saved(from: 5, to: 6, document: typed("Walk")))
+    try await signingIn.value
+    await saving.value
+    await h.engine.settled()
+
+    #expect(await !h.store.log.contains { $0.hasPrefix("write") }, "the answer was never written")
+    let kept = try await h.store.load()
+    #expect(kept?.owner == "user-2")
+    #expect(kept?.workspace.page(day)?.document == typed("Theirs"))
+    let state = await current(h.engine)
+    #expect(state?.workspace?.page(day)?.document == typed("Theirs"))
+    #expect(state?.drafts == [])
+    #expect(await h.saves.count == 1)
+  }
+
+  @Test func an_answer_that_arrives_after_an_erasing_sign_out_began_is_dropped() async throws {
+    let answerGate = Gate()
+    let signOutGate = Gate()
+    let h = try await DraftHarness(opening + [.gated(answerGate), .gated(signOutGate)])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    let saving = Task { await h.engine.saveNow() }
+    await answerGate.reached()
+    let leaving = Task { await h.engine.signOut(discardingUnsent: true) }
+    await signOutGate.reached()
+
+    await answerGate.open(try saved(from: 5, to: 6, document: typed("Walk")))
+    await saving.value
+    await h.engine.settled()
+    #expect(await !h.store.log.contains { $0.hasPrefix("write") || $0.hasPrefix("removeDraft") })
+    #expect(try await h.drafts.first?.sent != nil, "untouched while the sign-out waits for the server")
+
+    await signOutGate.open(.done)
+    #expect(await leaving.value == 0)
+    #expect(try await h.drafts == [])
+    #expect(try await h.store.load() == nil)
+    #expect(await current(h.engine)?.drafts == [])
   }
 }
