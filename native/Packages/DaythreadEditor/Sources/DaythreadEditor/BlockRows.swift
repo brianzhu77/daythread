@@ -62,10 +62,11 @@ public enum BlockRows {
 
   /// The status is the task's, never the block's own.
   private static func todo(of block: Block, in workspace: Workspace) -> BlockRow.Kind {
-    guard let id = block.props["taskId"]?.stringValue, let task = workspace.task(id) else {
-      return .todo(status: nil, paused: false)
+    let id = block.props["taskId"]?.stringValue ?? ""
+    guard let task = workspace.task(id) else {
+      return .todo(taskId: id, status: nil, paused: false)
     }
-    return .todo(status: task.status, paused: task.paused)
+    return .todo(taskId: id, status: task.status, paused: task.paused)
   }
 
   private static func placeholderName(for type: String) -> String {

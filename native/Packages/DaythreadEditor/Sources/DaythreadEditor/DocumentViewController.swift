@@ -25,6 +25,10 @@
       }
     }
 
+    /// Called when a to-do's circle is tapped, with the to-do's id. The caller draws the result by calling
+    /// `show` before it returns, and the circle is then drawn in the same turn of the run loop.
+    public var onTick: ((_ taskId: String) -> Void)?
+
     private var rowsByID: [String: BlockRow] = [:]
     private var orderedIDs: [String] = []
     private var drawn: [String: AttributedString] = [:]
@@ -102,8 +106,10 @@
         cell.configure(style: style, depth: row.depth, text: self.drawn[id] ?? AttributedString())
       }
       let todo = UICollectionView.CellRegistration<TodoBlockCell, String> { [weak self] cell, _, id in
-        guard let self, let row = self.rowsByID[id], case .todo(let status, _) = row.kind else { return }
-        cell.configure(status: status, depth: row.depth, text: self.drawn[id] ?? AttributedString())
+        guard let self, let row = self.rowsByID[id], case .todo(let taskId, let status, _) = row.kind else { return }
+        cell.configure(
+          status: status, canBeTicked: row.canBeTicked, depth: row.depth, text: self.drawn[id] ?? AttributedString()
+        ) { [weak self] in self?.onTick?(taskId) }
       }
       let separator = UICollectionView.CellRegistration<SeparatorBlockCell, String> { [weak self] cell, _, id in
         cell.configure(depth: self?.rowsByID[id]?.depth ?? 0)

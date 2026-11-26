@@ -15,8 +15,9 @@ public struct BlockRow: Hashable, Sendable, Identifiable {
 
   public enum Kind: Hashable, Sendable {
     case text(style: TextStyle)
-    /// `status` is nil for a row whose task the workspace does not hold yet.
-    case todo(status: TodoTask.Status?, paused: Bool)
+    /// `taskId` is the block's `props.taskId` (empty when it has none). `status` is nil for a row whose
+    /// task the workspace does not hold yet.
+    case todo(taskId: String, status: TodoTask.Status?, paused: Bool)
     case separator
     /// A block this version does not draw, by the name it is shown under.
     case placeholder(name: String)
@@ -34,5 +35,12 @@ public struct BlockRow: Hashable, Sendable, Identifiable {
     self.kind = kind
     self.depth = depth
     self.content = content
+  }
+
+  /// A to-do whose task is open or done: the two states a tap can flip. A cancelled or unknown task, and a
+  /// to-do the workspace does not hold, cannot be ticked.
+  public var canBeTicked: Bool {
+    guard case .todo(_, let status, _) = kind else { return false }
+    return status == .open || status == .done
   }
 }
