@@ -91,6 +91,21 @@ public struct EditablePage: Sendable {
     return Caret(block: paragraph.id, offset: 0)
   }
 
+  /// The rows he removed one at a time from the page this one replaces (a redraw from outside, a merge while he
+  /// edits), so the next save still names them: each that is not in this page, at any depth, is named once; one
+  /// that is back is not. The document is unchanged.
+  public mutating func carryRemovedRows(_ ids: [String]) {
+    var present: Set<String> = []
+    func walk(_ list: [Block]) {
+      for block in list {
+        present.insert(block.id)
+        walk(block.children)
+      }
+    }
+    walk(blocks)
+    for id in ids where !present.contains(id) && !singleDeleteIds.contains(id) { singleDeleteIds.append(id) }
+  }
+
   public func content(of block: String) -> InlineContent? {
     editablePath(of: block).map { InlineContent(self[$0].content) }
   }

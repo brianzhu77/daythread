@@ -40,6 +40,10 @@
     /// The page as it is on screen now; nil while a page is only shown.
     public var document: String? { editedPage?.document }
 
+    /// Called on the main actor when `isComposing` changes, after the committed words (if any) were reported through
+    /// `onChange`. A composition cancelled with nothing typed, or ended by its line losing the keyboard, ends too.
+    public var onComposingChange: ((Bool) -> Void)?
+
     /// True while some line holds marked text.
     public var isComposing: Bool { composingRow != nil }
 
@@ -182,7 +186,11 @@
       for line in lines where line.markedTextRange != nil { line.unmarkText() }
       for line in lines { line.cancelPendingReplacement() }
       collectionView.endEditing(true)
-      composingRow = nil
+      // Its line was not found to commit (its cell had gone): the composition ends with nothing read.
+      if composingRow != nil {
+        composingRow = nil
+        onComposingChange?(false)
+      }
     }
 
     /// Replaces the page from outside (a merge, a load) keeping the caret where its line still exists. While he
@@ -193,8 +201,16 @@
       if isComposing {
         heldReplace = (heldReplace?.base ?? editedPage.document, document, workspace)
       }
-      self.editedPage = EditablePage(document: document, pageDate: pageDate)
+      self.editedPage = replacing(editedPage, with: document)
       redraw(pageID: pageID, pageDate: pageDate, in: workspace)
+    }
+
+    /// The page made from `document` in place of `page`. It still names the rows he removed one at a time that it
+    /// does not hold, so a redraw that is not about his words (a tick) does not take them out of the next save.
+    private func replacing(_ page: EditablePage, with document: String) -> EditablePage {
+      var next = EditablePage(document: document, pageDate: pageDate)
+      next.carryRemovedRows(page.singleDeleteIds)
+      return next
     }
 
     /// Draws the page being edited from its blocks. The row being composed in stays as it is on screen, where it was,
@@ -532,18 +548,23 @@
     private func read(_ line: LineTextView) {
       guard let id = line.rowID, editableIDs.contains(id), editedPage != nil else { return }
       if line.markedTextRange != nil {
+        let began = composingRow == nil
         composingRow = id
+        if began { onComposingChange?(true) }
         return
       }
-      if composingRow == id {
-        composingRow = nil
-        if let held = heldReplace {
-          heldReplace = nil
-          commitHeld(line, in: id, held: held)
-          return
-        }
+      guard composingRow == id else {
+        if absorb(line) != nil { report() }
+        return
       }
-      if absorb(line) != nil { report() }
+      composingRow = nil
+      if let held = heldReplace {
+        heldReplace = nil
+        commitHeld(line, in: id, held: held)
+      } else if absorb(line) != nil {
+        report()
+      }
+      onComposingChange?(false)
     }
 
     /// The line on screen is compared with what it was last synced with, around the caret, and the difference is the
@@ -586,9 +607,9 @@
         _ = mine.replaceText(in: id, range: change.range, with: LineTextView.cleaned(change.text))
         committed = true
       }
-      editedPage = EditablePage(
-        document: PageMerge.merge(base: held.base, mine: mine.document, theirs: held.document).document,
-        pageDate: pageDate)
+      let merged = PageMerge.merge(base: held.base, mine: mine.document, theirs: held.document).document
+      // The page shown meanwhile carries the rows he removed; the merged one goes on naming them.
+      editedPage = editedPage.map { replacing($0, with: merged) } ?? EditablePage(document: merged, pageDate: pageDate)
       if let pageID = shownPageID { redraw(pageID: pageID, pageDate: pageDate, in: held.workspace) }
       if committed { report() }
     }
