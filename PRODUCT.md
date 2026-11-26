@@ -12,9 +12,11 @@ web, ios, macos
 Home Screen app) and in a Mac browser, to start and end his day, keep notes, and hold the material and structured
 records he used to keep in Notion and Craft. He writes notes in Chinese and English; the interface is English.
 
-**A native app:** a native app for iPhone and Mac is being built in Swift (`docs/design/native-app.md`). Phase 0 is
-built: it signs in and shows Today read only from a copy on the device, offline too. Everything else is still the web
-app's. The web app and the Home Screen app remain what he uses daily until phase 1.
+**A native app:** a native app for iPhone and Mac is being built in Swift (`docs/design/native-app.md`). Phase 0 and
+phase 1a are built: it signs in, shows any day from a copy on the device, offline too, and ticks a to-do in the frame
+it is tapped; a tick made offline is kept and sent when the server can be reached, and a tick the server will not
+take is named, with Keep mine and Discard. Nothing else can be changed in it yet. The web app and the Home Screen
+app remain what he uses daily until phase 1 is done.
 
 **Direction (Brian, 2026-11-08):** he is the first user, and the product is meant to become one other people sign up
 for. Design must not assume one person's habits, and nothing about him becomes a hard-coded rule.
@@ -54,8 +56,9 @@ model configured and says "Simulated" when none is set. A mocked reply is never 
   (sidebar, peek). Every visual change is checked at both.
 - **Rhythm:** morning (today's page with carried to-dos), the day (notes, pasted links, `/` and `@` and `[[`
   commands, databases), evening (the Tomorrow block on today's page).
-- **Native app:** iPhone and Mac, in Swift, on the same server. Today read only, from a copy on the device, with the
-  offline line when it cannot update. Its list of what is built is `docs/plan/native-parity.md`.
+- **Native app:** iPhone and Mac, in Swift, on the same server. Any day from a copy on the device (previous, next, a
+  calendar, Today), with the offline line when it cannot update; a to-do is ticked at once and the tick is sent
+  when it can be, offline too. Its list of what is built is `docs/plan/native-parity.md`.
 - **Offline:** the shell and the last loaded workspace open offline; drafts are kept and retried; failures are shown
   quietly with Retry.
 - **Dark mode** follows the system setting; no switch in the app.

@@ -18,7 +18,7 @@ Observation, Swift Testing, XCTest; the fixtures script is TypeScript on the web
 **Spec:** `docs/design/native-phase-1.md` §3 to §8 (slice 1a), under `docs/design/native-app.md`. Executors read
 the first in full and the second's §5 to §9.
 
-**Status (2026-11-25):** not started.
+**Status (2026-11-25):** tasks 1 to 10 built and reviewed, seen on the simulator against the seeded local servers (`tests/evidence/native-phase-1a/`). Task 11, the check on his own data, is Brian's.
 
 ## Global Constraints
 

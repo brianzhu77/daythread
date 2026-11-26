@@ -1,6 +1,6 @@
 # The native app's system
 
-- Author: Claude · 2026-11-25 · status: **started in phase 0.** Brian's rule (2026-11-25): where a system component
+- Author: Claude · 2026-11-25 · status: **started in phase 0; phase 1a's strings added and seen on the simulator.** Brian's rule (2026-11-25): where a system component
   and the web's look conflict, native wins. The rule and its table are in `docs/design/native-app.md` section 9.
   `DESIGN.md` stays the web app's system.
 
@@ -67,8 +67,9 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
 
 - **Text** (paragraph, heading, bullet, numbered, quote): the system's text styles in the user's Dynamic Type size;
   a bullet or number is a drawn image in a column set by the widest number; a quote adds a separator-coloured bar.
-- **To-do:** an SF Symbol (`circle`, `checkmark.circle.fill`, `xmark.circle`) and the text; a finished one in secondary
-  colour, struck through.
+- **To-do:** a system button holding an SF Symbol (`circle`, `checkmark.circle.fill`, `xmark.circle`, changed with the
+  symbol replace transition), at least 44 points square, and the text; a finished one in secondary colour, struck
+  through.
 - **Separator:** one hairline in the system's separator colour.
 - **Placeholder:** a `rectangle.dashed` symbol and the block's name in secondary colour.
 
