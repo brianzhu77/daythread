@@ -452,6 +452,11 @@ public actor SyncEngine {
 
   /// What is drawn: the copy with every pending entry's action replayed over it in `seq` order, including those this
   /// build cannot predict (they change nothing). A held entry is not replayed, so the page shows what the server has.
+  ///
+  /// An entry can be replayed over a copy that already holds its change: after a store call fails between writing
+  /// the copy and acknowledging the entry, and while a load-then-acknowledge has the load in the copy. That is
+  /// invisible only while every predicted command is idempotent; a later slice that predicts one that is not must
+  /// deal with it.
   var drawn: Workspace? {
     guard copyShown, let copy else { return nil }
     return outbox.lazy.filter { $0.state == .pending }.reduce(copy.workspace) { $0.predicting($1.action) }

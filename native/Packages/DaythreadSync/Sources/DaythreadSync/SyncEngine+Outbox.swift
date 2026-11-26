@@ -6,10 +6,11 @@ extension SyncEngine {
   /// What the drain does after an outcome.
   private enum Next {
     case send
-    /// The entry is acknowledged; the workspace is loaded whole, then the drain goes on.
-    case loadWhole
-    /// The changes start from another revision than the copy's: load whole, then acknowledge the entry.
-    case loadWholeThenAcknowledge(revision: Int)
+    /// The copy lacks what the server did for the entry (its changes start from another revision than the copy's, or
+    /// it was applied before and its answer lost): load whole, then acknowledge the entry, learning `revision` when
+    /// given. The entry stays pending until then, so it is drawn until the load is in the copy, and a load that fails
+    /// leaves it to be sent again.
+    case loadWholeThenAcknowledge(revision: Int?)
     /// The reply is another account's: nothing more of this owner's is sent; the new owner's workspace is loaded.
     case loadWholeAndStop
   }
@@ -33,8 +34,6 @@ extension SyncEngine {
       switch try await settle(outcome, of: entry, pass) {
       case .send:
         continue
-      case .loadWhole:
-        try await loadWorkspace(pass, have: nil)
       case .loadWholeThenAcknowledge(let revision):
         try await loadWorkspace(pass, have: nil)
         try await enter(pass)
@@ -93,10 +92,8 @@ extension SyncEngine {
       self.copy = (next, copy.owner)
       try await store.acknowledge(seq: entry.seq, revision: changes.revision)
     case .alreadyApplied:
-      try await store.acknowledge(seq: entry.seq, revision: nil)
-      await readOutbox()
       publish()
-      return .loadWhole
+      return .loadWholeThenAcknowledge(revision: nil)
     case .held(let reason, _, _, _), .refused(let reason, _):
       var kept = entry
       kept.state = .held
