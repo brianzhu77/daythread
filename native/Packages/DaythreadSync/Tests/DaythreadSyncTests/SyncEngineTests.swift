@@ -2347,6 +2347,77 @@ private final class Published: Sendable {
     #expect(try await h.entries == [])
     #expect(await h.transport.unscripted == [])
   }
+
+  @Test func a_later_tick_held_after_the_passs_load_is_settled_by_the_next_passs_load() async throws {
+    let first = try upserting(from: 6, to: 7, [row("t1", title: "Water the plants twice", status: "done", version: 4)])
+    // Renamed again after his tick went in; still done, so his untick is sent again.
+    let renamedAgain = try board(8, rows: [row("t1", title: "Water the plants at noon", status: "done", version: 5)])
+    let second = try upserting(from: 8, to: 9, [row("t1", title: "Water the plants at noon", version: 6)])
+    let h = try await Harness(
+      opening + [
+        conflict, .workspace(.full(renamed, owner: "user-1")), applied(first), conflict,
+        .workspace(.full(renamedAgain, owner: "user-1")), applied(second),
+      ], copy: copy,
+      entries: [stored("op-1", done("t1"), label: label), stored("op-2", undone("t1"), label: label)])
+
+    await h.engine.start()
+    await h.engine.settled()
+
+    #expect(
+      bases(await h.transport.sends) == [
+        "op-1 base 5 own []", "op-1 base 6 own []", "op-2 base 5 own [7]", "op-2 base 8 own []",
+      ])
+    let loads = await h.calls.filter { if case .workspace = $0 { true } else { false } }
+    #expect(
+      loads == [
+        .workspace(token: "tok-1", have: 5), .workspace(token: "tok-1", have: 5), .workspace(token: "tok-1", have: 7),
+      ], "the opening load, the load after the first hold, and the next pass's opening load")
+    let shown = await current(h.engine)
+    #expect(shown?.held == [])
+    #expect(shown?.pending == 0)
+    #expect(task("t1", in: shown?.workspace)?.status == .open)
+    #expect(task("t1", in: shown?.workspace)?.title == "Water the plants at noon")
+    #expect(try await h.entries == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  private static let maybeApplied: FakeTransport.Reply = .outcome(
+    .held(reason: "maybe-applied", rows: [], stale: false, owner: "user-1"))
+
+  @Test(arguments: [false, true])
+  func a_tick_that_may_already_be_applied_and_is_not_on_the_server_is_asked_about(renamedToo: Bool) async throws {
+    // His tick may have gone in and been unticked elsewhere since: the app cannot tell, so it asks.
+    let served = try board(
+      6, rows: [row("t1", title: renamedToo ? "Water the plants twice" : "Water the plants", version: 3)])
+    let h = try await Harness(
+      opening + [Self.maybeApplied, .workspace(.full(served, owner: "user-1"))], copy: copy,
+      entries: [stored("op-1", done("t1"), label: label)])
+
+    await h.engine.start()
+    await h.engine.settled()
+
+    #expect(await h.transport.sends.count == 1, "never sent again by the app")
+    let shown = await current(h.engine)
+    #expect(shown?.held == [HeldChange(id: 1, label: label, reason: .maybeApplied)])
+    #expect(shown?.held.first?.canKeep == true)
+    #expect(task("t1", in: shown?.workspace)?.status == .open)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_tick_that_may_already_be_applied_and_is_on_the_server_is_dropped() async throws {
+    let served = try board(6, rows: [row("t1", title: "Water the plants", status: "done", version: 2)])
+    let h = try await Harness(
+      opening + [Self.maybeApplied, .workspace(.full(served, owner: "user-1"))], copy: copy,
+      entries: [stored("op-1", done("t1"), label: label)])
+
+    await h.engine.start()
+    await h.engine.settled()
+
+    #expect(await h.transport.sends.count == 1)
+    #expect(try await h.entries == [])
+    #expect(await current(h.engine) == state(.ready, served, address: one))
+    #expect(await h.transport.unscripted == [])
+  }
 }
 
 // MARK: - Trying again, one pass at launch, and signing out with changes
