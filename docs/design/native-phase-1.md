@@ -169,8 +169,8 @@ automatic" (`outbox.md` §8.3).
 
 - It already holds between rows: a change made offline is sent on the revision it was made on, and the server
   applies it over whatever else changed, unless someone changed the same row.
-- For the same row, the app now settles it. When the server holds a tick (`conflict`, `changed-since` or
-  `maybe-applied`), the engine loads, as above, and looks at the to-do as the server has it:
+- For the same row, the app now settles it. When the server holds a tick because the to-do changed elsewhere
+  (`conflict` or `changed-since`), the engine loads, as above, and looks at the to-do as the server has it:
 
   | The to-do on the server | The app |
   |---|---|
@@ -181,6 +181,10 @@ automatic" (`outbox.md` §8.3).
 
   The status he tapped from is read from the tap itself: a tick to done came from a to-do that was not done, a
   tick to open from one that was done.
+- When the server says his tick may already have been applied (`maybe-applied`), the app cannot tell which write
+  came last: his tick may have gone in and been undone on another device, and sending it again would undo that
+  device's change without a word. So the app only drops it when the server already has the status he tapped, and
+  otherwise asks, as before. (Found by the review, 2026-11-26.)
 - While this is being settled the tick stays drawn. Nothing is published in which it is undone, unless it ends
   held.
 - A tick sent again this way and held a second time is held and asked about; the app does not try a third time.
