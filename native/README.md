@@ -51,7 +51,7 @@ directory: 3741 with sign-in off, seeded with today's page and its to-dos, and 3
 plants" is only read by the tests; each test that ticks has a to-do of its own ("Tick me offline", "Tick me twice";
 "Tick me" is left for looking by hand), since the seed is shared by every test and never reset. It passes the
 addresses and the seeded day to the UI tests (`TEST_RUNNER_DAYTHREAD_SERVER_URL`,
-`TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_TODAY`, `TEST_RUNNER_DAYTHREAD_TODAY_TITLE`), runs
+`TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_TODAY`), runs
 `xcodebuild test`, and on exit stops both servers, removes their directories and removes the stores the tests made in
 the app's container. Run any other way, the UI tests skip. The app hosting the unit tests is pointed at `127.0.0.1:9`,
 where nothing listens. A full run takes a few minutes; `-only-testing:` runs one class or one test.
