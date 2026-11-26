@@ -150,5 +150,10 @@ actor TestStore: WorkspaceStore {
   func update(_ entry: OutboxEntry) async throws { try await memory.update(entry) }
   func remove(seq: Int) async throws { try await memory.remove(seq: seq) }
   func acknowledge(seq: Int, revision: Int?) async throws { try await memory.acknowledge(seq: seq, revision: revision) }
+  func drafts() async throws -> [PageDraft] { try await memory.drafts() }
+  func put(_ draft: PageDraft) async throws { try await memory.put(draft) }
+  func removeDraft(pageId: String, owner: String) async throws {
+    try await memory.removeDraft(pageId: pageId, owner: owner)
+  }
   func erase() async throws { try await memory.erase() }
 }

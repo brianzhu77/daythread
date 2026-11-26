@@ -304,10 +304,11 @@ enum WorkspaceStoreContract {
     #expect(loaded.workspace.tasks == before.tasks)
   }
 
-  /// A document with non-ASCII text, escapes, quotes and a NUL, as the server would send it.
+  /// A document with non-ASCII text, escapes and quotes, as the server would send it. (A document is JSON text, so
+  /// a NUL in it is the escape `\u0000`, never the character.)
   private static let awkwardDocument =
-    #"[{"id":"b","content":[{"type":"text","text":"café 😀 \\ \/ \"q\" 你好"}]}]"#
-    + " \u{1F600} caf\u{E9} \u{0}"
+    #"[{"id":"b","content":[{"type":"text","text":"café 😀 \u0000 \\ \/ \"q\" 你好"}]}]"#
+    + " \u{1F600} caf\u{E9}"
 
   private static func draft(
     _ pageId: String = "p1", owner: String = owner, document: String = "[]", changedAt: Double = 1_798_194_615.125,
@@ -380,7 +381,7 @@ enum WorkspaceStoreContract {
   }
 
   static func drafts_come_oldest_first_then_by_owner_and_page(_ store: any WorkspaceStore) async throws {
-    let newest = draft("a", owner: "user-1", changedAt: 30)
+    let newest = draft("c", owner: "user-1", changedAt: 30)
     let tieB = draft("b", owner: "user-1", changedAt: 20)
     let tieA = draft("a", owner: "user-1", changedAt: 20)
     let tieOwner = draft("a", owner: "user-0", changedAt: 20)

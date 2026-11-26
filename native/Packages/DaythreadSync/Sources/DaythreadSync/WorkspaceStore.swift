@@ -31,6 +31,14 @@ public protocol WorkspaceStore: Sendable {
   /// In one transaction: removes the entry `seq` and, when `revision` is given, appends it to the `ownRevisions` of
   /// every later entry of the stored owner that does not have it yet. A `seq` that is not there changes nothing.
   func acknowledge(seq: Int, revision: Int?) async throws
-  /// Forgets everything, `seq` included.
+  /// Every owner's drafts, oldest `changedAt` first, ties by `owner` then `pageId`. `replace` keeps them all: a
+  /// draft is never drawn or sent under another account, but the store does not decide that.
+  func drafts() async throws -> [PageDraft]
+  /// Keeps `draft` as the one of its owner and page, in one transaction: afterwards there is the old draft or the
+  /// new one, never both and never neither.
+  func put(_ draft: PageDraft) async throws
+  /// Removes the draft of this owner and page; one that is not there is not an error.
+  func removeDraft(pageId: String, owner: String) async throws
+  /// Forgets everything, `seq` and every owner's drafts included.
   func erase() async throws
 }

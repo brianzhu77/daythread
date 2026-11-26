@@ -5,6 +5,17 @@ public actor MemoryWorkspaceStore: WorkspaceStore {
   private var kept: (workspace: Workspace, owner: String)?
   private var outbox: [OutboxEntry] = []
   private var nextSeq = 1
+  private var draftsKept: [DraftKey: PageDraft] = [:]
+
+  /// Swift's `String` equality is canonical equivalence; ids are compared by code units everywhere else.
+  private struct DraftKey: Hashable {
+    let owner: [UInt8]
+    let pageId: [UInt8]
+    init(owner: String, pageId: String) {
+      self.owner = Array(owner.utf8)
+      self.pageId = Array(pageId.utf8)
+    }
+  }
 
   public init() {}
 
@@ -64,7 +75,20 @@ public actor MemoryWorkspaceStore: WorkspaceStore {
     }
   }
 
+  public func drafts() async throws -> [PageDraft] {
+    draftsKept.values.sorted(by: PageDraft.inStoreOrder)
+  }
+
+  public func put(_ draft: PageDraft) async throws {
+    draftsKept[DraftKey(owner: draft.owner, pageId: draft.pageId)] = draft
+  }
+
+  public func removeDraft(pageId: String, owner: String) async throws {
+    draftsKept.removeValue(forKey: DraftKey(owner: owner, pageId: pageId))
+  }
+
   public func erase() async throws {
+    draftsKept = [:]
     kept = nil
     outbox = []
     nextSeq = 1

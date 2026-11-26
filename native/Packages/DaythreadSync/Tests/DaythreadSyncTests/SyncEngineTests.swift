@@ -200,6 +200,20 @@ actor RecordingStore: WorkspaceStore {
     try await inner.acknowledge(seq: seq, revision: revision)
   }
 
+  func drafts() async throws -> [PageDraft] { try await inner.drafts() }
+
+  func put(_ draft: PageDraft) async throws {
+    log.append("put \(draft.owner) \(draft.pageId)")
+    try check("put")
+    try await inner.put(draft)
+  }
+
+  func removeDraft(pageId: String, owner: String) async throws {
+    log.append("removeDraft \(owner) \(pageId)")
+    try check("removeDraft")
+    try await inner.removeDraft(pageId: pageId, owner: owner)
+  }
+
   func erase() async throws {
     log.append("erase")
     try check("erase")
