@@ -32,7 +32,8 @@
     private var rowsByID: [String: BlockRow] = [:]
     private var orderedIDs: [String] = []
     private var drawn: [String: AttributedString] = [:]
-    private var hasShownAPage = false
+    /// The id of the page drawn last; nil before the first.
+    private var shownPageID: String?
     /// Whether each snapshot `show` applied was animated, in order; a call that changes nothing applies none.
     private(set) var appliedAnimated: [Bool] = []
     var appliedSnapshots: Int { appliedAnimated.count }
@@ -64,7 +65,8 @@
     }
 
     /// Draws `page`. A row that is the same as before is left alone, one whose content or status changed is
-    /// reconfigured in place, and the scroll position is kept. The first call does not animate.
+    /// reconfigured in place, and the scroll position is kept. The first call, and the first for another page, do not
+    /// animate.
     public func show(page: Page, in workspace: Workspace) {
       let rows = BlockRows.rows(for: page, in: workspace)
       var newRows: [String: BlockRow] = [:]
@@ -79,7 +81,7 @@
       }
       let ids = rows.map(\.id)
       let changed = ids.filter { rowsByID[$0] != nil && (rowsByID[$0] != newRows[$0] || drawn[$0] != newDrawn[$0]) }
-      if hasShownAPage, changed.isEmpty, ids == orderedIDs { return }
+      if page.id == shownPageID, changed.isEmpty, ids == orderedIDs { return }
 
       let oldRows = rowsByID
       rowsByID = newRows
@@ -95,8 +97,10 @@
       }
       snapshot.reconfigureItems(reconfigured)
       snapshot.reloadItems(reloaded)
-      let animated = hasShownAPage
-      hasShownAPage = true
+      // Another page (another day) is not a diff of the one before: animated, its rows would slide in as the old
+      // ones slide out. Redraws of the same page animate, so a tick's symbol transition plays.
+      let animated = page.id == shownPageID
+      shownPageID = page.id
       appliedAnimated.append(animated)
       dataSource.apply(snapshot, animatingDifferences: animated)
     }
