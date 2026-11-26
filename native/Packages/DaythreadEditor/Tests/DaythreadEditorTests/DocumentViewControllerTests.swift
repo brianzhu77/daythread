@@ -397,6 +397,38 @@
       #expect(abs(layout.glyph.midY - guide.midY) <= 1, "glyph centre \(layout.glyph.midY), slot centre \(guide.midY)")
     }
 
+    /// The colour the circle's glyph is drawn in, as the button resolves it for its state now.
+    private func glyphColour(_ button: UIButton) throws -> UIColor {
+      button.updateConfiguration()
+      button.layoutIfNeeded()
+      return try #require(button.imageView?.tintColor).resolvedColor(with: button.traitCollection)
+    }
+
+    @Test func a_touch_on_the_circle_shows_the_systems_pressed_look() throws {
+      let controller = hosted()
+      controller.show(
+        page: try makePage([block("a", "task", ["taskId": .string("o")], text: "open")]),
+        in: try makeWorkspace(tasks: [taskJSON("o", status: "open")]))
+      let button = try circle(controller, 0)
+      let normal = try glyphColour(button)
+      button.isHighlighted = true
+      let pressed = try glyphColour(button)
+      #expect(pressed != normal, "pressed \(pressed), normal \(normal)")
+    }
+
+    @Test func a_circle_that_cannot_be_ticked_keeps_the_look_of_its_status() throws {
+      let controller = hosted()
+      controller.show(
+        page: try makePage([block("a", "task", ["taskId": .string("c")], text: "cancelled")]),
+        in: try makeWorkspace(tasks: [taskJSON("c", status: "cancelled")]))
+      let button = try circle(controller, 0)
+      #expect(!button.isEnabled)
+      let disabled = try glyphColour(button)
+      button.isEnabled = true
+      let enabled = try glyphColour(button)
+      #expect(disabled == enabled, "disabled \(disabled), as it would be drawn enabled \(enabled)")
+    }
+
     @Test func the_button_is_at_least_44_points_square() throws {
       let controller = hosted()
       controller.show(page: try EditorFixtures.dayPage(), in: try EditorFixtures.workspace())
