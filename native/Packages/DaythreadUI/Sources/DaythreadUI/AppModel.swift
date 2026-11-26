@@ -64,6 +64,9 @@ public final class AppModel {
   @ObservationIgnored private var following: Task<Void, Never>?
   @ObservationIgnored private var auditedRevision: Int?
 
+  /// Counts the pages whose last call the engine has answered. Observed, so a screen that held back an outside change
+  /// while it was ahead (`isWriting`) looks again once it is not.
+  private(set) var answeredWrites = 0
   /// The calls for pages' words not yet handed to the engine, in the order made; `callInFlight` is the one it is
   /// answering. A single task hands them over one at a time (`sendCalls`), so they reach the engine in that order.
   @ObservationIgnored private var queuedCalls: [QueuedCall] = []
@@ -296,14 +299,13 @@ private enum WritingCall {
   case keep(pageId: String, document: String, singleDeleteIds: [String], startedFrom: String)
   case rebase(pageId: String, baseDocument: String, document: String)
   case discard(pageId: String)
-  case saveNow
   /// Nothing for the engine: answered once every call made before it has been.
   case flush
 
   var pageId: String? {
     switch self {
     case .keep(let pageId, _, _, _), .rebase(let pageId, _, _), .discard(let pageId): pageId
-    case .saveNow, .flush: nil
+    case .flush: nil
     }
   }
 
@@ -320,7 +322,7 @@ private struct QueuedCall {
 }
 
 /// The open page's words live with the screen (`native-phase-1.md` §10.5); the model hands them to the engine. Every
-/// call about a page's words (keep, rebase, discard, save now) goes through one queue that a single task empties one
+/// call about a page's words (keep, rebase, discard, and the point a save now waits for) goes through one queue that a single task empties one
 /// call at a time, so the engine receives them in the order made: one task per call could reach the actor in another
 /// order, and a rebase landing after a later keystroke's keep would overwrite that keystroke in the store.
 extension AppModel {
@@ -345,12 +347,17 @@ extension AppModel {
     sendCalls()
   }
 
-  /// Sends what is waiting now (leaving the day, leaving the foreground), after every change handed over before it.
-  /// The task ends when the engine's pass has.
+  /// Sends what is waiting now (leaving the day, leaving the foreground), once every change handed over before it is
+  /// stored. The task ends when the engine's pass has. The pass is not a call in the queue: it waits for the network,
+  /// and what he types meanwhile is stored at once, not after it.
   @discardableResult
   public func saveNow() -> Task<Void, Never> {
-    let answer = enqueue(.saveNow)
-    return Task { _ = await Self.answer(answer) }
+    let stored = enqueue(.flush)
+    let engine = engine
+    return Task {
+      _ = await Self.answer(stored)
+      await engine.saveNow()
+    }
   }
 
   public func discardDraft(pageId: String) async {
@@ -382,8 +389,10 @@ extension AppModel {
   /// Whether the engine may not have what the screen wrote on the page yet: a call for it waits or is being
   /// answered, or the engine did not store the last one. While it may not, the page the engine publishes can be an
   /// older version of what is on screen; once it has, the published page is the truth, and a page that differs from
-  /// the screen's was changed from outside. A state the engine publishes inside a call reaches the model before the
-  /// call's answer does: both resume on the main actor, the state first.
+  /// the screen's was changed from outside. That a state the engine publishes inside a call reaches the model before
+  /// the call's answer does is how the main executor delivers them (first in, first out: the stream's element is
+  /// enqueued before the call's return), not a promise of any API; `answeredWrites` makes the screen look again once
+  /// the answer is in, should an update pass fall between the two.
   func isWriting(_ pageId: String) -> Bool {
     callInFlight?.isFor(pageId) == true || queuedCalls.contains { $0.call.isFor(pageId) } || unstored.contains(pageId)
   }
@@ -433,6 +442,7 @@ extension AppModel {
 
   private func answered(_ call: QueuedCall, _ answer: Bool) {
     callInFlight = nil
+    if let pageId = call.call.pageId, !isWriting(pageId) { answeredWrites += 1 }
     for continuation in call.answers {
       continuation.yield(answer)
       continuation.finish()
@@ -480,9 +490,6 @@ extension AppModel {
     case .discard(let pageId):
       await engine.discardDraft(pageId: pageId)
       unstored.remove(pageId)
-      return true
-    case .saveNow:
-      await engine.saveNow()
       return true
     case .flush:
       return true

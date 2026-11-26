@@ -87,6 +87,8 @@
     private var saysMerged = false
     /// Looks again for the end of a composition that holds up a merge.
     private var mergeAfterComposition: Task<Void, Never>?
+    /// The documents handed to the list's `replace`, in order (tests read it).
+    private(set) var replacedDocuments: [String] = []
     /// Where "Copy draft" puts the draft's words.
     var pasteboard = UIPasteboard.general
     private let refreshControl = UIRefreshControl()
@@ -174,6 +176,9 @@
       // A day opened before it was today is today now: from here on the screen follows today.
       if shownDate == model.today { shownDate = nil }
       let state = model.state
+      // Read so that this runs again once a page's last call is answered: a state passed over while the screen was
+      // ahead is then drawn.
+      _ = model.answeredWrites
       let date = date
       let status = StatusLine.text(
         state: state, keepsChanges: model.keepsChanges, pageId: model.workspace?.dayPage(date)?.id, merged: saysMerged)
@@ -263,18 +268,45 @@
         mergeIfBehind()
         return
       }
-      if !merging, !model.isWriting(page.id), !page.document.utf8.elementsEqual(mine.utf8) {
-        document.replace(document: page.document, in: workspace)
+      let ahead = merging || model.isWriting(page.id)
+      let draft = model.state.drafts.first { $0.id.utf8.elementsEqual(page.id.utf8) }
+      // With no draft, the page is the server's, and what he types next is typed onto it: after a save landed it is
+      // what was saved, even when that is what the screen already shows.
+      if !ahead, draft == nil { openPage?.startedFrom = page.document }
+      // A draft behind the server's page is the stored one, older than the screen: it is merged, never taken.
+      if !ahead, draft?.state != .behind, !page.document.utf8.elementsEqual(mine.utf8) {
+        replaceList(with: page.document, in: workspace)
         openPage?.startedFrom = page.document
         listWorkspace = workspace
       } else {
         let drawn = workspace.drawing(draft: mine, of: page.id)
         if drawn != listWorkspace {
-          document.replace(document: mine, in: drawn)
+          replaceList(with: mine, in: drawn)
           listWorkspace = drawn
         }
       }
       mergeIfBehind()
+    }
+
+    /// `workspace` with the page's document set to `document` and nothing else changed.
+    private static func workspace(_ workspace: Workspace, withDocument document: String, of pageId: String)
+      -> Workspace
+    {
+      guard let index = workspace.pages.firstIndex(where: { $0.id.utf8.elementsEqual(pageId.utf8) }) else {
+        return workspace
+      }
+      var raw = workspace.pages[index].raw
+      raw["document"] = .string(document)
+      guard let page = Page(.object(raw)) else { return workspace }
+      var copy = workspace
+      copy.pages[index] = page
+      return copy
+    }
+
+    /// Every page replace hands the list, so tests can tell a replace that happened from one that did not.
+    private func replaceList(with page: String, in workspace: Workspace) {
+      replacedDocuments.append(page)
+      document.replace(document: page, in: workspace)
     }
 
     private func closePage() {
@@ -292,6 +324,10 @@
       guard let openPage else { return }
       model.wrote(
         pageId: openPage.id, document: document, singleDeleteIds: singleDeleteIds, startedFrom: openPage.startedFrom)
+      // The list already shows his words: a state that differs from what it was drawn with only in them changes
+      // nothing it draws. Only the document: a to-do his words make is not in the list's workspace until a state
+      // brings it.
+      listWorkspace = listWorkspace.map { Self.workspace($0, withDocument: document, of: openPage.id) }
       if saysMerged {
         saysMerged = false
         setNeedsUpdateProperties()
@@ -322,14 +358,16 @@
         guard let pair, self.openPage?.id.utf8.elementsEqual(pageId.utf8) == true, !self.document.isComposing,
           let mine = self.document.document, let workspace = self.model.workspace
         else {
-          // Not behind any more (the state saying so is on its way), or another page; or he began composing.
+          // Not behind any more (the state saying so is on its way), or another page; or he began composing. A state
+          // passed over as ahead meanwhile is drawn now, and a behind draft of the day now open is merged.
           self.merging = false
           if self.document.isComposing { self.mergeWhenCompositionEnds() }
+          self.setNeedsUpdateProperties()
           return
         }
         let merged = DraftMerging.merged(base: pair.baseDocument, mine: mine, theirs: pair.theirs)
         let drawn = workspace.drawing(draft: merged.document, of: pageId)
-        self.document.replace(document: merged.document, in: drawn)
+        self.replaceList(with: merged.document, in: drawn)
         self.listWorkspace = drawn
         self.openPage?.startedFrom = merged.document
         if merged.bothChanged {
