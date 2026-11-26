@@ -1426,6 +1426,26 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
     #expect(try await h.entries == ["op-1 pending base 5 own []"], "so it is sent again later")
   }
 
+  @Test func an_already_applied_tick_is_no_longer_pending_once_its_load_is_in() async throws {
+    let gate = Gate()
+    let served = try board(6, rows: [row("t1", status: "done", version: 2), row("t2")])
+    let h = try await Harness(
+      opening + [.outcome(.alreadyApplied(owner: "user-1")), .workspace(.full(served, owner: "user-1")), .gated(gate)],
+      copy: try board(5, rows: [row("t1"), row("t2")]),
+      entries: [stored("op-1", done("t1")), stored("op-2", done("t2"))])
+
+    let starting = Task { await h.engine.start() }
+    await gate.reached()
+
+    // The second tick is in flight: nothing else is published until it is answered.
+    let shown = await current(h.engine)
+    #expect(shown?.pending == 1, "the first is acknowledged and said so")
+    #expect(task("t1", in: shown?.workspace)?.status == .done)
+
+    await gate.open(offline)
+    await starting.value
+  }
+
   @Test func enqueue_before_a_copy_is_shown_throws_and_gives_no_ticket() async throws {
     let empty = try await Harness()
     await #expect(throws: SyncError.notReady) { try await empty.engine.enqueue(action: done("t1"), label: "t1") }
