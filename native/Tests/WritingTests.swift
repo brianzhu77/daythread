@@ -569,7 +569,8 @@ private struct DayScreen {
 
     let circle = try #require(day.circle("Complete Buy milk!"))
     circle.sendActions(for: .primaryActionTriggered)
-    try await until { h.model.state.pending == 1 }
+    // The tick waits for the save that makes its to-do.
+    try await until { h.model.state.waiting == 1 }
     day.drawn()
     #expect(day.screen.replacedDocuments.count == 2, "a tick is drawn")
     day.close()

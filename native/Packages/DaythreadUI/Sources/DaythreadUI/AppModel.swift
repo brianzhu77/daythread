@@ -64,7 +64,7 @@ public final class AppModel {
   @ObservationIgnored private var following: Task<Void, Never>?
   @ObservationIgnored private var auditedRevision: Int?
 
-  /// Counts the pages whose last call the engine has answered. Observed, so a screen that held back an outside change
+  /// Counts the times a page stopped having calls waiting: its last call answered, or its calls dropped. Observed, so a screen that held back an outside change
   /// while it was ahead (`isWriting`) looks again once it is not.
   private(set) var answeredWrites = 0
   /// The calls for pages' words not yet handed to the engine, in the order made; `callInFlight` is the one it is
@@ -249,7 +249,10 @@ public final class AppModel {
     if !records.isEmpty { records = [] }
     lastTicks = [:]
     dropQueuedCalls()
-    unstored = []
+    if !unstored.isEmpty {
+      unstored = []
+      answeredWrites += 1
+    }
     mergedAt = [:]
   }
 
@@ -453,8 +456,11 @@ extension AppModel {
   /// answered is the engine's to settle; it refuses a call once the account changed.
   private func dropQueuedCalls() {
     let dropped = queuedCalls
+    guard !dropped.isEmpty else { return }
     queuedCalls = []
     for call in dropped { for continuation in call.answers { continuation.finish() } }
+    // The pages they were for may have nothing waiting now.
+    answeredWrites += 1
   }
 
   private func perform(_ call: WritingCall) async -> Bool {

@@ -78,7 +78,7 @@
 
     private let document = DocumentViewController()
     private var openPage: OpenPage?
-    /// The workspace the list was last drawn with, the screen's words drawn on it.
+    /// The workspace the list was last handed.
     private var listWorkspace: Workspace?
     /// A merge of the open page is being made and handed over: until the engine has it, what it publishes for the
     /// page is older than the screen.
@@ -276,31 +276,17 @@
       // A draft behind the server's page is the stored one, older than the screen: it is merged, never taken.
       if !ahead, draft?.state != .behind, !page.document.utf8.elementsEqual(mine.utf8) {
         replaceList(with: page.document, in: workspace)
-        openPage?.startedFrom = page.document
+        if draft != nil { openPage?.startedFrom = page.document }
         listWorkspace = workspace
       } else {
+        // His words stay; the list is handed the new workspace only when it would draw a row of them differently.
         let drawn = workspace.drawing(draft: mine, of: page.id)
-        if drawn != listWorkspace {
+        if ListReading(of: mine, in: drawn) != listWorkspace.map({ ListReading(of: mine, in: $0) }) {
           replaceList(with: mine, in: drawn)
           listWorkspace = drawn
         }
       }
       mergeIfBehind()
-    }
-
-    /// `workspace` with the page's document set to `document` and nothing else changed.
-    private static func workspace(_ workspace: Workspace, withDocument document: String, of pageId: String)
-      -> Workspace
-    {
-      guard let index = workspace.pages.firstIndex(where: { $0.id.utf8.elementsEqual(pageId.utf8) }) else {
-        return workspace
-      }
-      var raw = workspace.pages[index].raw
-      raw["document"] = .string(document)
-      guard let page = Page(.object(raw)) else { return workspace }
-      var copy = workspace
-      copy.pages[index] = page
-      return copy
     }
 
     /// Every page replace hands the list, so tests can tell a replace that happened from one that did not.
@@ -324,10 +310,6 @@
       guard let openPage else { return }
       model.wrote(
         pageId: openPage.id, document: document, singleDeleteIds: singleDeleteIds, startedFrom: openPage.startedFrom)
-      // The list already shows his words: a state that differs from what it was drawn with only in them changes
-      // nothing it draws. Only the document: a to-do his words make is not in the list's workspace until a state
-      // brings it.
-      listWorkspace = listWorkspace.map { Self.workspace($0, withDocument: document, of: openPage.id) }
       if saysMerged {
         saysMerged = false
         setNeedsUpdateProperties()
