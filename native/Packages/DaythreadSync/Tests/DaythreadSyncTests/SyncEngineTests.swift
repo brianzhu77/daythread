@@ -179,18 +179,25 @@ private struct Harness {
   let transport: FakeTransport
   let store = RecordingStore()
   let tokens = MemoryTokenStore()
+  /// The engine's waits before it tries again: none ends unless the test ends it.
+  let waits: Waits
   let engine: SyncEngine
 
   init(
     _ script: [FakeTransport.Reply] = [], session: Session? = first, copy: Workspace? = nil,
-    owner: String = "user-1", entries: [NewOutboxEntry] = [], now: Date = noon
+    owner: String = "user-1", entries: [NewOutboxEntry] = [], now: Date = noon,
+    reachability: any Reachability = NoReachability()
   ) async throws {
     transport = FakeTransport(script)
+    let waits = Waits()
+    self.waits = waits
     if let session { try tokens.write(session) }
     if let copy { try await store.replace(with: copy, owner: owner) }
     for entry in entries { _ = try await store.append(entry) }
     await store.forget()
-    engine = SyncEngine(transport: transport, tokens: tokens, store: store, now: { now })
+    engine = SyncEngine(
+      transport: transport, tokens: tokens, store: store, reachability: reachability,
+      sleep: { try await waits.sleep($0) }, now: { now })
   }
 
   var calls: [FakeTransport.Call] { get async { await transport.calls } }
@@ -462,7 +469,7 @@ private struct Harness {
     #expect(await h.log == [])
     #expect(await h.calls.count == 3)
 
-    // Nothing is retried on its own; the next refresh sends it again, and an answer clears `offline`.
+    // The retry waits (the test never ends its wait); a refresh sends it again, and an answer clears `offline`.
     await h.transport.add([
       .workspace(.unchanged(revision: 5, owner: "user-1")),
       .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")),
@@ -556,7 +563,7 @@ private struct Harness {
       ], copy: try workspace(5), entries: [pending("op-1", base: 5)])
     await h.engine.start()
 
-    await h.engine.signOut()
+    await h.engine.signOut(discardingUnsent: true)
 
     #expect(await h.calls.last == .signOut(token: "tok-1"))
     #expect(try h.tokens.read() == nil)
@@ -846,7 +853,7 @@ private struct Harness {
 
     let loading = Task { await h.engine.refresh() }
     await gate.reached()
-    await h.engine.signOut()
+    await h.engine.signOut(discardingUnsent: true)
     await gate.open(.workspace(.full(try workspace(9), owner: "user-1")))
     await loading.value
 
@@ -1007,7 +1014,7 @@ private struct Harness {
     await h.engine.start()
     await h.store.fail("erase")
 
-    await h.engine.signOut()
+    await h.engine.signOut(discardingUnsent: true)
 
     #expect(await h.log == ["erase", "erase"])
     #expect(await current(h.engine) == state(.signedOut, nil))
@@ -1103,7 +1110,7 @@ private struct Harness {
       opening + [.gated(gate), .session(second), .workspace(.full(served, owner: "user-2"))], copy: try workspace(5))
     await h.engine.start()
 
-    let signingOut = Task { await h.engine.signOut() }
+    let signingOut = Task { await h.engine.signOut(discardingUnsent: true) }
     await gate.reached()
     try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
     await gate.open(.done)
@@ -1161,7 +1168,7 @@ private struct Harness {
     let engine = SyncEngine(transport: transport, tokens: tokens, store: store, now: { noon })
     await engine.start()
 
-    let signingOut = Task { await engine.signOut() }
+    let signingOut = Task { await engine.signOut(discardingUnsent: true) }
     await gate.reached()
     await #expect(throws: StoreRefused.self) {
       try await engine.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
@@ -1201,7 +1208,7 @@ private struct Harness {
     try await h.engine.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
     #expect(await current(h.engine) == state(.ready, served, signedIn: true, address: one))
 
-    await h.engine.signOut()
+    await h.engine.signOut(discardingUnsent: true)
     #expect(await current(h.engine) == state(.signedOut, nil, signedIn: false))
   }
 }
@@ -1406,7 +1413,7 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
     await h.engine.start()
     #expect(try await h.engine.enqueue(action: done("t1"), label: "t1") == 1)
     await h.engine.settled()
-    await h.engine.signOut()
+    await h.engine.signOut(discardingUnsent: true)
     await #expect(throws: SyncError.notReady) { try await h.engine.enqueue(action: done("t1"), label: "t1") }
     #expect(await current(h.engine)?.enqueued == 1)
   }
@@ -1420,7 +1427,7 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
     await h.engine.start()
     #expect(await current(h.engine)?.address == "one@example.com")
 
-    await h.engine.signOut()
+    await h.engine.signOut(discardingUnsent: true)
     #expect(await current(h.engine)?.address == nil)
 
     try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
@@ -1749,6 +1756,199 @@ struct Answer: Sendable, CustomTestStringConvertible {
 
     #expect(await h.engine.perform(action: Command.ensureDay(yesterday)) == .signedOut)
     #expect(await h.calls == [.account(token: "tok-1")])
+  }
+}
+
+// MARK: - Trying again, one pass at launch, and signing out with changes
+
+private let offline: FakeTransport.Reply = .failure(TransportError.offline)
+
+private func applied(_ changes: WorkspaceChanges) -> FakeTransport.Reply {
+  .outcome(.applied(receipt: .object([:]), changes: changes, owner: "user-1"))
+}
+
+@Suite struct SyncEngineRetryTests {
+  @Test func after_a_failed_send_it_tries_again_after_2_5_15_then_30_seconds() async throws {
+    let answer = try upserting(from: 5, to: 6, [row("t1", status: "done", version: 2)])
+    let h = try await Harness(
+      opening + [offline], copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"))])
+    await h.engine.start()
+    await until { await h.waits.asked.count == 1 }
+
+    for retry in 1...4 {
+      await h.transport.add([offline])
+      await h.waits.elapse()
+      await until { await h.waits.asked.count == retry + 1 }
+    }
+    #expect(await h.waits.asked == [.seconds(2), .seconds(5), .seconds(15), .seconds(30), .seconds(30)])
+    #expect(await h.transport.sends.count == 5)
+
+    await h.transport.add([applied(answer)])
+    await h.waits.elapse()
+    await until { await h.transport.sends.count == 6 }
+    await h.engine.settled()
+
+    #expect(try await h.entries == [])
+    #expect(await h.waits.asked.count == 5, "no further wait once the transport answers")
+    #expect(await h.waits.inProgress == 0)
+  }
+
+  @Test func a_429_waits_as_long_as_it_was_told_when_that_is_longer() async throws {
+    let h = try await Harness(
+      opening + [.failure(TransportError.wait(seconds: 60))], copy: try board(5, rows: [row("t1")]),
+      entries: [stored("op-1", done("t1"))])
+    await h.engine.start()
+    await until { await h.waits.asked.count == 1 }
+    #expect(await h.waits.asked == [.seconds(60)])
+
+    // A wait shorter than the schedule's gives the schedule's.
+    await h.transport.add([.failure(TransportError.wait(seconds: 1))])
+    await h.waits.elapse()
+    await until { await h.waits.asked.count == 2 }
+    #expect(await h.waits.asked == [.seconds(60), .seconds(5)])
+  }
+
+  @Test func nothing_to_send_means_no_retry() async throws {
+    let empty = try await Harness(copy: try board(5, rows: [row("t1")]))
+    await empty.transport.goOffline()
+    await empty.engine.start()
+    #expect(await current(empty.engine)?.offline == true)
+    // A command waited for is not an entry: it is answered, not tried again.
+    #expect(await empty.engine.perform(action: Command.ensureDay(yesterday)) == .offline)
+    await empty.engine.settled()
+    #expect(await empty.waits.asked == [])
+
+    let behind = try await Harness(
+      opening + [offline], copy: try board(5, rows: [row("t1")]),
+      entries: [stored("op-held", done("t1"), heldFor: "conflict"), stored("op-waiting", done("t1"))])
+    await behind.engine.start()
+    await behind.engine.refresh()
+    #expect(await current(behind.engine)?.offline == true)
+    #expect(await current(behind.engine)?.waiting == 1)
+    #expect(await behind.transport.sends == [])
+    #expect(await behind.waits.asked == [])
+  }
+
+  @Test func the_network_coming_back_sends_at_once() async throws {
+    let answer = try upserting(from: 5, to: 6, [row("t1", status: "done", version: 2)])
+    let network = FiredReachability()
+    let h = try await Harness(
+      opening + [offline], copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"))],
+      reachability: network)
+    await h.engine.start()
+    await until { await h.waits.asked.count == 1 }
+
+    await h.transport.add([applied(answer)])
+    network.fire()
+    await until { await h.transport.sends.count == 2 }
+    await h.engine.settled()
+
+    #expect(try await h.entries == [])
+    #expect(await h.waits.asked == [.seconds(2)], "the 2 s wait was cut short, and none follows")
+    #expect(await h.waits.cancelled == 1)
+    #expect(await current(h.engine)?.failure == nil)
+  }
+
+  @Test func signed_out_stops_the_retries() async throws {
+    // The server no longer knows the session.
+    let expired = try await Harness(
+      opening + [offline], copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"))])
+    await expired.engine.start()
+    await until { await expired.waits.asked.count == 1 }
+    await expired.transport.add([.failure(TransportError.signedOut)])
+    await expired.engine.refresh()
+    await until { await expired.waits.cancelled == 1 }
+    let asked = await expired.engine.passRequests
+    await expired.waits.elapse()
+    await expired.engine.settled()
+    #expect(await expired.engine.passRequests == asked)
+    #expect(await expired.waits.asked.count == 1)
+
+    // He signs out.
+    let leaving = try await Harness(
+      opening + [offline, .done], copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"))])
+    await leaving.engine.start()
+    await until { await leaving.waits.asked.count == 1 }
+    #expect(await leaving.engine.signOut(discardingUnsent: true) == 0)
+    await until { await leaving.waits.cancelled == 1 }
+    await leaving.engine.settled()
+    #expect(await leaving.waits.asked.count == 1)
+    #expect(await leaving.transport.sends.count == 1)
+  }
+
+  @Test func a_launch_runs_one_pass() async throws {
+    let gate = Gate()
+    let h = try await Harness(
+      [.gated(gate), .workspace(.unchanged(revision: 5, owner: "user-1"))], copy: try board(5, rows: []))
+
+    // The scene becomes active while the launch's account check is in flight.
+    let starting = Task { await h.engine.start() }
+    await gate.reached()
+    let refreshing = Task { await h.engine.refresh() }
+    await until { await h.engine.passRequests == 2 }
+    await gate.open(.account(firstAccount))
+    await starting.value
+    await refreshing.value
+
+    #expect(await h.calls == [.account(token: "tok-1"), .workspace(token: "tok-1", have: 5)])
+    #expect(await current(h.engine) == state(.ready, try board(5, rows: []), address: one))
+
+    // With no session, the server is asked once who it is, and the refresh asks nothing more.
+    let nobody = try await Harness([.failure(TransportError.signedOut)], session: nil)
+    await nobody.engine.start()
+    await nobody.engine.refresh()
+    #expect(await nobody.calls == [.account(token: nil)])
+    #expect(await current(nobody.engine) == state(.signedOut, nil))
+  }
+
+  @Test func signing_out_with_changes_not_sent_asks_first() async throws {
+    let h = try await Harness(
+      opening + [offline], copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"))])
+    await h.engine.start()
+    await h.transport.goOffline()
+
+    #expect(await h.engine.signOut(discardingUnsent: false) == 1)
+    #expect(try h.tokens.read() == first)
+    #expect(try await h.entries == ["op-1 pending base 5 own []"])
+    #expect(await current(h.engine)?.phase == .ready)
+    #expect(await current(h.engine)?.pending == 1)
+
+    #expect(await h.engine.signOut(discardingUnsent: true) == 0)
+    #expect(try h.tokens.read() == nil)
+    #expect(try await h.entries == [])
+    #expect(try await h.kept == nil)
+    let sentBefore = await h.transport.sends.count
+
+    // Another account signs in: nothing of the first is held, pending, drawn or sent.
+    let served = try board(2, rows: [row("t9")])
+    await h.transport.comeBack()
+    await h.transport.add([.session(second), .workspace(.full(served, owner: "user-2"))])
+    try await h.engine.signIn(email: two, password: "pw", timezone: "UTC")
+    await h.waits.elapse()
+    await h.engine.settled()
+
+    #expect(await current(h.engine) == state(.ready, served, address: two))
+    #expect(await h.transport.sends.count == sentBefore)
+    #expect(try await h.entries == [])
+    #expect(try await h.kept?.owner == "user-2")
+  }
+
+  @Test func signing_out_online_sends_what_is_pending_first() async throws {
+    let answer = try upserting(from: 5, to: 6, [row("t1", status: "done", version: 2)])
+    let h = try await Harness(
+      opening + [offline], copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"))])
+    await h.engine.start()
+    #expect(await current(h.engine)?.pending == 1)
+
+    await h.transport.add([applied(answer), .done])
+    #expect(await h.engine.signOut(discardingUnsent: false) == 0)
+
+    let calls = await h.calls
+    #expect(calls.suffix(2).first?.operationId == "op-1", "the tick is sent first")
+    #expect(calls.last == .signOut(token: "tok-1"))
+    #expect(try h.tokens.read() == nil)
+    #expect(try await h.entries == [])
+    #expect(await current(h.engine) == state(.signedOut, nil))
   }
 }
 
