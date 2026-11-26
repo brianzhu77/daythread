@@ -69,6 +69,11 @@ public actor SyncEngine {
   /// Sign-ins completed (their session kept), so a sign-out can tell that a newer sign-in happened while it waited for
   /// the server. A sign-in that fails does not count: the sign-out still erases.
   private var signIns = 0
+  /// The epoch in which the server answered that sign-in is required; until the next sign-in or sign-out, a pass with
+  /// no session has nothing to ask it. A launch always asks at least once.
+  private var signInRequiredIn: Int?
+  /// A sign-out that will erase has begun and not ended: nothing of this account is accepted, sent or performed.
+  var leaving = false
 
   // MARK: Trying again
 
@@ -153,13 +158,14 @@ public actor SyncEngine {
 
   /// Stores the entry, publishes a state that draws it, asks for a pass without waiting for it, and returns the
   /// entry's ticket: by then a state with `enqueued` at or past it has been published. Throws `SyncError.notReady`
-  /// when no workspace is shown (nothing can be changed before something is), and what the store threw when it
+  /// when no workspace is shown (nothing can be changed before something is) or a sign-out has begun, and what the
+  /// store threw when it
   /// refuses the entry; either way nothing was stored, no ticket is given and nothing is sent.
   @discardableResult
   public func enqueue(action: JSONValue, label: String) async throws -> Int {
     await acquire()
     do {
-      guard copyShown, phase != .signedOut else { throw SyncError.notReady }
+      guard copyShown, phase != .signedOut, !leaving else { throw SyncError.notReady }
       outbox.append(try await append(action: action, label: label))
     } catch {
       release()
@@ -212,6 +218,8 @@ public actor SyncEngine {
       throw error
     }
     signIns += 1
+    // A sign-in that lands while a sign-out waits for the server wins; the new account's changes go.
+    leaving = false
     SyncLog.logger.notice("Signed in")
     phase = .ready
     signedIn = true
@@ -247,6 +255,7 @@ public actor SyncEngine {
       return unsent
     }
     epoch += 1
+    leaving = true
     running?.cancel()
     stopRetrying()
     answerStalePerformances()
@@ -271,6 +280,7 @@ public actor SyncEngine {
       return 0
     }
     epoch += 1
+    leaving = false
     running?.cancel()
     stopRetrying()
     var erased = (try? await store.erase()) != nil
@@ -341,8 +351,10 @@ public actor SyncEngine {
 
   private func pass(load: Bool) async {
     let pass = await begin()
-    // With no session and sign-in shown, there is nothing to ask the server until he signs in.
-    if phase == .signedOut, pass.session == nil {
+    // While he signs out nothing of his is sent. With no session, once the server has said in this epoch that sign-in
+    // is required, there is nothing to ask it until he signs in; a hidden copy at launch still asks once, in case the
+    // server now runs with sign-in off.
+    if leaving || (phase == .signedOut && pass.session == nil && signInRequiredIn == pass.epoch) {
       answerPerformances(of: pass, with: .signedOut)
       return
     }
@@ -407,6 +419,8 @@ public actor SyncEngine {
     case .offline?:
       offline = true
     case .signedOut?:
+      // Only a server with sign-in on refuses a session.
+      signInRequiredIn = pass.epoch
       try? tokens.clear()
       phase = .signedOut
       signedIn = false
@@ -434,6 +448,7 @@ public actor SyncEngine {
     failure = nil
     if pass.session == nil && account.signIn {
       SyncLog.logger.notice("No session; sign-in shown")
+      signInRequiredIn = pass.epoch
       phase = .signedOut
       copyShown = false
       address = nil
@@ -560,7 +575,7 @@ public actor SyncEngine {
     await acquire()
     do {
       try Task.checkCancellation()
-      guard pass.epoch == epoch else { throw Superseded() }
+      guard pass.epoch == epoch, !leaving else { throw Superseded() }
     } catch {
       release()
       throw error

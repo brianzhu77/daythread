@@ -220,7 +220,7 @@ extension SyncEngine {
   /// reply's changes are in the published workspace before it returns.
   public func perform(action: JSONValue) async -> Performed {
     await acquire()
-    guard phase != .signedOut else {
+    guard phase != .signedOut, !leaving else {
       release()
       return .signedOut
     }
