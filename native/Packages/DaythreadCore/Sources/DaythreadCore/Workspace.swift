@@ -40,6 +40,9 @@ public struct Page: Hashable, Sendable, Identifiable {
   /// `document` is the draft's own object, never an array of blocks.
   public var isDraft: Bool { type == "draft" }
 
+  /// The batch a trashed page went to Trash in; nil when absent, null or not a string.
+  public var trashId: String? { raw["trashId"]?.stringValue }
+
   /// Nil when `id`, `type`, `title` or `document` is not a string, or when `date`, `parentId` or
   /// `trashedAt` is present, not null and not a string (a date, for `date`).
   public init?(_ json: JSONValue) {
@@ -61,7 +64,30 @@ public struct Page: Hashable, Sendable, Identifiable {
 
 /// A to-do, `Task` in the domain; renamed because Swift has its own `Task`.
 public struct TodoTask: Hashable, Sendable, Identifiable {
-  public enum Status: String, Sendable { case open, done, cancelled }
+  /// A word this build does not know is kept as `.other`, so a status a newer server adds neither hides the
+  /// workspace nor is lost when it is written back.
+  public enum Status: Hashable, Sendable {
+    case open, done, cancelled
+    case other(String)
+
+    public init(rawValue: String) {
+      switch rawValue {
+      case "open": self = .open
+      case "done": self = .done
+      case "cancelled": self = .cancelled
+      default: self = .other(rawValue)
+      }
+    }
+
+    public var rawValue: String {
+      switch self {
+      case .open: "open"
+      case .done: "done"
+      case .cancelled: "cancelled"
+      case .other(let word): word
+      }
+    }
+  }
 
   public let id: String
   public let title: String
@@ -71,7 +97,13 @@ public struct TodoTask: Hashable, Sendable, Identifiable {
   public let attentionOn: LocalDate?
   public let raw: JSONObject
 
-  /// Nil when `id` or `title` is not a string, `status` is not one of open, done and cancelled,
+  /// The day it was finished; nil when the row has none or it is null.
+  public var doneOn: LocalDate? { raw["doneOn"]?.stringValue.flatMap(LocalDate.init) }
+
+  /// How many times the server has changed the row.
+  public var version: Int? { raw["version"]?.intValue }
+
+  /// Nil when `id`, `title` or `status` is not a string,
   /// `paused` is not a boolean, or a date is present, not null and not a date.
   public init?(_ json: JSONValue) {
     try? self.init(reading: json)
@@ -81,8 +113,7 @@ public struct TodoTask: Hashable, Sendable, Identifiable {
     guard let raw = json.objectValue else { throw Unreadable(field: nil) }
     id = try raw.requiredString("id")
     title = try raw.requiredString("title")
-    guard let status = Status(rawValue: try raw.requiredString("status")) else { throw Unreadable(field: "status") }
-    self.status = status
+    status = Status(rawValue: try raw.requiredString("status"))
     guard let paused = raw["paused"]?.boolValue else { throw Unreadable(field: "paused") }
     self.paused = paused
     deadlineOn = try raw.optionalDate("deadlineOn")
@@ -202,7 +233,4 @@ public struct Workspace: Hashable, Sendable {
   public func page(_ id: String) -> Page? { pages.first { $0.id.hasSameCodeUnits(as: id) } }
 
   public func task(_ id: String) -> TodoTask? { tasks.first { $0.id.hasSameCodeUnits(as: id) } }
-
-  /// The page `day:<date>`.
-  public func dayPage(_ date: LocalDate) -> Page? { page("day:\(date.value)") }
 }

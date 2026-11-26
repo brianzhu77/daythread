@@ -32,6 +32,12 @@ enum WorkspaceStoreContract {
     StoreCase(name: "acknowledge does not repeat a revision an entry has", run: acknowledgeDoesNotRepeat),
     StoreCase(name: "acknowledge of an entry that is not there does nothing", run: acknowledgeOfMissingEntry),
     StoreCase(name: "acknowledge without a revision only removes", run: acknowledgeWithoutRevision),
+    StoreCase(
+      name: "acknowledging an entry that is not there changes nothing",
+      run: acknowledging_an_entry_that_is_not_there_changes_nothing),
+    StoreCase(
+      name: "a write that names a row the workspace lacks changes nothing",
+      run: a_write_that_names_a_row_the_workspace_lacks_changes_nothing),
   ]
 
   private static let owner = "user-1"
@@ -150,6 +156,13 @@ enum WorkspaceStoreContract {
     try await store.update(entry)
     #expect(try await store.entries() == [other, entry])
 
+    // Kept again on a later revision, as Keep mine does.
+    entry.baseRevision = 9
+    entry.ownRevisions = []
+    try await store.update(entry)
+    #expect(try await store.entries() == [other, entry])
+    entry.ownRevisions = [6, 7]
+
     entry.state = .pending
     entry.reason = nil
     try await store.update(entry)
@@ -243,6 +256,40 @@ enum WorkspaceStoreContract {
     try await store.acknowledge(seq: acknowledged.seq, revision: nil)
 
     #expect(try await store.entries() == [later])
+  }
+
+  static func acknowledging_an_entry_that_is_not_there_changes_nothing(_ store: any WorkspaceStore) async throws {
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    let earlier = try await store.append(entry("op-earlier", own: [3]))
+    let gone = try await store.append(entry("op-gone"))
+    let later = try await store.append(entry("op-later", own: [6]))
+    try await store.remove(seq: gone.seq)
+
+    try await store.acknowledge(seq: gone.seq, revision: 7)
+
+    #expect(try await store.entries() == [earlier, later], "no other entry gains the revision")
+  }
+
+  /// The input: changes that remove the kept to-do `a` and write a to-do `ghost` the workspace given lacks. The
+  /// store removes before it writes, so a store that is not one transaction would lose `a`.
+  static func a_write_that_names_a_row_the_workspace_lacks_changes_nothing(_ store: any WorkspaceStore) async throws {
+    let row = #"{"id":"a","title":"a","status":"open","paused":false}"#
+    let ghost = #"{"id":"ghost","title":"ghost","status":"open","paused":false}"#
+    let before = try required(
+      Workspace(try JSON.parse(#"{"revision":5,"timezone":"UTC","pages":[],"tasks":[\#(row)]}"#)))
+    let lacking = try required(Workspace(try JSON.parse(#"{"revision":6,"timezone":"UTC","pages":[],"tasks":[]}"#)))
+    let changes = try required(
+      WorkspaceChanges(
+        try JSON.parse(
+          #"{"from":5,"revision":6,"timezone":"UTC","pages":{"upsert":[],"remove":[]},"#
+            + #""tasks":{"upsert":[\#(ghost)],"remove":["a"]}}"#)))
+    try await store.replace(with: before, owner: owner)
+
+    await #expect(throws: StoreError.self) { try await store.write(lacking, changed: changes) }
+
+    let loaded = try required(try await store.load())
+    #expect(loaded.workspace.json() == before.json())
+    #expect(loaded.workspace.tasks == before.tasks)
   }
 
   static func manyPages(_ store: any WorkspaceStore) async throws {

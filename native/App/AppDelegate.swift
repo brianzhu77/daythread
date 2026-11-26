@@ -11,10 +11,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
   private(set) lazy var model: AppModel = {
     let server = Self.serverURL()
     let origin = ServerOrigin(server)
+    let (store, kept) = Self.openStore(origin)
     let engine = SyncEngine(
       transport: URLSessionTransport(baseURL: server), tokens: KeychainTokenStore(service: origin.keychainService),
-      store: Self.openStore(origin))
-    return AppModel(engine: engine)
+      store: store, reachability: NetworkReachability())
+    return AppModel(engine: engine, keepsChanges: kept)
   }()
 
   func application(
@@ -56,8 +57,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
   /// `Application Support/Daythread/workspace-<origin>.store` (see `ServerOrigin`); in a Debug build,
   /// `<name>.store` with `-DaythreadStoreName <name>` (UI tests). The folder is left out of backups and, on iPhone and
   /// iPad, readable once the device has been unlocked after a restart. A store that cannot be opened is kept in memory
-  /// for this launch, and the reason logged.
-  private static func openStore(_ origin: ServerOrigin) -> any WorkspaceStore {
+  /// for this launch, and the reason logged; `kept` is then false, and the screen says so.
+  private static func openStore(_ origin: ServerOrigin) -> (store: any WorkspaceStore, kept: Bool) {
     do {
       let folder = try FileManager.default.url(
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
@@ -69,10 +70,10 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         let explicitName: String? = nil
       #endif
       let file = storeFileName(for: origin, explicitName: explicitName)
-      return try SwiftDataWorkspaceStore.open(at: folder.appending(path: file))
+      return (try SwiftDataWorkspaceStore.open(at: folder.appending(path: file)), true)
     } catch {
       storeLog.error("The store on the device could not be opened; this launch keeps it in memory: \(error)")
-      return MemoryWorkspaceStore()
+      return (MemoryWorkspaceStore(), false)
     }
   }
 

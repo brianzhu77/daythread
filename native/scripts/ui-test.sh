@@ -1,7 +1,8 @@
 #!/bin/sh
 # Runs the app's tests (unit and UI) on the one simulator this machine gives to this work, against two throwaway
 # servers started from this checkout:
-#   3741  sign-in off, seeded with today's page and the to-do "Water the plants"
+#   3741  sign-in off, seeded with today's page and its to-dos: "Water the plants", which tests only read, and one for
+#         each test that ticks ("Tick me", "Tick me offline", "Tick me twice")
 #   3742  sign-in on (no Supabase behind it: only "who is this?" is asked, and it answers 401)
 # Each server keeps its SQLite file in a directory under the system temp directory; both are stopped and their
 # directories removed on exit, however the run ends, and so are the stores the UI tests made in the app's container.
@@ -11,6 +12,7 @@
 # DAYTHREAD_SIMULATOR_OS. Its UDID is looked up only to find the app's container when cleaning up.
 #
 #   native/scripts/ui-test.sh [extra xcodebuild arguments, e.g. -only-testing:DaythreadUITests]
+#   native/scripts/ui-test.sh --serve   # the same two servers, seeded, until Ctrl-C; no tests (for looking by hand)
 set -eu
 
 native=$(cd "$(dirname "$0")/.." && pwd)
@@ -103,8 +105,8 @@ start sign-in $sign_in_port SUPABASE_URL=http://127.0.0.1:9 SUPABASE_PUBLISHABLE
 wait_for $today_port 200
 wait_for $sign_in_port 401
 
-# Today's page in the workspace's own zone, and a to-do on it; prints the title the app should show for that day.
-title=$(node --no-warnings --input-type=module - "http://127.0.0.1:$today_port" <<'EOF'
+# Today's page in the workspace's own zone, and its to-dos; prints the day, a tab, and the title the app shows for it.
+seeded=$(node --no-warnings --input-type=module - "http://127.0.0.1:$today_port" <<'EOF'
 const base = process.argv[2]
 const read = async () => {
   const reply = await fetch(`${base}/api/v1/workspace`)
@@ -126,17 +128,28 @@ const today = new Intl.DateTimeFormat('en-CA', {
   timeZone: workspace.timezone, year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date())
 await send('ui-test-day', { type: 'ensure-day', date: today })
-await send('ui-test-task', { type: 'add-task', pageId: `day:${today}`, title: 'Water the plants' })
+for (const [index, title] of ['Water the plants', 'Tick me', 'Tick me offline', 'Tick me twice'].entries()) {
+  await send(`ui-test-task-${index}`, { type: 'add-task', pageId: `day:${today}`, title })
+}
 const title = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric',
 }).format(new Date(`${today}T00:00:00Z`))
-process.stdout.write(title)
+process.stdout.write(`${today}\t${title}`)
 EOF
 )
+today=$(printf '%s' "$seeded" | cut -f1)
+title=$(printf '%s' "$seeded" | cut -f2)
 echo "ui-test: seeded today ($title) on $today_port"
+
+if [ "${1:-}" = --serve ]; then
+  echo "ui-test: serving on $today_port (sign-in off) and $sign_in_port (sign-in on); Ctrl-C stops both"
+  wait
+  exit 0
+fi
 
 TEST_RUNNER_DAYTHREAD_SERVER_URL="http://127.0.0.1:$today_port" \
 TEST_RUNNER_DAYTHREAD_TODAY_TITLE="$title" \
+TEST_RUNNER_DAYTHREAD_TODAY="$today" \
 TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL="http://127.0.0.1:$sign_in_port" \
   xcodebuild test -project "$native/Daythread.xcodeproj" -scheme Daythread \
   -destination "$destination" -derivedDataPath "$native/DerivedData" "$@"

@@ -39,9 +39,59 @@ public struct LocalDate: Hashable, Comparable, Sendable {
     return LocalDate(unchecked: text)
   }
 
+  /// The day `days` away, by the calendar alone (no zone, no daylight saving); nil outside years 0000 to 9999.
+  public func adding(days: Int) -> LocalDate? {
+    let (year, month, day) = Self.parts(of: value)
+    let (shifted, overflow) = Self.daysSinceEpoch(year: year, month: month, day: day).addingReportingOverflow(days)
+    guard !overflow else { return nil }
+    let (y, m, d) = Self.civil(daysSinceEpoch: shifted)
+    guard (0...9999).contains(y) else { return nil }
+    return LocalDate(unchecked: "\(Self.pad(y, 4))-\(Self.pad(m, 2))-\(Self.pad(d, 2))")
+  }
+
+  /// The first instant of this day in `timezone` (an unknown zone reads as GMT, as `today(in:at:)` does). A day whose
+  /// midnight a clock change skipped starts at the first instant that reads as it.
+  public func start(in timezone: String) -> Date {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: timezone) ?? .gmt
+    let (year, month, day) = Self.parts(of: value)
+    let noon = DateComponents(calendar: calendar, timeZone: calendar.timeZone, year: year, month: month, day: day, hour: 12)
+    return calendar.startOfDay(for: noon.date ?? Date(timeIntervalSince1970: 0))
+  }
+
   /// Whether the system knows `timezone`; `today` reads one it does not know as GMT.
   public static func isKnown(timezone: String) -> Bool {
     TimeZone(identifier: timezone) != nil
+  }
+
+  private static func parts(of value: String) -> (year: Int, month: Int, day: Int) {
+    let digits = value.utf8.map { Int($0) - 48 }
+    return (
+      digits[0] * 1000 + digits[1] * 100 + digits[2] * 10 + digits[3], digits[5] * 10 + digits[6],
+      digits[8] * 10 + digits[9]
+    )
+  }
+
+  // Days from 1970-01-01 and back, proleptic Gregorian (Howard Hinnant's civil-date algorithms).
+  private static func daysSinceEpoch(year: Int, month: Int, day: Int) -> Int {
+    let y = month <= 2 ? year - 1 : year
+    let era = (y >= 0 ? y : y - 399) / 400
+    let yearOfEra = y - era * 400
+    let dayOfYear = (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1
+    let dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear
+    return era * 146_097 + dayOfEra - 719_468
+  }
+
+  private static func civil(daysSinceEpoch days: Int) -> (year: Int, month: Int, day: Int) {
+    let z = days + 719_468
+    let era = (z >= 0 ? z : z - 146_096) / 146_097
+    let dayOfEra = z - era * 146_097
+    let yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36_524 - dayOfEra / 146_096) / 365
+    let dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100)
+    let shiftedMonth = (5 * dayOfYear + 2) / 153
+    let day = dayOfYear - (153 * shiftedMonth + 2) / 5 + 1
+    let month = shiftedMonth < 10 ? shiftedMonth + 3 : shiftedMonth - 9
+    return (yearOfEra + era * 400 + (month <= 2 ? 1 : 0), month, day)
   }
 
   private init(unchecked value: String) { self.value = value }

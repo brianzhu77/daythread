@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 
 @testable import DaythreadCore
 
@@ -92,4 +93,45 @@ func textRun(_ text: String) -> JSONObject {
   run["text"] = .string(text)
   run["styles"] = .object(JSONObject())
   return run
+}
+
+/// A shared case of `commands/`: one action, the rows the server changed for it, and the workspaces around it.
+struct CommandCase {
+  var name: String
+  var before: JSONValue
+  var action: JSONValue
+  var taskRows: [String]
+  var after: JSONValue
+}
+
+extension Fixtures {
+  static func commandNames() throws -> [String] {
+    try FileManager.default.contentsOfDirectory(atPath: core.appending(path: "commands").path)
+      .filter { $0.hasSuffix(".json") }
+      .map { String($0.dropLast(".json".count)) }
+      .sorted()
+  }
+
+  static func commandCase(_ name: String) throws -> CommandCase {
+    let object = try requireObject(try json("commands/\(name).json"), name)
+    guard let before = object["before"], let action = object["action"], let after = object["after"],
+      let ids = object["rows"]?.objectValue?["tasks"]?.arrayValue
+    else { throw Missing(path: "commands/\(name).json") }
+    return CommandCase(
+      name: name, before: before, action: action, taskRows: ids.compactMap(\.stringValue), after: after)
+  }
+
+  static func commandCases() throws -> [CommandCase] { try commandNames().map(commandCase) }
+
+  private static func requireObject(_ value: JSONValue, _ name: String) throws -> JSONObject {
+    guard let object = value.objectValue else { throw Missing(path: "commands/\(name).json") }
+    return object
+  }
+}
+
+extension Fixtures {
+  /// The entries of a shared case file whose cases are an array of objects.
+  static func cases(_ path: String) throws -> [JSONObject] {
+    try #require(try json(path).arrayValue).compactMap(\.objectValue)
+  }
 }

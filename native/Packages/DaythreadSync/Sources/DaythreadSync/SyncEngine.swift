@@ -2,7 +2,8 @@ import DaythreadCore
 import Foundation
 
 /// Keeps the copy on the device, the outbox and the server in step. The server is the authority: its replies replace
-/// what the device holds, and nothing is shown that it did not send.
+/// the copy the device keeps, and the copy holds nothing it did not send. What is drawn is that copy with the changes
+/// not yet answered replayed over it (`drawn`), worked out again at each publish and never stored.
 ///
 /// How calls that overlap are kept apart (every `await` is a point where another call can enter the actor):
 /// - **One pass at a time.** Loading, draining and applying replies happen in a *pass*. `requestPass` counts the
@@ -15,19 +16,39 @@ import Foundation
 /// - **Epochs.** `signIn` and `signOut` move `epoch` on (and cancel the pass in flight) inside a store section. A pass
 ///   remembers the epoch and session it began with and checks the epoch at the start of each of its sections, so a
 ///   reply that arrives after the account changed is never applied, sent on or shown.
+/// - **Commands waited for.** `perform` queues its command and asks for a pass; the pass sends it after its drain,
+///   under the pass's epoch, and answers it. Every queued command is answered: by its pass, by the failure that ended
+///   that pass, or with `signedOut` by the sign-in or sign-out that moved the epoch on. None is ever stored.
+/// - **Trying again.** A pass that fails with an entry it could send still pending schedules another, after the
+///   web's waits (`retryWaits`, or a 429's own wait when longer), through the injected `sleep`; the network coming back
+///   cuts the wait short. A pass that ends well, a sign-in, a sign-out, or nothing left to send stops it. The network
+///   coming back after a pass that ended offline also asks for one load, with or without a wait planned.
+/// - **The outbox in memory.** `outbox` is what the store's outbox holds, read again inside the same store section as
+///   every write to it, so no published state has an entry in neither the outbox (drawn as a prediction) nor the
+///   copy (applied by the server's answer).
 public actor SyncEngine {
   let transport: any ServerTransport
   let tokens: any TokenStore
   let store: any WorkspaceStore
   let now: @Sendable () -> Date
+  private let reachability: any Reachability
+  private let sleep: @Sendable (Duration) async throws -> Void
   private let broadcast = StateBroadcast(.initial)
 
   // MARK: What is shown
 
   var phase: SyncState.Phase = .starting
   var offline = false
-  var held = 0
   var failure: SyncFailure?
+  /// The stored owner's outbox entries by `seq`, as last read or written.
+  var outbox: [OutboxEntry] = []
+  /// Commands `perform` is waiting on, in the order asked.
+  var performances: [Performance] = []
+  /// Tickets given by `enqueue` in this engine's lifetime. Not an entry's `seq`, which restarts when the store is
+  /// erased.
+  private var enqueued = 0
+  /// The account's email, as the server last told it; nil until it has on this launch.
+  private var address: String?
   /// Whether a session is stored, as last read or written.
   private var signedIn = false
   /// What the store keeps, read once and then kept in step with every store call this engine makes.
@@ -42,33 +63,65 @@ public actor SyncEngine {
   private var running: Task<Void, Never>?
   private var requested = 0
   private var finished = 0
+  /// The last request the running pass answers: those made before it asked the server for the workspace.
+  private var covered = 0
   private var loadWanted = false
   var epoch = 0
   /// Sign-ins completed (their session kept), so a sign-out can tell that a newer sign-in happened while it waited for
   /// the server. A sign-in that fails does not count: the sign-out still erases.
   private var signIns = 0
+  /// The epoch in which the server answered that sign-in is required; until the next sign-in or sign-out, a pass with
+  /// no session has nothing to ask it. A launch always asks at least once.
+  private var signInRequiredIn: Int?
+  /// A sign-out that will erase has begun and not ended: nothing of this account is accepted, sent or performed.
+  var leaving = false
+
+  // MARK: Trying again
+
+  /// The web's waits before trying again: 2 s, 5 s, 15 s, then 30 s each time.
+  static let retryWaits: [Duration] = [.seconds(2), .seconds(5), .seconds(15), .seconds(30)]
+  /// The wait in progress before the next try; nil when none is planned.
+  private var retry: Task<Void, Never>?
+  /// Which planned wait `retry` is, so a wait that ends after it was replaced asks for nothing.
+  private var retryNumber = 0
+  /// Passes that failed one after another with something left to send.
+  private var failedPasses = 0
+  private var listening: Task<Void, Never>?
 
   // MARK: Store sections
 
   private var busy = false
   private var waiting: [CheckedContinuation<Void, Never>] = []
 
+  /// `sleep` is how the engine waits before trying again, and `reachability` says when the network is back; tests
+  /// own both.
   public init(
     transport: any ServerTransport, tokens: any TokenStore, store: any WorkspaceStore,
+    reachability: any Reachability = NoReachability(),
+    sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
     now: @escaping @Sendable () -> Date = Date.init
   ) {
     self.transport = transport
     self.tokens = tokens
     self.store = store
+    self.reachability = reachability
+    self.sleep = sleep
     self.now = now
+  }
+
+  deinit {
+    retry?.cancel()
+    listening?.cancel()
   }
 
   /// The current state at once, then each change. Each read is a new stream; one whose reader stops is forgotten.
   public nonisolated var states: AsyncStream<SyncState> { broadcast.stream() }
 
-  /// For tests: readers of `states` not yet forgotten, and passes asked for so far.
+  /// For tests: readers of `states` not yet forgotten, passes asked for so far, and calls waiting for the store
+  /// section.
   nonisolated var subscriberCount: Int { broadcast.count }
   var passRequests: Int { requested }
+  var sectionWaiters: Int { waiting.count }
 
   // MARK: Public calls
 
@@ -86,16 +139,18 @@ public actor SyncEngine {
   public func start() async {
     await acquire()
     await readCopyIfNeeded()
+    await removeHeldDayRequests()
     signedIn = (try? tokens.read()) != nil
     var hidden = false
     if let copy, case .success(nil) = readSession(), copy.owner != Self.localOwner {
       hidden = true
       phase = .signedOut
       copyShown = false
-      held = 0
+      outbox = []
     }
     publish()
     release()
+    listenForTheNetwork()
     if !hidden { await requestPass(load: true) }
   }
 
@@ -105,20 +160,32 @@ public actor SyncEngine {
     await requestPass(load: true)
   }
 
-  /// Writes the change to the outbox, then sends it; returns once that pass has run. Throws `SyncError.notReady` when
-  /// no workspace is shown (nothing can be changed before something is), and what the store threw when it refuses
-  /// the entry. Nothing is sent when it throws.
-  public func enqueue(action: JSONValue, label: String) async throws {
+  /// Stores the entry, publishes a state that draws it, asks for a pass without waiting for it, and returns the
+  /// entry's ticket: by then a state with `enqueued` at or past it has been published. Throws `SyncError.notReady`
+  /// when no workspace is shown (nothing can be changed before something is) or a sign-out has begun, and what the
+  /// store threw when it
+  /// refuses the entry; either way nothing was stored, no ticket is given and nothing is sent.
+  @discardableResult
+  public func enqueue(action: JSONValue, label: String) async throws -> Int {
     await acquire()
     do {
-      guard copyShown, phase != .signedOut else { throw SyncError.notReady }
-      _ = try await append(action: action, label: label)
+      guard copyShown, phase != .signedOut, !leaving else { throw SyncError.notReady }
+      outbox.append(try await append(action: action, label: label))
     } catch {
       release()
       throw error
     }
+    enqueued += 1
+    let ticket = enqueued
+    publish()
     release()
-    await requestPass(load: false)
+    askForPass(load: false)
+    return ticket
+  }
+
+  /// Returns when no pass is running or asked for. For tests and for sign-out.
+  public func settled() async {
+    while let driver { await driver.value }
   }
 
   /// Signs in, then loads. A session of another account than the stored copy's erases the copy and its outbox first;
@@ -130,13 +197,15 @@ public actor SyncEngine {
     await acquire()
     epoch += 1
     running?.cancel()
+    stopRetrying()
+    answerStalePerformances()
     do {
       await readCopyIfNeeded()
       // A copy that could not be read may still be someone else's, so nothing known erases too.
       if copy?.owner != session.owner {
         try await store.erase()
         copy = nil
-        held = 0
+        outbox = []
       }
       try tokens.write(session)
     } catch {
@@ -146,34 +215,54 @@ public actor SyncEngine {
       signedIn = false
       failure = nil
       copyShown = false
-      held = 0
+      outbox = []
+      address = nil
       publish()
       release()
       throw error
     }
     signIns += 1
+    // A sign-in that lands while a sign-out waits for the server wins; the new account's changes go.
+    leaving = false
     SyncLog.logger.notice("Signed in")
     phase = .ready
     signedIn = true
     offline = false
     failure = nil
     copyShown = copy != nil
-    held = await heldCount()
+    // The sign-in reply names no email: the address he signed in with is the account's.
+    address = email
+    await readOutbox()
     publish()
     release()
     await requestPass(load: true)
   }
 
-  /// Tells the server, then erases the copy, the outbox and the session whatever it answered: a shared device must not
-  /// keep someone's notes. The last action wins: a sign-in that completes while the server is being told is kept.
+  /// Unless `discardingUnsent`, first tries one pass; then, when changes are still unsent (pending, waiting or held;
+  /// the engine's own request for today's page is not his), signs nobody out and returns how many, so he can be asked.
+  /// Otherwise tells the server, erases the copy, the outbox and the session whatever it answered (a shared device must
+  /// not keep someone's notes), and returns 0. Discarding tries no pass: he has said yes, and sign-out does not wait
+  /// for the network beyond telling the server. The last action wins: a sign-in that completes while the server is
+  /// being told is kept.
   ///
   /// If `erase` throws, it is tried once more; if it still throws, this ends signed out anyway. The copy then stays on
   /// disk but hidden (`start` shows no copy without its session), and is erased at the next sign-in under another
   /// owner.
-  public func signOut() async {
+  @discardableResult
+  public func signOut(discardingUnsent: Bool) async -> Int {
+    if !discardingUnsent { await requestPass(load: false) }
     await acquire()
+    let unsent = outbox.count { !$0.asksForADay }
+    if !discardingUnsent, unsent > 0 {
+      release()
+      SyncLog.logger.notice("Sign-out waits for a yes: \(unsent, privacy: .public) changes not sent")
+      return unsent
+    }
     epoch += 1
+    leaving = true
     running?.cancel()
+    stopRetrying()
+    answerStalePerformances()
     let signInsBefore = signIns
     let session = try? tokens.read()
     release()
@@ -192,10 +281,12 @@ public actor SyncEngine {
     defer { release() }
     guard signIns == signInsBefore else {
       SyncLog.logger.notice("Sign-out superseded by a sign-in that completed meanwhile")
-      return
+      return 0
     }
     epoch += 1
+    leaving = false
     running?.cancel()
+    stopRetrying()
     var erased = (try? await store.erase()) != nil
     if !erased { erased = (try? await store.erase()) != nil }
     try? tokens.clear()
@@ -207,9 +298,11 @@ public actor SyncEngine {
     phase = .signedOut
     signedIn = false
     failure = nil
-    held = 0
+    outbox = []
+    address = nil
     if let reachedServer { offline = !reachedServer }
     publish()
+    return 0
   }
 
   // MARK: Passes
@@ -225,43 +318,74 @@ public actor SyncEngine {
 
   /// Returns once a pass that started after this request has finished.
   private func requestPass(load: Bool) async {
+    let ticket = askForPass(load: load)
+    while finished < ticket, let driver { await driver.value }
+  }
+
+  /// Asks for a pass that starts after this request, without waiting for it; returns the request's number.
+  @discardableResult
+  func askForPass(load: Bool) -> Int {
     requested += 1
-    let ticket = requested
     if load { loadWanted = true }
     if driver == nil { driver = Task { await self.drive() } }
-    while finished < ticket, let driver { await driver.value }
+    return requested
   }
 
   private func drive() async {
     while finished < requested {
-      let ticket = requested
+      covered = requested
       let load = loadWanted
       loadWanted = false
       let pass = Task { await self.pass(load: load) }
       running = pass
       await pass.value
       running = nil
-      finished = ticket
+      finished = covered
     }
     driver = nil
   }
 
+  /// The running pass is about to ask for the workspace, and everything it does comes after: every request made so far
+  /// is answered by it. So a refresh asked while a launch checks the account does not run a second pass.
+  private func coverRequestsSoFar(_ pass: Pass) {
+    guard !Task.isCancelled, pass.epoch == epoch else { return }
+    covered = requested
+    loadWanted = false
+  }
+
   private func pass(load: Bool) async {
     let pass = await begin()
+    // While he signs out nothing of his is sent. With no session, once the server has said in this epoch that sign-in
+    // is required, there is nothing to ask it until he signs in; a hidden copy at launch still asks once, in case the
+    // server now runs with sign-in off.
+    if leaving || (phase == .signedOut && pass.session == nil && signInRequiredIn == pass.epoch) {
+      answerPerformances(of: pass, with: .signedOut)
+      return
+    }
     do {
       var load = load
       if phase != .ready {
         try await checkAccount(pass)
-        guard phase == .ready else { return }
+        guard phase == .ready else {
+          answerPerformances(of: pass, with: .signedOut)
+          stopRetrying()
+          return
+        }
         load = true
       }
-      if load { try await loadWorkspace(pass, have: copy?.workspace.revision) }
+      if load {
+        coverRequestsSoFar(pass)
+        try await loadWorkspace(pass, have: copy?.workspace.revision)
+      }
       try await drain(pass)
+      try await performQueued(pass)
       try await enter(pass)
       defer { release() }
-      held = await heldCount()
+      await readOutbox()
+      stopRetrying()
+      let held = outbox.count { $0.state == .held }
       SyncLog.logger.info(
-        "Pass done: revision \(self.copy?.workspace.revision ?? -1, privacy: .public), held \(self.held, privacy: .public)")
+        "Pass done: revision \(self.copy?.workspace.revision ?? -1, privacy: .public), held \(held, privacy: .public)")
       publish()
     } catch {
       await end(pass, after: error)
@@ -281,28 +405,49 @@ public actor SyncEngine {
   /// and sign-in is shown, with the copy and the outbox kept for the next sign-in to claim or erase; any other reason
   /// is kept in `failure` until the server next answers.
   private func end(_ pass: Pass, after error: any Error) async {
+    // A refusal here was the answer to something else; these commands were never sent.
+    let unsent: Performed =
+      if case TransportError.refused? = error as? TransportError {
+        .offline
+      } else {
+        interrupted(error, pass) ?? Performed(error)
+      }
+    answerPerformances(of: pass, with: unsent)
     if error is CancellationError || error is Superseded {
       SyncLog.logger.info("Pass dropped: \(SyncLog.describe(error), privacy: .public)")
       return
     }
-    SyncLog.logger.error("Pass failed: \(SyncLog.describe(error), privacy: .public)")
+    // A launch with no session meets a refusal by design; it is said once, at the default level.
+    if case .signedOut? = error as? TransportError {
+      SyncLog.logger.notice(
+        "\(pass.session == nil ? "No session; sign-in shown" : "The server no longer knows the session; signed out", privacy: .public)")
+    } else {
+      SyncLog.logger.error("Pass failed: \(SyncLog.describe(error), privacy: .public)")
+    }
     guard (try? await enter(pass)) != nil else { return }
     defer { release() }
     switch error as? TransportError {
     case .offline?:
       offline = true
     case .signedOut?:
-      SyncLog.logger.notice("The server no longer knows the session; signed out")
+      // Only a server with sign-in on refuses a session.
+      signInRequiredIn = pass.epoch
       try? tokens.clear()
       phase = .signedOut
       signedIn = false
       failure = nil
       copyShown = false
       offline = false
+      address = nil
     default:
       failure = SyncFailure(error)
     }
-    held = await heldCount()
+    await readOutbox()
+    if phase != .signedOut, hasSendable {
+      planRetry(after: error)
+    } else {
+      stopRetrying()
+    }
     publish()
   }
 
@@ -313,10 +458,14 @@ public actor SyncEngine {
     offline = false
     failure = nil
     if pass.session == nil && account.signIn {
+      SyncLog.logger.notice("No session; sign-in shown")
+      signInRequiredIn = pass.epoch
       phase = .signedOut
       copyShown = false
+      address = nil
     } else {
       phase = .ready
+      address = account.email
     }
     publish()
   }
@@ -351,14 +500,72 @@ public actor SyncEngine {
     }
     copyShown = true
     await ensureToday()
-    held = await heldCount()
+    await readOutbox()
     publish()
     return true
   }
 
+  // MARK: Trying again
+
+  /// A pending entry not waiting behind a held one: something a pass could send.
+  private var hasSendable: Bool {
+    let behind = outbox.waiting
+    return outbox.contains { $0.state == .pending && !behind.contains($0.seq) }
+  }
+
+  /// Plans the next try after the schedule's wait, or a 429's when longer, replacing any wait in progress.
+  private func planRetry(after error: any Error) {
+    var wait = Self.retryWaits[min(failedPasses, Self.retryWaits.count - 1)]
+    if case .wait(let seconds)? = error as? TransportError, .seconds(seconds) > wait { wait = .seconds(seconds) }
+    failedPasses += 1
+    retry?.cancel()
+    retryNumber += 1
+    let number = retryNumber
+    let sleep = sleep
+    SyncLog.logger.info("Trying again in \(wait.components.seconds, privacy: .public) s")
+    retry = Task { [weak self] in
+      // A cancelled wait (signed out, the network back, nothing left to send) asks for nothing.
+      guard (try? await sleep(wait)) != nil, !Task.isCancelled else { return }
+      await self?.retryDue(number)
+    }
+    listenForTheNetwork()
+  }
+
+  private func retryDue(_ number: Int) {
+    guard number == retryNumber, retry != nil else { return }
+    retry = nil
+    askForPass(load: false)
+  }
+
+  /// Stops the wait in progress, and starts the schedule again from its first wait.
+  private func stopRetrying() {
+    retry?.cancel()
+    retry = nil
+    failedPasses = 0
+  }
+
+  private func listenForTheNetwork() {
+    guard listening == nil else { return }
+    let returns = reachability.becameReachable
+    listening = Task { [weak self] in
+      for await _ in returns { await self?.networkReturned() }
+    }
+  }
+
+  /// Cuts a planned wait short. When the last pass ended for lack of network the pass loads too, whether or not
+  /// anything waits to be sent, so the offline line does not outlast the outage. Signed out with sign-in shown, or
+  /// signing out, there is nothing to ask.
+  private func networkReturned() {
+    guard phase != .signedOut, !leaving, retry != nil || offline else { return }
+    retry?.cancel()
+    retry = nil
+    SyncLog.logger.info("The network is back; trying again now")
+    askForPass(load: offline)
+  }
+
   // MARK: Store sections
 
-  private func acquire() async {
+  func acquire() async {
     guard busy else {
       busy = true
       return
@@ -381,7 +588,7 @@ public actor SyncEngine {
     await acquire()
     do {
       try Task.checkCancellation()
-      guard pass.epoch == epoch else { throw Superseded() }
+      guard pass.epoch == epoch, !leaving else { throw Superseded() }
     } catch {
       release()
       throw error
@@ -401,22 +608,44 @@ public actor SyncEngine {
       case .failure: copyShown = false
       }
     }
-    held = await heldCount()
+    await readOutbox()
   }
 
   private func readSession() -> Result<Session?, any Error> {
     Result { try tokens.read() }
   }
 
-  func heldCount() async -> Int {
-    guard let entries = try? await store.entries() else { return held }
-    return entries.count { $0.state == .held }
+  /// Reads the outbox again after a store call that may have changed it. Runs inside a store section. An outbox that
+  /// cannot be read keeps what was last read.
+  func readOutbox() async {
+    guard let entries = try? await store.entries() else { return }
+    outbox = entries
   }
 
+  /// What is drawn: the copy with every pending entry's action replayed over it in `seq` order, including those this
+  /// build cannot predict (they change nothing) and those waiting behind a held one. A held entry is not replayed, so
+  /// the page shows what the server has.
+  ///
+  /// An entry can be replayed over a copy that already holds its change: after a store call fails between writing
+  /// the copy and acknowledging the entry, and while a load-then-acknowledge has the load in the copy. That is
+  /// invisible only while every predicted command is idempotent; a later slice that predicts one that is not must
+  /// deal with it.
+  var drawn: Workspace? {
+    guard copyShown, let copy else { return nil }
+    return outbox.lazy.filter { $0.state == .pending }.reduce(copy.workspace) { $0.predicting($1.action) }
+  }
+
+  /// Held, pending and waiting entries are said only while the copy they belong to is shown.
   func publish() {
+    let shown = copyShown && copy != nil
+    let behind = outbox.waiting
+    let held = outbox.filter { $0.state == .held && !$0.asksForADay }.map(HeldChange.init)
+    // He did not make the engine's own request for today's page: it is sent, but not counted as his.
+    let pending = outbox.count { $0.state == .pending && !behind.contains($0.seq) && !$0.asksForADay }
     broadcast.publish(
       SyncState(
-        phase: phase, workspace: copyShown ? copy?.workspace : nil, offline: offline, held: held, failure: failure,
-        signedIn: signedIn))
+        phase: phase, workspace: drawn, offline: offline, held: shown ? held : [], pending: shown ? pending : 0,
+        waiting: shown ? behind.count : 0, failure: failure, signedIn: signedIn, enqueued: enqueued,
+        address: address))
   }
 }

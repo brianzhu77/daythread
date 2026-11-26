@@ -10,11 +10,11 @@ import Testing
     let expected: [(String, BlockRow.Kind, Int)] = [
       ("d1", .text(style: .paragraph), 0),
       ("d2", .text(style: .heading(level: 2)), 0),
-      ("d3", .todo(status: .open, paused: false), 0),
-      ("d4", .todo(status: .open, paused: false), 1),
-      ("d5", .todo(status: .open, paused: false), 2),
-      ("d6", .todo(status: .done, paused: false), 0),
-      ("d7", .todo(status: .open, paused: false), 0),
+      ("d3", .todo(taskId: "editor-task:d3", status: .open, paused: false), 0),
+      ("d4", .todo(taskId: "editor-task:d4", status: .open, paused: false), 1),
+      ("d5", .todo(taskId: "editor-task:d5", status: .open, paused: false), 2),
+      ("d6", .todo(taskId: "editor-task:d6", status: .done, paused: false), 0),
+      ("d7", .todo(taskId: "editor-task:d7", status: .open, paused: false), 0),
       ("d8", .text(style: .heading(level: 1)), 0),
       ("d9", .text(style: .numbered(1)), 0),
       ("d10", .text(style: .numbered(2)), 0),
@@ -27,7 +27,7 @@ import Testing
       ("d17", .text(style: .paragraph), 0),
       ("d18", .text(style: .paragraph), 0),
       ("d19", .placeholder(name: "Page"), 0),
-      ("d20", .todo(status: nil, paused: false), 0),
+      ("d20", .todo(taskId: "editor-task:d20", status: nil, paused: false), 0),
       ("d21", .placeholder(name: "Database"), 0),
       ("d22", .placeholder(name: "Synced block"), 0),
       ("d23", .placeholder(name: "Button"), 0),
@@ -80,16 +80,33 @@ import Testing
     ])
     let rows = BlockRows.rows(for: try makePage(blocks), in: workspace)
     #expect(rows.map(\.kind) == [
-      .todo(status: .done, paused: false), .todo(status: .cancelled, paused: true),
-      .todo(status: .open, paused: false), .todo(status: nil, paused: false),
-      .todo(status: nil, paused: false),
+      .todo(taskId: "k1", status: .done, paused: false), .todo(taskId: "k2", status: .cancelled, paused: true),
+      .todo(taskId: "k3", status: .open, paused: false), .todo(taskId: "absent", status: nil, paused: false),
+      .todo(taskId: "", status: nil, paused: false),
     ])
+  }
+
+  @Test func a_to_do_row_carries_its_to_dos_id() throws {
+    let blocks = [block("b1", "task", ["taskId": .string("k1")], text: "one")]
+    let rows = BlockRows.rows(for: try makePage(blocks), in: try makeWorkspace(tasks: [taskJSON("k1", status: "open")]))
+    #expect(rows.map(\.id) == ["b1"])
+    #expect(rows.map(\.kind) == [.todo(taskId: "k1", status: .open, paused: false)])
+  }
+
+  @Test func a_row_can_be_ticked_only_when_open_or_done() throws {
+    let blocks = ["o", "d", "c", "w", "gone"].map { block("b-\($0)", "task", ["taskId": .string($0)], text: $0) }
+    let workspace = try makeWorkspace(tasks: [
+      taskJSON("o", status: "open"), taskJSON("d", status: "done"), taskJSON("c", status: "cancelled"),
+      taskJSON("w", status: "waiting"),
+    ])
+    let rows = BlockRows.rows(for: try makePage(blocks + [block("p", "paragraph", text: "x")]), in: workspace)
+    #expect(rows.map(\.canBeTicked) == [true, true, false, false, false, false])
   }
 
   @Test func aToDoRowIgnoresAStatusWrittenOnTheBlock() throws {
     let blocks = [block("t", "task", ["taskId": .string("k"), "checked": .bool(true), "status": .string("done")])]
     let rows = BlockRows.rows(for: try makePage(blocks), in: try makeWorkspace(tasks: [taskJSON("k", status: "open")]))
-    #expect(rows.map(\.kind) == [.todo(status: .open, paused: false)])
+    #expect(rows.map(\.kind) == [.todo(taskId: "k", status: .open, paused: false)])
   }
 
   @Test(arguments: [

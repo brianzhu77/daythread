@@ -17,6 +17,13 @@ public actor MemoryWorkspaceStore: WorkspaceStore {
 
   public func write(_ workspace: Workspace, changed: WorkspaceChanges) async throws {
     guard let owner = kept?.owner else { throw StoreError.noWorkspace }
+    let pages = Set(workspace.pages.map { Array($0.id.utf8) })
+    let tasks = Set(workspace.tasks.map { Array($0.id.utf8) })
+    if let id = changed.upsertedPageIds.first(where: { !pages.contains(Array($0.utf8)) })
+      ?? changed.upsertedTaskIds.first(where: { !tasks.contains(Array($0.utf8)) })
+    {
+      throw StoreError.notInWorkspace(id: id)
+    }
     kept = (workspace, owner)
   }
 
@@ -37,6 +44,7 @@ public actor MemoryWorkspaceStore: WorkspaceStore {
     guard let index = outbox.firstIndex(where: { $0.seq == entry.seq }) else {
       throw StoreError.noSuchEntry(seq: entry.seq)
     }
+    outbox[index].baseRevision = entry.baseRevision
     outbox[index].ownRevisions = entry.ownRevisions
     outbox[index].state = entry.state
     outbox[index].reason = entry.reason

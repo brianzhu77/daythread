@@ -204,13 +204,19 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
   }
 
   /// Writes the records of `list` whose ids are in `names`: the row's JSON when it is there, a new
-  /// row at the record's place in the list when it is not. Answers whether any row was new.
+  /// row at the record's place in the list when it is not. Answers whether any row was new. A name `list` lacks
+  /// is refused.
   private func upsert<Row: ListRow>(
     _ list: [(id: String, json: String)], named names: [String], as type: Row.Type,
     make: (String, Int, String) -> Row
   ) throws -> Bool {
     guard !names.isEmpty else { return false }
     let wanted = Set(names.map(Self.key))
+    // Checked here, after the removals, so a refusal also takes back what this transaction already did.
+    let given = Set(list.map { Self.key($0.id) })
+    if let missing = names.first(where: { !given.contains(Self.key($0)) }) {
+      throw StoreError.notInWorkspace(id: missing)
+    }
     var existing: [[UInt8]: Row] = [:]
     for row in try Row.fetch(ids: names, in: modelContext) { existing[Self.key(row.id)] = row }
     var added = false
@@ -288,6 +294,7 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
       guard let row = try outboxRow(seq: entry.seq) else {
         throw StoreError.noSuchEntry(seq: entry.seq)
       }
+      row.baseRevision = entry.baseRevision
       row.ownRevisionsJSON = Self.write(entry.ownRevisions)
       row.state = entry.state.rawValue
       row.reason = entry.reason

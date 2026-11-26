@@ -1,0 +1,639 @@
+[
+  {
+    "name": "task-status-done",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"fee723cd-a861-410f-ab92-bf7c8eb4592d\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "A template",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-10-22T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:r1",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "editor-task:r2",
+          "title": "Call the dentist",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-1",
+        "revision": 5
+      }
+    },
+    "action": {
+      "type": "task-status",
+      "taskId": "editor-task:r1",
+      "status": "done",
+      "today": "2026-10-22"
+    },
+    "label": "ticked \"Write the report\""
+  },
+  {
+    "name": "task-status-open",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"fee723cd-a861-410f-ab92-bf7c8eb4592d\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "A template",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-10-22T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:r1",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "editor-task:r2",
+          "title": "Call the dentist",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-1",
+        "revision": 5
+      }
+    },
+    "action": {
+      "type": "task-status",
+      "taskId": "editor-task:r1",
+      "status": "open",
+      "today": "2026-10-22"
+    },
+    "label": "unticked \"Write the report\""
+  },
+  {
+    "name": "task-status-cancelled",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"fee723cd-a861-410f-ab92-bf7c8eb4592d\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "A template",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-10-22T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:r1",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "editor-task:r2",
+          "title": "Call the dentist",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-1",
+        "revision": 5
+      }
+    },
+    "action": {
+      "type": "task-status",
+      "taskId": "editor-task:r1",
+      "status": "cancelled",
+      "today": "2026-10-22"
+    },
+    "label": "changed \"Write the report\""
+  },
+  {
+    "name": "title-longer-than-40",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"fee723cd-a861-410f-ab92-bf7c8eb4592d\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "A template",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]},{\"id\":\"bcc5d194-7487-4ef4-b500-1c85c05002d3\",\"type\":\"task\",\"props\":{\"taskId\":\"a034e52f-501c-47a5-a482-9f1aa34b984a\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"A to-do whose title runs well past the forty characters the banner keeps\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-10-22T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:r1",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "editor-task:r2",
+          "title": "Call the dentist",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "a034e52f-501c-47a5-a482-9f1aa34b984a",
+          "title": "A to-do whose title runs well past the forty characters the banner keeps",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "add-72",
+        "revision": 6
+      }
+    },
+    "action": {
+      "type": "task-status",
+      "taskId": "a034e52f-501c-47a5-a482-9f1aa34b984a",
+      "status": "done",
+      "today": "2026-10-22"
+    },
+    "label": "ticked \"A to-do whose title runs well past the …\""
+  },
+  {
+    "name": "title-with-a-quote",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"fee723cd-a861-410f-ab92-bf7c8eb4592d\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "A template",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]},{\"id\":\"84caedfc-66da-4820-86e2-15cca6547837\",\"type\":\"task\",\"props\":{\"taskId\":\"ba53c86f-bbf0-45ee-ad45-8b5e2c102f17\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Call \\\"Sam\\\" back\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-10-22T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:r1",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "editor-task:r2",
+          "title": "Call the dentist",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "ba53c86f-bbf0-45ee-ad45-8b5e2c102f17",
+          "title": "Call \"Sam\" back",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "add-15",
+        "revision": 6
+      }
+    },
+    "action": {
+      "type": "task-status",
+      "taskId": "ba53c86f-bbf0-45ee-ad45-8b5e2c102f17",
+      "status": "done",
+      "today": "2026-10-22"
+    },
+    "label": "ticked \"Call \"Sam\" back\""
+  },
+  {
+    "name": "title-in-chinese",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"fee723cd-a861-410f-ab92-bf7c8eb4592d\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "A template",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]},{\"id\":\"a694d123-9c00-4766-a670-ab0391457d10\",\"type\":\"task\",\"props\":{\"taskId\":\"d17d527f-d24b-448e-a3a4-b3cae8d02c03\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"给妈妈打电话\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-10-22T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:r1",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "editor-task:r2",
+          "title": "Call the dentist",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "d17d527f-d24b-448e-a3a4-b3cae8d02c03",
+          "title": "给妈妈打电话",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "add-6",
+        "revision": 6
+      }
+    },
+    "action": {
+      "type": "task-status",
+      "taskId": "d17d527f-d24b-448e-a3a4-b3cae8d02c03",
+      "status": "done",
+      "today": "2026-10-22"
+    },
+    "label": "ticked \"给妈妈打电话\""
+  },
+  {
+    "name": "ensure-day",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"fee723cd-a861-410f-ab92-bf7c8eb4592d\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "A template",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-10-22T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:r1",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "editor-task:r2",
+          "title": "Call the dentist",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-1",
+        "revision": 5
+      }
+    },
+    "action": {
+      "type": "ensure-day",
+      "date": "2026-10-22"
+    },
+    "label": "a change"
+  },
+  {
+    "name": "restore-batch",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"5a3c26b9-e49c-4b9c-a85c-1aed54e159a2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"fee723cd-a861-410f-ab92-bf7c8eb4592d\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "A template",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-10-22",
+          "type": "daily",
+          "date": "2026-10-22",
+          "title": "2026-10-22",
+          "document": "[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-10-22T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:r1",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        },
+        {
+          "id": "editor-task:r2",
+          "title": "Call the dentist",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-10-22",
+          "sourcePageId": "day:2026-10-22"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-1",
+        "revision": 5
+      }
+    },
+    "action": {
+      "type": "restore-batch",
+      "trashId": "trash-1"
+    },
+    "label": "a change"
+  }
+]

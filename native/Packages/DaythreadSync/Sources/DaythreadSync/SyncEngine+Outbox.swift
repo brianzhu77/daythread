@@ -6,20 +6,47 @@ extension SyncEngine {
   /// What the drain does after an outcome.
   private enum Next {
     case send
-    /// The entry is acknowledged; the workspace is loaded whole, then the drain goes on.
-    case loadWhole
-    /// The changes start from another revision than the copy's: load whole, then acknowledge the entry.
-    case loadWholeThenAcknowledge(revision: Int)
+    /// The server held or refused one of his entries: the copy is behind what it checked the entry against. The
+    /// drain goes on, and loads once before the pass does anything else.
+    case sendThenLoad
+    /// The copy lacks what the server did for the entry (its changes start from another revision than the copy's, or
+    /// it was applied before and its answer lost): load whole, then acknowledge the entry, learning `revision` when
+    /// given. The entry stays pending until then, so it is drawn until the load is in the copy, and a load that fails
+    /// leaves it to be sent again.
+    case loadWholeThenAcknowledge(revision: Int?)
     /// The reply is another account's: nothing more of this owner's is sent; the new owner's workspace is loaded.
     case loadWholeAndStop
   }
 
-  /// Sends pending entries one at a time, oldest first, until none is left. Held entries are passed over.
+  /// Sends pending entries one at a time, oldest first, until none is left. Held entries are passed over, and so are
+  /// those waiting behind one.
+  ///
+  /// When the server held or refused one of his entries, the workspace is loaded once, so the page shows what the
+  /// server has and Keep mine is built on it; then what that load asked for (today's page) is sent, with no second
+  /// load whatever its answer, so a pass never loops between holding and loading.
   func drain(_ pass: Pass) async throws {
+    guard try await sendPending(pass) == .copyBehind else { return }
+    let owner = copy?.owner
+    try await loadWorkspace(pass, have: copy?.workspace.revision)
+    // A load under another owner leaves nothing of this owner's to send in this pass.
+    guard copy?.owner == owner else { return }
+    _ = try await sendPending(pass)
+  }
+
+  private enum Drained {
+    case done
+    /// An entry was held or refused and no load since has brought the copy up to date.
+    case copyBehind
+    /// The reply was another account's and the workspace was loaded whole under it.
+    case stopped
+  }
+
+  private func sendPending(_ pass: Pass) async throws -> Drained {
+    var behind = false
     while let entry = try await nextPending(pass) {
-      // Every send states the entry's own basis; `readsBeyond` is stated conservatively until a command's reads are
-      // ported (design, outbox §5 and §6).
-      let basis = OutboxBasis(baseRevision: entry.baseRevision, ownRevisions: entry.ownRevisions, readsBeyond: true)
+      let basis = OutboxBasis(
+        baseRevision: entry.baseRevision, ownRevisions: entry.ownRevisions,
+        readsBeyond: Command.readsBeyond(entry.action))
       let outcome: CommandOutcome
       do {
         outcome = try await transport.send(
@@ -33,19 +60,25 @@ extension SyncEngine {
       switch try await settle(outcome, of: entry, pass) {
       case .send:
         continue
-      case .loadWhole:
-        try await loadWorkspace(pass, have: nil)
+      case .sendThenLoad:
+        behind = true
       case .loadWholeThenAcknowledge(let revision):
         try await loadWorkspace(pass, have: nil)
+        // That load brought the copy up to what the server has, holds included.
+        behind = false
         try await enter(pass)
         defer { release() }
         // After a load under another owner, the entries left are that owner's; this revision is not theirs.
         try await store.acknowledge(seq: entry.seq, revision: copy?.owner == entry.owner ? revision : nil)
+        await readOutbox()
+        // The load holds its change now: said at once, not replayed until the pass's next publish.
+        publish()
       case .loadWholeAndStop:
         try await loadWorkspace(pass, have: nil)
-        return
+        return .stopped
       }
     }
+    return behind ? .copyBehind : .done
   }
 
   /// Holds `entry` for him, as the server's `held` outcome would.
@@ -55,18 +88,31 @@ extension SyncEngine {
     offline = false
     failure = nil
     SyncLog.logger.notice("Outbox \(entry.operationId, privacy: .public): \(reason, privacy: .public), held")
+    try await keepHeld(entry, reason: reason)
+    await readOutbox()
+    publish()
+  }
+
+  /// Keeps `entry` as held for `reason`, the server's words. The engine's own request for today's page is removed
+  /// instead, as the web removes its own writes: he never asked for it, and the next load asks again if today still
+  /// has no page. Runs inside a store section.
+  private func keepHeld(_ entry: OutboxEntry, reason: String) async throws {
+    guard !entry.asksForADay else {
+      try await store.remove(seq: entry.seq)
+      return
+    }
     var kept = entry
     kept.state = .held
     kept.reason = reason
     try await store.update(kept)
-    held = await heldCount()
-    publish()
   }
 
   private func nextPending(_ pass: Pass) async throws -> OutboxEntry? {
     try await enter(pass)
     defer { release() }
-    return try await store.entries().first { $0.state == .pending }
+    let entries = try await store.entries()
+    let waiting = entries.waiting
+    return entries.first { $0.state == .pending && !waiting.contains($0.seq) }
   }
 
   private func settle(_ outcome: CommandOutcome, of entry: OutboxEntry, _ pass: Pass) async throws -> Next {
@@ -80,34 +126,33 @@ extension SyncEngine {
       publish()
       return .loadWholeAndStop
     }
+    var next = Next.send
     switch outcome {
     case .applied(_, let changes, _):
-      guard let next = copy.workspace.applying(changes) else {
+      guard let updated = copy.workspace.applying(changes) else {
         publish()
         return .loadWholeThenAcknowledge(revision: changes.revision)
       }
       // Two transactions: a death between them leaves the entry pending, and its replay is answered with the
       // receipt the server kept and acknowledged then.
-      try await store.write(next, changed: changes)
-      self.copy = (next, copy.owner)
+      try await store.write(updated, changed: changes)
+      self.copy = (updated, copy.owner)
       try await store.acknowledge(seq: entry.seq, revision: changes.revision)
     case .alreadyApplied:
-      try await store.acknowledge(seq: entry.seq, revision: nil)
-      held = await heldCount()
       publish()
-      return .loadWhole
+      return .loadWholeThenAcknowledge(revision: nil)
     case .held(let reason, _, _, _), .refused(let reason, _):
-      var kept = entry
-      kept.state = .held
-      kept.reason = reason
-      try await store.update(kept)
+      try await keepHeld(entry, reason: reason)
+      // The engine's own request for today's page is removed, and a load would only ask for it again.
+      if !entry.asksForADay { next = .sendThenLoad }
     case .ownerMismatch:
       publish()
       return .loadWholeAndStop
     }
-    held = await heldCount()
+    // The copy and the outbox have both moved on before this publish: the entry is drawn by one or the other.
+    await readOutbox()
     publish()
-    return .send
+    return next
   }
 
   /// Writes an entry under the copy's owner, built on the copy's revision. Runs inside a store section.
@@ -120,8 +165,9 @@ extension SyncEngine {
         reason: nil))
   }
 
-  /// When the account's today has no day page, asks for one, unless the outbox already holds that request. A store
-  /// that refuses is asked again after the next load. Runs inside a store section.
+  /// When the account's today has no day page, live or in Trash, asks for one, unless the outbox already holds that
+  /// request. A page in Trash is his to restore or start again. A store that refuses is asked again after the next
+  /// load. Runs inside a store section.
   func ensureToday() async {
     guard let copy else { return }
     // `today` would read an unknown zone as GMT, and ask for another day than the account's.
@@ -131,14 +177,287 @@ extension SyncEngine {
       return
     }
     let today = LocalDate.today(in: copy.workspace.timezone, at: now())
-    guard copy.workspace.dayPage(today) == nil, let entries = try? await store.entries() else { return }
+    guard copy.workspace.dayPage(today) == nil, copy.workspace.trashedDayPage(today) == nil,
+      let entries = try? await store.entries()
+    else { return }
     let asked = entries.contains { entry in
       let action = entry.action.objectValue
       return action?["type"]?.stringValue == "ensure-day" && action?["date"]?.stringValue == today.value
     }
     guard !asked else { return }
-    let action: JSONValue = .object(["type": .string("ensure-day"), "date": .string(today.value)])
-    _ = try? await append(action: action, label: "Open today's page")
+    _ = try? await append(action: Command.ensureDay(today), label: "Open today's page")
+  }
+
+  /// Removes the held requests for a day page a store keeps from an earlier build, which held them. Runs inside a
+  /// store section.
+  func removeHeldDayRequests() async {
+    guard let entries = try? await store.entries() else { return }
+    let left = entries.filter { $0.state == .held && $0.asksForADay }
+    guard !left.isEmpty else { return }
+    for entry in left { try? await store.remove(seq: entry.seq) }
+    await readOutbox()
+  }
+
+  // MARK: Held changes
+
+  /// Puts a held change back as pending, built on the copy's revision with no revisions of its own, as the web's
+  /// Keep mine does, and asks for a pass. The operation id stays. Does nothing for a change that cannot be kept, or
+  /// that is no longer held.
+  public func keep(_ id: Int) async {
+    await acquire()
+    defer { release() }
+    guard copyShown, phase != .signedOut, let copy,
+      var entry = outbox.first(where: { $0.seq == id && $0.state == .held }), HeldChange(entry).canKeep
+    else { return }
+    entry.state = .pending
+    entry.reason = nil
+    entry.baseRevision = copy.workspace.revision
+    entry.ownRevisions = []
+    do {
+      try await store.update(entry)
+    } catch {
+      SyncLog.logger.error("A held change could not be kept: \(SyncLog.describe(error), privacy: .public)")
+      return
+    }
+    await readOutbox()
+    publish()
+    askForPass(load: false)
+  }
+
+  /// Removes a held change, and asks for a pass so the changes waiting behind it go.
+  public func discard(_ id: Int) async {
+    await acquire()
+    defer { release() }
+    guard copyShown, phase != .signedOut, outbox.contains(where: { $0.seq == id && $0.state == .held }) else { return }
+    do {
+      try await store.remove(seq: id)
+    } catch {
+      SyncLog.logger.error("A held change could not be discarded: \(SyncLog.describe(error), privacy: .public)")
+      return
+    }
+    await readOutbox()
+    publish()
+    askForPass(load: false)
+  }
+
+  // MARK: Commands waited for
+
+  /// A command `perform` waits on: who it was made for, and in which epoch.
+  struct Performance: Sendable {
+    let action: JSONValue
+    let owner: String
+    let epoch: Int
+    let answer: CheckedContinuation<Performed, Never>
+  }
+
+  /// Sends `action` after everything pending, on the copy's revision, `readsBeyond: true`, and returns what the
+  /// server did. When the server holds it because the copy is behind, the workspace is loaded and it is sent once
+  /// more, under the same operation id; any other hold or refusal is answered after a load. Never stored, so a command
+  /// sent as the network drops is not sent again later. On `.applied` the reply's changes are in the published
+  /// workspace before it returns, except when the server's changes did not start from the copy's revision and the
+  /// whole load that follows fails: the server applied it, and the copy catches up at the next load.
+  public func perform(action: JSONValue) async -> Performed {
+    await acquire()
+    guard phase != .signedOut, !leaving else {
+      release()
+      return .signedOut
+    }
+    // Before the first load there is no copy to build it on, and the server has not been reached.
+    guard copyShown, let owner = copy?.owner else {
+      release()
+      return .offline
+    }
+    return await withCheckedContinuation { answer in
+      performances.append(Performance(action: action, owner: owner, epoch: epoch, answer: answer))
+      release()
+      askForPass(load: false)
+    }
+  }
+
+  /// Sends the queued commands one at a time; each is answered before the next is taken.
+  func performQueued(_ pass: Pass) async throws {
+    while true {
+      try await enter(pass)
+      guard !performances.isEmpty else {
+        release()
+        return
+      }
+      let performance = performances.removeFirst()
+      release()
+      guard performance.epoch == pass.epoch else {
+        performance.answer.resume(returning: .signedOut)
+        continue
+      }
+      try await answer(performance, pass)
+    }
+  }
+
+  /// Sends `performance`, sends it once more when the server held it only because the copy was behind, and answers
+  /// it. Every hold or refusal is followed by a load before the answer, so a second tap is built on what the server
+  /// has, as the web resyncs before a retry. Throws, with the command answered, when the pass cannot go on.
+  ///
+  /// The command has left the queue, so nothing else can answer it: every throw below answers it first, exactly once.
+  private func answer(_ performance: Performance, _ pass: Pass) async throws {
+    // One operation for both sends: a held command wrote nothing on the server, so it has no receipt to replay.
+    let operationId = UUID().uuidString.lowercased()
+    var sentAgain = false
+    while true {
+      do {
+        try await enter(pass)
+      } catch {
+        // A sign-out or sign-in took the section first, or the pass was cancelled.
+        performance.answer.resume(returning: interrupted(error, pass) ?? Performed(error))
+        throw error
+      }
+      let revision = copy?.workspace.revision
+      release()
+      guard let revision else {
+        performance.answer.resume(returning: .signedOut)
+        return
+      }
+      let step: PerformStep
+      do {
+        step = try await send(performance, operationId: operationId, on: revision, pass)
+      } catch {
+        performance.answer.resume(returning: interrupted(error, pass) ?? Performed(error))
+        throw error
+      }
+      let performed: Performed
+      let have: Int?
+      switch step {
+      case .answer(let answered):
+        performance.answer.resume(returning: answered)
+        return
+      case .loadWholeThenAnswer(let answered):
+        (performed, have) = (answered, nil)
+      case .loadThenAnswer(let answered):
+        (performed, have) = (answered, revision)
+      case .loadThenSendAgain(let answered):
+        (performed, have) = (answered, revision)
+      }
+      do {
+        try await loadWorkspace(pass, have: have)
+      } catch {
+        // The server's answer stands, only the copy is behind, and the pass's failure says so; unless the account
+        // changed meanwhile, when the answer belongs to an account no longer shown.
+        performance.answer.resume(returning: interrupted(error, pass) ?? performed)
+        throw error
+      }
+      guard case .loadThenSendAgain = step, !sentAgain, copy?.owner == performance.owner else {
+        performance.answer.resume(returning: performed)
+        return
+      }
+      sentAgain = true
+    }
+  }
+
+  /// What a command reads when its pass was cut off rather than answered: signed out when the account changed or a
+  /// sign-out has begun since the pass began, offline when the pass was only cancelled. Nil for any other error.
+  func interrupted(_ error: any Error, _ pass: Pass) -> Performed? {
+    guard error is CancellationError || error is Superseded else { return nil }
+    return pass.epoch != epoch || leaving ? .signedOut : .offline
+  }
+
+  private enum PerformStep {
+    case answer(Performed)
+    /// The copy lacks what the server did, or the reply is another account's: the answer is given once the whole
+    /// workspace is loaded.
+    case loadWholeThenAnswer(Performed)
+    /// The server held or refused it: the copy may be behind, and is loaded before the answer.
+    case loadThenAnswer(Performed)
+    /// The server held it only because the copy is behind: loaded, then sent once more on the new revision.
+    case loadThenSendAgain(Performed)
+  }
+
+  private func send(
+    _ performance: Performance, operationId: String, on revision: Int, _ pass: Pass
+  ) async throws -> PerformStep {
+    let outcome: CommandOutcome
+    do {
+      outcome = try await transport.send(
+        token: pass.session?.token, operationId: operationId, action: performance.action,
+        expectedOwner: performance.owner,
+        basis: OutboxBasis(baseRevision: revision, ownRevisions: [], readsBeyond: true))
+    } catch TransportError.refused(let status, let reason) {
+      // The server's answer to this command alone: answered, and the pass goes on to the next.
+      return .answer(.refused(status == 400 ? "bad-request" : reason ?? "refused"))
+    }
+    try await enter(pass)
+    defer { release() }
+    offline = false
+    failure = nil
+    SyncLog.logger.info("Performed: \(outcome.kind, privacy: .public)")
+    guard let copy, outcome.owner == copy.owner else {
+      publish()
+      return .loadWholeThenAnswer(.refused("owner-mismatch"))
+    }
+    switch outcome {
+    case .applied(_, let changes, _):
+      guard let next = copy.workspace.applying(changes) else {
+        publish()
+        return .loadWholeThenAnswer(.applied)
+      }
+      try await store.write(next, changed: changes)
+      self.copy = (next, copy.owner)
+      await readOutbox()
+      publish()
+      return .answer(.applied)
+    case .alreadyApplied:
+      // Not expected for an operation id never sent before; the copy is loaded whole to be sure of it.
+      publish()
+      return .loadWholeThenAnswer(.applied)
+    case .held(let reason, _, let stale, _):
+      publish()
+      // The server's `stale` says it may be built again on the latest state; `changed-since` is the copy behind.
+      let behind = stale || reason == "changed-since"
+      return behind ? .loadThenSendAgain(.refused(reason)) : .loadThenAnswer(.refused(reason))
+    case .refused(let reason, _):
+      publish()
+      return .loadThenAnswer(.refused(reason))
+    case .ownerMismatch:
+      publish()
+      return .loadWholeThenAnswer(.refused("owner-mismatch"))
+    }
+  }
+
+  /// Answers the queued commands of `pass`'s epoch, or older, with `performed`, when the pass ends without sending
+  /// them.
+  func answerPerformances(of pass: Pass, with performed: Performed) {
+    let (ended, left) = performances.partitioned { $0.epoch <= pass.epoch }
+    performances = left
+    for performance in ended { performance.answer.resume(returning: performed) }
+  }
+
+  /// Answers every queued command made before the account changed. Called just after `epoch` moves on.
+  func answerStalePerformances() {
+    let (stale, left) = performances.partitioned { $0.epoch < epoch }
+    performances = left
+    for performance in stale { performance.answer.resume(returning: .signedOut) }
+  }
+}
+
+extension Performed {
+  /// What a command that got no answer reads as.
+  init(_ error: any Error) {
+    switch error {
+    case TransportError.offline: self = .offline
+    case TransportError.signedOut, is CancellationError, is SyncEngine.Superseded: self = .signedOut
+    case TransportError.server, TransportError.wait, TransportError.unreadable: self = .offline
+    case TransportError.refused(_, let reason): self = .refused(reason ?? "refused")
+    default: self = .offline
+    }
+  }
+}
+
+extension Array {
+  /// The elements that satisfy `belongs`, and the rest, each in order.
+  fileprivate func partitioned(by belongs: (Element) -> Bool) -> ([Element], [Element]) {
+    var matching: [Element] = []
+    var rest: [Element] = []
+    for element in self {
+      if belongs(element) { matching.append(element) } else { rest.append(element) }
+    }
+    return (matching, rest)
   }
 }
 

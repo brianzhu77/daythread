@@ -7,8 +7,8 @@ third-party packages, no web view.
   (`Tests/`) and its UI tests (`UITests/`). The `App/`, `Tests/` and `UITests/` folders are synchronised groups: a file
   added there is in the target without a project edit.
 - `Packages/`: `DaythreadCore` (records, lossless JSON), `DaythreadSync` (server client, Keychain, store on the device,
-  `SyncEngine`), `DaythreadEditor` (a page, read only), `DaythreadUI` (the screens and `AppModel`). Each package's own
-  tests run with `swift test` in its folder.
+  `SyncEngine`), `DaythreadEditor` (a page's rows; a to-do's circle ticks, nothing else edits), `DaythreadUI` (the
+  screens and `AppModel`). Each package's own tests run with `swift test` in its folder.
 
 ## Build
 
@@ -40,16 +40,32 @@ To run your own server on another port, start it the way `scripts/ui-test.sh` do
 ## Tests
 
 ```sh
-native/scripts/ui-test.sh                                   # unit and UI tests
-native/scripts/ui-test.sh -only-testing:DaythreadUITests    # extra arguments go to xcodebuild
+native/scripts/ui-test.sh                                                       # unit and UI tests
+native/scripts/ui-test.sh -only-testing:DaythreadUITests                        # extra arguments go to xcodebuild
+native/scripts/ui-test.sh -only-testing:DaythreadUITests/TickUITests/test_a_tap_ticks_and_a_second_tap_unticks
+native/scripts/ui-test.sh --serve                                               # the seeded servers only, until Ctrl-C
 ```
 
 The wrapper starts two throwaway servers from this checkout, each on SQLite in a directory under the system temp
-directory: 3741 with sign-in off, seeded with today's page and the to-do "Water the plants", and 3742 with sign-in
-on. It passes their addresses to the UI tests (`TEST_RUNNER_DAYTHREAD_SERVER_URL`,
-`TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_TODAY_TITLE`), runs `xcodebuild test`, and on exit
-stops both servers, removes their directories and removes the stores the tests made in the app's container. Run any
-other way, the UI tests skip. The app hosting the unit tests is pointed at `127.0.0.1:9`, where nothing listens.
+directory: 3741 with sign-in off, seeded with today's page and its to-dos, and 3742 with sign-in on. "Water the
+plants" is only read by the tests; each test that ticks has a to-do of its own ("Tick me offline", "Tick me twice";
+"Tick me" is left for looking by hand), since the seed is shared by every test and never reset. It passes the
+addresses and the seeded day to the UI tests (`TEST_RUNNER_DAYTHREAD_SERVER_URL`,
+`TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_TODAY`, `TEST_RUNNER_DAYTHREAD_TODAY_TITLE`), runs
+`xcodebuild test`, and on exit stops both servers, removes their directories and removes the stores the tests made in
+the app's container. Run any other way, the UI tests skip. The app hosting the unit tests is pointed at `127.0.0.1:9`,
+where nothing listens. A full run takes a few minutes; `-only-testing:` runs one class or one test.
+
+The UI tests read the server the way any client does (`GET /api/v1/workspace` on 3741, where sign-in is off). Offline
+is a launch with `-DaythreadServerURL http://127.0.0.1:9` and the same `-DaythreadStoreName` as the launch before it.
+
+`--serve` seeds the same two servers and keeps them until Ctrl-C, for looking at the app by hand: launch it with
+`xcrun simctl launch <simulator> app.daythread.Daythread -DaythreadServerURL http://127.0.0.1:3741
+-DaythreadStoreName test-<anything>` (a `test-` store is removed when the wrapper stops). Screenshots:
+`xcrun simctl io <simulator> screenshot <file>.png`.
+
+The UI tests are not run in CI: they need the simulator and the local servers. Run them before merging a change to
+the app's screens.
 
 Rules for a shared machine:
 

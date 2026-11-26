@@ -2,7 +2,8 @@
   import DaythreadCore
   import UIKit
 
-  /// A page drawn from its stored document, read only: one list row per block.
+  /// A page drawn from its stored document: one list row per block. A to-do's circle reports a tick (`onTick`);
+  /// nothing else on the page edits.
   @MainActor
   public final class DocumentViewController: UIViewController {
     /// How far each level of nesting moves a row in.
@@ -25,16 +26,25 @@
       }
     }
 
+    /// Called when a to-do's circle is tapped, with the to-do's id. The caller draws the result by calling
+    /// `show` before it returns, and the circle is then drawn in the same turn of the run loop.
+    public var onTick: ((_ taskId: String) -> Void)?
+
     private var rowsByID: [String: BlockRow] = [:]
     private var orderedIDs: [String] = []
     private var drawn: [String: AttributedString] = [:]
-    private var hasShownAPage = false
-    /// How many snapshots `show` has applied; a call that changes nothing applies none.
-    private(set) var appliedSnapshots = 0
+    /// The id of the page drawn last; nil before the first.
+    private var shownPageID: String?
+    /// Whether each snapshot `show` applied was animated, in order; a call that changes nothing applies none.
+    private(set) var appliedAnimated: [Bool] = []
+    var appliedSnapshots: Int { appliedAnimated.count }
 
     private lazy var collectionView: UICollectionView = {
       var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
       configuration.showsSeparators = false
+      // The section's own background lies over the list's background view, where a day without a page says so; the
+      // list itself is the page's background.
+      configuration.backgroundColor = .clear
       let view = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
       view.backgroundColor = .systemBackground
       view.allowsSelection = false
@@ -56,7 +66,8 @@
     }
 
     /// Draws `page`. A row that is the same as before is left alone, one whose content or status changed is
-    /// reconfigured in place, and the scroll position is kept. The first call does not animate.
+    /// reconfigured in place, and the scroll position is kept. The first call, and the first for another page, do not
+    /// animate.
     public func show(page: Page, in workspace: Workspace) {
       let rows = BlockRows.rows(for: page, in: workspace)
       var newRows: [String: BlockRow] = [:]
@@ -71,7 +82,7 @@
       }
       let ids = rows.map(\.id)
       let changed = ids.filter { rowsByID[$0] != nil && (rowsByID[$0] != newRows[$0] || drawn[$0] != newDrawn[$0]) }
-      if hasShownAPage, changed.isEmpty, ids == orderedIDs { return }
+      if page.id == shownPageID, changed.isEmpty, ids == orderedIDs { return }
 
       let oldRows = rowsByID
       rowsByID = newRows
@@ -87,9 +98,11 @@
       }
       snapshot.reconfigureItems(reconfigured)
       snapshot.reloadItems(reloaded)
-      let animated = hasShownAPage
-      hasShownAPage = true
-      appliedSnapshots += 1
+      // Another page (another day) is not a diff of the one before: animated, its rows would slide in as the old
+      // ones slide out. Redraws of the same page animate, so a tick's symbol transition plays.
+      let animated = page.id == shownPageID
+      shownPageID = page.id
+      appliedAnimated.append(animated)
       dataSource.apply(snapshot, animatingDifferences: animated)
     }
 
@@ -102,8 +115,10 @@
         cell.configure(style: style, depth: row.depth, text: self.drawn[id] ?? AttributedString())
       }
       let todo = UICollectionView.CellRegistration<TodoBlockCell, String> { [weak self] cell, _, id in
-        guard let self, let row = self.rowsByID[id], case .todo(let status, _) = row.kind else { return }
-        cell.configure(status: status, depth: row.depth, text: self.drawn[id] ?? AttributedString())
+        guard let self, let row = self.rowsByID[id], case .todo(let taskId, let status, _) = row.kind else { return }
+        cell.configure(
+          status: status, canBeTicked: row.canBeTicked, depth: row.depth, text: self.drawn[id] ?? AttributedString()
+        ) { [weak self] in self?.onTick?(taskId) }
       }
       let separator = UICollectionView.CellRegistration<SeparatorBlockCell, String> { [weak self] cell, _, id in
         cell.configure(depth: self?.rowsByID[id]?.depth ?? 0)

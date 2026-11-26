@@ -100,7 +100,7 @@ import Testing
     #"{"id":"t","status":"open","paused":false}"#,
     #"{"id":"t","title":"T","paused":false}"#,
     #"{"id":"t","title":"T","status":"open"}"#,
-    #"{"id":"t","title":"T","status":"started","paused":false}"#,
+    #"{"id":"t","title":"T","status":3,"paused":false}"#,
     #"{"id":"t","title":"T","status":"open","paused":"no"}"#,
     #"{"id":"t","title":"T","status":"open","paused":false,"deadlineOn":3}"#,
     #"{"id":"t","title":"T","status":"open","paused":false,"attentionOn":"soon"}"#,
@@ -108,6 +108,18 @@ import Testing
   func a_task_with_a_missing_or_mistyped_field_is_unreadable(_ text: String) throws {
     #expect(TodoTask(try json(text)) == nil)
     #expect(Workspace(try Self.workspace(tasks: "[\(Self.task),\(text)]")) == nil)
+  }
+
+  /// Replaces the earlier expectation that a status other than open, done and cancelled made the workspace
+  /// unreadable: a newer server may add one, and the app must still read, show and write back the workspace.
+  @Test func a_status_this_build_does_not_know_is_kept_and_the_workspace_still_reads() throws {
+    let row = #"{"id":"t","title":"T","status":"waiting","paused":false}"#
+    let text = try Self.workspace(tasks: "[\(row)]")
+    let workspace = try #require(Workspace(text))
+    #expect(workspace.task("t")?.status == .other("waiting"))
+    #expect(workspace.task("t")?.status.rawValue == "waiting")
+    #expect(JSON.write(workspace.json()) == JSON.write(text))
+    #expect(Workspace.unreadableReason(text) == nil)
   }
 
   @Test func a_task_reads_its_dates_and_status() throws {

@@ -81,9 +81,9 @@ public enum InlineAttributedText {
         if run.attributes[InlineUnderline.self] == true || run.link != nil {
           attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
         }
-        if struckThrough || intent.contains(.strikethrough) {
-          attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
-        }
+        // Said either way: a label whose text loses the line keeps drawing it unless told there is none.
+        let struck = struckThrough || intent.contains(.strikethrough)
+        attributes[.strikethroughStyle] = struck ? NSUnderlineStyle.single.rawValue : 0
         result.append(NSAttributedString(string: String(text[run.range].characters), attributes: attributes))
       }
       return result

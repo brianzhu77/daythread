@@ -71,7 +71,7 @@ import Testing
     (#"{"title":"\#(secret)","status":"open","paused":false}"#, "task 1: id"),
     (#"{"id":"t","status":"open","paused":false}"#, "task 1 (id t): title"),
     (#"{"id":"t","title":"\#(secret)","paused":false}"#, "task 1 (id t): status"),
-    (#"{"id":"t","title":"\#(secret)","status":"started","paused":false}"#, "task 1 (id t): status"),
+    (#"{"id":"t","title":"\#(secret)","status":3,"paused":false}"#, "task 1 (id t): status"),
     (#"{"id":"t","title":"\#(secret)","status":"open"}"#, "task 1 (id t): paused"),
     (#"{"id":"t","title":"\#(secret)","status":"open","paused":"no"}"#, "task 1 (id t): paused"),
     (#"{"id":"t","title":"\#(secret)","status":"open","paused":false,"deadlineOn":3}"#, "task 1 (id t): deadlineOn"),

@@ -72,3 +72,27 @@ import Testing
     #expect([b, a].sorted() == [a, b])
   }
 }
+
+extension TodayTests {
+  @Test func adding_days_crosses_months_years_and_leap_days() throws {
+    func date(_ text: String) throws -> LocalDate { try #require(LocalDate(text)) }
+    #expect(try date("2026-12-31").adding(days: 1)?.value == "2027-01-01")
+    #expect(try date("2028-02-28").adding(days: 1)?.value == "2028-02-29")
+    #expect(try date("2026-03-01").adding(days: -1)?.value == "2026-02-28")
+    #expect(try date("2026-10-22").adding(days: 0)?.value == "2026-10-22")
+    #expect(try date("9999-12-31").adding(days: 1) == nil)
+    #expect(try date("0000-01-01").adding(days: -1) == nil)
+  }
+
+  @Test func a_day_starts_at_its_first_instant_in_the_zone() throws {
+    let shanghai = try #require(LocalDate("2026-11-25"))
+    #expect(shanghai.start(in: "Asia/Shanghai") == (try Self.instant("2026-11-24T16:00:00Z")))
+    // Havana's clocks go from 00:00 to 01:00 on 2026-03-08, so that day has no midnight: it starts at 01:00 local.
+    let havana = try #require(LocalDate("2026-03-08"))
+    #expect(havana.start(in: "America/Havana") == (try Self.instant("2026-03-08T05:00:00Z")))
+    #expect(LocalDate.today(in: "America/Havana", at: try Self.instant("2026-03-08T04:59:59Z")).value == "2026-03-07")
+    for (date, zone) in [(shanghai, "Asia/Shanghai"), (havana, "America/Havana")] {
+      #expect(LocalDate.today(in: zone, at: date.start(in: zone)) == date, "\(zone)")
+    }
+  }
+}
