@@ -225,6 +225,22 @@
       #expect(open.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int == 0)
     }
 
+    /// Another day's page is not a diff of the one before: its rows appear, they do not slide in.
+    @Test func another_page_is_drawn_without_animation_and_the_same_page_with_it() throws {
+      let controller = hosted()
+      let tasks = [taskJSON("k", status: "open")]
+      let monday = try makePage([block("a", "task", ["taskId": .string("k")], text: "Water")], id: "day:2026-11-23")
+      let mondayTicked = try makeWorkspace(tasks: [taskJSON("k", status: "done")])
+      let tuesday = try makePage([block("b", "paragraph", text: "Rest")], id: "day:2026-11-24")
+      controller.show(page: monday, in: try makeWorkspace(tasks: tasks))
+      controller.show(page: monday, in: mondayTicked)
+      controller.show(page: tuesday, in: mondayTicked)
+      controller.show(page: tuesday, in: try makeWorkspace(tasks: tasks))
+      let tuesdayEdited = try makePage([block("b", "paragraph", text: "Rest well")], id: "day:2026-11-24")
+      controller.show(page: tuesdayEdited, in: mondayTicked)
+      #expect(controller.appliedAnimated == [false, true, false, true])
+    }
+
     @Test func aRowWhoseTextChangedButNotItsKindIsReconfiguredInPlace() throws {
       let controller = hosted()
       let workspace = try makeWorkspace()

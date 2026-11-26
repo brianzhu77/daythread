@@ -33,8 +33,9 @@
     private var orderedIDs: [String] = []
     private var drawn: [String: AttributedString] = [:]
     private var hasShownAPage = false
-    /// How many snapshots `show` has applied; a call that changes nothing applies none.
-    private(set) var appliedSnapshots = 0
+    /// Whether each snapshot `show` applied was animated, in order; a call that changes nothing applies none.
+    private(set) var appliedAnimated: [Bool] = []
+    var appliedSnapshots: Int { appliedAnimated.count }
 
     private lazy var collectionView: UICollectionView = {
       var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
@@ -96,7 +97,7 @@
       snapshot.reloadItems(reloaded)
       let animated = hasShownAPage
       hasShownAPage = true
-      appliedSnapshots += 1
+      appliedAnimated.append(animated)
       dataSource.apply(snapshot, animatingDifferences: animated)
     }
 
