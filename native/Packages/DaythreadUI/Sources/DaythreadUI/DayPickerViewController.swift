@@ -31,9 +31,10 @@
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// The detent the sheet opens at on the phone.
+    /// The detent the sheet opens at on the phone: half the screen holds a month up to the largest of the ordinary text
+    /// sizes, and not at the accessibility sizes.
     static func firstDetent(for category: UIContentSizeCategory) -> UISheetPresentationController.Detent.Identifier {
-      .medium
+      category.isAccessibilityCategory ? .large : .medium
     }
 
     override func viewDidLoad() {

@@ -222,7 +222,10 @@
       if let popover = picker.popoverPresentationController {
         popover.sourceItem = calendarButton
         // On the phone the popover becomes a sheet; the calendar needs about half the screen, not all of it.
-        popover.adaptiveSheetPresentationController.detents = [.medium(), .large()]
+        let sheet = popover.adaptiveSheetPresentationController
+        sheet.detents = [.medium(), .large()]
+        sheet.selectedDetentIdentifier = DayPickerViewController.firstDetent(
+          for: traitCollection.preferredContentSizeCategory)
       }
       present(picker, animated: true)
     }
