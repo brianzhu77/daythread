@@ -36,6 +36,10 @@ actor FakeTransport: ServerTransport {
   private var script: [Reply]
   private(set) var calls: [Call] = []
   private(set) var unscripted: [Call] = []
+  /// The calls that got a reply, in the order they got it; a call still held at a gate is not here.
+  private(set) var answered: [Call] = []
+  /// While set, every call fails for lack of network and no reply of the script is used.
+  private(set) var unreachable = false
   private(set) var inFlight = 0
   private(set) var maxInFlight = 0
   private var inspect: (@Sendable (Call) async -> Void)?
@@ -52,6 +56,9 @@ actor FakeTransport: ServerTransport {
   func onCall(_ body: @escaping @Sendable (Call) async -> Void) {
     inspect = body
   }
+
+  func goOffline() { unreachable = true }
+  func comeBack() { unreachable = false }
 
   /// The calls that sent a command, in order.
   var sends: [Call] { calls.filter { $0.operationId != nil } }
@@ -100,6 +107,7 @@ actor FakeTransport: ServerTransport {
     maxInFlight = max(maxInFlight, inFlight)
     defer { inFlight -= 1 }
     if let inspect { await inspect(call) }
+    if unreachable { throw TransportError.offline }
     guard !script.isEmpty else {
       unscripted.append(call)
       throw Unscripted(call: call)
@@ -107,6 +115,7 @@ actor FakeTransport: ServerTransport {
     var reply = script.removeFirst()
     if case .gated(let gate) = reply { reply = await gate.wait() }
     if case .failure(let error) = reply { throw error }
+    answered.append(call)
     return reply
   }
 

@@ -1181,6 +1181,208 @@ private struct Harness {
   }
 }
 
+// MARK: - What is drawn, and a change accepted at once
+
+private let today = LocalDate("2026-11-25")
+
+/// A to-do's row as the server writes it.
+private func row(_ id: String, title: String? = nil, status: String = "open", version: Int = 1) -> String {
+  let doneOn = status == "done" ? #""2026-11-25""# : "null"
+  return
+    #"{"id":"\#(id)","title":"\#(title ?? id)","status":"\#(status)","paused":false,"doneOn":\#(doneOn),"#
+    + #""version":\#(version)}"#
+}
+
+/// A workspace at `revision` holding today's page (unless `days` says otherwise) and `rows`.
+private func board(_ revision: Int, days: [String] = ["2026-11-25"], rows: [String]) throws -> Workspace {
+  let pages = days.map { #"{"id":"day:\#($0)","type":"daily","date":"\#($0)","title":"\#($0)","document":"[]"}"# }
+  let text =
+    #"{"revision":\#(revision),"timezone":"UTC","pages":[\#(pages.joined(separator: ","))],"#
+    + #""tasks":[\#(rows.joined(separator: ","))]}"#
+  return try required(Workspace(try JSON.parse(text)))
+}
+
+/// Changes from `from` to `revision` that write `rows`.
+private func upserting(from: Int, to revision: Int, _ rows: [String]) throws -> WorkspaceChanges {
+  let text =
+    #"{"from":\#(from),"revision":\#(revision),"timezone":"UTC","pages":{"upsert":[],"remove":[]},"#
+    + #""tasks":{"upsert":[\#(rows.joined(separator: ","))],"remove":[]}}"#
+  return try required(WorkspaceChanges(try JSON.parse(text)))
+}
+
+/// The tick the app sends for `taskId`.
+private func done(_ taskId: String) -> JSONValue {
+  Command.taskStatus(taskId: taskId, status: .done, today: today)
+}
+
+private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
+  workspace?.tasks.first { $0.id == id }
+}
+
+@Suite struct SyncEnginePredictionTests {
+  @Test func a_tick_is_drawn_before_the_server_is_asked() async throws {
+    let gate = Gate()
+    let h = try await Harness(opening + [.gated(gate)], copy: try board(5, rows: [row("t1")]))
+    await h.engine.start()
+
+    let ticket = try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
+
+    let drawn = await current(h.engine)
+    #expect(ticket == 1)
+    #expect(drawn?.enqueued == 1)
+    #expect(task("t1", in: drawn?.workspace)?.status == .done)
+    #expect(await h.transport.answered.allSatisfy { $0.operationId == nil })
+
+    await gate.open(.outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")))
+    await h.engine.settled()
+  }
+
+  @Test func the_servers_answer_replaces_the_prediction() async throws {
+    let copy = try board(5, rows: [row("t1")])
+    // The server moved the version further than the prediction's one step.
+    let answer = try upserting(from: 5, to: 6, [row("t1", status: "done", version: 7)])
+    let h = try await Harness(
+      opening + [.outcome(.applied(receipt: .object([:]), changes: answer, owner: "user-1"))], copy: copy)
+    await h.engine.start()
+
+    try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
+    await h.engine.settled()
+
+    let drawn = await current(h.engine)?.workspace
+    #expect(drawn == copy.applying(answer))
+    #expect(task("t1", in: drawn)?.version == 7)
+    #expect(try await h.entries == [])
+  }
+
+  @Test func a_tick_made_offline_is_drawn_by_a_new_engine_on_the_same_store() async throws {
+    let h = try await Harness(copy: try board(5, rows: [row("t1")]))
+    await h.transport.goOffline()
+    await h.engine.start()
+    try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
+    await h.engine.settled()
+
+    let gate = Gate()
+    let transport = FakeTransport([.gated(gate)])
+    let next = SyncEngine(transport: transport, tokens: h.tokens, store: h.store, now: { noon })
+    let starting = Task { await next.start() }
+    await gate.reached()
+
+    let drawn = await current(next)
+    #expect(await transport.answered == [])
+    #expect(task("t1", in: drawn?.workspace)?.status == .done)
+    #expect(drawn?.enqueued == 0)
+
+    await gate.open(.failure(TransportError.offline))
+    await starting.value
+  }
+
+  @Test func twenty_ticks_offline_are_all_drawn_and_sent_in_the_order_made() async throws {
+    let ids = (0..<20).map { "t\($0)" }
+    let h = try await Harness(copy: try board(5, rows: ids.map { row($0) }))
+    await h.transport.goOffline()
+    await h.engine.start()
+    for id in ids { try await h.engine.enqueue(action: done(id), label: #"ticked "\#(id)""#) }
+    await h.engine.settled()
+    let drawnOffline = await current(h.engine)?.workspace
+    #expect(ids.allSatisfy { task($0, in: drawnOffline)?.status == .done })
+    let made = try await h.store.entries().map(\.operationId)
+
+    let answers = try ids.enumerated().map { index, id in
+      FakeTransport.Reply.outcome(
+        .applied(
+          receipt: .object([:]),
+          changes: try upserting(from: 5 + index, to: 6 + index, [row(id, status: "done", version: 2)]),
+          owner: "user-1"))
+    }
+    await h.transport.add([.account(firstAccount), .workspace(.unchanged(revision: 5, owner: "user-1"))] + answers)
+    let allDone = Seen()
+    let engine = h.engine
+    await h.transport.onCall { call in
+      guard call.operationId != nil else { return }
+      await allDone.add(await current(engine))
+    }
+    await h.transport.comeBack()
+    await h.engine.refresh()
+
+    #expect(await h.transport.sends.compactMap(\.operationId) == made)
+    let seenAtEachSend = await allDone.all
+    #expect(seenAtEachSend.count == 20)
+    for (index, seen) in seenAtEachSend.enumerated() {
+      #expect(ids.allSatisfy { task($0, in: seen.workspace)?.status == .done }, "before answer \(index + 1)")
+    }
+    let final = await current(h.engine)?.workspace
+    #expect(final?.revision == 25)
+    #expect(ids.allSatisfy { task($0, in: final)?.status == .done })
+    #expect(try await h.entries == [])
+  }
+
+  @Test func a_load_that_changes_the_same_to_do_keeps_his_tap_on_top() async throws {
+    let h = try await Harness(
+      opening + [.failure(TransportError.offline)], copy: try board(5, rows: [row("t1", title: "Call Ann")]))
+    await h.engine.start()
+    try await h.engine.enqueue(action: done("t1"), label: #"ticked "Call Ann""#)
+    await h.engine.settled()
+
+    let renamed = try board(6, rows: [row("t1", title: "Call Ann back", version: 4)])
+    await h.transport.add([.workspace(.full(renamed, owner: "user-1")), .failure(TransportError.offline)])
+    await h.engine.refresh()
+
+    let drawn = task("t1", in: await current(h.engine)?.workspace)
+    #expect(drawn?.title == "Call Ann back")
+    #expect(drawn?.status == .done)
+    #expect(try await h.kept?.workspace == renamed, "the prediction is never stored")
+  }
+
+  @Test func a_tick_says_it_reads_nothing_beyond_its_row() async throws {
+    let held: FakeTransport.Reply = .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1"))
+    let h = try await Harness(
+      [.account(firstAccount), .workspace(.full(try board(5, days: [], rows: [row("t1")]), owner: "user-1")), held, held])
+    await h.engine.start()
+
+    try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
+    await h.engine.settled()
+
+    let sent = await h.transport.sends.compactMap { call -> (String?, Bool)? in
+      guard case .send(_, _, let action, _, let basis) = call else { return nil }
+      return (Command.type(of: action), basis.readsBeyond)
+    }
+    #expect(sent.map(\.0) == ["ensure-day", "task-status"])
+    #expect(sent.map(\.1) == [true, false])
+  }
+
+  @Test func enqueue_before_a_copy_is_shown_throws_and_gives_no_ticket() async throws {
+    let empty = try await Harness()
+    await #expect(throws: SyncError.notReady) { try await empty.engine.enqueue(action: done("t1"), label: "t1") }
+    #expect(await current(empty.engine)?.enqueued == 0)
+
+    let h = try await Harness(
+      opening + [.outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")), .done],
+      copy: try board(5, rows: [row("t1")]))
+    await h.engine.start()
+    #expect(try await h.engine.enqueue(action: done("t1"), label: "t1") == 1)
+    await h.engine.settled()
+    await h.engine.signOut()
+    await #expect(throws: SyncError.notReady) { try await h.engine.enqueue(action: done("t1"), label: "t1") }
+    #expect(await current(h.engine)?.enqueued == 1)
+  }
+
+  @Test func the_address_is_published_once_the_server_has_told_it() async throws {
+    let h = try await Harness(
+      opening + [.done, .session(second), .workspace(.full(try board(2, rows: []), owner: "user-2"))],
+      copy: try board(5, rows: []))
+    #expect(await current(h.engine)?.address == nil)
+
+    await h.engine.start()
+    #expect(await current(h.engine)?.address == "one@example.com")
+
+    await h.engine.signOut()
+    #expect(await current(h.engine)?.address == nil)
+
+    try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
+    #expect(await current(h.engine)?.address == "two@example.com")
+  }
+}
+
 /// States a callback saw, in order.
 actor Seen {
   private(set) var all: [SyncState] = []
