@@ -152,6 +152,8 @@ public final class AppModel {
 
   // MARK: Changes
 
+  private static let tickLog = Logger(subsystem: "app.daythread.Daythread", category: "tick")
+
   /// Works out the status from what is drawn, records the action, and hands it to the engine.
   /// Returns false when nothing was done: the to-do cannot be ticked, or the same to-do was tapped under 500 ms ago.
   @discardableResult
@@ -176,7 +178,17 @@ public final class AppModel {
     Task { [weak self] in
       // An account change between the tap and this turn dropped the record; its action is not that account's.
       guard self?.records.contains(where: { $0.id == id }) == true else { return }
-      let ticket = try? await engine.enqueue(action: action, label: label)
+      let ticket: Int?
+      do {
+        ticket = try await engine.enqueue(action: action, label: label)
+      } catch {
+        // Nothing shown yet, or signing out: the tap simply does not count. Anything else is the store refusing a
+        // change he made, and this line is the only trace of it. The error's type only: never his words or ids.
+        if error as? SyncError != .notReady {
+          Self.tickLog.error("A tick was not stored: \(String(describing: type(of: error)), privacy: .public)")
+        }
+        ticket = nil
+      }
       self?.accepted(id, ticket: ticket)
     }
     return true
