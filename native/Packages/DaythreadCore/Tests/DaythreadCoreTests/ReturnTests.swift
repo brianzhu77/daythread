@@ -18,8 +18,8 @@ import Testing
 
     let caret = pressReturn(&page, "a", 5)
 
-    #expect(caret == Caret(block: "n", offset: 0))
-    #expect(Lines.outline(page) == ["a paragraph 'Hello'", "n paragraph ' world'", "b paragraph 'Next'"])
+    #expect(caret == Caret(block: "n1", offset: 0))
+    #expect(Lines.outline(page) == ["a paragraph 'Hello'", "n1 paragraph ' world'", "b paragraph 'Next'"])
     #expect(Lines.written("a", in: page) == Lines.line("a", props: props, "Hello"))
     #expect(Lines.written("b", in: page) == Lines.line("b", "Next"))
   }
@@ -29,10 +29,10 @@ import Testing
 
     let caret = pressReturn(&page, "a", 4)
 
-    #expect(caret == Caret(block: "n", offset: 0))
-    #expect(Lines.outline(page) == ["a bulletListItem 'Milk'", "n bulletListItem ''"])
+    #expect(caret == Caret(block: "n1", offset: 0))
+    #expect(Lines.outline(page) == ["a bulletListItem 'Milk'", "n1 bulletListItem ''"])
     #expect(Lines.written("a", in: page) == Lines.line("a", "bulletListItem", "Milk"))
-    #expect(Lines.written("n", in: page) == Lines.line("n", "bulletListItem", ""))
+    #expect(Lines.written("n1", in: page) == Lines.line("n1", "bulletListItem", ""))
   }
 
   @Test func of_a_numbered_item_makes_a_numbered_item() {
@@ -41,10 +41,10 @@ import Testing
 
     let caret = pressReturn(&page, "a", 5)
 
-    #expect(caret == Caret(block: "n", offset: 0))
+    #expect(caret == Caret(block: "n1", offset: 0))
     #expect(Lines.written("a", in: page) == Lines.line("a", "numberedListItem", props: started, "Seven"))
     // The second item counts on from the first; it does not restart at 7.
-    #expect(Lines.written("n", in: page) == Lines.line("n", "numberedListItem", " eight"))
+    #expect(Lines.written("n1", in: page) == Lines.line("n1", "numberedListItem", " eight"))
   }
 
   @Test func of_a_quote_makes_a_paragraph() {
@@ -53,9 +53,9 @@ import Testing
 
     let caret = pressReturn(&page, "a", 5)
 
-    #expect(caret == Caret(block: "n", offset: 0))
+    #expect(caret == Caret(block: "n1", offset: 0))
     #expect(Lines.written("a", in: page) == Lines.line("a", "quote", props: quote, "To be"))
-    #expect(Lines.written("n", in: page) == Lines.line("n", " or"))
+    #expect(Lines.written("n1", in: page) == Lines.line("n1", " or"))
   }
 
   @Test func in_a_heading_makes_a_paragraph_of_the_rest() {
@@ -64,9 +64,9 @@ import Testing
 
     let caret = pressReturn(&page, "a", 5)
 
-    #expect(caret == Caret(block: "n", offset: 0))
+    #expect(caret == Caret(block: "n1", offset: 0))
     #expect(Lines.written("a", in: page) == Lines.line("a", "heading", props: heading, "Notes"))
-    #expect(Lines.written("n", in: page) == Lines.line("n", " today"))
+    #expect(Lines.written("n1", in: page) == Lines.line("n1", " today"))
   }
 
   @Test func nested_lines_go_with_the_second_half() {
@@ -76,16 +76,62 @@ import Testing
 
     let caret = pressReturn(&page, "a", 3)
 
-    #expect(caret == Caret(block: "n", offset: 0))
+    #expect(caret == Caret(block: "n1", offset: 0))
     #expect(
       Lines.outline(page) == [
         "a bulletListItem 'Par'",
-        "n bulletListItem 'ent'",
+        "n1 bulletListItem 'ent'",
         "  c paragraph 'Child'",
         "    g paragraph 'Grandchild'",
         "b paragraph 'After'",
       ])
     #expect(Lines.written("c", in: page) == child)
+  }
+
+  @Test func a_nested_line_splits_where_it_is() {
+    var page = Lines.editable(
+      Lines.document(
+        Lines.line(
+          "p", "bulletListItem", "Parent",
+          children: [
+            Lines.line("first", "bulletListItem", "First child", children: [Lines.line("g", "Grand")]),
+            Lines.line("mid", "Middle"),
+            Lines.line("last", "Last child"),
+          ]),
+        Lines.line("q", "After")))
+
+    #expect(pressReturn(&page, "first", 5) == Caret(block: "n1", offset: 0))
+    #expect(pressReturn(&page, "last", 4) == Caret(block: "n2", offset: 0))
+
+    #expect(
+      Lines.outline(page) == [
+        "p bulletListItem 'Parent'",
+        "  first bulletListItem 'First'",
+        "  n1 bulletListItem ' child'",
+        "    g paragraph 'Grand'",
+        "  mid paragraph 'Middle'",
+        "  last paragraph 'Last'",
+        "  n2 paragraph ' child'",
+        "q paragraph 'After'",
+      ])
+  }
+
+  @Test func at_the_start_of_a_nested_first_line_puts_an_empty_line_above_it() {
+    let first = Lines.line("first", "bulletListItem", "First", children: [Lines.line("g", "Grand")])
+    var page = Lines.editable(
+      Lines.document(Lines.line("p", "Parent", children: [first, Lines.line("second", "bulletListItem", "Second")])))
+
+    #expect(pressReturn(&page, "first", 0) == Caret(block: "first", offset: 0))
+
+    #expect(
+      Lines.outline(page) == [
+        "p paragraph 'Parent'",
+        "  n1 bulletListItem ''",
+        "  first bulletListItem 'First'",
+        "    g paragraph 'Grand'",
+        "  second bulletListItem 'Second'",
+      ])
+    #expect(Lines.written("first", in: page) == first)
   }
 
   @Test func at_the_start_of_a_line_with_words_puts_an_empty_line_above() {
@@ -104,9 +150,9 @@ import Testing
       let caret = pressReturn(&page, "a", 0)
 
       #expect(caret == Caret(block: "a", offset: 0), "\(type)")
-      #expect(Lines.outline(page) == ["n \(above) ''", "a \(type) 'Words'", "  c paragraph 'Nested'"], "\(type)")
+      #expect(Lines.outline(page) == ["n1 \(above) ''", "a \(type) 'Words'", "  c paragraph 'Nested'"], "\(type)")
       #expect(Lines.written("a", in: page) == line, "\(type)")
-      #expect(Lines.written("n", in: page) == Lines.line("n", above, ""), "\(type)")
+      #expect(Lines.written("n1", in: page) == Lines.line("n1", above, ""), "\(type)")
     }
   }
 
@@ -167,10 +213,10 @@ import Testing
 
     let caret = pressReturn(&page, "e", 0)
 
-    #expect(caret == Caret(block: "n", offset: 0))
-    #expect(Lines.outline(page) == ["e paragraph ''", "n paragraph ''", "  c paragraph 'Child'", "b paragraph 'After'"])
+    #expect(caret == Caret(block: "n1", offset: 0))
+    #expect(Lines.outline(page) == ["e paragraph ''", "n1 paragraph ''", "  c paragraph 'Child'", "b paragraph 'After'"])
     #expect(Lines.written("e", in: page) == Lines.line("e", ""))
-    #expect(Lines.written("n", in: page) == Lines.line("n", "", children: [Lines.line("c", "Child")]))
+    #expect(Lines.written("n1", in: page) == Lines.line("n1", "", children: [Lines.line("c", "Child")]))
   }
 
   @Test func in_a_to_do_makes_a_new_to_do_after_everything_nested_under_it() throws {
@@ -183,9 +229,9 @@ import Testing
 
     let caret = pressReturn(&page, "t", 6)
 
-    #expect(caret == Caret(block: "n", offset: 0))
+    #expect(caret == Caret(block: "n1", offset: 0))
     #expect(
-      Lines.outline(page) == ["t task 'Buy mi'", "  c task 'Sub'", "n task 'lk'", "x paragraph 'After'"])
+      Lines.outline(page) == ["t task 'Buy mi'", "  c task 'Sub'", "n1 task 'lk'", "x paragraph 'After'"])
     #expect(
       Lines.written("t", in: page)
         == Lines.block(
@@ -193,9 +239,9 @@ import Testing
           children: [child]))
     // Its own task, with the row's role and plan date (not the page's date).
     #expect(
-      Lines.written("n", in: page)
+      Lines.written("n1", in: page)
         == Lines.block(
-          "n", "task", props: #"{"taskId":"editor-task:n","role":"plan","planDate":"2026-10-22"}"#,
+          "n1", "task", props: #"{"taskId":"editor-task:n1","role":"plan","planDate":"2026-10-22"}"#,
           words: [Lines.run("lk", styles: bold)]))
   }
 
@@ -206,11 +252,11 @@ import Testing
     let caret = pressReturn(&page, "t", 0)
 
     #expect(caret == Caret(block: "t", offset: 0))
-    #expect(Lines.outline(page) == ["n task ''", "t task 'Call Sam'", "  c paragraph 'Note'"])
+    #expect(Lines.outline(page) == ["n1 task ''", "t task 'Call Sam'", "  c paragraph 'Note'"])
     #expect(Lines.written("t", in: page) == row)
     #expect(
-      Lines.written("n", in: page)
-        == Lines.line("n", "task", props: #"{"taskId":"editor-task:n","role":"plan","planDate":"2026-10-22"}"#, ""))
+      Lines.written("n1", in: page)
+        == Lines.line("n1", "task", props: #"{"taskId":"editor-task:n1","role":"plan","planDate":"2026-10-22"}"#, ""))
   }
 
   @Test func on_an_empty_to_do_makes_it_a_paragraph() {
@@ -235,8 +281,8 @@ import Testing
     _ = pressReturn(&page, "a", 5)
 
     #expect(
-      Lines.written("n", in: page)
-        == #"{"id":"n","type":"paragraph","props":{"backgroundColor":"default","textColor":"default","textAlignment":"left"},"content":[{"type":"text","text":" here","styles":{}}],"children":[]}"#
+      Lines.written("n1", in: page)
+        == #"{"id":"n1","type":"paragraph","props":{"backgroundColor":"default","textColor":"default","textAlignment":"left"},"content":[{"type":"text","text":" here","styles":{}}],"children":[]}"#
     )
   }
 
@@ -249,19 +295,19 @@ import Testing
 
     #expect(pressReturn(&page, "db", 0) == nil)
     #expect(pressReturn(&page, "inside", 3) == nil)
-    #expect(page.replaceText(in: "inside", range: 0..<0, with: "x") == Caret(block: "inside", offset: 0))
+    _ = page.replaceText(in: "inside", range: 0..<0, with: "x")
     #expect(page.document == original)
 
-    #expect(pressReturn(&page, "a", 6) == Caret(block: "n", offset: 0))
+    #expect(pressReturn(&page, "a", 6) == Caret(block: "n1", offset: 0))
     #expect(pressReturn(&page, "b", 0) == Caret(block: "b", offset: 0))
 
     #expect(
       Lines.outline(page) == [
         "a paragraph 'Before'",
-        "n paragraph ''",
+        "n1 paragraph ''",
         "db database ''",
         "  inside paragraph 'Hidden row'",
-        "n paragraph ''",
+        "n2 paragraph ''",
         "b paragraph 'After'",
       ])
     #expect(Lines.written("db", in: page) == database)

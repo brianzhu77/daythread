@@ -1,3 +1,4 @@
+import Synchronization
 import Testing
 
 @testable import DaythreadCore
@@ -34,8 +35,21 @@ enum Lines {
     "[\(blocks.joined(separator: ","))]"
   }
 
-  static func editable(_ document: String, pageDate: LocalDate? = nil, newID: String = "n") -> EditablePage {
-    EditablePage(document: document, pageDate: pageDate, makeID: { newID })
+  /// New blocks get `n1`, `n2`, … in the order they are made.
+  static func editable(_ document: String, pageDate: LocalDate? = nil) -> EditablePage {
+    let counter = Counter()
+    return EditablePage(document: document, pageDate: pageDate, makeID: { "n\(counter.next())" })
+  }
+
+  final class Counter: Sendable {
+    private let count = Mutex(0)
+
+    func next() -> Int {
+      count.withLock { value in
+        value += 1
+        return value
+      }
+    }
   }
 
   /// One line per block, indented by depth: its id, type and words.
@@ -125,6 +139,43 @@ enum Lines {
     #expect(page.press(.returnKey, at: EditablePage.Caret(block: "missing", offset: 0)) == nil)
     #expect(page.document == original)
     #expect(page.singleDeleteIds.isEmpty)
+  }
+
+  @Test func a_document_that_does_not_read_is_never_rewritten_or_edited() {
+    let unreadable = [
+      "not json",
+      #"{"id":"a","type":"paragraph"}"#,
+      #"[{"id":"a","type":"paragraph","props":{},"content":[],"children":{}}]"#,
+    ]
+    for original in unreadable {
+      var page = Lines.editable(original)
+
+      #expect(!page.isReadable, "\(original)")
+      #expect(page.document == original, "\(original)")
+      #expect(page.press(.returnKey, at: EditablePage.Caret(block: "a", offset: 0)) == nil, "\(original)")
+      _ = page.replaceText(in: "a", range: 0..<0, with: "x")
+      #expect(page.document == original, "\(original)")
+      #expect(page.blocks.isEmpty && page.textBlocks.isEmpty, "\(original)")
+    }
+    #expect(Lines.editable("[]").isReadable)
+  }
+
+  @Test func an_untouched_page_is_written_back_as_it_was_read() throws {
+    let originals = try Fixtures.documentStrings() + [
+      // Whitespace and an escape that writing the blocks back would not reproduce.
+      "[ {\"id\":\"a\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"x\",\"styles\":{}}],\"children\":[]} ]"
+    ]
+    #expect(originals.count > 1)
+    for original in originals {
+      var page = Lines.editable(original)
+      #expect(page.document == original)
+
+      let ids = page.textBlocks
+      #expect(page.press(.backspace, at: EditablePage.Caret(block: ids.first ?? "missing", offset: 0)) == nil)
+      #expect(page.press(.returnKey, at: EditablePage.Caret(block: "missing", offset: 0)) == nil)
+      if let id = ids.first { _ = page.replaceText(in: id, range: 0..<0, with: "") }
+      #expect(page.document == original)
+    }
   }
 
   @Test func a_repeated_id_acts_on_the_first_line_with_it() {
