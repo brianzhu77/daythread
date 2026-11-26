@@ -28,12 +28,12 @@
 | Couldn't update · showing what was last loaded | The same line, when a pass failed for any other reason |
 | Couldn't load, Retry | The whole screen, when a pass failed and there is no copy to show |
 | Today, Yesterday, Tomorrow | The small word above the day's title when the day is one of these (subheadline, semibold; `Today` in the app's tint, the others in the secondary colour). The day's header is the page's first row and scrolls with it; the navigation bar has no title |
-| Tue, Nov 3 | The day's title, the web's `longLabel`: short weekday, month and day in the reader's language, no year (large title, bold), with a small `chevron.down` in the secondary colour after it. It is one plain button; it opens the system's calendar, a dot on each day with something written, in a popover anchored to it (a sheet on the phone) |
+| Tue, Nov 3 | The day's title, the web's `longLabel`: short weekday, month and day in the reader's language, no year (large title, bold; it grows with the text size up to accessibility extra large and no further, as the system caps its own large titles, so every date of a year stays one line on an iPhone 17), with a small `chevron.down` in the secondary colour after it. It is one plain button; it opens the system's calendar, a dot on each day with something written, in a popover anchored to it (a sheet on the phone) |
 | Today, Tue, Nov 3. Choose a date | The title button's accessibility label, the web's; the relative word only when there is one |
 | Tuesday, Nov 3 | The long form, used only inside sentences; `<day>` below is this text |
 | Previous day, Next day | The accessibility labels of the navigation bar's trailing chevrons (`chevron.left`, `chevron.right`, no text): bar buttons with no glass capsule (`hidesSharedBackground`), tinted the secondary label colour. Next is disabled from today on |
 | Today | On a regular-width screen only (iPad, Mac): a plain text item before the chevrons, the same quiet look, while another day is open. On the phone the Today tab does it |
-| More | The accessibility label of the navigation bar's last item (`ellipsis`, no text, the same quiet look); its menu holds the address and "Sign out". Not shown when its menu would be empty. The system's own More tab, when it shows one, has the same name |
+| More | The accessibility label of the navigation bar's last item (`ellipsis`, no text, the same quiet look); its menu holds the address and "Sign out". Not shown when its menu would be empty |
 | No page for <day>, Add page | A past day with no page, in place of the page |
 | <day> hasn't happened yet, Create page | A future day with no page, in place of the page |
 | Today's page is in Trash. (The page for <day> is in Trash.), Restore, Add a new page | A day whose page is in Trash; "Restore" only when the page names its trash entry |
@@ -61,8 +61,9 @@
 | Untitled | A page reference whose page has no title |
 | Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
-| Today, Tasks, Calendar, Pages, Tags | The tab bar's tabs, the web's places in its order: the system's tab bar with its default appearance (the floating glass capsule on iOS 26). Symbols: `<day of month>.calendar` for Today (the account's today, `26.calendar` on the 26th; it changes at the account's midnight), `checkmark.square`, `calendar`, `doc.text`, `number` |
-| Search | The system's search tab (`UISearchTab`), its own title and symbol, after the five. On an iPhone 17 in portrait the compact bar keeps four tabs and puts Tags and Search under the system's More tab: the system draws the search tab apart, as the round button at the end, only when the bar has room for it |
+| Today, Tasks, Calendar, Pages | The tab bar's tabs, the web's places in its order: the system's tab bar with its default appearance (the floating glass capsule on iOS 26). Symbols: `<day of month>.calendar` for Today (the account's today, `26.calendar` on the 26th; it changes at the account's midnight), `checkmark.square`, `calendar`, `doc.text` |
+| Search | The system's search tab (`UISearchTab`), its own title and symbol, after the four; the system draws it apart, as the round button at the end of the bar |
+| (Tags) | No tab: a phone's bar holds five items, the search tab included, and a sixth puts Tags and Search behind the system's More tab (seen on the simulator, 2026-11-26). Which place gives way is Brian's choice; until then it is Tags |
 | <place>, Not in the app yet | A tab whose place is not built yet: its symbol, its name and this line, centred, nothing to press |
 
 The sign-in lines are the web's (`src/routes/sign-in.tsx`).
@@ -86,5 +87,5 @@ Phase 1 must settle:
 
 - Row spacing on a page.
 - How date chips and page references are drawn (today they are plain text).
-- The tab bar: the five places and Search do not fit the system's compact bar on an iPhone 17 (it keeps four and a
-  More tab holding Tags and Search). Which place gives way, or whether that is kept, is Brian's call.
+- Which of the web's five places has no tab on the phone: Tags for now, Brian's choice
+  (`docs/design/native-phase-1.md` section 6).

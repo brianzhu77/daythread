@@ -232,10 +232,13 @@ Previous, Calendar and Next in a bottom toolbar: "前/后一天还是要在顶�
 原生组件". So where a control goes is the web phone app's answer, and how it looks and behaves is the system's
 (`native-app.md` §9 is about the second, not the first).
 
-- **The bottom bar is the system tab bar** with the web's five places in the web's order, Today, Tasks, Calendar,
-  Pages, Tags, and the system's search tab, which the system draws as the round button at the end, where the web
-  has its round Search button. Until a place is built its tab shows the place's name and `Not in the app yet`.
-  This replaces §2's "the tab bar waits for 1e": the bar is there from now, and each slice fills a tab.
+- **The bottom bar is the system tab bar**: Today, Tasks, Calendar, Pages, and the system's search tab, which the
+  system draws as the round button at the end, where the web has its round Search button. The web's fifth place, Tags,
+  has no tab yet: on a phone the system's bar holds five items, the search tab included, and a sixth puts Tags and
+  Search behind a More tab of the system's (tried on the simulator, 2026-11-26). Which place gives way is Brian's to
+  say; until he does it is Tags, the place a search reaches most easily. Until a place is built its tab shows the
+  place's name and `Not in the app yet`. This replaces §2's "the tab bar waits for 1e": the bar is there from now, and
+  each slice fills a tab.
 - **The day's header is the first row of the page**, as on the web: the word `Today`, `Yesterday` or `Tomorrow`
   above the title when it applies; the title ("Wed, Nov 25", the web's wording) with a small chevron, which
   opens the day picker (`UICalendarView`, a dot on each day with something written, the week starting as the
