@@ -525,7 +525,8 @@ public actor SyncEngine {
   /// The engine's own wait, to the second. It is `Task.sleep(nanoseconds:)` and not `Task.sleep(for:)`: built by
   /// Xcode 26.6, a retry wait made with the latter and cancelled at once (an engine let go right after a pass failed)
   /// aborted the process when its task resumed ("freed pointer was not the last allocation", in `swift_task_dealloc`).
-  /// Seen only on the hosted runner, in two tests that do exactly that; never with Xcode 27.
+  /// Seen only on the hosted runner, six runs of six in each of the two tests that do exactly that, and gone with
+  /// this; never seen built by Xcode 27. Anything that waits and may be cancelled should use this.
   public static let sleep: @Sendable (Duration) async throws -> Void = { duration in
     try await Task.sleep(nanoseconds: UInt64(max(0, duration.components.seconds)) * 1_000_000_000)
   }

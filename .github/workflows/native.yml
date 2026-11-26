@@ -37,32 +37,6 @@ jobs:
       - name: swift test (DaythreadSync)
         run: |
           if [ -d native/Packages/DaythreadSync ]; then cd native/Packages/DaythreadSync && swift test; else echo "native/Packages/DaythreadSync does not exist yet"; fi
-      # TEMPORARY (2026-11-26): the Sync test process aborts on the hosted runner ("freed pointer was not the last
-      # allocation", in the retry task) and never on a Mac with a newer Xcode. Finds which test does it; removed
-      # before merge.
-      - name: Which Sync test aborts (temporary)
-        if: always()
-        run: |
-          cd native/Packages/DaythreadSync
-          swift build --build-tests > /tmp/build.log 2>&1 || { tail -20 /tmp/build.log; exit 0; }
-          swift test list --skip-build > /tmp/tests.txt 2>/dev/null || true
-          wc -l /tmp/tests.txt
-          for suite in $(sed 's/\/.*//' /tmp/tests.txt | sort -u); do
-            bad=0
-            for i in 1 2 3 4; do swift test --skip-build --filter "^${suite}/" > /tmp/o.log 2>&1 || bad=$((bad+1)); done
-            echo "SUITE $suite: $bad of 4 failed"
-            if [ "$bad" -gt 0 ]; then
-              grep "^${suite}/" /tmp/tests.txt | sed 's/(.*//' | sort -u | while read -r test; do
-                short=${test#*.}
-                tbad=0
-                for i in 1 2 3 4 5 6; do swift test --skip-build --filter "${short}" > /tmp/t.log 2>&1 || tbad=$((tbad+1)); done
-                if [ "$tbad" -gt 0 ]; then echo "  TEST $test: $tbad of 6 failed"; grep -E "freed pointer|Fatal|✘|error:" /tmp/t.log | cut -c1-200 | head -3; fi
-              done
-            fi
-          done
-          echo "serial run of everything:"
-          sbad=0; for i in 1 2 3; do swift test --skip-build --no-parallel > /tmp/s.log 2>&1 || sbad=$((sbad+1)); done; echo "no-parallel: $sbad of 3 failed"
-          exit 0
       # A test process that dies leaves no assertion behind, only this.
       - name: The crash report, when a test process died
         if: failure()

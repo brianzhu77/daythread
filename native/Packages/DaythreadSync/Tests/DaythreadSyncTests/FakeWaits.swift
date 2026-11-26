@@ -9,22 +9,26 @@ actor Waits {
   private(set) var asked: [Duration] = []
   /// Waits the engine cancelled before the test ended them.
   private(set) var cancelled = 0
-  private var sleeping: [Int: AsyncStream<Void>.Continuation] = [:]
+  private var sleeping: [Int: CheckedContinuation<Void, any Error>] = [:]
 
-  /// Waits on a stream the test ends. A stream's iteration also ends when the task is cancelled, so this needs no
-  /// cancellation handler of its own: the one it had (`withTaskCancellationHandler` around a continuation) made the
-  /// test process abort when built by Xcode 26.6 ("freed pointer was not the last allocation", in the task that had
-  /// been waiting), on the hosted runner only.
   func sleep(_ duration: Duration) async throws {
     asked.append(duration)
     let id = asked.count
-    let (ended, end) = AsyncStream.makeStream(of: Void.self)
-    sleeping[id] = end
-    for await _ in ended { break }
-    // Still written down: the test did not end it, so the engine cancelled it.
-    if sleeping.removeValue(forKey: id) != nil {
-      cancelled += 1
-      throw CancellationError()
+    try await withTaskCancellationHandler {
+      try await wait(id)
+    } onCancel: {
+      Task { await self.cancel(id) }
+    }
+  }
+
+  private func wait(_ id: Int) async throws {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+      if Task.isCancelled {
+        cancelled += 1
+        continuation.resume(throwing: CancellationError())
+      } else {
+        sleeping[id] = continuation
+      }
     }
   }
 
@@ -32,13 +36,16 @@ actor Waits {
   func elapse() {
     let ended = sleeping
     sleeping = [:]
-    for end in ended.values {
-      end.yield()
-      end.finish()
-    }
+    for continuation in ended.values { continuation.resume() }
   }
 
   var inProgress: Int { sleeping.count }
+
+  private func cancel(_ id: Int) {
+    guard let continuation = sleeping.removeValue(forKey: id) else { return }
+    cancelled += 1
+    continuation.resume(throwing: CancellationError())
+  }
 }
 
 /// A network the test says has come back.
