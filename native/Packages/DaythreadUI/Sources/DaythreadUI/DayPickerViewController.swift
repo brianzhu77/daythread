@@ -10,8 +10,8 @@
     private let written: Set<LocalDate>
     private let onPick: (LocalDate) -> Void
     let calendarView = UICalendarView()
-    /// A `LocalDate` is a calendar day with no zone; read and written in UTC, the day tapped is the day picked, as in
-    /// `DayTitle`.
+    /// In the account's zone, so the day the system marks as today is the app's Today. A `LocalDate` goes in and comes
+    /// out as year, month and day only, so the zone never moves the day tapped.
     private let calendar: Calendar
 
     init(
@@ -22,7 +22,7 @@
       self.written = written
       self.onPick = onPick
       var calendar = Calendar(identifier: .gregorian)
-      calendar.timeZone = .gmt
+      calendar.timeZone = TimeZone(identifier: timezone) ?? .gmt
       calendar.firstWeekday = weekStartsOnMonday ? 2 : 1
       self.calendar = calendar
       super.init(nibName: nil, bundle: nil)
