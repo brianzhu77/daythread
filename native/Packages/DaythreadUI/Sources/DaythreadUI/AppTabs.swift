@@ -1,7 +1,8 @@
 import DaythreadCore
 
-/// The tab bar's places: the web's five (`destinations` in `src/components/navigation.tsx`), in its order. Search
-/// follows them as the system's own search tab.
+/// The tab bar's places: the web's (`destinations` in `src/components/navigation.tsx`), in its order, but four of its
+/// five. A phone's bar shows five items, the search tab that follows them included; a sixth puts Tags and Search
+/// behind the system's More tab. Tags waits for a tab until Brian says which place gives way (`native-phase-1.md` §6).
 enum AppTabs {
   struct Place: Equatable {
     let id: String
@@ -16,7 +17,6 @@ enum AppTabs {
       Place(id: "tasks", title: "Tasks", symbol: "checkmark.square"),
       Place(id: "calendar", title: "Calendar", symbol: "calendar"),
       Place(id: "pages", title: "Pages", symbol: "doc.text"),
-      Place(id: "tags", title: "Tags", symbol: "number"),
     ]
   }
 

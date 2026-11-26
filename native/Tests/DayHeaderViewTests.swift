@@ -56,15 +56,21 @@ import UIKit
     }
     let image = chevron.convert(chevron.bounds, to: header)
     #expect(image.minX >= drawn.minX + text.width - 0.5, "the chevron after the title", sourceLocation: sourceLocation)
-    #expect(image.maxX <= header.bounds.width + 0.5, sourceLocation: sourceLocation)
+    #expect(image.maxX <= header.bounds.width - header.directionalLayoutMargins.trailing + 0.5, "the chevron within the margins", sourceLocation: sourceLocation)
   }
 
-  @Test func at_the_largest_size_the_widest_date_is_one_whole_line_on_an_iphone_17() throws {
-    for date in ["2026-09-30", "2026-11-25"] {
-      let (header, window) = header(date, width: 402, size: .accessibilityExtraExtraExtraLarge)
+  @Test func at_the_largest_size_every_date_of_a_year_is_one_whole_line_on_an_iphone_17() throws {
+    let (header, window) = header("2026-09-30", width: 402, size: .accessibilityExtraExtraExtraLarge)
+    try check(header, oneLine: true)
+    var day = LocalDate("2026-01-01")
+    while let date = day, date.value.hasPrefix("2026") {
+      header.show(
+        DayHeading(for: date, today: LocalDate("2026-11-25")!, locale: Locale(identifier: "en_US")), status: nil)
+      window.layoutIfNeeded()
       try check(header, oneLine: true)
-      window.isHidden = true
+      day = date.adding(days: 1)
     }
+    window.isHidden = true
   }
 
   @Test func on_a_narrow_screen_at_the_largest_size_the_title_wraps_without_clipping() throws {

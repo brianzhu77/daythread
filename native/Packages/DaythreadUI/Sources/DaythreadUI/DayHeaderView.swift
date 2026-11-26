@@ -24,11 +24,8 @@
       configuration.contentInsets = .zero
       configuration.baseForegroundColor = .label
       configuration.titleLineBreakMode = .byWordWrapping
-      configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-        var attributes = attributes
-        attributes.font = Self.boldLargeTitle()
-        return attributes
-      }
+      // A wrapped title starts each line at the leading edge, as the text above and below it does.
+      configuration.titleAlignment = .leading
       configuration.image = UIImage(systemName: "chevron.down")
       configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(
         textStyle: .title3, scale: .small)
@@ -45,6 +42,21 @@
       relativeLabel.isAccessibilityElement = false
 
       titleButton.contentHorizontalAlignment = .leading
+      // As the system's own large titles do, the title stops growing before the widest short date ("Wed, Sep 30")
+      // and its chevron no longer fit one line on a phone.
+      titleButton.maximumContentSizeCategory = Self.largestTitleSize
+      // The font is read from the button's own traits, so the cap above applies to it as it does to the chevron.
+      titleButton.configurationUpdateHandler = { button in
+        let font = Self.boldLargeTitle(for: button.traitCollection)
+        button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+          var attributes = attributes
+          attributes.font = font
+          return attributes
+        }
+      }
+      titleButton.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (button: UIButton, _) in
+        button.setNeedsUpdateConfiguration()
+      }
 
       statusLabel.font = .preferredFont(forTextStyle: .footnote)
       statusLabel.adjustsFontForContentSizeCategory = true
@@ -90,8 +102,11 @@
       return true
     }
 
-    private nonisolated static func boldLargeTitle() -> UIFont {
-      let font = UIFont.preferredFont(forTextStyle: .largeTitle)
+    /// The largest text size the title follows; see `maximumContentSizeCategory` in `init`.
+    static let largestTitleSize = UIContentSizeCategory.accessibilityExtraLarge
+
+    private static func boldLargeTitle(for traits: UITraitCollection) -> UIFont {
+      let font = UIFont.preferredFont(forTextStyle: .largeTitle, compatibleWith: traits)
       return font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
     }
 

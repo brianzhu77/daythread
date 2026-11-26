@@ -1,7 +1,7 @@
 #if canImport(UIKit)
   import UIKit
 
-  /// The signed-in app: the system's tab bar, with its default appearance, holding the web's five places and the
+  /// The signed-in app: the system's tab bar, with its default appearance, holding four of the web's places and the
   /// system's search tab (`native-phase-1.md` §6). Today holds the day screen; a place not built yet says so.
   @MainActor
   final class AppTabBarController: UITabBarController, UITabBarControllerDelegate {
@@ -24,9 +24,8 @@
           NotInTheAppYetViewController(title: place.title, symbol: place.symbol)
         }
       }
-      // The system draws its search tab apart, at the end of the bar, where the web has its round Search button, but
-      // only when the compact bar has room: with five places it keeps four and puts Tags and Search under its own More
-      // tab. That is the system's default, kept; which place gives way is Brian's to say.
+      // The system draws its search tab apart, the round button at the end of the bar, where the web has its round
+      // Search button; it does so only while the bar has room, which is why there are four places (see `AppTabs`).
       let search = UISearchTab { _ in NotInTheAppYetViewController(title: "Search", symbol: "magnifyingglass") }
       tabs = [todayTab] + others + [search]
       delegate = self
