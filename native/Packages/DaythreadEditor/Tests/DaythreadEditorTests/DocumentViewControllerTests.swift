@@ -83,9 +83,13 @@
       #expect(cell(1)?.accessibilityLabel == "Plan")
       #expect(cell(1)?.accessibilityTraits.contains(.header) == true)
       #expect(cell(0)?.accessibilityTraits.contains(.header) == false)
-      #expect(cell(2)?.accessibilityValue == "not done")
-      #expect(cell(5)?.accessibilityValue == "done")
-      #expect(cell(5)?.accessibilityLabel == "Call the dentist")
+      // A to-do's button is the row's accessibility element, so the cell itself is not one.
+      let open = (cell(2) as? TodoBlockCell)?.circle
+      let done = (cell(5) as? TodoBlockCell)?.circle
+      #expect(open?.accessibilityValue == "not done")
+      #expect(done?.accessibilityValue == "done")
+      #expect(done?.accessibilityLabel == "Complete Call the dentist")
+      #expect(cell(5)?.isAccessibilityElement == false)
     }
 
     @Test func theWorkspaceDecidesTheCheckmark() throws {
@@ -147,7 +151,8 @@
       default: #expect(changed is PlaceholderBlockCell)
       }
       switch to {
-      case "task", "paragraph": #expect(changed.accessibilityLabel == "changing")
+      case "paragraph": #expect(changed.accessibilityLabel == "changing")
+      case "task": #expect((changed as? TodoBlockCell)?.circle.accessibilityLabel == "Complete changing")
       case "database": #expect(changed.accessibilityLabel == "Database")
       default: break
       }
@@ -161,7 +166,7 @@
       controller.show(page: page, in: workspace)
       let before = try #require(try cell(controller, 2) as? TodoBlockCell)
       let untouched = try cell(controller, 0)
-      #expect(before.accessibilityValue == "not done")
+      #expect(before.circle.accessibilityValue == "not done")
       #expect(before.symbolName == "circle")
 
       let index = try #require(workspace.tasks.firstIndex { $0.id == "editor-task:d3" })
@@ -171,7 +176,7 @@
       controller.show(page: page, in: workspace)
 
       let after = try #require(try cell(controller, 2) as? TodoBlockCell)
-      #expect(after.accessibilityValue == "done")
+      #expect(after.circle.accessibilityValue == "done")
       #expect(after.symbolName == "checkmark.circle.fill")
       let drawn = try #require(text(of: after))
       #expect(drawn.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) != nil)
@@ -194,6 +199,70 @@
       #expect(try cell(controller, 1) === second)
       #expect(text(of: after)?.string == "one, changed")
       #expect(after.accessibilityLabel == "one, changed")
+    }
+
+    // MARK: the circle is a button
+
+    private func circle(_ controller: DocumentViewController, _ item: Int) throws -> UIButton {
+      try #require(try cell(controller, item) as? TodoBlockCell).circle
+    }
+
+    @Test func tapping_the_circle_reports_the_to_do() throws {
+      let controller = hosted()
+      controller.show(page: try EditorFixtures.dayPage(), in: try EditorFixtures.workspace())
+      var ticked: [String] = []
+      controller.onTick = { ticked.append($0) }
+      try circle(controller, 2).sendActions(for: .primaryActionTriggered)
+      #expect(ticked == ["editor-task:d3"])
+    }
+
+    @Test func a_circle_that_cannot_be_ticked_is_disabled_and_reports_nothing() throws {
+      let controller = hosted()
+      let blocks = [
+        block("a", "task", ["taskId": .string("c")], text: "cancelled"),
+        block("b", "task", ["taskId": .string("gone")], text: "absent"),
+        block("c", "task", ["taskId": .string("o")], text: "open"),
+      ]
+      controller.show(
+        page: try makePage(blocks),
+        in: try makeWorkspace(tasks: [taskJSON("c", status: "cancelled"), taskJSON("o", status: "open")]))
+      var ticked: [String] = []
+      controller.onTick = { ticked.append($0) }
+      for item in 0...1 {
+        let button = try circle(controller, item)
+        #expect(button.isEnabled == false)
+        button.sendActions(for: .primaryActionTriggered)
+      }
+      #expect(try circle(controller, 2).isEnabled)
+      #expect(ticked.isEmpty)
+    }
+
+    @Test func showing_the_ticked_workspace_in_the_same_turn_draws_it_done() throws {
+      let controller = hosted()
+      let page = try EditorFixtures.dayPage()
+      let workspace = try EditorFixtures.workspace()
+      controller.show(page: page, in: workspace)
+      _ = try collection(controller)
+      controller.onTick = { taskId in
+        let ticked = workspace.predicting(Command.taskStatus(taskId: taskId, status: .done, today: nil))
+        controller.show(page: page, in: ticked)
+      }
+      let cell = try #require(try self.cell(controller, 2) as? TodoBlockCell)
+      #expect(cell.symbolName == "circle")
+      cell.circle.sendActions(for: .primaryActionTriggered)
+      _ = try collection(controller)
+      let after = try #require(try self.cell(controller, 2) as? TodoBlockCell)
+      #expect(after.symbolName == "checkmark.circle.fill")
+      #expect(after.circle.accessibilityValue == "done")
+    }
+
+    @Test func the_button_is_at_least_44_points_square() throws {
+      let controller = hosted()
+      controller.show(page: try EditorFixtures.dayPage(), in: try EditorFixtures.workspace())
+      _ = try collection(controller)
+      let button = try circle(controller, 2)
+      #expect(button.bounds.width >= 44)
+      #expect(button.bounds.height >= 44)
     }
 
     // MARK: nesting
