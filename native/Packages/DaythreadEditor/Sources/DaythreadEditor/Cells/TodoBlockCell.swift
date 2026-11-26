@@ -44,6 +44,13 @@
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    override func layoutSubviews() {
+      super.layoutSubviews()
+      // The list cell's content view covers the whole cell and is kept above the circle; the circle must be on top
+      // to get the touch.
+      bringSubviewToFront(circle)
+    }
+
     override func indentationDidChange() {
       circleCenterX.constant = Self.margin + indentation + glyphSlotWidth / 2
     }
