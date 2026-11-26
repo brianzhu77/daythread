@@ -120,12 +120,18 @@
 
       NotificationCenter.default.addObserver(
         self, selector: #selector(dayMayHaveChanged), name: UIApplication.significantTimeChangeNotification, object: nil)
+      // A timer counts no time while the device sleeps, so after a sleep it would fire late. The root view controller
+      // checks the day and refreshes on activation; here only the timer is set again.
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(rearmDayTimer), name: UIScene.didActivateNotification, object: nil)
     }
 
     /// UIKit calls this again whenever what it reads from `model` changes; a change of day or of an empty state's
     /// action asks for it.
     override func updateProperties() {
       super.updateProperties()
+      // A day opened before it was today is today now: from here on the screen follows today.
+      if shownDate == model.today { shownDate = nil }
       let state = model.state
       let date = date
       title = DayTitle.text(for: date)
@@ -152,6 +158,7 @@
       let date = date
       let content = DayContent.content(for: date, today: model.today, in: workspace)
       self.content = content
+      if case .page = content, failed?.date == date { failed = nil }
       // Until the engine has made today's page, an empty one stands in for it.
       let page: Page? =
         if case .page(let page) = content { page } else { Self.emptyPage(on: date) }
@@ -196,6 +203,8 @@
     /// Shows `day`; today, or nil, follows today from then on.
     func open(_ day: LocalDate?) {
       shownDate = day == model.today ? nil : day
+      // A failure belongs to the visit it happened in.
+      failed = nil
       setNeedsUpdateProperties()
     }
 
@@ -359,6 +368,11 @@
       }
       RunLoop.main.add(timer, forMode: .common)
       dayTimer = timer
+    }
+
+    @objc private func rearmDayTimer() {
+      scheduledChange = nil
+      setNeedsUpdateProperties()
     }
 
     @objc private func dayMayHaveChanged() {
