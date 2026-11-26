@@ -344,7 +344,10 @@
       // Without this the two measurements could be the same layout and the rest would check nothing.
       #expect(largest.glyph.width > normal.glyph.width * 1.5, "the larger category did not reach the cells")
       #expect(largest.gap >= 0, "the glyph overlaps the text")
-      #expect(largest.gap >= normal.gap, "gap \(largest.gap) at the largest size, \(normal.gap) at the default")
+      // The system's own layout of a row's image: its slot hugs the larger glyph, and the words keep their padding.
+      let padding = UIListContentConfiguration.cell().imageToTextPadding
+      #expect(largest.gap >= padding - 0.5, "gap \(largest.gap) at the largest size, padding \(padding)")
+      #expect(normal.gap >= padding - 0.5, "gap \(normal.gap) at the default size, padding \(padding)")
       #expect(largest.button.width >= 44 && largest.button.height >= 44)
     }
 

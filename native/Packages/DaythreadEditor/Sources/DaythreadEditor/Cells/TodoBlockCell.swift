@@ -20,20 +20,17 @@
 
     private lazy var circleWidth = circle.widthAnchor.constraint(equalToConstant: Self.minimumTouchTarget)
     private lazy var circleHeight = circle.heightAnchor.constraint(equalToConstant: Self.minimumTouchTarget)
-    private lazy var circleCenterX = circle.centerXAnchor.constraint(equalTo: leadingAnchor)
-    private var glyphSlotWidth: CGFloat = 0
-
-    /// The system's own side margin for a list row.
-    private static let margin = UIListContentConfiguration.cell().directionalLayoutMargins.leading
+    /// The circle is centred on the slot the list content view lays out for its (hidden) image, so the system places
+    /// it with the words: margins, indent and safe area included. Remade when the content view gives a new guide.
+    private var slotConstraints: [NSLayoutConstraint] = []
+    private weak var slot: UILayoutGuide?
 
     override init(frame: CGRect) {
       super.init(frame: frame)
       circle.translatesAutoresizingMaskIntoConstraints = false
-      // On the cell, so the indent is the cell's own and not the system's for its content view.
+      // On the cell, above its content view: a button inside the list's content view does not get the touch.
       addSubview(circle)
-      NSLayoutConstraint.activate([
-        circleWidth, circleHeight, circleCenterX, circle.centerYAnchor.constraint(equalTo: centerYAnchor),
-      ])
+      NSLayoutConstraint.activate([circleWidth, circleHeight])
       // A disabled control still sends actions to `sendActions(for:)`; a to-do that cannot be ticked reports nothing.
       circle.addAction(
         UIAction { [weak self] _ in
@@ -49,10 +46,6 @@
       // The list cell's content view covers the whole cell and is kept above the circle; the circle must be on top
       // to get the touch.
       bringSubviewToFront(circle)
-    }
-
-    override func indentationDidChange() {
-      circleCenterX.constant = Self.margin + indentation + glyphSlotWidth / 2
     }
 
     func configure(
@@ -86,6 +79,13 @@
 
       let symbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body, scale: .medium)
       let symbol = UIImage(systemName: symbolName)
+      // The symbol is the content's image, as it was before the circle was a button, so the system lays out its slot
+      // and the words exactly as then; it is not seen: the button draws it.
+      content.image = symbol
+      content.imageProperties.preferredSymbolConfiguration = symbolConfiguration
+      content.imageProperties.tintColor = .clear
+      contentConfiguration = content
+
       let tint: UIColor = finished ? .tintColor : .secondaryLabel
       var button = UIButton.Configuration.plain()
       button.image = symbol
@@ -96,18 +96,21 @@
       button.symbolContentTransition = UISymbolContentTransition(.replace)
       circle.configuration = button
 
-      // The text starts where it did when the glyph was the content's image; the button is centered on that
-      // glyph and reaches past it to its touch target.
       let glyph = symbol?.withConfiguration(symbolConfiguration.withTraitCollection(state.traitCollection)).size ?? .zero
-      // A list row gave its image a box 4 points wider than the glyph (measured: 24 for the 20-point glyph at
-      // the default text size), and the text started after it.
-      glyphSlotWidth = glyph.width.rounded(.up) + 4
-      var padded = content
-      padded.directionalLayoutMargins.leading += glyphSlotWidth + content.imageToTextPadding
-      contentConfiguration = padded
-      circleWidth.constant = max(Self.minimumTouchTarget, glyphSlotWidth)
+      circleWidth.constant = max(Self.minimumTouchTarget, glyph.width)
       circleHeight.constant = max(Self.minimumTouchTarget, glyph.height)
-      indentationDidChange()
+      centreOnImageSlot()
+    }
+
+    private func centreOnImageSlot() {
+      guard let guide = (contentView as? UIListContentView)?.imageLayoutGuide, guide !== slot else { return }
+      NSLayoutConstraint.deactivate(slotConstraints)
+      slotConstraints = [
+        circle.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+        circle.centerYAnchor.constraint(equalTo: guide.centerYAnchor),
+      ]
+      NSLayoutConstraint.activate(slotConstraints)
+      slot = guide
     }
 
     private static func symbol(for status: TodoTask.Status?) -> String {
