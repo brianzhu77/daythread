@@ -7,8 +7,9 @@ third-party packages, no web view.
   (`Tests/`) and its UI tests (`UITests/`). The `App/`, `Tests/` and `UITests/` folders are synchronised groups: a file
   added there is in the target without a project edit.
 - `Packages/`: `DaythreadCore` (records, lossless JSON), `DaythreadSync` (server client, Keychain, store on the device,
-  `SyncEngine`), `DaythreadEditor` (a page's rows; a to-do's circle ticks, nothing else edits), `DaythreadUI` (the
-  screens and `AppModel`). Each package's own tests run with `swift test` in its folder.
+  `SyncEngine`), `DaythreadEditor` (a page's rows; a line's words are typed into, one row at a time, and a to-do's
+  circle ticks), `DaythreadUI` (the screens and `AppModel`). Each package's own tests run with `swift test` in its
+  folder.
 
 ## Build
 

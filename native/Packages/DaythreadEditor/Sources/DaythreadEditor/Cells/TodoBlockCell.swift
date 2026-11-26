@@ -3,14 +3,12 @@
   import DaythreadCore
 
   /// A to-do: the system's checkmark symbol and its title; a finished one is dimmed and struck through.
-  final class TodoBlockCell: BlockCell {
+  final class TodoBlockCell: LineBlockCell {
     private var status: TodoTask.Status?
     /// The SF Symbol drawn at the leading edge.
     private(set) var symbolName = "circle"
-    private var text = AttributedString()
 
-    /// The circle. It is the row's interactive element, so VoiceOver reads it (label and value) and not the
-    /// cell.
+    /// The circle. It is its own element for VoiceOver (label and value), before the words; the cell is not one.
     let circle = UIButton(type: .system)
     /// Set on every configure so a reused cell never reports an old row.
     private var onTick: (() -> Void)?
@@ -43,39 +41,42 @@
 
     override func layoutSubviews() {
       super.layoutSubviews()
-      // The list cell's content view covers the whole cell and is kept above the circle; the circle must be on top
-      // to get the touch.
+      // The list cell's content view covers the whole cell and is kept above the circle, and so are the words; the
+      // circle must be on top to get the touch.
       bringSubviewToFront(circle)
     }
 
     func configure(
-      status: TodoTask.Status?, canBeTicked: Bool, depth: Int, text: AttributedString, onTick: @escaping () -> Void
+      status: TodoTask.Status?, canBeTicked: Bool, depth: Int, text: AttributedString, editable: Bool, rowID: String,
+      delegate: LineTextViewDelegate?, onTick: @escaping () -> Void
     ) {
       self.status = status
       symbolName = Self.symbol(for: status)
-      self.text = text
       self.onTick = onTick
       circle.isEnabled = canBeTicked
       setDepth(depth)
+      let finished = status == .done || status == .cancelled
+      setWords(
+        text, look: LineLook(textStyle: .body, color: finished ? .secondaryLabel : .label, struckThrough: finished),
+        editable: editable, rowID: rowID, delegate: delegate)
       isAccessibilityElement = false
-      accessibilityElements = [circle]
-      circle.accessibilityLabel = "Complete " + String(text.characters)
+      accessibilityElements = [circle, line]
       circle.accessibilityValue =
         switch status {
         case .done: "done"
         case .cancelled: "cancelled"
         case .open, .other, nil: "not done"
         }
-      setNeedsUpdateConfiguration()
+    }
+
+    override func wordsDidChange() {
+      circle.accessibilityLabel = "Complete " + String(words.characters)
     }
 
     override func updateConfiguration(using state: UICellConfigurationState) {
       var content = defaultContentConfiguration()
       let finished = status == .done || status == .cancelled
-      content.attributedText = InlineAttributedText.display(
-        text, textStyle: .body, color: finished ? .secondaryLabel : .label, struckThrough: finished,
-        compatibleWith: state.traitCollection)
-      content.textProperties.adjustsFontForContentSizeCategory = true
+      applyWords(to: &content, traits: state.traitCollection)
 
       let symbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body, scale: .medium)
       let symbol = UIImage(systemName: symbolName)
@@ -85,6 +86,7 @@
       content.imageProperties.preferredSymbolConfiguration = symbolConfiguration
       content.imageProperties.tintColor = .clear
       contentConfiguration = content
+      pinWords()
 
       let tint: UIColor = finished ? .tintColor : .secondaryLabel
       var button = UIButton.Configuration.plain()
