@@ -138,15 +138,15 @@ extension DayViewController {
     await h.server.release()
   }
 
-  @Test func start_this_page_asks_the_server_once_and_shows_the_page() async throws {
+  @Test func add_page_asks_the_server_once_and_shows_the_page() async throws {
     let h = try await Harness(copy: try copy())
     let screen = DayViewController(model: h.model)
     screen.loadViewIfNeeded()
     screen.tap("Previous day")
 
     let empty = try #require(screen.emptyState)
-    #expect(empty.text == "No page for \(DayTitle.text(for: yesterday)) yet")
-    #expect(empty.button.title == "Start this page")
+    #expect(empty.text == "No page for \(DayTitle.text(for: yesterday))")
+    #expect(empty.button.title == "Add page")
     #expect(empty.secondaryText == nil)
 
     await h.server.add([.outcome(.applied(receipt: .object([:]), changes: try yesterdayStarted(), owner: "one"))])
@@ -165,7 +165,7 @@ extension DayViewController {
     #expect(await h.server.sent == [Command.ensureDay(yesterday)])
   }
 
-  @Test func start_this_page_says_it_could_not_when_offline() async throws {
+  @Test func add_page_says_it_could_not_when_offline() async throws {
     let h = try await Harness(copy: try copy())
     let screen = DayViewController(model: h.model)
     screen.loadViewIfNeeded()
@@ -173,9 +173,9 @@ extension DayViewController {
 
     // The server has no reply scripted: the call fails for lack of network.
     screen.tapEmptyStateButton()
-    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't start a page · try again" }
+    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't add a page · try again" }
     let failed = try #require(screen.emptyState)
-    #expect(failed.text == "No page for \(DayTitle.text(for: yesterday)) yet")
+    #expect(failed.text == "No page for \(DayTitle.text(for: yesterday))")
     #expect(!failed.button.showsActivityIndicator)
     #expect(failed.buttonProperties.isEnabled)
 
@@ -229,12 +229,12 @@ extension DayViewController {
     screen.loadViewIfNeeded()
     screen.tap("Previous day")
     screen.tapEmptyStateButton()
-    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't start a page · try again" }
+    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't add a page · try again" }
 
     screen.tap("Today")
     screen.tap("Previous day")
     let empty = try #require(screen.emptyState)
-    #expect(empty.text == "No page for \(DayTitle.text(for: yesterday)) yet")
+    #expect(empty.text == "No page for \(DayTitle.text(for: yesterday))")
     #expect(empty.secondaryText == nil)
   }
 
@@ -244,7 +244,7 @@ extension DayViewController {
     screen.loadViewIfNeeded()
     screen.tap("Previous day")
     screen.tapEmptyStateButton()
-    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't start a page · try again" }
+    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't add a page · try again" }
 
     // Another device starts the page, then puts it in Trash.
     await h.server.add([.workspace(.full(try copy(revision: 2, others: [dayPage(yesterday)]), owner: "one"))])
@@ -269,7 +269,7 @@ extension DayViewController {
     let empty = try #require(screen.emptyState)
     #expect(empty.text == "The page for \(DayTitle.text(for: yesterday)) is in Trash.")
     #expect(empty.button.title == "Restore")
-    #expect(empty.secondaryButton.title == "Start a new page")
+    #expect(empty.secondaryButton.title == "Add a new page")
 
     await h.server.add([.outcome(.applied(receipt: .object([:]), changes: try yesterdayRestored(), owner: "one"))])
     screen.tapEmptyStateButton()
@@ -292,7 +292,7 @@ extension DayViewController {
     #expect(await h.server.sent == [Command.restoreBatch(trashId: "batch-1")])
   }
 
-  @Test func a_page_in_trash_with_no_batch_can_only_be_started_again() async throws {
+  @Test func a_page_in_trash_with_no_batch_can_only_be_added_again() async throws {
     let h = try await Harness(copy: try copy(others: [trashedPage(yesterday, trashId: nil)]))
     let screen = DayViewController(model: h.model)
     screen.loadViewIfNeeded()
@@ -300,7 +300,29 @@ extension DayViewController {
 
     let empty = try #require(screen.emptyState)
     #expect(empty.text == "The page for \(DayTitle.text(for: yesterday)) is in Trash.")
-    #expect(empty.button.title == "Start a new page")
+    #expect(empty.button.title == "Add a new page")
     #expect(empty.secondaryButton.title == nil)
+
+    screen.tapEmptyStateButton()
+    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't add a page · try again" }
+    #expect(await h.server.sent == [Command.ensureDay(yesterday)])
+  }
+
+  @Test func create_page_on_a_future_day_says_it_could_not_create_when_offline() async throws {
+    let h = try await Harness(copy: try copy())
+    let screen = DayViewController(model: h.model)
+    screen.loadViewIfNeeded()
+    screen.open(tomorrow)
+
+    let empty = try #require(screen.drawn().emptyState)
+    #expect(empty.text == "\(DayTitle.text(for: tomorrow)) hasn't happened yet")
+    #expect(empty.button.title == "Create page")
+
+    screen.tapEmptyStateButton()
+    try await until { screen.drawn().emptyState?.secondaryText == "Couldn't create a page · try again" }
+    let failed = try #require(screen.emptyState)
+    #expect(failed.button.title == "Create page")
+    #expect(failed.buttonProperties.isEnabled)
+    #expect(await h.server.sent == [Command.ensureDay(tomorrow)])
   }
 }

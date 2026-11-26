@@ -93,7 +93,7 @@ final class DayUITests: XCTestCase {
   }
 
   @MainActor
-  func test_a_past_day_with_no_page_can_be_started() throws {
+  func test_a_past_day_with_no_page_can_be_added() throws {
     let server = try Wrapper.value("DAYTHREAD_SERVER_URL")
     let today = try Wrapper.today()
     let app = XCUIApplication.daythread(server: server, store: Wrapper.storeName())
@@ -105,12 +105,12 @@ final class DayUITests: XCTestCase {
     app.buttons["Previous day"].tap()
     let title = dayTitle(today, adding: -2)
     XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10))
-    let empty = app.staticTexts["No page for \(title) yet"]
+    let empty = app.staticTexts["No page for \(title)"]
     XCTAssertTrue(empty.waitForExistence(timeout: 10), "what a day without a page says")
 
-    app.buttons["Start this page"].tap()
+    app.buttons["Add page"].tap()
     XCTAssertTrue(empty.waitForNonExistence(timeout: 30), "the day's page")
-    XCTAssertFalse(app.buttons["Start this page"].exists)
+    XCTAssertFalse(app.buttons["Add page"].exists)
     XCTAssertTrue(app.navigationBars[title].exists, "the same day")
     app.terminate()
   }
