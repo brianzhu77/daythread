@@ -103,11 +103,15 @@ import Testing
       Lines.line("a", "One"), Lines.line("b", "Two"), Lines.line("x", "Added"), Lines.line("c", "Three"))
     let theirs = Lines.document(Lines.line("a", "One"), Lines.line("c", "Three"))
 
-    #expect(outline(merge(base, mine, theirs).document) == ["a paragraph 'One'", "x paragraph 'Added'", "c paragraph 'Three'"])
+    #expect(
+      outline(merge(base, mine, theirs).document) == [
+        "a paragraph 'One'", "x paragraph 'Added'", "c paragraph 'Three'",
+      ])
 
     // Nested under a line that is gone: after the nearest earlier line that is still there, at that line's depth.
     let nested = Lines.document(
-      Lines.line("a", "One"), Lines.line("b", "Two", children: [Lines.line("y", "Under two")]), Lines.line("c", "Three"))
+      Lines.line("a", "One"), Lines.line("b", "Two", children: [Lines.line("y", "Under two")]),
+      Lines.line("c", "Three"))
     #expect(
       outline(merge(base, nested, theirs).document) == [
         "a paragraph 'One'", "y paragraph 'Under two'", "c paragraph 'Three'",
@@ -216,7 +220,8 @@ import Testing
 
   @Test func a_to_do_he_added_comes_back_as_a_to_do_once() {
     // His save landed with its answer lost: the server already has his to-do, and something else since.
-    let mine = Lines.document(Lines.line("a", "One"), Self.todo("t", "Buy milk"), Lines.line("b", "Two"), Lines.line("c", "Three"))
+    let mine = Lines.document(
+      Lines.line("a", "One"), Self.todo("t", "Buy milk"), Lines.line("b", "Two"), Lines.line("c", "Three"))
     let theirs = Lines.document(
       Lines.line("a", "One"), Self.todo("t", "Buy milk"), Lines.line("b", "Two"), Lines.line("c", "Three, theirs"))
 
@@ -273,7 +278,8 @@ import Testing
     let base = Lines.document(
       Lines.line("a", "One"), Lines.line("b", "Two"), Lines.line("c", "Three"), Lines.line("d", "Four"))
     let mine = Lines.document(
-      Lines.line("a", "One"), Lines.line("x", "Added"), Lines.line("b", "Two", children: [Lines.line("c", "Three, mine")]))
+      Lines.line("a", "One"), Lines.line("x", "Added"),
+      Lines.line("b", "Two", children: [Lines.line("c", "Three, mine")]))
     let theirs = Lines.document(
       Lines.line("a", "One", children: [Lines.line("b", "Two")]), Lines.line("c", "Three"), Lines.line("d", "Four"))
 
@@ -313,7 +319,8 @@ import Testing
     // A draft without the block, on a server that still has it: the block stays, as the server has it.
     let without = Lines.document(Lines.line("a", "One"), Lines.line("c", "Three, mine"))
     let kept = Lines.document(
-      Lines.line("a", "One, theirs"), database(#"{"databaseId":"d1"}"#, "Row"), synced("Shared"), Lines.line("c", "Three"))
+      Lines.line("a", "One, theirs"), database(#"{"databaseId":"d1"}"#, "Row"), synced("Shared"),
+      Lines.line("c", "Three"))
     #expect(
       merge(base, without, kept).document
         == Lines.document(
@@ -474,8 +481,11 @@ enum Generated {
       let content = JSONValue.array([
         .object(["type": .string("text"), "text": .string(phrase(&random)), "styles": .object(JSONObject())])
       ])
-      let kinds: [NewBlock.Kind] = [.paragraph, .paragraph, .bullet, .numbered(start: nil), .heading(level: 2), .quote, .todo]
-      var block = NewBlock.make(kinds[Int.random(in: 0..<kinds.count, using: &random)], id: id, content: content, pageDate: nil)
+      let kinds: [NewBlock.Kind] = [
+        .paragraph, .paragraph, .bullet, .numbered(start: nil), .heading(level: 2), .quote, .todo,
+      ]
+      let kind = kinds[Int.random(in: 0..<kinds.count, using: &random)]
+      var block = NewBlock.make(kind, id: id, content: content, pageDate: nil)
       if depth < 2, Int.random(in: 0..<4, using: &random) == 0 {
         block.children = (0..<Int.random(in: 1...2, using: &random)).map { _ in line(depth: depth + 1) }
       }
