@@ -63,7 +63,7 @@ then what surrounds the day.
 
 **The command.** A tap sends `{ "type": "task-status", "taskId": …, "status": "done" | "open", "today": … }`, the
 web's action (`src/domain/types.ts`). A tap on a done to-do sends `open`; on anything else, `done`. A cancelled
-to-do's circle is disabled, as on the web. `today` is the account's day (the day the app's Today shows), so a tick
+to-do's circle is disabled, and a row whose to-do the copy does not hold does nothing, as on the web. `today` is the account's day (the day the app's Today shows), so a tick
 at 00:30 in his zone is dated the day his page says it is. The web sends the device's date; the two differ only
 when the device is in another zone than the account. My call.
 
@@ -171,7 +171,9 @@ app asks, in a system alert, before erasing them (§7). Carried from phase 0.
 **A store that cannot be opened** still falls back to memory. With changes now made on the device, the screen says
 so (§7), because a tick made offline would not survive a relaunch. Carried.
 
-**The account's address** is published by the engine in `SyncState`, so the menu has it on every launch. Carried.
+**The account's address** is published by the engine in `SyncState` whenever the server has told it (sign-in, and
+the account check each launch makes when it is online), so the menu no longer depends on a sign-in in this launch.
+A launch that never reaches the server has none. Carried.
 
 ## 6. Other days
 
