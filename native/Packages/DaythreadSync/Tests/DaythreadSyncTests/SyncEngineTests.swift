@@ -1831,10 +1831,11 @@ struct Answer: Sendable, CustomTestStringConvertible {
   }
 
   @Test func perform_refused_gives_the_servers_reason() async throws {
+    let unchanged: FakeTransport.Reply = .workspace(.unchanged(revision: 5, owner: "user-1"))
     let h = try await Harness(
       opening + [
-        .outcome(.refused(message: "Nothing to restore", owner: "user-1")),
-        .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")),
+        .outcome(.refused(message: "Nothing to restore", owner: "user-1")), unchanged,
+        .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")), unchanged,
         .failure(TransportError.refused(status: 400, reason: "bad-request")),
       ], copy: try board(5, rows: []))
     await h.engine.start()
@@ -1843,8 +1844,71 @@ struct Answer: Sendable, CustomTestStringConvertible {
     #expect(await h.engine.perform(action: restore) == .refused("Nothing to restore"))
     #expect(await h.engine.perform(action: restore) == .refused("conflict"))
     #expect(await h.engine.perform(action: restore) == .refused("bad-request"))
+    #expect(await h.transport.sends.count == 3, "a hold that is not stale is not sent again")
     #expect(try await h.entries == [])
     #expect(await current(h.engine)?.held == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_refused_command_is_followed_by_a_load_before_it_is_answered() async throws {
+    // Restored elsewhere already: the server has yesterday's page back and nothing in Trash.
+    let served = try board(6, days: ["2026-11-24", "2026-11-25"], rows: [])
+    let h = try await Harness(
+      opening + [
+        .outcome(.refused(message: "Nothing to restore", owner: "user-1")), .workspace(.full(served, owner: "user-1")),
+      ], copy: try board(5, rows: []))
+    await h.engine.start()
+
+    #expect(await h.engine.perform(action: Command.restoreBatch(trashId: "trash-1")) == .refused("Nothing to restore"))
+
+    #expect(await h.calls.last == .workspace(token: "tok-1", have: 5))
+    #expect(await current(h.engine)?.workspace == served, "loaded before it is answered")
+    #expect(await h.transport.sends.count == 1)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_command_held_because_the_copy_is_behind_is_sent_again_once_after_a_load() async throws {
+    let served = try board(6, rows: [row("t1")])
+    let h = try await Harness(
+      opening + [
+        .outcome(.held(reason: "changed-since", rows: [], stale: true, owner: "user-1")),
+        .workspace(.full(served, owner: "user-1")),
+        applied(try addingDay(from: 6, to: 7, "2026-11-24")),
+      ], copy: try board(5, rows: []))
+    await h.engine.start()
+
+    let action = Command.ensureDay(yesterday)
+    #expect(await h.engine.perform(action: action) == .applied)
+
+    #expect(await current(h.engine)?.workspace?.dayPage(yesterday) != nil, "in before it returns")
+    let sends = await h.transport.sends
+    #expect(sends.count == 2)
+    guard case .send(_, let firstId, let firstAction, _, let firstBasis)? = sends.first,
+      case .send(_, let secondId, let secondAction, _, let secondBasis)? = sends.last
+    else { return }
+    #expect(firstAction == action)
+    #expect(secondAction == action)
+    #expect(secondId == firstId, "the same operation")
+    #expect(firstBasis == OutboxBasis(baseRevision: 5, ownRevisions: [], readsBeyond: true))
+    #expect(secondBasis == OutboxBasis(baseRevision: 6, ownRevisions: [], readsBeyond: true))
+    #expect(try await h.entries == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_command_held_as_stale_twice_is_refused_and_not_sent_a_third_time() async throws {
+    let stale: FakeTransport.Reply = .outcome(.held(reason: "conflict", rows: ["page:x"], stale: true, owner: "user-1"))
+    let h = try await Harness(
+      opening + [
+        stale, .workspace(.full(try board(6, rows: []), owner: "user-1")), stale,
+        .workspace(.full(try board(7, rows: []), owner: "user-1")),
+      ], copy: try board(5, rows: []))
+    await h.engine.start()
+
+    #expect(await h.engine.perform(action: Command.ensureDay(yesterday)) == .refused("conflict"))
+
+    #expect(await h.transport.sends.count == 2)
+    #expect(await current(h.engine)?.workspace?.revision == 7, "try again is built on what the server has")
+    #expect(await h.transport.unscripted == [])
   }
 
   @Test func perform_while_signed_out_answers_signedOut() async throws {
