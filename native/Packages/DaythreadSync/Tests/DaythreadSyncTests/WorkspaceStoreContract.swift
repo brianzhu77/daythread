@@ -38,6 +38,18 @@ enum WorkspaceStoreContract {
     StoreCase(
       name: "a write that names a row the workspace lacks changes nothing",
       run: a_write_that_names_a_row_the_workspace_lacks_changes_nothing),
+    StoreCase(name: "a draft is kept and read back", run: a_draft_is_kept_and_read_back),
+    StoreCase(
+      name: "putting again replaces that owner's draft of that page",
+      run: putting_again_replaces_that_owners_draft_of_that_page),
+    StoreCase(
+      name: "two owners' drafts of the same page are both kept",
+      run: two_owners_drafts_of_the_same_page_are_both_kept),
+    StoreCase(name: "replacing the workspace keeps every draft", run: replacing_the_workspace_keeps_every_draft),
+    StoreCase(name: "removing a draft leaves the others", run: removing_a_draft_leaves_the_others),
+    StoreCase(name: "erase removes drafts", run: erase_removes_drafts),
+    StoreCase(
+      name: "drafts come oldest first, ties by owner then page", run: drafts_come_oldest_first_then_by_owner_and_page),
   ]
 
   private static let owner = "user-1"
@@ -290,6 +302,91 @@ enum WorkspaceStoreContract {
     let loaded = try required(try await store.load())
     #expect(loaded.workspace.json() == before.json())
     #expect(loaded.workspace.tasks == before.tasks)
+  }
+
+  /// A document with non-ASCII text, escapes, quotes and a NUL, as the server would send it.
+  private static let awkwardDocument =
+    #"[{"id":"b","content":[{"type":"text","text":"café 😀 \\ \/ \"q\" 你好"}]}]"#
+    + " \u{1F600} caf\u{E9} \u{0}"
+
+  private static func draft(
+    _ pageId: String = "p1", owner: String = owner, document: String = "[]", changedAt: Double = 1_798_194_615.125,
+    sent: PageDraft.Sent? = nil
+  ) -> PageDraft {
+    PageDraft(
+      pageId: pageId, owner: owner, base: "key-\(pageId)", baseDocument: awkwardDocument, document: document,
+      singleDeleteIds: ["x", "y"], sent: sent, changedAt: Date(timeIntervalSince1970: changedAt))
+  }
+
+  static func a_draft_is_kept_and_read_back(_ store: any WorkspaceStore) async throws {
+    #expect(try await store.drafts().isEmpty)
+    let sent = PageDraft.Sent(operationId: "op-9", document: awkwardDocument)
+    let plain = draft("p1", document: awkwardDocument)
+    let sending = draft("p2", document: awkwardDocument, changedAt: 1_798_194_616.5, sent: sent)
+    try await store.put(plain)
+    try await store.put(sending)
+    #expect(try await store.drafts() == [plain, sending])
+    #expect(try await store.drafts().last?.sent?.document == awkwardDocument)
+  }
+
+  static func putting_again_replaces_that_owners_draft_of_that_page(_ store: any WorkspaceStore) async throws {
+    try await store.put(draft(document: "[1]"))
+    let later = draft(document: "[2]", changedAt: 1_798_194_700, sent: .init(operationId: "op", document: "[1]"))
+    try await store.put(later)
+    #expect(try await store.drafts() == [later])
+  }
+
+  static func two_owners_drafts_of_the_same_page_are_both_kept(_ store: any WorkspaceStore) async throws {
+    let mine = draft(owner: "user-1", document: "[1]")
+    let theirs = draft(owner: "user-2", document: "[2]")
+    try await store.put(mine)
+    try await store.put(theirs)
+    #expect(try await store.drafts() == [mine, theirs])
+    try await store.removeDraft(pageId: "p1", owner: "user-1")
+    #expect(try await store.drafts() == [theirs])
+  }
+
+  static func replacing_the_workspace_keeps_every_draft(_ store: any WorkspaceStore) async throws {
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    let mine = draft(owner: "user-1")
+    let theirs = draft("p2", owner: "user-2", changedAt: 1_798_194_700)
+    try await store.put(mine)
+    try await store.put(theirs)
+    try await store.replace(with: try firstWorkspace(), owner: "user-2")
+    #expect(try await store.drafts() == [mine, theirs])
+    try await store.replace(with: try firstWorkspace(), owner: "user-1")
+    #expect(try await store.drafts() == [mine, theirs])
+  }
+
+  static func removing_a_draft_leaves_the_others(_ store: any WorkspaceStore) async throws {
+    let one = draft("p1", changedAt: 1)
+    let two = draft("p2", changedAt: 2)
+    let three = draft("p3", changedAt: 3)
+    for each in [one, two, three] { try await store.put(each) }
+    try await store.removeDraft(pageId: "p2", owner: owner)
+    #expect(try await store.drafts() == [one, three])
+    // Nothing there: nothing happens, and nothing is thrown.
+    try await store.removeDraft(pageId: "p2", owner: owner)
+    try await store.removeDraft(pageId: "p1", owner: "user-2")
+    #expect(try await store.drafts() == [one, three])
+  }
+
+  static func erase_removes_drafts(_ store: any WorkspaceStore) async throws {
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    try await store.put(draft(owner: "user-1"))
+    try await store.put(draft(owner: "user-2"))
+    try await store.erase()
+    #expect(try await store.drafts().isEmpty)
+  }
+
+  static func drafts_come_oldest_first_then_by_owner_and_page(_ store: any WorkspaceStore) async throws {
+    let newest = draft("a", owner: "user-1", changedAt: 30)
+    let tieB = draft("b", owner: "user-1", changedAt: 20)
+    let tieA = draft("a", owner: "user-1", changedAt: 20)
+    let tieOwner = draft("a", owner: "user-0", changedAt: 20)
+    let oldest = draft("z", owner: "user-9", changedAt: 10)
+    for each in [newest, tieB, oldest, tieA, tieOwner] { try await store.put(each) }
+    #expect(try await store.drafts() == [oldest, tieOwner, tieA, tieB, newest])
   }
 
   static func manyPages(_ store: any WorkspaceStore) async throws {
