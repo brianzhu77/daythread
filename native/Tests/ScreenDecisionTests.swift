@@ -8,7 +8,7 @@ private func workspace() throws -> Workspace {
   try #require(Workspace(try JSON.parse(#"{"revision":1,"timezone":"UTC","pages":[],"tasks":[]}"#)))
 }
 
-/// Which screen a state shows, and what Today's account menu says: decided from the state alone.
+/// Which screen a state shows, and what the day screen's account menu says: decided from the state alone.
 @MainActor
 @Suite struct ScreenDecisionTests {
   typealias Screen = RootViewController.Screen
@@ -33,10 +33,10 @@ private func workspace() throws -> Workspace {
 
   @Test func aCopyIsShownWhateverWentWrong() throws {
     let copy = try workspace()
-    #expect(Screen(SyncState(phase: .starting, workspace: copy)) == .today)
-    #expect(Screen(SyncState(phase: .starting, workspace: copy, offline: true)) == .today)
-    #expect(Screen(SyncState(phase: .ready, workspace: copy, failure: .server)) == .today)
-    #expect(Screen(SyncState(phase: .ready)) == .today)
+    #expect(Screen(SyncState(phase: .starting, workspace: copy)) == .day)
+    #expect(Screen(SyncState(phase: .starting, workspace: copy, offline: true)) == .day)
+    #expect(Screen(SyncState(phase: .ready, workspace: copy, failure: .server)) == .day)
+    #expect(Screen(SyncState(phase: .ready)) == .day)
   }
 
   @Test func signedOutIsSignInWhateverWentWrong() {
@@ -46,18 +46,18 @@ private func workspace() throws -> Workspace {
   }
 
   @Test func signOutIsOfferedOnlyWithASession() {
-    typealias Row = TodayViewController.AccountRow
+    typealias Row = DayViewController.AccountRow
     let signedIn = SyncState(phase: .ready, signedIn: true)
     let local = SyncState(phase: .ready, signedIn: false)
-    #expect(TodayViewController.accountRows(state: local, roundTrip: nil) == [])
-    #expect(TodayViewController.accountRows(state: signedIn, roundTrip: nil) == [.signOut])
+    #expect(DayViewController.accountRows(state: local, roundTrip: nil) == [])
+    #expect(DayViewController.accountRows(state: signedIn, roundTrip: nil) == [.signOut])
     let roundTrip = AppModel.RoundTrip(failing: 1, total: 3)
     #expect(
-      TodayViewController.accountRows(state: local, roundTrip: roundTrip) == [Row.roundTrip(failing: 1, total: 3)])
+      DayViewController.accountRows(state: local, roundTrip: roundTrip) == [Row.roundTrip(failing: 1, total: 3)])
   }
 
   @Test func theAccountMenuShowsTheAddressTheEnginePublishesWithoutASignInOnThisLaunch() {
     let launched = SyncState(phase: .ready, signedIn: true, address: "one@example.com")
-    #expect(TodayViewController.accountRows(state: launched, roundTrip: nil) == [.address("one@example.com"), .signOut])
+    #expect(DayViewController.accountRows(state: launched, roundTrip: nil) == [.address("one@example.com"), .signOut])
   }
 }
