@@ -20,7 +20,7 @@ the first in full and the second's §5 to §9.
 
 **Status (2026-11-25):** tasks 1 to 10 built and reviewed one by one, then the whole slice reviewed once and its
 findings fixed (below, "Decisions made while building"). Seen on the simulator against the seeded local servers
-(`tests/evidence/native-phase-1a/`). Task 11, the check on his own data, is Brian's.
+(`tests/evidence/native-phase-1a/`). Task 11, the check on his own data, is Brian's. Three changes he asked for on 2026-11-26 are built on top (below, "After Brian looked at it").
 
 ## Global Constraints
 
@@ -645,6 +645,30 @@ found six defects no unit test had caught (a tap on the circle did nothing; the 
 today; the calendar sheet cut off its last week at the largest text size; a held tick left a line through the
 words; the states for a day without a page were not drawn; one more was withdrawn as an artefact of the test
 host). Each fixed one has a test now.
+
+## After Brian looked at it (2026-11-26)
+
+Three things he asked for, each now in the design (`native-phase-1.md` §5 "Merging, not overwriting", §6) and
+built with its tests first:
+
+- **A past day's words.** "No page for <day>" and "Add page"; a day whose page is in Trash offers "Add a new
+  page". It was "No page for … yet" and "Start this page", the web's words; a past day is not started.
+- **The toolbar.** Previous, Calendar and Next are in the system toolbar at the bottom, with "Today" there only
+  while another day is open. The navigation bar keeps the title and the account button, and "Not saved" only
+  while a change is held. Six buttons had sat around the title.
+- **Merging, not overwriting.** A tick the server holds because the to-do changed elsewhere is settled by the
+  app: dropped when the server already has that status, sent again once when only something else about the
+  to-do changed, and asked about only when the two sides gave it different statuses or it is gone. The tick stays
+  drawn while this is settled. The web asks every time.
+
+Calls made while building these, each reversible:
+
+| Decision | If wrong |
+|---|---|
+| "Add page", and "Couldn't add a page · try again" / "Couldn't create a page · try again" for the two failures | One string to change |
+| Previous and Next stay in the toolbar, so three day buttons are always shown | Two items to remove; the calendar reaches every day |
+| A tick the server says may already be applied is never sent again by the app: dropped when the server has it, asked about otherwise. Sending it again could undo another device's untick without a word (found by the review) | One more question in a rare case |
+| "Sent again once" is remembered for the launch, not stored | After a relaunch the app may try one more time |
 
 ## Order and independence
 
