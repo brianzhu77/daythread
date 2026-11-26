@@ -13,7 +13,7 @@
 | Web | App | What the app does today |
 | --- | --- | --- |
 | Today (`/`) | built | The account's day page from the copy on the device, offline too. Large title is the day ("Thursday, Oct 22"). Moves at the account's midnight, not the device's. Pull to refresh; refreshes when the app becomes active and when the day changes. Asks the server for today's page when the copy has none and none is in Trash. A to-do can be ticked (see the to-do row) |
-| A past or future day (`/day/$date`) | built | The same screen, in place (no Back): Previous day and Next day in the bar (Next stops at today, as on the web), any day, future ones too, from the system's calendar with a dot on each day with something written, and "Today" while another day is open. A day without a page says so instead of making one: "No page for … yet" with "Start this page", "… hasn't happened yet" with "Create page", and a page in Trash with "Restore" and "Start a new page". The web's lists of what is planned or due on a future day are absent |
+| A past or future day (`/day/$date`) | built | The same screen, in place (no Back). The system's toolbar at the bottom holds Previous day, Calendar and Next day (Next stops at today, as on the web), and "Today" beside Next while another day is open; the navigation bar keeps the title and the account. Any day, future ones too, from the system's calendar with a dot on each day with something written. A day without a page says so instead of making one: "No page for …" with "Add page", "… hasn't happened yet" with "Create page", and a page in Trash with "Restore" and "Add a new page" (the web says "No page for … yet", "Start this page" and "Start a new page"). The web's lists of what is planned or due on a future day are absent |
 | Tasks (`/tasks`) | absent | |
 | Upcoming | absent | Part of Tasks on the web |
 | Calendar (`/calendar`) | absent | |
@@ -23,7 +23,7 @@
 | Search | absent | |
 | Trash (`/pages?view=trash`) | absent | |
 | Account menu | built, minimal | One button. Rows: the account's address as the server last gave it, "Sign out" while a session is stored, and in Debug builds "Round trip · N of M pages fail" when any page fails. "Sign out" tries once to send what is waiting and, when changes are still not sent, asks before discarding them ("2 changes not sent", "Sign out and discard", "Cancel") |
-| Changes not saved (the web's banner) | built | A red `exclamationmark.triangle` button in the bar while a change is held, on every day. Its menu has one section per held change titled with the web's sentence, with "Keep mine" (when the server held it) and "Discard", and a last line "1 later change waiting" when ticks wait behind a held one. The web's link from the name to its row is absent |
+| Changes not saved (the web's banner) | built, merges first | The app settles a held tick itself before asking: dropped when the server already has the status, sent again on the loaded revision (once) when only something else about the to-do changed, held only when the to-do now has another status or is gone. The web asks (Keep mine) in every case, never automatically. What is held shows as a red `exclamationmark.triangle` button in the navigation bar, beside the account, on every day. Its menu has one section per held change titled with the web's sentence, with "Keep mine" (when the server held it) and "Discard", and a last line "1 later change waiting" when ticks wait behind a held one. The web's link from the name to its row is absent |
 | Account settings (time zone, delete account, reminders) | absent | |
 | Sign-in (`/sign-in`) | built | Email, password, "Sign in"; one line under the button for a refusal, in the web's words. The session is kept in the Keychain |
 | Sign-up (`/sign-up`) | absent | |
@@ -73,12 +73,14 @@ app shows any type it does not know as "Block".
   kept on the device until the server answers, and is sent without him doing anything when the server can be reached
   (after 2 s, 5 s, 15 s, then every 30 s, and at once when the network comes back). `readsBeyond` is false. When the
   server holds or refuses one, the app loads the workspace in the same pass, so the row shows what the server has and
-  "Keep mine" is sent on it, as the web's resync does.
+  "Keep mine" is sent on it, as the web's resync does. A tick held for `conflict`, `changed-since` or `maybe-applied`
+  is merged after that load without asking: dropped when the to-do already has its status, sent again once on the
+  loaded revision when the to-do still has the status it was tapped from, held otherwise; it stays drawn meanwhile.
 - `ensure-day`: the engine asks for today's page when the copy has none and none is in Trash, through the outbox,
-  once per load while that holds. "Start this page", "Create page" and "Start a new page" send it for their day,
+  once per load while that holds. "Add page", "Create page" and "Add a new page" send it for their day,
   waiting for the answer, not through the outbox.
 - `restore-batch` (the page's `trashId`): "Restore" on a day whose page is in Trash, waiting for the answer.
-- A command waited for ("Start this page", "Create page", "Start a new page", "Restore") that the server holds
+- A command waited for ("Add page", "Create page", "Add a new page", "Restore") that the server holds
   because the copy is behind is sent once more after a load, so it works after another device wrote; any other hold
   or refusal is followed by a load before "Couldn't … · try again" shows, so trying again is built on what the
   server has, as the web resyncs before a retry.

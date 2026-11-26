@@ -28,13 +28,14 @@
 | Couldn't update · showing what was last loaded | The same prompt, when a pass failed for any other reason |
 | Couldn't load, Retry | The whole screen, when a pass failed and there is no copy to show |
 | Tuesday, Nov 3 | The day screen's title: weekday, month and day in the reader's language, no year; `<day>` below is this text |
-| Previous day, Next day | The leading bar buttons' accessibility labels (`chevron.left`, `chevron.right`, no text); Next is disabled from today on |
-| Calendar | The calendar bar button's accessibility label (`calendar`, no text); it opens the system's calendar, a dot on each day with something written |
-| Today | A bar button, shown only while another day is open |
-| No page for <day> yet, Start this page | A past day with no page, in place of the page |
+| Previous day, Next day | The accessibility labels of the toolbar's first and last buttons (`chevron.left`, `chevron.right`, no text), at its two ends; Next is disabled from today on |
+| Calendar | The accessibility label of the toolbar's middle button (`calendar`, no text); it opens the system's calendar, a dot on each day with something written, in a popover anchored to that button (a sheet on the phone) |
+| Today | A toolbar button beside Next, shown only while another day is open |
+| No page for <day>, Add page | A past day with no page, in place of the page |
 | <day> hasn't happened yet, Create page | A future day with no page, in place of the page |
-| Today's page is in Trash. (The page for <day> is in Trash.), Restore, Start a new page | A day whose page is in Trash; "Restore" only when the page names its trash entry |
-| Couldn't start a page · try again | The second line of those states when "Start this page", "Create page" or "Start a new page" did not go through; the web's words |
+| Today's page is in Trash. (The page for <day> is in Trash.), Restore, Add a new page | A day whose page is in Trash; "Restore" only when the page names its trash entry |
+| Couldn't add a page · try again | The second line of those states when "Add page" or "Add a new page" did not go through |
+| Couldn't create a page · try again | The same, when "Create page" did not go through |
 | Couldn't restore · try again | The same, when "Restore" did not go through; the web's words |
 | Daythread | The sign-in screen's title |
 | Email, Password, Sign in | The sign-in form |
@@ -43,10 +44,10 @@
 | This address isn't on the invite list yet | Under "Sign in", not invited |
 | Too many tries · Try again in 30 s (or in 4 min) | Under "Sign in", when asked to wait |
 | Couldn't sign in · Try again | Under "Sign in", offline or any other failure |
-| Account | The account button's accessibility label (an icon, no text) |
+| Account | The account button's accessibility label (an icon, no text), the navigation bar's trailing button |
 | Sign out | The account menu, while a session is stored |
 | 1 change not sent (N changes not sent), Sign out and discard, Cancel | The alert after "Sign out" when changes are still not sent after one try |
-| Not saved | The held button's accessibility label (`exclamationmark.triangle` in the system's red, no text), shown while a change is held |
+| Not saved | The held button's accessibility label (`exclamationmark.triangle` in the system's red, no text), in the navigation bar beside the account button, shown while a change is held. The app merges a held tick itself (dropped when the server has it, sent again when only something else about the to-do changed) and shows this only when both sides changed the to-do's status differently, or the to-do is gone |
 | Not saved — ticked "…" was changed elsewhere | The held menu's section title, held because the row changed elsewhere; the web's sentence, with the change's label |
 | Not saved — "…" was deleted elsewhere | The same, for a to-do that is gone ("it" when the label names nothing) |
 | Not saved — ticked "…" · changed since | The same, held because something changed since |
