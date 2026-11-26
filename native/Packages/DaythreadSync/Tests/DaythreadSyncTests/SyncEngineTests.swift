@@ -350,6 +350,7 @@ private struct Harness {
         .account(firstAccount), .workspace(.unchanged(revision: 5, owner: "user-1")),
         .outcome(.applied(receipt: .object([:]), changes: applied, owner: "user-1")),
         .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")),
+        .workspace(.unchanged(revision: 6, owner: "user-1")),
       ], copy: copy, entries: [pending("op-1", base: 5), pending("op-2", base: 5)])
 
     await h.engine.start()
@@ -476,6 +477,7 @@ private struct Harness {
     await h.transport.add([
       .workspace(.unchanged(revision: 5, owner: "user-1")),
       .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")),
+      .workspace(.unchanged(revision: 5, owner: "user-1")),
     ])
     await h.engine.refresh()
     #expect(await h.transport.sends == [send("op-1", base: 5), send("op-1", base: 5)])
@@ -677,6 +679,7 @@ private struct Harness {
     await h.transport.add([
       .workspace(.unchanged(revision: 5, owner: "user-1")),
       .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")),
+      .workspace(.unchanged(revision: 5, owner: "user-1")),
     ])
     await h.engine.refresh()
     #expect(await h.transport.sends == [send("op-1", base: 5), send("op-1", base: 5)])
@@ -752,6 +755,7 @@ private struct Harness {
       [
         .account(firstAccount), .workspace(.unchanged(revision: 5, owner: "user-1")),
         .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1")),
+        .workspace(.unchanged(revision: 5, owner: "user-1")),
       ], copy: copy)
     await h.engine.start()
     let seen = SeenEntries()
@@ -781,7 +785,9 @@ private struct Harness {
     #expect(kept.label == "Tick t1")
     #expect(kept.createdAt == noon)
     #expect(kept.state == .pending)
-    #expect(await h.calls.count == 3)  // the change is sent; nothing is loaded for it
+    // The change is sent with nothing loaded before it; the load after it is the one its hold asks for.
+    #expect(await h.calls.count == 4)
+    #expect(await h.calls.last == .workspace(token: "tok-1", have: 5))
   }
 
   @Test func enqueue_with_nothing_shown_is_refused() async throws {
@@ -1374,7 +1380,7 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
     let h = try await Harness(
       [
         .account(firstAccount), .workspace(.full(try board(5, days: [], rows: [row("t1")]), owner: "user-1")), held,
-        held, .workspace(.unchanged(revision: 5, owner: "user-1")),
+        held, .workspace(.unchanged(revision: 5, owner: "user-1")), held,
       ])
     await h.engine.start()
 
@@ -1385,8 +1391,9 @@ private func task(_ id: String, in workspace: Workspace?) -> TodoTask? {
       guard case .send(_, _, let action, _, let basis) = call else { return nil }
       return (Command.type(of: action), basis.readsBeyond)
     }
-    #expect(sent.map(\.0) == ["ensure-day", "task-status"])
-    #expect(sent.map(\.1) == [true, false])
+    // The tick's hold loads, and today still has no page, so the load asks for it once more.
+    #expect(sent.map(\.0) == ["ensure-day", "task-status", "ensure-day"])
+    #expect(sent.map(\.1) == [true, false, true])
   }
 
   @Test func an_already_applied_tick_stays_drawn_until_the_load_brings_it() async throws {

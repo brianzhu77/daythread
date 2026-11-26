@@ -6,6 +6,9 @@ extension SyncEngine {
   /// What the drain does after an outcome.
   private enum Next {
     case send
+    /// The server held or refused one of his entries: the copy is behind what it checked the entry against. The
+    /// drain goes on, and loads once before the pass does anything else.
+    case sendThenLoad
     /// The copy lacks what the server did for the entry (its changes start from another revision than the copy's, or
     /// it was applied before and its answer lost): load whole, then acknowledge the entry, learning `revision` when
     /// given. The entry stays pending until then, so it is drawn until the load is in the copy, and a load that fails
@@ -17,7 +20,29 @@ extension SyncEngine {
 
   /// Sends pending entries one at a time, oldest first, until none is left. Held entries are passed over, and so are
   /// those waiting behind one.
+  ///
+  /// When the server held or refused one of his entries, the workspace is loaded once, so the page shows what the
+  /// server has and Keep mine is built on it; then what that load asked for (today's page) is sent, with no second
+  /// load whatever its answer, so a pass never loops between holding and loading.
   func drain(_ pass: Pass) async throws {
+    guard try await sendPending(pass) == .copyBehind else { return }
+    let owner = copy?.owner
+    try await loadWorkspace(pass, have: copy?.workspace.revision)
+    // A load under another owner leaves nothing of this owner's to send in this pass.
+    guard copy?.owner == owner else { return }
+    _ = try await sendPending(pass)
+  }
+
+  private enum Drained {
+    case done
+    /// An entry was held or refused and no load since has brought the copy up to date.
+    case copyBehind
+    /// The reply was another account's and the workspace was loaded whole under it.
+    case stopped
+  }
+
+  private func sendPending(_ pass: Pass) async throws -> Drained {
+    var behind = false
     while let entry = try await nextPending(pass) {
       let basis = OutboxBasis(
         baseRevision: entry.baseRevision, ownRevisions: entry.ownRevisions,
@@ -35,8 +60,12 @@ extension SyncEngine {
       switch try await settle(outcome, of: entry, pass) {
       case .send:
         continue
+      case .sendThenLoad:
+        behind = true
       case .loadWholeThenAcknowledge(let revision):
         try await loadWorkspace(pass, have: nil)
+        // That load brought the copy up to what the server has, holds included.
+        behind = false
         try await enter(pass)
         defer { release() }
         // After a load under another owner, the entries left are that owner's; this revision is not theirs.
@@ -44,9 +73,10 @@ extension SyncEngine {
         await readOutbox()
       case .loadWholeAndStop:
         try await loadWorkspace(pass, have: nil)
-        return
+        return .stopped
       }
     }
+    return behind ? .copyBehind : .done
   }
 
   /// Holds `entry` for him, as the server's `held` outcome would.
@@ -94,22 +124,25 @@ extension SyncEngine {
       publish()
       return .loadWholeAndStop
     }
+    var next = Next.send
     switch outcome {
     case .applied(_, let changes, _):
-      guard let next = copy.workspace.applying(changes) else {
+      guard let updated = copy.workspace.applying(changes) else {
         publish()
         return .loadWholeThenAcknowledge(revision: changes.revision)
       }
       // Two transactions: a death between them leaves the entry pending, and its replay is answered with the
       // receipt the server kept and acknowledged then.
-      try await store.write(next, changed: changes)
-      self.copy = (next, copy.owner)
+      try await store.write(updated, changed: changes)
+      self.copy = (updated, copy.owner)
       try await store.acknowledge(seq: entry.seq, revision: changes.revision)
     case .alreadyApplied:
       publish()
       return .loadWholeThenAcknowledge(revision: nil)
     case .held(let reason, _, _, _), .refused(let reason, _):
       try await keepHeld(entry, reason: reason)
+      // The engine's own request for today's page is removed, and a load would only ask for it again.
+      if !entry.asksForADay { next = .sendThenLoad }
     case .ownerMismatch:
       publish()
       return .loadWholeAndStop
@@ -117,7 +150,7 @@ extension SyncEngine {
     // The copy and the outbox have both moved on before this publish: the entry is drawn by one or the other.
     await readOutbox()
     publish()
-    return .send
+    return next
   }
 
   /// Writes an entry under the copy's owner, built on the copy's revision. Runs inside a store section.
