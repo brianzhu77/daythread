@@ -23,32 +23,49 @@ public struct EditablePage: Sendable {
   /// The page's day, for a to-do made with no row to copy its role and plan date from.
   let pageDate: LocalDate?
   let makeID: @Sendable () -> String
+  /// False when `Document.parses` refuses the stored string. Such a page reads as no blocks, so writing it would
+  /// save an empty page over the real one: it is shown, never edited, and `document` stays the stored string.
+  public let isReadable: Bool
+  /// The string as stored, written back until an operation changes something, so an untouched page is never
+  /// rewritten (writing the blocks back can differ in spacing or escapes from what was stored).
+  private let stored: String
+  private var changed = false
 
   public init(document: String, pageDate: LocalDate?, makeID: @escaping @Sendable () -> String = NewBlock.id) {
+    isReadable = Document.parses(document)
+    stored = document
     blocks = Document.blocks(document)
     self.pageDate = pageDate
     self.makeID = makeID
   }
 
-  public var document: String { Document.write(blocks) }
+  public var document: String { changed ? Document.write(blocks) : stored }
 
-  /// Typing and deleting inside one line. Returns where the caret is afterwards. A line that cannot hold a
-  /// caret, or an id not on the page, is left alone.
+  /// Typing and deleting inside one line. Returns where the caret is afterwards. When the block is not in
+  /// `textBlocks` (or the page is not readable) the page is unchanged and the returned caret means nothing.
   public mutating func replaceText(in block: String, range: Range<Int>, with text: String) -> Caret {
-    guard let path = editablePath(of: block) else { return Caret(block: block, offset: range.lowerBound) }
+    guard isReadable, let path = editablePath(of: block) else { return Caret(block: block, offset: range.lowerBound) }
     var words = InlineContent(self[path].content)
     let start = Self.characterStart(range.lowerBound, in: words)
     words.replace(range, with: text)
-    self[path].content = words.json
+    let content = words.json
+    if self[path].content != content {
+      self[path].content = content
+      changed = true
+    }
     return Caret(block: block, offset: start + text.utf16.count)
   }
 
-  /// A key at a caret. Nil when the key does nothing there.
+  /// A key at a caret. Nil when the key does nothing there; a key that does something always changes the page.
   public mutating func press(_ key: Key, at caret: Caret) -> Caret? {
-    switch key {
-    case .returnKey: pressReturn(at: caret)
-    case .backspace, .tab, .shiftTab: nil
-    }
+    guard isReadable else { return nil }
+    let result: Caret? =
+      switch key {
+      case .returnKey: pressReturn(at: caret)
+      case .backspace, .tab, .shiftTab: nil
+      }
+    if result != nil { changed = true }
+    return result
   }
 
   public func content(of block: String) -> InlineContent? {
