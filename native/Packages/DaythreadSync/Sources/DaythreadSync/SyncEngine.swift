@@ -269,10 +269,10 @@ public actor SyncEngine {
   /// his, and each draft of the account shown, whatever it waits for), signs nobody out and returns how many, so he
   /// can be asked. Otherwise tells the server, erases the copy, the outbox and the session whatever it answered (a
   /// shared device must not keep someone's notes), and returns 0. Another account's drafts are never erased: when
-  /// discarding, the signing-out account's drafts go with the copy, in the same transaction; without discarding it
-  /// has none left to erase, and a draft not shown (a session that ended) is not erased uncounted. Discarding tries no pass:
-  /// he has said yes, and sign-out does not wait for the network beyond telling the server. The last action wins: a
-  /// sign-in that completes while the server is being told is kept.
+  /// discarding, the drafts counted (those of the copy shown) go with the copy, in the same transaction; without
+  /// discarding there are none left to erase, and a draft not shown (a session that ended) is not erased uncounted.
+  /// Discarding tries no pass: he has said yes, and sign-out does not wait for the network beyond telling the server.
+  /// The last action wins: a sign-in that completes while the server is being told is kept.
   ///
   /// If the erase throws, it is tried once more; if it still throws, this ends signed out anyway. The copy then stays on
   /// disk but hidden (`start` shows no copy without its session), and is erased at the next sign-in under another
@@ -301,8 +301,9 @@ public actor SyncEngine {
     answerStalePerformances()
     let signInsBefore = signIns
     let session = try? tokens.read()
-    // With sign-in off there is no session, and the account shown is the Mac's.
-    let discarded = discardingUnsent ? session?.owner ?? (copyShown ? copy?.owner : nil) : nil
+    // The owner whose drafts were counted, not the session's: after an owner mismatch the copy shown is the
+    // server's account while the session still names the other.
+    let discarded = discardingUnsent && copyShown ? copy?.owner : nil
     release()
 
     var reachedServer: Bool?
@@ -337,6 +338,8 @@ public actor SyncEngine {
     signedIn = false
     failure = nil
     outbox = []
+    // A read that fails keeps what memory had: the discarded account's drafts must not be among it.
+    if let discarded { drafts.removeAll { $0.owner == discarded } }
     await readDrafts()
     forgetDraftWork()
     address = nil

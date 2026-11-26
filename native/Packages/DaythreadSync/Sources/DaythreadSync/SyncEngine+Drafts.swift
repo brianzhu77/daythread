@@ -102,15 +102,21 @@ extension SyncEngine {
 
   /// Removes the account's draft of the page: the page is drawn as the server has it. A save already on its way is
   /// still answered into the copy. The pending ticks on a to-do that only this draft had go with it: sent, they
-  /// would only be held as gone.
+  /// would only be held as gone. Not those on a to-do its recorded save makes (that save may land, or have landed,
+  /// and the tick goes after its answer or is held as gone where he sees it), nor on one another page's draft makes.
   public func discardDraft(pageId: String) async {
     await acquire()
     defer { release() }
     guard copyShown, phase != .signedOut, !leaving, let copy, let kept = accountDraft(pageId) else {
       return
     }
+    let stillMade = Set(
+      (Self.todosMade(by: kept)
+        + accountDrafts.filter { !$0.pageId.utf8.elementsEqual(kept.pageId.utf8) }
+        .flatMap { Self.todoIds(in: Document.blocks($0.document)) }).map { Array($0.utf8) })
     let onlyHere = Set(
-      Self.todoIds(in: Document.blocks(kept.document)).filter { copy.workspace.task($0) == nil }.map { Array($0.utf8) })
+      Self.todoIds(in: Document.blocks(kept.document)).filter { copy.workspace.task($0) == nil }.map { Array($0.utf8) }
+    ).subtracting(stillMade)
     do {
       try await store.removeDraft(pageId: kept.pageId, owner: copy.owner)
       for entry in outbox where entry.state == .pending {
@@ -518,7 +524,7 @@ extension SyncEngine {
         return .pageChanged
       }
       SyncLog.logger.notice("Save of a page: refused, kept")
-      refusedDrafts[save.pageId] = message
+      if recordsAsSent(save) { refusedDrafts[save.pageId] = message }
       try await clearSent(save)
     case .ownerMismatch:
       SyncLog.logger.notice("Save of a page: owner-mismatch, kept")
@@ -570,6 +576,12 @@ extension SyncEngine {
     drafts.first { $0.owner == save.owner && $0.pageId.utf8.elementsEqual(save.pageId.utf8) }
   }
 
+  /// Whether the page's draft still has `save` as the one on its way. A refusal belongs to the save refused: once
+  /// that draft was discarded, a new draft of the page never sent those words. Runs inside a store section.
+  private func recordsAsSent(_ save: DraftSave) -> Bool {
+    recordedDraft(of: save)?.sent?.operationId == save.operationId
+  }
+
   /// Holds the draft for him after the server refused the request itself: kept, and not sent until he acts.
   private func hold(_ save: DraftSave, because reason: String, status: Int, _ pass: Pass) async throws {
     try await enter(pass)
@@ -578,7 +590,7 @@ extension SyncEngine {
     offline = false
     failure = nil
     SyncLog.logger.notice("Save of a page: refused with \(status, privacy: .public), kept")
-    refusedDrafts[save.pageId] = reason
+    if recordsAsSent(save) { refusedDrafts[save.pageId] = reason }
     try await clearSent(save)
     publish()
   }
