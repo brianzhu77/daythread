@@ -1,0 +1,119 @@
+{
+  "before": {
+    "schemaVersion": 2,
+    "revision": 3,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "books",
+        "type": "document",
+        "date": null,
+        "title": "Books",
+        "document": "[{\"id\":\"2db45c7a-c9d5-4306-b182-85f94c0e7742\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Hello\",\"styles\":{}}],\"children\":[]},{\"id\":\"s1\",\"type\":\"syncedBlock\",\"props\":{\"syncId\":\"sync-1\",\"roles\":\"\"},\"children\":[]},{\"id\":\"home\",\"type\":\"database\",\"props\":{\"pageId\":\"list\",\"view\":\"\"},\"children\":[]},{\"id\":\"p2\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Tail\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-10-22T09:01:00.000Z"
+      },
+      {
+        "id": "list",
+        "type": "document",
+        "date": null,
+        "title": "Reading list",
+        "parentId": "books",
+        "document": "[]",
+        "database": {
+          "homeBlockId": "home",
+          "properties": [],
+          "views": [
+            {
+              "id": "0da4879b-a128-49b4-b76e-94b7a2537a98",
+              "name": "Table",
+              "layout": "table",
+              "columns": [],
+              "sort": [],
+              "filter": []
+            }
+          ]
+        }
+      }
+    ],
+    "tasks": [],
+    "deletedTasks": [],
+    "synced": [
+      {
+        "id": "sync-1",
+        "lines": "[{\"id\":\"l1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Shown in two places\",\"styles\":{}}],\"children\":[]}]",
+        "rev": 1,
+        "original": "s1",
+        "editedAt": "2026-10-22T09:01:00.000Z"
+      }
+    ],
+    "receipts": {},
+    "undo": {
+      "operationId": "make-list",
+      "revision": 3
+    }
+  },
+  "operationId": "save-untouched",
+  "expectedRevision": 3,
+  "action": {
+    "type": "save-editor",
+    "pageId": "books",
+    "expectedContent": "d:493:8a2f4a573bddd447aaeb69487cb8da58",
+    "document": "[{\"id\":\"2db45c7a-c9d5-4306-b182-85f94c0e7742\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Hello, world\",\"styles\":{}}],\"children\":[]},{\"id\":\"s1\",\"type\":\"syncedBlock\",\"props\":{\"syncId\":\"sync-1\",\"roles\":\"\"},\"children\":[]},{\"id\":\"home\",\"type\":\"database\",\"props\":{\"pageId\":\"list\",\"view\":\"\"},\"children\":[]},{\"id\":\"p2\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Tail\",\"styles\":{}}],\"children\":[]}]",
+    "today": "2026-10-22",
+    "at": "2026-10-22T09:30:00.000Z"
+  },
+  "after": {
+    "schemaVersion": 2,
+    "revision": 4,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "books",
+        "type": "document",
+        "date": null,
+        "title": "Books",
+        "document": "[{\"id\":\"2db45c7a-c9d5-4306-b182-85f94c0e7742\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Hello, world\",\"styles\":{}}],\"children\":[]},{\"id\":\"s1\",\"type\":\"syncedBlock\",\"props\":{\"syncId\":\"sync-1\",\"roles\":\"\"},\"children\":[]},{\"id\":\"home\",\"type\":\"database\",\"props\":{\"pageId\":\"list\",\"view\":\"\"},\"children\":[]},{\"id\":\"p2\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Tail\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-10-22T09:30:00.000Z"
+      },
+      {
+        "id": "list",
+        "type": "document",
+        "date": null,
+        "title": "Reading list",
+        "parentId": "books",
+        "document": "[]",
+        "database": {
+          "homeBlockId": "home",
+          "properties": [],
+          "views": [
+            {
+              "id": "0da4879b-a128-49b4-b76e-94b7a2537a98",
+              "name": "Table",
+              "layout": "table",
+              "columns": [],
+              "sort": [],
+              "filter": []
+            }
+          ]
+        }
+      }
+    ],
+    "tasks": [],
+    "deletedTasks": [],
+    "synced": [
+      {
+        "id": "sync-1",
+        "lines": "[{\"id\":\"l1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Shown in two places\",\"styles\":{}}],\"children\":[]}]",
+        "rev": 1,
+        "original": "s1",
+        "editedAt": "2026-10-22T09:01:00.000Z"
+      }
+    ],
+    "receipts": {},
+    "undo": {
+      "operationId": "save-untouched",
+      "revision": 4
+    }
+  },
+  "message": "Page saved"
+}

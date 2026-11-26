@@ -1,5 +1,6 @@
 // The native app's workspace, commands and saves over /api/v1: the web app's server functions as plain JSON, through
 // the same rules (`runOutbox`, the store's revision check), so the two clients cannot drift apart.
+import { z } from 'zod'
 import { outboxCommandSchema, commandSchema } from '../domain/command-schema.ts'
 import type { Receipt, Workspace } from '../domain/types.ts'
 import type { WorkspaceChanges } from '../domain/workspace-changes.ts'
@@ -9,6 +10,7 @@ import { runOutbox, type OutboxOutcome } from './outbox-command.ts'
 import type { ServerRepository } from './repository.ts'
 
 const noStore = { 'cache-control': 'no-store' }
+const saveSchema = commandSchema.extend({ expectedOwner: z.string().min(1).max(200).optional() })
 const badRequest = { status: 400, body: { error: 'bad-request' } } as const
 
 /** The whole workspace, or just "nothing new" when the app already has this revision (it polls, and a workspace is large). */
@@ -25,11 +27,14 @@ export async function commandReply(repo: ServerRepository, owner: string, body: 
 }
 
 /** An editor save is checked against the whole revision, not a row basis: the app sends the document it read, so a stale one is refused, not merged. */
-export async function saveReply(repo: ServerRepository, owner: string, body: unknown): Promise<{ status: 200; body: { receipt: Receipt; changes: WorkspaceChanges; owner: string } } | { status: 400; body: { error: 'bad-request' } } | { status: 409; body: { error: 'refused'; message: string } }> {
-  const command = commandSchema.safeParse(body)
-  if (!command.success || command.data.action.type !== 'save-editor') return badRequest
+export async function saveReply(repo: ServerRepository, owner: string, body: unknown): Promise<{ status: 200; body: { receipt: Receipt; changes: WorkspaceChanges; owner: string } } | { status: 400; body: { error: 'bad-request' } } | { status: 409; body: { error: 'refused'; message: string } } | { status: 409; body: { error: 'owner-mismatch'; owner: string } }> {
+  const parsed = saveSchema.safeParse(body)
+  if (!parsed.success || parsed.data.action.type !== 'save-editor') return badRequest
+  // Optional, so the web app and older clients are unaffected; a save made under one account must not land in another.
+  const { expectedOwner, ...command } = parsed.data
+  if (expectedOwner !== undefined && expectedOwner !== owner) return { status: 409, body: { error: 'owner-mismatch', owner } }
   try {
-    const { receipt, changes } = await repo.execute(command.data)
+    const { receipt, changes } = await repo.execute(command)
     return { status: 200, body: { receipt, changes, owner } }
   } catch (error) {
     if (error instanceof DomainError) return { status: 409, body: { error: 'refused', message: error.message } }

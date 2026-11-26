@@ -10,6 +10,8 @@ The cases the native app (`native/`) is held to, made from the TypeScript domain
 - `day-page/cases.json`: `{ name, workspace, date, live, trashed }`, the id of a date's live day page and of its latest page in Trash (`null` for none).
 - `written-days/cases.json`: `{ name, workspace, days }`, the days `writtenDays` counts, sorted.
 - `labels/cases.json`: `{ name, workspace, action, label }`, what the outbox's `labelFor` says of a change.
+- `content-key/cases.json`: `{ name, document, key }`, a page's stored string and its `pageContentKey` (a synced block is stored without its lines, and the key is of that form).
+- `saves/`: one file per save. `{ before, operationId, expectedRevision, action, after, message }` for a `save-editor` the server takes, `{ before, operationId, expectedRevision, action, refused }` for one it refuses (the domain's message). `same-operation-twice.json` also has `second: { message, after }`, the answer to the same command sent again.
 - `today/cases.json`: `{ timezone, at, day }`, the local day of an instant in a time zone.
 
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:

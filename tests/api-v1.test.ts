@@ -63,6 +63,19 @@ test('saves: save-editor only, checked against the whole revision; a stale one i
   assert.equal((await saveReply(repo, 'local', { operationId: 'x', expectedRevision: 2, action: { type: 'ensure-day', date: '2026-10-23' } })).status, 400)
 })
 
+test('saves: an expectedOwner that is the session\'s is applied; another is 409 owner-mismatch and writes nothing; absent behaves as before; not a string is 400', async () => {
+  const repo = await withDay()
+  const page = (await repo.load()).pages[0]!
+  const save = (operationId: string, extra: Record<string, unknown>) => ({ operationId, expectedRevision: 1, action: { type: 'save-editor', pageId: page.id, expectedContent: pageContentKey(page), document: page.document }, ...extra })
+  const other = await saveReply(repo, 'local', save('o1', { expectedOwner: 'someone-else' }))
+  assert.deepEqual(other, { status: 409, body: { error: 'owner-mismatch', owner: 'local' } })
+  assert.equal((await repo.load()).revision, 1, 'nothing was written')
+  assert.equal((await saveReply(repo, 'local', save('o2', { expectedOwner: 'local' }))).status, 200)
+  assert.equal((await repo.load()).revision, 2)
+  assert.equal((await saveReply(repo, 'local', { ...save('o3', {}), expectedRevision: 2 })).status, 200, 'without the field it is as before')
+  for (const bad of [7, null, {}, ['local']]) assert.deepEqual(await saveReply(repo, 'local', save('o4', { expectedOwner: bad })), { status: 400, body: { error: 'bad-request' } })
+})
+
 test('a body that is not JSON is the same 400 as one that is not a command', async () => {
   const request = new Request('http://localhost/api/v1/commands', { method: 'POST', body: 'not json' })
   for (const handle of [handleCommand, handleSave]) {
