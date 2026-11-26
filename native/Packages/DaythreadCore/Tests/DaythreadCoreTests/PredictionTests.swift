@@ -15,12 +15,12 @@ import Testing
       let theirs = try #require(after.task(id))
       #expect(JSON.write(.object(mine.raw)) == JSON.write(.object(theirs.raw)), "task \(id) in \(name)")
     }
-    #expect(predicted.tasks.map(\.id) == before.tasks.map(\.id), name)
+    #expect(predicted.tasks.map(\.id) == before.tasks.map(\.id), "\(name)")
     for task in before.tasks where !found.taskRows.contains(task.id) {
       #expect(predicted.task(task.id) == task, "task \(task.id) in \(name)")
     }
-    #expect(predicted.pages == before.pages, name)
-    #expect(predicted.revision == before.revision, name)
+    #expect(predicted.pages == before.pages, "\(name)")
+    #expect(predicted.revision == before.revision, "\(name)")
   }
 
   @Test(arguments: [

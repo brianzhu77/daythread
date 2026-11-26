@@ -20,7 +20,7 @@
         switch status {
         case .done: "done"
         case .cancelled: "cancelled"
-        case .open, nil: "not done"
+        case .open, .other, nil: "not done"
         }
       setNeedsUpdateConfiguration()
     }
@@ -42,7 +42,7 @@
       switch status {
       case .done: "checkmark.circle.fill"
       case .cancelled: "xmark.circle"
-      case .open, nil: "circle"
+      case .open, .other, nil: "circle"
       }
     }
   }
