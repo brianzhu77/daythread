@@ -117,9 +117,11 @@ public actor SyncEngine {
   /// The current state at once, then each change. Each read is a new stream; one whose reader stops is forgotten.
   public nonisolated var states: AsyncStream<SyncState> { broadcast.stream() }
 
-  /// For tests: readers of `states` not yet forgotten, and passes asked for so far.
+  /// For tests: readers of `states` not yet forgotten, passes asked for so far, and calls waiting for the store
+  /// section.
   nonisolated var subscriberCount: Int { broadcast.count }
   var passRequests: Int { requested }
+  var sectionWaiters: Int { waiting.count }
 
   // MARK: Public calls
 

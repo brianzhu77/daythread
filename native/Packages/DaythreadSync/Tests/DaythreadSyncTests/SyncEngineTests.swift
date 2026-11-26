@@ -115,8 +115,33 @@ actor RecordingStore: WorkspaceStore {
   private let inner = MemoryWorkspaceStore()
   private(set) var log: [String] = []
   private var failing: Set<String> = []
+  private var holding: Set<String> = []
+  private var held: [String: CheckedContinuation<Void, Never>] = [:]
+  private var arrivals: [String: [CheckedContinuation<Void, Never>]] = [:]
 
   func forget() { log = [] }
+
+  /// Makes the next call named `name` wait, after it arrives, until `letGo(name)`.
+  func hold(_ name: String) { holding.insert(name) }
+
+  /// Returns once the held call named `name` is waiting.
+  func arrived(_ name: String) async {
+    if held[name] != nil { return }
+    await withCheckedContinuation { arrivals[name, default: []].append($0) }
+  }
+
+  func letGo(_ name: String) {
+    holding.remove(name)
+    held.removeValue(forKey: name)?.resume()
+  }
+
+  private func pause(_ name: String) async {
+    guard holding.remove(name) != nil else { return }
+    await withCheckedContinuation { call in
+      held[name] = call
+      for arrival in arrivals.removeValue(forKey: name) ?? [] { arrival.resume() }
+    }
+  }
 
   /// Makes the call named `name` throw `StoreRefused` until `heal()`.
   func fail(_ name: String) { failing.insert(name) }
@@ -129,6 +154,7 @@ actor RecordingStore: WorkspaceStore {
   func load() async throws -> (workspace: Workspace, owner: String)? { try await inner.load() }
 
   func replace(with workspace: Workspace, owner: String) async throws {
+    await pause("replace")
     log.append("replace \(owner) \(workspace.revision)")
     try check("replace")
     try await inner.replace(with: workspace, owner: owner)
@@ -140,9 +166,13 @@ actor RecordingStore: WorkspaceStore {
     try await inner.write(workspace, changed: changed)
   }
 
-  func entries() async throws -> [OutboxEntry] { try await inner.entries() }
+  func entries() async throws -> [OutboxEntry] {
+    await pause("entries")
+    return try await inner.entries()
+  }
 
   func append(_ entry: NewOutboxEntry) async throws -> OutboxEntry {
+    await pause("append")
     log.append("append \(entry.operationId)")
     try check("append")
     return try await inner.append(entry)
@@ -2009,6 +2039,80 @@ struct Answer: Sendable, CustomTestStringConvertible {
     #expect(sends == 1)
   }
 
+  @Test func a_command_taken_from_the_queue_as_a_sign_out_begins_is_answered_signed_out() async throws {
+    let h = try await Harness(opening + [.done], copy: try board(5, rows: [row("t1")]))
+    await h.engine.start()
+    let answer = Answered()
+    let engine = h.engine
+
+    // The pass's drain holds the store section while it reads the outbox.
+    await h.store.hold("entries")
+    Task { await answer.set(await engine.perform(action: Command.ensureDay(yesterday))) }
+    await h.store.arrived("entries")
+    // A tick waits for the section, then holds it while the pass waits to take the command from the queue.
+    await h.store.hold("append")
+    let enqueuing = Task { try? await engine.enqueue(action: done("t1"), label: #"ticked "t1""#) }
+    try #require(await eventually { await engine.sectionWaiters == 1 })
+    await h.store.letGo("entries")
+    await h.store.arrived("append")
+    try #require(await eventually { await engine.sectionWaiters == 1 }, "the pass waits to take the command")
+    // The sign-out waits behind the pass, so it wins the section between the command leaving the queue and its send.
+    let signingOut = Task { await engine.signOut(discardingUnsent: true) }
+    try #require(await eventually { await engine.sectionWaiters == 2 })
+    await h.store.letGo("append")
+    _ = await enqueuing.value
+    #expect(await signingOut.value == 0)
+    await h.engine.settled()
+
+    #expect(await eventually { await answer.value != nil }, "answered, not left waiting")
+    #expect(await answer.value == .signedOut)
+    #expect(await h.transport.sends == [])
+  }
+
+  @Test func a_sign_out_while_the_load_before_a_resend_is_written_answers_signed_out() async throws {
+    let h = try await Harness(
+      opening + [
+        .outcome(.held(reason: "changed-since", rows: [], stale: true, owner: "user-1")),
+        .workspace(.full(try board(6, rows: []), owner: "user-1")), .done,
+      ], copy: try board(5, rows: []))
+    await h.engine.start()
+    let answer = Answered()
+    let engine = h.engine
+
+    await h.store.hold("replace")
+    Task { await answer.set(await engine.perform(action: Command.ensureDay(yesterday))) }
+    await h.store.arrived("replace")
+    let signingOut = Task { await engine.signOut(discardingUnsent: true) }
+    try #require(await eventually { await engine.sectionWaiters == 1 })
+    await h.store.letGo("replace")
+    #expect(await signingOut.value == 0)
+    await h.engine.settled()
+
+    #expect(await eventually { await answer.value != nil }, "answered, not left waiting")
+    #expect(await answer.value == .signedOut)
+    #expect(await h.transport.sends.count == 1, "not sent again once the sign-out began")
+  }
+
+  @Test func a_sign_out_while_the_load_before_a_resend_is_in_flight_answers_signed_out() async throws {
+    let gate = Gate()
+    let h = try await Harness(
+      opening + [.outcome(.held(reason: "changed-since", rows: [], stale: true, owner: "user-1")), .gated(gate), .done],
+      copy: try board(5, rows: []))
+    await h.engine.start()
+    let answer = Answered()
+    let engine = h.engine
+
+    Task { await answer.set(await engine.perform(action: Command.ensureDay(yesterday))) }
+    await gate.reached()
+    #expect(await h.engine.signOut(discardingUnsent: true) == 0)
+    await gate.open(.workspace(.full(try board(6, rows: []), owner: "user-1")))
+    await h.engine.settled()
+
+    #expect(await eventually { await answer.value != nil }, "answered, not left waiting")
+    #expect(await answer.value == .signedOut)
+    #expect(await h.transport.sends.count == 1)
+  }
+
   @Test func perform_while_signed_out_answers_signedOut() async throws {
     let h = try await Harness([.failure(TransportError.signedOut)], copy: try board(5, rows: []))
     await h.engine.start()
@@ -2322,6 +2426,12 @@ actor Seen {
   func add(_ value: SyncState?) {
     if let value { all.append(value) }
   }
+}
+
+/// What a `perform` answered, once it has.
+actor Answered {
+  private(set) var value: Performed?
+  func set(_ performed: Performed) { value = performed }
 }
 
 actor SeenEntries {
