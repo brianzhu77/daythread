@@ -47,12 +47,13 @@ private let english = Locale(identifier: "en_US")
   }
 }
 
-/// The tab bar: the web's five places in its order, then the system's search tab.
+/// The tab bar: four of the web's places in its order, then the system's search tab; Tags waits for a tab, since a
+/// sixth item would put Tags and Search behind the system's More tab.
 @Suite struct AppTabsTests {
-  @Test func the_places_are_the_webs_in_its_order_with_their_symbols() {
+  @Test func the_places_are_four_of_the_webs_in_its_order_with_their_symbols() {
     let places = AppTabs.places(today: today)
-    #expect(places.map(\.title) == ["Today", "Tasks", "Calendar", "Pages", "Tags"])
-    #expect(places.map(\.symbol) == ["25.calendar", "checkmark.square", "calendar", "doc.text", "number"])
+    #expect(places.map(\.title) == ["Today", "Tasks", "Calendar", "Pages"])
+    #expect(places.map(\.symbol) == ["25.calendar", "checkmark.square", "calendar", "doc.text"])
   }
 
   @Test func the_today_symbol_is_the_day_of_the_month_of_the_accounts_today() {

@@ -21,7 +21,7 @@ final class DayUITests: XCTestCase {
     XCTAssertTrue(online.buttons[title].waitForExistence(timeout: 30), "today's title")
     XCTAssertTrue(online.cells["Water the plants"].waitForExistence(timeout: 30), "the seeded to-do")
     XCTAssertFalse(online.staticTexts[Self.offlineLine].exists)
-    XCTAssertFalse(online.navigationBars.buttons["More"].exists, "a server with sign-in off has no one to sign out")
+    XCTAssertFalse(online.buttons["More"].exists, "a server with sign-in off has no one to sign out")
     online.terminate()
 
     let offline = XCUIApplication.daythread(server: Self.noServer, store: store)
@@ -103,6 +103,10 @@ final class DayUITests: XCTestCase {
     app.launch()
     XCTAssertTrue(app.buttons[dayHeader(today)].waitForExistence(timeout: 30), "today's title")
 
+    // Four places and the system's search tab: no More tab of the system's, so Search is one tap away.
+    XCTAssertFalse(app.tabBars.buttons["More"].exists)
+    XCTAssertFalse(app.tabBars.buttons["Tags"].exists)
+    XCTAssertTrue(app.buttons["Search"].exists)
     app.tabBars.buttons["Tasks"].tap()
     XCTAssertTrue(app.staticTexts["Not in the app yet"].waitForExistence(timeout: 10))
     XCTAssertFalse(app.buttons[dayHeader(today)].exists)

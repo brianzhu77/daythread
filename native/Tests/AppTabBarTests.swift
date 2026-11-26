@@ -26,14 +26,16 @@ private func copy() throws -> Workspace {
     return try #require(root.children.first as? AppTabBarController)
   }
 
-  @Test func the_root_is_a_tab_bar_with_the_webs_places_and_search() async throws {
+  @Test func the_root_is_a_tab_bar_with_four_places_and_search_and_no_more_tab() async throws {
     let h = try await Harness(copy: try copy())
     let tabs = try tabs(h)
     let all = tabs.tabs
 
-    #expect(all.count == 6)
-    #expect(all.prefix(5).map(\.title) == ["Today", "Tasks", "Calendar", "Pages", "Tags"])
-    #expect(all.prefix(5).map(\.image) == AppTabs.places(today: today).map { UIImage(systemName: $0.symbol) })
+    // A phone's bar shows five items, the search tab included; a sixth makes the system add its More tab.
+    #expect(all.count == 5)
+    #expect(all.prefix(4).map(\.title) == ["Today", "Tasks", "Calendar", "Pages"])
+    #expect(all.prefix(4).map(\.image) == AppTabs.places(today: today).map { UIImage(systemName: $0.symbol) })
+    #expect(!all.contains { $0.title == "Tags" })
     #expect(all.last is UISearchTab)
     #expect(tabs.selectedTab === all.first)
   }
