@@ -83,15 +83,20 @@ public struct InlineContent: Hashable, Sendable {
     return (InlineContent(items: left), InlineContent(items: right))
   }
 
-  /// This line followed by `other`. Runs are not merged, so each keeps its own fields.
+  /// This line followed by `other`. Only the seam is looked at: the last item of this line and the first of
+  /// `other` join when they are runs with the same fields besides `text`, or links with the same fields
+  /// besides `content` (then their own seam in turn), so a line that was split rejoins as it was. Nothing else
+  /// is merged; runs that sit side by side with equal fields elsewhere stay as they were read.
   public func appending(_ other: InlineContent) -> InlineContent {
     if other.items.isEmpty { return self }
     if items.isEmpty { return other }
-    return InlineContent(items: items + other.items)
+    return InlineContent(items: Self.join(items, other.items))
   }
 
+  /// Equal when the items are equal, that is, when both write the same runs. An unedited string or number
+  /// therefore equals the run list it would become on the first edit, though their `json` differs.
   public static func == (lhs: InlineContent, rhs: InlineContent) -> Bool {
-    lhs.items == rhs.items && lhs.json == rhs.json
+    lhs.items == rhs.items
   }
 
   public func hash(into hasher: inout Hasher) {
@@ -201,6 +206,9 @@ extension InlineContent {
         items[index] = .text(utf16Replace(run, at: offset - position, with: text), raw: raw)
         return true
       case .link(var inner, let raw):
+        // A link takes typing only strictly inside it: at an edge the neighbour outside wins, so typing
+        // after a link does not extend it.
+        guard position < offset, offset < end else { continue }
         // Inside the link, the same rule on its own positions.
         let local = offset - position
         if insert(in: &inner, at: local, text: text, accepts: { start, finish in
@@ -254,6 +262,28 @@ extension InlineContent {
       }
     }
     return out
+  }
+
+  private static func without(_ key: String, in raw: JSONObject) -> JSONObject {
+    var rest = raw
+    rest[key] = nil
+    return rest
+  }
+
+  private static func join(_ left: [Item], _ right: [Item]) -> [Item] {
+    guard let last = left.last, let first = right.first else { return left + right }
+    var out = Array(left.dropLast())
+    switch (last, first) {
+    case (.text(let a, let rawA), .text(let b, let rawB)) where without("text", in: rawA) == without("text", in: rawB):
+      out.append(.text(a + b, raw: rawA))
+    case (.link(let a, let rawA), .link(let b, let rawB))
+    where without("content", in: rawA) == without("content", in: rawB):
+      out.append(.link(items: join(a, b), raw: rawA))
+    default:
+      out.append(last)
+      out.append(first)
+    }
+    return out + right.dropFirst()
   }
 
   private static func split(_ items: [Item], at offset: Int) -> ([Item], [Item]) {
