@@ -231,6 +231,7 @@ Every string below goes into `docs/design/native-system.md` in the same change.
 | State | On screen |
 |---|---|
 | A tick | The circle fills with the system's symbol replace transition; a light impact haptic; the words dim and strike, as now |
+| The circle, to VoiceOver | A button labelled `Complete <the to-do's words>`, the web's label, with the value "done", "cancelled" or "not done" |
 | Offline with changes to send | The line under the title: `Offline · showing what was last loaded · 1 change will be sent` (`2 changes will be sent`), the web's words |
 | Changes waiting behind a held one | A disabled last line in the held menu: `1 later change waiting` (`2 later changes waiting`), the web's words |
 | A held change | A button appears in the navigation bar (`exclamationmark.triangle`, in the system's red). Its menu has one section per held change, titled with the web's sentence, holding "Keep mine" and "Discard" (destructive) |
