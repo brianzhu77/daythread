@@ -65,13 +65,13 @@ private func served(_ revision: Int = 5, document: String = baseDocument, tasks:
 
 /// Changes from `from` to `revision` that leave the day page holding `document`, when given, and write `tasks`.
 private func changes(
-  from: Int, to revision: Int, document: String? = nil, tasks: [JSONValue] = []
+  from: Int, to revision: Int, document: String? = nil, pages: [JSONValue]? = nil, tasks: [JSONValue] = []
 ) throws -> WorkspaceChanges {
   try required(
     WorkspaceChanges(
       .object([
         "from": .number(String(from)), "revision": .number(String(revision)), "timezone": .string("UTC"),
-        "pages": .object(["upsert": .array(document.map { [dayPage($0)] } ?? []), "remove": .array([])]),
+        "pages": .object(["upsert": .array(pages ?? document.map { [dayPage($0)] } ?? []), "remove": .array([])]),
         "tasks": .object(["upsert": .array(tasks), "remove": .array([])]),
       ])))
 }
@@ -132,6 +132,36 @@ private func current(_ engine: SyncEngine) async -> SyncState? {
 }
 
 private func waiting(_ pageId: String = day) -> [DraftStatus] { [DraftStatus(id: pageId, state: .waiting)] }
+private func behind(_ pageId: String = day) -> [DraftStatus] { [DraftStatus(id: pageId, state: .behind)] }
+private func stuck(_ reason: String, _ pageId: String = day) -> [DraftStatus] {
+  [DraftStatus(id: pageId, state: .stuck(reason))]
+}
+
+/// The server's words when it refuses a save, from the shared cases.
+private func refusal(_ name: String) throws -> String {
+  try required(try StoreFixtures.json("saves/\(name).json").objectValue?["refused"]?.stringValue)
+}
+
+/// A page that is not a day's, so no day page is asked for when it goes.
+private let notes = "notes"
+
+private func notesPage(_ document: String, trashedAt: String? = nil) -> JSONValue {
+  var page: JSONObject = [
+    "id": .string(notes), "type": .string("document"), "date": .null, "title": .string("Notes"),
+    "document": .string(document),
+  ]
+  if let trashedAt { page["trashedAt"] = .string(trashedAt) }
+  return .object(page)
+}
+
+/// The day page as it was, and the notes page when given.
+private func servedWithNotes(_ revision: Int, _ notesPage: JSONValue?) -> Workspace {
+  Workspace(
+    .object([
+      "revision": .number(String(revision)), "timezone": .string("UTC"),
+      "pages": .array([dayPage(baseDocument)] + (notesPage.map { [$0] } ?? [])), "tasks": .array([]),
+    ]))!
+}
 
 /// The engine's clock, which a test moves on.
 private final class TestClock: Sendable {
@@ -467,7 +497,10 @@ private struct DraftHarness {
     #expect(try await h.store.entries().isEmpty)
   }
 
-  @Test func an_answer_to_newer_words_when_the_server_changed_what_was_sent_leaves_the_draft_unsent() async throws {
+  @Test
+  func an_answer_that_comes_back_to_newer_words_leaves_them_and_puts_the_draft_behind_when_the_server_changed_what_was_sent()
+    async throws
+  {
     let gate = Gate()
     let h = try await DraftHarness(opening + [.gated(gate)])
     await h.engine.start()
@@ -489,31 +522,14 @@ private struct DraftHarness {
     #expect(draft.sent == nil)
     #expect(draft.document == withTodo(more: "Then call"))
     let state = await current(h.engine)
-    #expect(state?.drafts == waiting())
+    #expect(state?.drafts == behind())
     #expect(state?.workspace?.page(day)?.document == withTodo(more: "Then call"))
-    #expect(try await h.store.load()?.workspace.page(day)?.document == withTodo(planned: true))
-  }
-
-  @Test func a_refused_save_leaves_the_draft_waiting_and_is_not_sent_again_until_he_types() async throws {
-    let h = try await DraftHarness(
-      opening + [.saved(.refused(message: "Saved elsewhere")), .workspace(.unchanged(revision: 5, owner: "user-1"))])
-    await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
-    await h.engine.saveNow()
-
-    #expect(try await h.drafts.first?.sent == nil)
-    #expect(await current(h.engine)?.drafts == waiting())
-    await h.engine.refresh()
-    #expect(await h.saves.count == 1, "a pass does not send it again")
-    #expect(await h.waits.asked.allSatisfy { $0 == .milliseconds(450) }, "nor is it tried again later")
-
-    await h.transport.add([try saved(from: 5, to: 6, document: typed("Walk on"))])
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk on"), singleDeleteIds: [])
-    await until { await h.waits.inProgress == 1 }
-    await h.waits.elapse()
-    await until { await h.saves.count == 2 }
-    await h.engine.settled()
-    #expect(try await h.drafts == [])
+    let theirs = try #require(try await h.store.load()?.workspace.page(day)?.document)
+    #expect(theirs == withTodo(planned: true))
+    // The screen's merge: what was sent, his newer words, and the server's page.
+    let merged = PageMerge.merge(base: draft.baseDocument, mine: draft.document, theirs: theirs)
+    #expect(merged.document == withTodo(planned: true, more: "Then call"))
+    #expect(!merged.bothChanged)
   }
 
   @Test func typing_back_to_the_page_as_it_was_removes_the_draft_and_sends_nothing() async throws {
@@ -696,7 +712,7 @@ private struct DraftHarness {
     await gate.reached()
 
     let signingIn = Task { try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC") }
-    await until { await h.store.log.contains("erase") }
+    await until { await h.store.log.contains("eraseKeepingDrafts") }
     await gate.open(try saved(from: 5, to: 6, document: typed("Walk")))
     try await signingIn.value
     await saving.value
@@ -710,6 +726,7 @@ private struct DraftHarness {
     #expect(state?.workspace?.page(day)?.document == typed("Theirs"))
     #expect(state?.drafts == [])
     #expect(await h.saves.count == 1)
+    #expect(try await h.drafts.map(\.owner) == ["user-1"], "the first account's draft is still there")
   }
 
   @Test func an_answer_that_arrives_after_an_erasing_sign_out_began_is_dropped() async throws {
@@ -734,5 +751,569 @@ private struct DraftHarness {
     #expect(try await h.drafts == [])
     #expect(try await h.store.load() == nil)
     #expect(await current(h.engine)?.drafts == [])
+  }
+
+  // MARK: Behind the server's page, refusals, accounts
+
+  @Test func a_load_that_changes_the_page_puts_its_draft_behind_and_sends_nothing() async throws {
+    let h = try await DraftHarness(
+      opening + [.workspace(.full(served(6, document: typed("Theirs")), owner: "user-1"))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+
+    await h.engine.refresh()
+    await h.waits.elapse()
+    await h.engine.saveNow()
+    await h.engine.settled()
+
+    #expect(await h.saves == [])
+    let state = await current(h.engine)
+    #expect(state?.drafts == behind())
+    #expect(state?.workspace?.revision == 6)
+    #expect(state?.workspace?.page(day)?.document == typed("Walk"), "his words are still drawn")
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.base == ContentKey.of(baseDocument))
+    #expect(draft.baseDocument == baseDocument)
+    #expect(draft.document == typed("Walk"))
+    #expect(await h.waits.asked.allSatisfy { $0 == .milliseconds(450) }, "nor is it tried again later")
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func page_changed_elsewhere_is_followed_by_a_load_and_the_draft_is_behind() async throws {
+    let h = try await DraftHarness(
+      opening + [
+        .saved(.refused(message: try refusal("page-changed-elsewhere"))),
+        .workspace(.full(served(6, document: typed("Theirs")), owner: "user-1")),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+
+    await h.engine.saveNow()
+
+    #expect(await h.transport.calls.last == .workspace(token: "tok-1", have: 5))
+    #expect(await h.saves.count == 1)
+    #expect(try await h.drafts.first?.sent == nil)
+    #expect(try await h.drafts.first?.document == typed("Walk"))
+    let state = await current(h.engine)
+    #expect(state?.drafts == behind())
+    #expect(state?.workspace?.revision == 6)
+    #expect(state?.workspace?.page(day)?.document == typed("Walk"))
+    #expect(await h.waits.asked.allSatisfy { $0 == .milliseconds(450) }, "nothing is tried again")
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func page_changed_elsewhere_with_the_page_as_it_was_is_tried_again_on_the_schedule() async throws {
+    let h = try await DraftHarness(
+      opening + [
+        .saved(.refused(message: try refusal("page-changed-elsewhere"))),
+        .workspace(.unchanged(revision: 5, owner: "user-1")),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+
+    await h.engine.saveNow()
+
+    #expect(await h.saves.count == 1, "not again within the pass")
+    #expect(await h.waits.asked.last == .seconds(2))
+    #expect(await current(h.engine)?.drafts == [DraftStatus(id: day, state: .retrying)])
+
+    await h.transport.add([try saved(from: 5, to: 6, document: typed("Walk"))])
+    await h.waits.elapse()
+    await until { await h.saves.count == 2 }
+    await h.engine.settled()
+    #expect(try await h.drafts == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func saved_elsewhere_with_the_page_as_it_was_sends_the_same_save_once_more() async throws {
+    let savedElsewhere = try refusal("saved-elsewhere")
+    // Another device wrote something else: the revision moved, this page did not.
+    let moved = served(6, tasks: [otherTask])
+    let h = try await DraftHarness(
+      opening + [
+        .saved(.refused(message: savedElsewhere)), .workspace(.full(moved, owner: "user-1")),
+        .saved(.refused(message: savedElsewhere)),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+
+    await h.engine.saveNow()
+
+    let saves = await h.saves
+    #expect(saves.count == 2, "once more, and not a third time in the pass")
+    #expect(saves.map(\.expectedRevision) == [5, 6])
+    #expect(saves.last?.operationId == saves.first?.operationId)
+    #expect(saves.last?.action == saves.first?.action)
+    let calls = await h.transport.calls
+    #expect(calls.count == 5, "one load between them")
+    #expect(calls.dropFirst(3).first == .workspace(token: "tok-1", have: 5))
+    #expect(try await h.drafts.first?.sent?.operationId == saves.first?.operationId, "kept as sent, for the retry")
+    #expect(await h.waits.asked.last == .seconds(2))
+    #expect(await current(h.engine)?.drafts == [DraftStatus(id: day, state: .retrying)])
+
+    await h.transport.add([try saved(from: 6, to: 7, document: typed("Walk"))])
+    await h.waits.elapse()
+    await until { await h.saves.count == 3 }
+    await h.engine.settled()
+    #expect(await h.saves.last?.operationId == saves.first?.operationId)
+    #expect(try await h.drafts == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func saved_elsewhere_with_the_page_changed_puts_the_draft_behind() async throws {
+    let h = try await DraftHarness(
+      opening + [
+        .saved(.refused(message: try refusal("saved-elsewhere"))),
+        .workspace(.full(served(6, document: typed("Theirs")), owner: "user-1")),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+
+    await h.engine.saveNow()
+
+    #expect(await h.saves.count == 1)
+    #expect(try await h.drafts.first?.sent == nil)
+    let state = await current(h.engine)
+    #expect(state?.drafts == behind())
+    #expect(state?.workspace?.page(day)?.document == typed("Walk"))
+    #expect(await h.waits.asked.allSatisfy { $0 == .milliseconds(450) })
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func rebasing_a_draft_sends_it_on_the_servers_page() async throws {
+    let h = try await DraftHarness(
+      opening + [
+        .workspace(.full(served(6, document: typed("Theirs")), owner: "user-1")),
+        .workspace(.full(served(7, document: typed("Theirs again")), owner: "user-1")),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["gone-1"])
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.drafts == behind())
+    let merged = "[\(paragraph("p1", "Morning")),\(paragraph("p2", "Theirs again")),\(paragraph("p3", "Walk"))]"
+
+    // The page moved again before the screen's merge was handed over.
+    await h.engine.refresh()
+    let before = try await h.drafts
+    #expect(try await h.engine.rebaseDraft(pageId: day, baseDocument: typed("Theirs"), document: merged) == false)
+    #expect(try await h.drafts == before)
+    #expect(await current(h.engine)?.drafts == behind())
+    await h.engine.settled()
+    #expect(await h.saves == [])
+
+    await h.transport.add([try saved(from: 7, to: 8, document: merged)])
+    let asked = await h.waits.asked.count
+    #expect(try await h.engine.rebaseDraft(pageId: day, baseDocument: typed("Theirs again"), document: merged))
+    await h.engine.settled()
+
+    let saves = await h.saves
+    #expect(saves.count == 1)
+    #expect(saves.first?.expectedContent == ContentKey.of(typed("Theirs again")))
+    #expect(saves.first?.expectedRevision == 7)
+    #expect(saves.first?.document == merged)
+    let action = try saves.first.map { try JSON.parse($0.action) }
+    #expect(action?.objectValue?["singleDeleteIds"] == .array([]), "the merge names no rows")
+    #expect(await h.waits.asked.count == asked, "saved at once, with no wait")
+    #expect(try await h.drafts == [])
+    #expect(await current(h.engine)?.workspace?.page(day)?.document == merged)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_save_whose_answer_was_lost_then_a_relaunch_is_recognised() async throws {
+    let h = try await DraftHarness(opening + [.failure(TransportError.offline)])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    await h.engine.saveNow()
+    let first = try #require(await h.saves.first)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [])
+
+    // The app is quit and opened again; the first save had landed as revision 6.
+    let transport = FakeTransport([
+      .account(Account(owner: "user-1", email: "one@example.com", signIn: true)),
+      .workspace(.full(served(6, document: typed("Walk")), owner: "user-1")),
+      try saved(from: 6, to: 6, document: typed("Walk"), receipt: 6),
+      try saved(from: 6, to: 7, document: typed("Walk the dog")),
+    ])
+    let waits = Waits()
+    let next = SyncEngine(
+      transport: transport, tokens: h.tokens, store: h.store, sleep: { try await waits.sleep($0) }, now: { noon })
+    await next.start()
+    await next.settled()
+
+    let saves = received(await transport.calls)
+    #expect(saves.count == 2)
+    #expect(saves.first?.operationId == first.operationId, "the recorded save goes first, as it was")
+    #expect(saves.first?.action == first.action)
+    #expect(saves.first?.expectedRevision == 6)
+    #expect(saves.last?.operationId != first.operationId)
+    #expect(saves.last?.document == typed("Walk the dog"))
+    #expect(saves.last?.expectedContent == ContentKey.of(typed("Walk")))
+    #expect(try await h.drafts == [])
+    #expect(await current(next)?.workspace?.page(day)?.document == typed("Walk the dog"))
+    #expect(await transport.unscripted == [])
+  }
+
+  @Test func the_page_in_trash_or_gone_holds_the_draft() async throws {
+    let trashed = servedWithNotes(6, notesPage(baseDocument, trashedAt: "2026-11-25T12:00:00.000Z"))
+    let h = try await DraftHarness(
+      opening + [.workspace(.full(trashed, owner: "user-1"))], copy: servedWithNotes(5, notesPage(baseDocument)))
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: notes, document: typed("Walk"), singleDeleteIds: [])
+
+    await h.engine.refresh()
+    await h.waits.elapse()
+    await h.engine.saveNow()
+    await h.engine.settled()
+    #expect(await current(h.engine)?.drafts == stuck("This page is in Trash", notes))
+    #expect(await h.saves == [])
+
+    await h.transport.add([.workspace(.full(servedWithNotes(7, nil), owner: "user-1"))])
+    await h.engine.refresh()
+    await h.engine.saveNow()
+    #expect(await current(h.engine)?.drafts == stuck("This page is gone", notes))
+    #expect(await h.saves == [])
+    #expect(try await h.drafts.map(\.document) == [typed("Walk")], "kept for him")
+
+    // A load that brings the page back lets it go.
+    let applied = try changes(from: 8, to: 9, pages: [notesPage(typed("Walk"))])
+    await h.transport.add([
+      .workspace(.full(servedWithNotes(8, notesPage(baseDocument)), owner: "user-1")),
+      .saved(.applied(receipt: .object(["revision": .number("9")]), changes: applied, owner: "user-1")),
+    ])
+    await h.engine.refresh()
+    let saves = await h.saves
+    #expect(saves.count == 1)
+    #expect(saves.first?.expectedContent == ContentKey.of(baseDocument))
+    #expect(saves.first?.expectedRevision == 8)
+    #expect(try await h.drafts == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_document_the_server_refuses_holds_the_draft() async throws {
+    let h = try await DraftHarness(
+      opening + [
+        .saved(.refused(message: "Invalid editor document")), .workspace(.unchanged(revision: 5, owner: "user-1")),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    await h.engine.saveNow()
+
+    #expect(await current(h.engine)?.drafts == stuck("Invalid editor document"))
+    #expect(try await h.drafts.first?.sent == nil)
+    await h.engine.refresh()
+    await h.engine.saveNow()
+    #expect(await h.saves.count == 1, "not sent again")
+    #expect(await h.waits.asked.allSatisfy { $0 == .milliseconds(450) }, "nor tried again later")
+
+    // His next words take it out of that state; a 400 and a 413 hold it again.
+    let refusals: [(status: Int, reason: String?, held: String)] = [
+      (400, "bad-request", "bad-request"), (413, nil, "refused"),
+    ]
+    for (count, refusal) in refusals.enumerated() {
+      await h.transport.add([.failure(TransportError.refused(status: refusal.status, reason: refusal.reason))])
+      try await h.engine.keepDraft(pageId: day, document: typed("Walk \(count)"), singleDeleteIds: [])
+      #expect(await current(h.engine)?.drafts == waiting())
+      await until { await h.waits.inProgress == 1 }
+      await h.waits.elapse()
+      await until { await h.saves.count == count + 2 }
+      await h.engine.settled()
+      #expect(await current(h.engine)?.drafts == stuck(refusal.held))
+      #expect(try await h.drafts.first?.sent == nil)
+    }
+    #expect(await h.waits.asked.allSatisfy { $0 == .milliseconds(450) })
+
+    // The next launch tries it once more.
+    let transport = FakeTransport(opening + [try saved(from: 5, to: 6, document: typed("Walk 1"))])
+    let waits = Waits()
+    let next = SyncEngine(
+      transport: transport, tokens: h.tokens, store: h.store, sleep: { try await waits.sleep($0) }, now: { noon })
+    await next.start()
+    await next.settled()
+    #expect(received(await transport.calls).map(\.document) == [typed("Walk 1")])
+    #expect(try await h.drafts == [])
+  }
+
+  @Test func discardDraft_removes_it_and_the_page_is_the_servers_again() async throws {
+    let h = try await DraftHarness(
+      opening + [.workspace(.full(served(6, document: typed("Theirs")), owner: "user-1"))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    await h.engine.refresh()
+    #expect(await h.engine.draft(of: day)?.document == typed("Walk"))
+
+    await h.engine.discardDraft(pageId: day)
+
+    #expect(try await h.drafts == [])
+    #expect(await h.engine.draft(of: day) == nil)
+    let state = await current(h.engine)
+    #expect(state?.drafts == [])
+    #expect(state?.workspace?.page(day)?.document == typed("Theirs"))
+    await h.waits.elapse()
+    await h.engine.saveNow()
+    #expect(await h.saves == [])
+  }
+
+  @Test func another_accounts_draft_is_not_drawn_not_sent_and_still_there() async throws {
+    let other = Session(token: "tok-2", owner: "user-2", expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
+    let back = Session(token: "tok-3", owner: "user-1", expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
+    let h = try await DraftHarness(opening + [.failure(TransportError.signedOut)])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+    // His session ends: signed out, with the copy and the draft kept out of sight.
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.phase == .signedOut)
+
+    // Another account, whose day page has the same id and the same words.
+    await h.transport.add([.session(other), .workspace(.full(served(1), owner: "user-2"))])
+    try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
+    await h.waits.elapse()
+    await h.engine.saveNow()
+    await h.engine.settled()
+
+    let theirs = await current(h.engine)
+    #expect(theirs?.drafts == [])
+    #expect(theirs?.workspace?.page(day)?.document == baseDocument)
+    #expect(await h.engine.draft(of: day) == nil)
+    #expect(await h.saves == [])
+    #expect(try await h.drafts.map(\.owner) == ["user-1"])
+    #expect(try await h.drafts.first?.document == typed("Walk"))
+
+    // He signs back in: his draft is drawn again, and saved under his account.
+    let gate = Gate()
+    await h.transport.add([.session(back), .workspace(.full(served(5), owner: "user-1")), .gated(gate)])
+    let signingIn = Task { try await h.engine.signIn(email: "one@example.com", password: "pw", timezone: "UTC") }
+    await gate.reached()
+    let mine = await current(h.engine)
+    #expect(mine?.workspace?.page(day)?.document == typed("Walk"))
+    #expect(mine?.drafts == [DraftStatus(id: day, state: .sending)])
+    await gate.open(try saved(from: 5, to: 6, document: typed("Walk")))
+    try await signingIn.value
+    await h.engine.settled()
+
+    let saves = await h.saves
+    #expect(saves.count == 1)
+    #expect(saves.first?.expectedOwner == "user-1")
+    #expect(saves.first?.document == typed("Walk"))
+    #expect(try await h.drafts == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func an_owner_mismatch_on_a_save_loads_and_stops() async throws {
+    let theirs = served(1, document: typed("Theirs"))
+    let h = try await DraftHarness(
+      opening + [.saved(.ownerMismatch(owner: "user-2")), .workspace(.full(theirs, owner: "user-2"))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+
+    await h.engine.saveNow()
+    await h.engine.settled()
+
+    #expect(await h.transport.calls.last == .workspace(token: "tok-1", have: nil))
+    #expect(await h.saves.count == 1)
+    #expect(try await h.store.load()?.owner == "user-2")
+    let kept = try #require(try await h.drafts.first)
+    #expect(kept.owner == "user-1")
+    #expect(kept.document == typed("Walk"))
+    #expect(kept.sent == nil)
+    let state = await current(h.engine)
+    #expect(state?.drafts == [])
+    #expect(state?.workspace?.page(day)?.document == typed("Theirs"))
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func signing_out_with_a_draft_asks_first() async throws {
+    let h = try await DraftHarness(opening + [.failure(TransportError.offline), .done])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [])
+
+    #expect(await h.engine.signOut(discardingUnsent: false) == 1)
+
+    #expect(await h.saves.count == 1, "its wait was cut short and the save tried")
+    #expect(try await h.drafts.count == 1)
+    let state = await current(h.engine)
+    #expect(state?.phase == .ready)
+    #expect(state?.signedIn == true)
+    #expect(state?.workspace?.page(day)?.document == typed("Walk"))
+
+    #expect(await h.engine.signOut(discardingUnsent: true) == 0)
+    #expect(try await h.drafts == [])
+    #expect(try await h.store.load() == nil)
+    #expect(await current(h.engine)?.phase == .signedOut)
+  }
+
+  @Test func a_tick_on_a_to_do_a_draft_made_waits_for_that_saves_resend_after_a_load_brought_the_to_do() async throws {
+    // The first send lands as revision 6 and its answer is lost; a load then brings revision 7, which holds the
+    // to-do the save made.
+    let landed = served(7, document: withTodo(planned: true), tasks: [todo("open"), otherTask])
+    let replay = try saved(
+      from: 7, to: 7, document: withTodo(planned: true), tasks: [todo("open"), otherTask], receipt: 6)
+    let ticked = try changes(from: 7, to: 8, tasks: [todo("done", version: 2)])
+    let gate = Gate()
+    let h = try await DraftHarness(
+      opening + [
+        .failure(TransportError.offline), .workspace(.full(landed, owner: "user-1")), .gated(gate),
+        .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1")),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [])
+    try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
+    await h.engine.settled()
+    await h.engine.saveNow()
+
+    let refreshing = Task { await h.engine.refresh() }
+    await gate.reached()
+    #expect(await h.transport.sends == [], "the tick waits for the answer to the save that made its to-do")
+    #expect(await current(h.engine)?.waiting == 1)
+    await gate.open(replay)
+    await refreshing.value
+
+    let saves = await h.saves
+    #expect(saves.count == 2)
+    #expect(saves.last?.operationId == saves.first?.operationId)
+    guard case .send(_, _, let action, _, let basis)? = await h.transport.sends.last else {
+      Issue.record("the tick was not sent")
+      return
+    }
+    #expect(action == tick("editor-task:r1"))
+    #expect(basis.baseRevision == 5)
+    #expect(basis.ownRevisions == [6], "the save is his own change")
+    #expect(try await h.store.entries().isEmpty)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func two_devices() async throws {
+    let server = try PageServer()
+    let one = try await Device(server)
+    let two = try await Device(server)
+    await one.engine.start()
+    await two.engine.start()
+
+    // Both type in the morning's line and add one of their own, offline from each other.
+    let mine = "[\(paragraph("p1", "Morning run")),\(paragraph("pa", "Call mom"))]"
+    let theirs = "[\(paragraph("p1", "Morning tea")),\(paragraph("pb", "Buy bread"))]"
+    try await one.engine.keepDraft(pageId: day, document: mine, singleDeleteIds: [])
+    try await two.engine.keepDraft(pageId: day, document: theirs, singleDeleteIds: [])
+
+    await one.engine.saveNow()
+    await two.engine.saveNow()
+    #expect(await current(one.engine)?.drafts == [])
+    #expect(await current(two.engine)?.drafts == behind())
+
+    // The second merges onto the first's page and saves; the first, meanwhile, typed again.
+    #expect(try await two.merge())
+    await two.engine.settled()
+    let more = "[\(paragraph("p1", "Morning run")),\(paragraph("pa", "Call mom")),\(paragraph("pc", "Then the gym"))]"
+    try await one.engine.keepDraft(pageId: day, document: more, singleDeleteIds: [])
+    await one.engine.saveNow()
+    #expect(await current(one.engine)?.drafts == behind())
+    #expect(try await one.merge())
+    await one.engine.settled()
+    await two.engine.refresh()
+
+    let settled = await server.document
+    #expect(try await one.page == settled)
+    #expect(try await two.page == settled)
+    #expect(await current(one.engine)?.workspace?.page(day)?.document == settled)
+    #expect(await current(two.engine)?.workspace?.page(day)?.document == settled)
+    #expect(try await one.store.drafts() == [])
+    #expect(try await two.store.drafts() == [])
+    let lines = Document.blocks(settled).map { InlineText.plain($0.content, pageDate: nil) }
+    for words in ["Morning run", "Morning tea", "Call mom", "Buy bread", "Then the gym"] {
+      #expect(lines.count { $0 == words } == 1, "\(words) once")
+    }
+    #expect(lines.count == 5)
+  }
+}
+
+/// Another device's to-do, written elsewhere.
+private let otherTask: JSONValue = .object([
+  "id": .string("other"), "title": .string("Other"), "status": .string("open"), "paused": .bool(false),
+  "version": .number("1"),
+])
+
+/// One server's state for two devices, held by the test: the day page, the revision and the saves it took. A save
+/// is checked as `applyCommand` and `save-editor` check it: an operation it took before is answered with that
+/// receipt; then the revision; then the page's key.
+private actor PageServer: ServerTransport {
+  private var revision = 5
+  private(set) var document = baseDocument
+  private var receipts: [String: Int] = [:]
+  private let savedElsewhere: String
+  private let pageChanged: String
+
+  init() throws {
+    savedElsewhere = try refusal("saved-elsewhere")
+    pageChanged = try refusal("page-changed-elsewhere")
+  }
+
+  func signIn(email: String, password: String, timezone: String) async throws -> Session {
+    throw TransportError.offline
+  }
+
+  func signOut(token: String) async throws {}
+
+  func account(token: String?) async throws -> Account {
+    Account(owner: "user-1", email: "one@example.com", signIn: true)
+  }
+
+  func workspace(token: String?, have: Int?) async throws -> WorkspaceReply {
+    have == revision ? .unchanged(revision: revision, owner: "user-1") : .full(served(revision, document: document), owner: "user-1")
+  }
+
+  func send(
+    token: String?, operationId: String, action: JSONValue, expectedOwner: String, basis: OutboxBasis
+  ) async throws -> CommandOutcome {
+    throw TransportError.offline
+  }
+
+  func save(
+    token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
+  ) async throws -> SaveOutcome {
+    if let made = receipts[operationId] {
+      return .applied(
+        receipt: .object(["revision": .number(String(made))]),
+        changes: try changes(from: revision, to: revision, document: document), owner: "user-1")
+    }
+    guard expectedRevision == revision else { return .refused(message: savedElsewhere) }
+    let object = action.objectValue
+    guard object?["expectedContent"]?.stringValue == ContentKey.of(document) else {
+      return .refused(message: pageChanged)
+    }
+    guard let next = object?["document"]?.stringValue else {
+      throw TransportError.refused(status: 400, reason: "bad-request")
+    }
+    document = next
+    revision += 1
+    receipts[operationId] = revision
+    return .applied(
+      receipt: .object(["revision": .number(String(revision))]),
+      changes: try changes(from: revision - 1, to: revision, document: next), owner: "user-1")
+  }
+}
+
+/// A device: an engine with its own store and session, on the shared server.
+private struct Device {
+  let store = MemoryWorkspaceStore()
+  let tokens = MemoryTokenStore()
+  let waits = Waits()
+  let engine: SyncEngine
+
+  init(_ server: PageServer) async throws {
+    try tokens.write(session)
+    let waits = waits
+    engine = SyncEngine(
+      transport: server, tokens: tokens, store: store, sleep: { try await waits.sleep($0) }, now: { noon })
+  }
+
+  /// The day page as this device's copy has it: the server's, as last loaded.
+  var page: String? { get async throws { try await store.load()?.workspace.page(day)?.document } }
+
+  /// What the screen does with a draft behind the server's page: merges what it started from, his words and the
+  /// server's page, and hands the result back on that page.
+  func merge() async throws -> Bool {
+    let draft = try #require(await engine.draft(of: day))
+    let theirs = try #require(try await page)
+    let merged = PageMerge.merge(base: draft.baseDocument, mine: draft.document, theirs: theirs)
+    return try await engine.rebaseDraft(pageId: day, baseDocument: theirs, document: merged.document)
   }
 }

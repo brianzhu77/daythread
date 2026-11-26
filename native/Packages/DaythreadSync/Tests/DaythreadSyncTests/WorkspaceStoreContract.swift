@@ -49,6 +49,9 @@ enum WorkspaceStoreContract {
     StoreCase(name: "removing a draft leaves the others", run: removing_a_draft_leaves_the_others),
     StoreCase(name: "erase removes drafts", run: erase_removes_drafts),
     StoreCase(
+      name: "erasing all but the drafts leaves every owner's drafts and nothing else",
+      run: erasing_all_but_the_drafts_leaves_every_owners_drafts_and_nothing_else),
+    StoreCase(
       name: "drafts come oldest first, ties by owner then page", run: drafts_come_oldest_first_then_by_owner_and_page),
   ]
 
@@ -388,6 +391,33 @@ enum WorkspaceStoreContract {
     try await store.put(draft(owner: "user-2"))
     try await store.erase()
     #expect(try await store.drafts().isEmpty)
+  }
+
+  static func erasing_all_but_the_drafts_leaves_every_owners_drafts_and_nothing_else(
+    _ store: any WorkspaceStore
+  ) async throws {
+    let sent = PageDraft.Sent(operationId: "op-9", document: awkwardDocument, action: awkwardAction)
+    let mine = draft(owner: "user-1", sent: sent)
+    let theirs = draft("p2", owner: "user-2", changedAt: 1_798_194_700)
+    try await store.replace(with: try firstWorkspace(), owner: owner)
+    _ = try await store.append(newEntry())
+    _ = try await store.append(newEntry(operationId: "op-2"))
+    try await store.put(mine)
+    try await store.put(theirs)
+
+    try await store.eraseKeepingDrafts()
+
+    #expect(try await store.load() == nil)
+    #expect(try await store.entries().isEmpty)
+    #expect(try await store.drafts() == [mine, theirs])
+    // The outbox's numbers start again, as after `erase`.
+    try await store.replace(with: try firstWorkspace(), owner: "user-2")
+    #expect(try await store.append(newEntry(owner: "user-2")).seq == 1)
+    // With nothing but drafts left, it is the same again.
+    try await store.erase()
+    try await store.put(theirs)
+    try await store.eraseKeepingDrafts()
+    #expect(try await store.drafts() == [theirs])
   }
 
   static func drafts_come_oldest_first_then_by_owner_and_page(_ store: any WorkspaceStore) async throws {
