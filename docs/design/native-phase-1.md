@@ -156,10 +156,20 @@ pending and how many are waiting behind a held one. Two new calls: `keep(_ numbe
 pending on the copy's current revision with no revisions of its own (the web's Keep mine), and
 `discard(_ number:)` removes it.
 
+**After the server holds a change, the engine loads the workspace once** in the same pass, before anything else is
+sent. The server holding it means the copy is behind, so without the load the page would show what was last loaded,
+not what the server has, and Keep mine would be sent on the same old revision and held again. (Found by the review
+of the whole slice, 2026-11-25.)
+
 **A command that is sent and waited for** does not go through the outbox. `perform(action:)` sends it once, after
 anything pending has been sent, on the copy's revision, and returns what happened: applied (the reply's changes
 are in the copy before it returns), no connection, or refused with the reason. Nothing is stored, so a tap made as
-the network drops is not replayed hours later. The buttons of §6 use it.
+the network drops is not replayed hours later. The buttons of §6 use it. When the server answers that the copy is
+behind, the engine loads and sends the command once more; after any other refusal it loads, so "try again" is
+tried on what the server has now, as the web resyncs before a retry.
+
+**The network coming back** also asks for one load when the last pass ended offline, whether or not anything is
+waiting to be sent, so the offline line does not outlast the outage.
 
 **The label** is the web's (`labelFor`, `src/components/outbox.ts`): a past-tense verb and the name in quotes, cut
 to 40 characters with "…". The app makes it for the commands it sends: `ticked "…"` for a tick and whatever
@@ -189,7 +199,7 @@ while it shows another day it stays there. Carried from phase 0.
 - The title is the day ("Wednesday, Nov 25"), as now.
 - Leading: `chevron.left` (Previous day) and `chevron.right` (Next day). Next is disabled from today on, as on the
   web, where a future day is reached only from the calendar.
-- Trailing: a calendar button opening `UICalendarView` in a popover (a sheet on the phone, which is what the
+- Trailing: a calendar button (to VoiceOver, "Calendar") opening `UICalendarView` in a popover (a sheet on the phone, which is what the
   system makes of a popover there), with a dot on each day that has something written and the week starting as
   the account has it. A day picked there opens; future days too. Then "Today", shown only while another day is
   open; then the account button.
@@ -234,7 +244,7 @@ Every string below goes into `docs/design/native-system.md` in the same change.
 | The circle, to VoiceOver | A button labelled `Complete <the to-do's words>`, the web's label, with the value "done", "cancelled" or "not done" |
 | Offline with changes to send | The line under the title: `Offline · showing what was last loaded · 1 change will be sent` (`2 changes will be sent`), the web's words |
 | Changes waiting behind a held one | A disabled last line in the held menu: `1 later change waiting` (`2 later changes waiting`), the web's words |
-| A held change | A button appears in the navigation bar (`exclamationmark.triangle`, in the system's red). Its menu has one section per held change, titled with the web's sentence, holding "Keep mine" and "Discard" (destructive) |
+| A held change | A button appears in the navigation bar (`exclamationmark.triangle`, in the system's red; to VoiceOver, "Not saved"). Its menu has one section per held change, titled with the web's sentence, holding "Keep mine" and "Discard" (destructive) |
 | …held because the row changed elsewhere | `Not saved — ticked "Water the plants" was changed elsewhere` · Keep mine · Discard |
 | …held because the to-do is gone | `Not saved — "Water the plants" was deleted elsewhere` · Discard |
 | …held because something changed since | `Not saved — ticked "Water the plants" · changed since` · Keep mine · Discard |
@@ -274,3 +284,12 @@ Every string below goes into `docs/design/native-system.md` in the same change.
 - The web keeps a ticked row in place for a second in lists that drop done rows. That is for Tasks (1e); a day
   page keeps its rows.
 - Row spacing, chips as text, cell polish: with 1b, when the cells are rebuilt for typing.
+- A kept entry does not learn the revisions of entries acknowledged after it (it keeps its early place in the
+  queue). Harmless for a tick; before a slice puts an entry that reads beyond its rows in the outbox, it must.
+- `writtenDays()` reads every day's document on the main actor each time the calendar opens (0.18 s for 730 days
+  in a Debug build on the Mac). Cache it per revision, or work it out off the main actor, with 1e's Calendar.
+- "Sign out" shows nothing while it waits for its one pass; on a network that hangs that is the request's timeout.
+- Carried unchanged from phase 0 and still open: an entry whose reply the app cannot read, or that the server
+  answers with a 5xx every time, blocks every entry behind it, with no way to discard it; nothing is sent while
+  the app is suspended; the Mac build has no way to refresh and cannot keep a session under its current signing;
+  today's page that cannot be made shows a blank page with no words; the day title has no year.
