@@ -39,6 +39,9 @@
     private lazy var collectionView: UICollectionView = {
       var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
       configuration.showsSeparators = false
+      // The section's own background lies over the list's background view, where a day without a page says so; the
+      // list itself is the page's background.
+      configuration.backgroundColor = .clear
       let view = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
       view.backgroundColor = .systemBackground
       view.allowsSelection = false
