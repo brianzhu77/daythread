@@ -140,7 +140,7 @@ final class NoticeView: UIView {
     let axis: NSLayoutConstraint.Axis = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? .vertical : .horizontal
     if content.axis != axis {
       content.axis = axis
-      content.alignment = axis == .vertical ? .leading : .center
+      content.alignment = axis == .vertical ? .fill : .center
       setNeedsLayout()
     }
   }
@@ -156,7 +156,8 @@ final class NoticeView: UIView {
     label.textColor = .label
     label.numberOfLines = 0
     label.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    // Just under the gutters' priority, so a long line wraps rather than widens the surface.
+    label.setContentCompressionResistancePriority(UILayoutPriority(749), for: .horizontal)
 
     content.axis = .horizontal
     content.alignment = .center
@@ -171,9 +172,9 @@ final class NoticeView: UIView {
     surface.addGestureRecognizer(swipe)
 
     let gutter = surface.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 16)
-    gutter.priority = .defaultHigh
+    gutter.priority = UILayoutPriority(999)
     let gutterEnd = surface.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16)
-    gutterEnd.priority = .defaultHigh
+    gutterEnd.priority = UILayoutPriority(999)
     NSLayoutConstraint.activate([
       surface.topAnchor.constraint(equalToSystemSpacingBelow: safeAreaLayoutGuide.topAnchor, multiplier: 1),
       surface.centerXAnchor.constraint(equalTo: centerXAnchor),
@@ -205,7 +206,7 @@ final class NoticeView: UIView {
       let undo = UIButton(
         configuration: configuration,
         primaryAction: UIAction { [weak self] _ in self?.undo(operation, of: mine) })
-      undo.setContentHuggingPriority(.required, for: .horizontal)
+      undo.setContentHuggingPriority(UILayoutPriority(751), for: .horizontal)
       undo.setContentCompressionResistancePriority(.required, for: .horizontal)
       undo.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
       content.addArrangedSubview(undo)
