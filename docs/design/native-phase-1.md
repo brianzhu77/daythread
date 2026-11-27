@@ -29,7 +29,7 @@ then what surrounds the day.
 | **1f. Chips, menus, moving lines** | `@date` chips drawn and made, the `/` and `@` lists, the formatting bar, drag to move lines | Write as he does on the web |
 | **1g. The day keeps running** | Reminders scheduled on the device; `run-repeats` on opening | Stop opening the web app |
 
-- 1a is designed in §3 to §8, 1b in §10 and 1c in §11. Each later slice gets its own section in this document when its turn
+- 1a is designed in §3 to §8, 1b in §10, 1c in §11 and 1d in §12 (in two parts: above the page, then the day draft). Each later slice gets its own section in this document when its turn
   comes, written against what the earlier slices built, as phase 1 was written against phase 0.
 - 1b follows 1a whatever happens. The order after 1b is looked at again then.
 - **Changed from `native-app.md`:** it lists Tomorrow in phase 1. The web's Tomorrow block is gone (B76); the day
@@ -893,3 +893,146 @@ does a tick. So:
 - The system's undo gestures and ⌘Z for a row action; the text view's own undo is the line's.
 - `Reference` and `Moved to` on a phone (the web hides them there too).
 - A sign that an action is taking long (the row is dimmed; nothing says "working").
+
+## 12. Slice 1d: the morning
+
+Written 2026-11-27 against the web as it is (the survey: every string and rule below was read from the code and
+the running phone layout) and the app after 1c. The slice table promised "the day draft as bands on today's
+page, the Not today list, events and Due soon above the page". Two things the table did not know:
+
+- **`POST /api/v1/day-draft` does not exist.** The web calls a server function (`prepareDayDraft`), which
+  stores nothing: it answers with a `set-draft` command that the client then sends like any other. The route
+  has to be written, over the same function.
+- **The slice is two things of very different size.** What sits above the page is read from the workspace the
+  app already holds, and needs one existing command. The day draft needs a new route, the port of the web's
+  draft readings, six commands, rows in the list that are not lines of the page, and its own notices.
+
+So 1d is built and merged in two parts, each of which he can use: **1d.1, above the page** (§12.1 to §12.6),
+then **1d.2, the day draft** (§12.7, an outline: it gets its full design when 1d.1 is in, as each slice was
+written against what the one before it built).
+
+### 12.1 Goals, non-goals, anti-goals (1d.1)
+
+Goals: on today's page he sees, above the page and under the title, what the web's phone layout shows there:
+today's events in one line, the to-dos that are due or started (`Due soon`), and the to-dos he set aside
+(`Not today · N`), which he can bring back or plan for another day. On any other day's page he sees that day's
+`Due soon`. Every word and every rule is the web's.
+
+Non-goals: the day draft's line and bands (1d.2); the rows the web draws under the `Events` heading for events
+written on other pages (they are rows that are not lines of the page: 1d.2 brings that kind of row); making or
+editing a `@date` chip (1f); anything on Tasks (1e).
+
+Anti-goals: a fact that disagrees with the web's for the same workspace; anything here costing a keystroke
+(the facts are not read on the typing path); a list above the page that pushes the page off the screen with no
+way to fold it; a control that restyles a system one.
+
+### 12.2 What is shown, and when
+
+In this order under the day's title and the status line, each absent when it has nothing to show (the strip
+then takes no room):
+
+| Part | Shown on | Holds |
+|---|---|---|
+| The events line | today's page, when today has an event | The first two events, each `10:30 AM Standup with Lu` (the title alone when it has no time; `Untitled event` for no words), joined by ` · `; `All day` added when there is exactly one event and it has no time; then `+N more` when there are more than two |
+| `Due soon` | any day's page that exists | Every open to-do with words whose Due or Start date is that page's day or earlier, that has no row on this page; each with its date tag (`Due today`, `Was due Thu`, `Start today`, `Due that day` on another day's page, …), and `Not today · <tag>` for one he set aside |
+| `Not today · N` | today's page | Every open to-do he set aside, each with its date tag (`Unscheduled` when it has none), a `Bring back` button and a menu `Another day` (`Tomorrow · Sat 11/28`, `This weekend · …`, `Next week · …`, `Pick date…`) |
+
+- **An event** is a `@date` chip in a line of any page that is not in Trash, not a template and not a day
+  draft; the same chip in two lines is one event, read from the line on the newest day page. Its title is the
+  line's words without its chips. The day's events are ordered all-day first, then by time. This is the web's
+  `chipEvents` and `dayEvents`, word for word; times are worded `10:30 AM`, `3 PM`.
+- **`Due soon` is not a window.** It is "due or started by this day": an overdue to-do stays until it is done,
+  and a Due date next week never shows. The order is the workspace's own (as stored), with no limit, as the web.
+- **`Not today`** is every to-do set aside, whenever that was (`paused` has no date), in the workspace's order.
+  It is folded when the page opens, and its fold is not remembered.
+- The date tags are the ones slice 1c already words (`DateTag`), a passed Due date in red as on a row.
+- "Today" is the app's today (the workspace's time zone, as in 1a), not the device's clock. The web uses the
+  device's local date; the two agree unless the device is in another zone than the account.
+
+### 12.3 How it looks
+
+The web's phone layout, with the system's parts (rule: the system component, configured, never restyled):
+
+- The three parts are one view under the status line, inside the page's header, so they scroll away with the
+  title. It is written in SwiftUI (the app's sign-in screen already is), because these are exactly SwiftUI's
+  stock parts and the page's list is not touched: a plain `Button` with a `Label` (the `calendar` symbol) for
+  the events line; a `GroupBox` titled `Due soon` whose rows are `LabeledContent` (the words, and the tag as the
+  value in the secondary colour); a `DisclosureGroup` titled `Not today · N` whose rows hold the words, the tag,
+  a bordered `Bring back` button and a `Menu` under the ellipsis symbol.
+- The events line is one line, cut with an ellipsis; `+N more` and the chevron are never cut. Everything else
+  wraps, and follows the text size; at the accessibility sizes a `Not today` row's button and menu go under its
+  words (the web does this on a phone at every size; here the words keep the line while they fit).
+- No part has a tint of its own; the `Bring back` button is the system's bordered button.
+- At regular width (the Mac, an iPad) the same view, no wider than the page's text.
+
+### 12.4 What a tap does
+
+- **The events line** scrolls the page to its heading titled `Events` (any case), when the page has one;
+  otherwise it is not a button. (The web scrolls to its events rows; those come with 1d.2.)
+- **A `Due soon` row** does nothing, as on the web.
+- **`Bring back`** plans the to-do for today: `plan-task` with today as its date and as `today`, no `from`. The
+  server puts its row under the planning heading after the rows already there, and it is no longer set aside.
+  The notice is `On today`, with `Undo`.
+- **`Another day`** plans it for that day: `plan-task` with that date; the notice is `Moved to Sat 11/28` (the
+  short form, as the web words this one), with `Undo`. `Pick date…` opens the same calendar as a row's
+  (nothing selected, no day before today).
+- These are sent as a row's actions are (§11.4): his unsaved words of today's page first, then the command,
+  waited for; nothing is drawn ahead; while one is out its row is dimmed and neither this list nor the page's
+  rows start another; a failure says `Not done · your text is kept` and changes nothing. `Undo` follows §11.5.
+- A row leaves `Not today` when the state that holds the answer arrives, not before.
+
+### 12.5 What is built (1d.1)
+
+- **Web (its own pull request, behaviour unchanged)**: the events line's words move from the component into a
+  pure function, so that shared cases can hold them; `scripts/export-core-fixtures.ts` gains the cases for a
+  day's facts (`Due soon`, `Not today`, their tags and order) and for events (which chips are events, their
+  titles, the day's order, the line's words).
+- **Core**: the day's events (`chipEvents`, `dayEvents`, the title of a line without its chips, `shortTime`),
+  read in the same pass over the pages that already builds the to-do index, so no document is parsed twice;
+  `DayFacts` (the three parts as values: strings and to-do ids, nothing of UIKit), checked against the shared
+  cases; `Command.planTask` as it is.
+- **UI**: `DayFactsView` (SwiftUI) hosted in the day's header; the header tells the list when its height
+  changes (today it does not); `AppModel` gains the action for `Bring back` and `Another day` beside `act`,
+  with the same waiting, notice and `Undo`; the facts are worked out when the drawn workspace, the day or
+  today changes, never on a keystroke that changes nothing they read.
+- **Editor**: one addition, `scroll(toRow:)`, for the events line.
+
+### 12.6 How 1d.1 is checked, and what is left out
+
+- **Core**, against the web's own functions through shared cases: a day's `Due soon` (which to-dos, the order,
+  each tag, one set aside, one with a row on the page left out, another day's page), `Not today`, the events
+  of a day (a chip on a template or in Trash is none; the same chip twice is one; all-day first), the line's
+  words (one event, two, five; no time; no title).
+- **The screen** (hosted, the test server): the parts appear and go with what the workspace holds and with the
+  day; `Bring back` waits for unsaved words, sends `plan-task`, says `On today` and offers `Undo`; `Another
+  day` and `Pick date…`; a failure changes nothing; one action at a time with the page's rows; the header's
+  height follows the fold; typing keeps its budget with the strip on screen.
+- **On the simulator** (the seeded server gains events, a to-do set aside, one due, one started): the three
+  parts, light and dark and at the largest text size; bring back and undo; another day.
+- **His data**, by him: the strip on his real today against the web's.
+- Left out, recorded: the events rows under `Events` (1d.2); a tap on a `Due soon` row (the web has none);
+  remembering the fold of `Not today`; limits or "more" for long lists (the web has none; if his real lists are
+  long, that is seen on his data and decided then).
+
+### 12.7 The day draft (1d.2), in outline
+
+What is known, so that 1d.1 is built without closing a door:
+
+- **The route** `POST /api/v1/day-draft` wraps `prepareDayDraft`: the request names the date and an operation
+  id; the reply is the `set-draft` command as text (or none: the day already has its draft), the owner, whether
+  this account has a model, and whether a remake failed. The app then sends that command as its own write. An
+  account with no model gets a draft marked failed that still holds what the app itself carries; the web says
+  `Couldn’t draft · Retry` for it.
+- **The readings to port**, pure and already tested on the web: `draftView` and what it leans on (where an item
+  sits, the planning part of a page, what is offered, what another day's draft decided or took over, the days
+  a to-do was skipped), checked against shared cases.
+- **Bands** are rows that are not lines of the page: an open suggestion drawn in the page after its anchor, in
+  muted ink with a dashed box, with Apply and Skip. The list today has no such row; this is the part to spike
+  first, as the swipe was in 1c. The same kind of row serves the events rows under `Events` and `N more open`.
+- **The commands**: `apply-draft`, `skip-draft`, `snooze-draft`, `move-draft`, `reopen-draft`, and `plan-task`
+  for `N more open`, each with its notice (`Applied` with `Undo`; `Skipped` with `Undo` and `Move to`; `Moved to
+  …`). Each takes the server's one Undo slot, `set-draft` included.
+- **Open questions for that design**: whether a band's words can be edited before applying (the web's can, for
+  a new line or to-do); what the page says for an account with no model; when the app asks (on opening today,
+  once, with what retry); bands arriving while he types (the web holds them for three seconds behind
+  `Suggestions ready · Show`).
