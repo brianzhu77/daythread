@@ -197,4 +197,25 @@ import Testing
     let workspace = try #require(Workspace(try Self.workspace(pages: "[\(pages)]")))
     #expect(Audit.pagesThatDoNotRoundTrip(workspace) == ["draft:spaced", "draft:broken"])
   }
+
+  @Test func a_to_do_reads_the_day_it_was_made_and_its_page() throws {
+    let marks = try Fixtures.cases("rows/marks.json")
+    let workspace = try #require(Workspace(try #require(marks.first?["workspace"])))
+    let task = try #require(workspace.tasks.first)
+    #expect(task.createdOn == LocalDate("2026-11-26"))
+    #expect(task.sourcePageId == "day:2026-11-26")
+  }
+
+  @Test func a_to_do_without_a_creation_day_or_with_a_bad_one_still_reads_and_is_kept() throws {
+    let absent = #"{"id":"a","title":"A","status":"open","paused":false,"deadlineOn":null,"attentionOn":null}"#
+    let bad =
+      #"{"id":"b","title":"B","status":"open","paused":false,"deadlineOn":null,"attentionOn":null,"createdOn":"soon","sourcePageId":null}"#
+    let original = try Self.workspace(tasks: "[\(absent),\(bad)]")
+    let workspace = try #require(Workspace(original))
+    #expect(workspace.tasks[0].createdOn == nil)
+    #expect(workspace.tasks[0].sourcePageId == nil)
+    #expect(workspace.tasks[1].createdOn == nil)
+    #expect(workspace.tasks[1].sourcePageId == nil)
+    #expect(workspace.json() == original)
+  }
 }
