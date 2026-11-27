@@ -1776,6 +1776,37 @@ private struct DraftHarness {
 
   // MARK: Whose state it is
 
+  @Test func a_refusal_under_one_account_does_not_hold_another_accounts_draft_of_the_same_page() async throws {
+    let theirs = typed("Theirs")
+    let h = try await DraftHarness(
+      opening + [
+        .saved(.refused(message: "Invalid editor document")),
+        .workspace(.full(served(1, document: theirs), owner: "user-2")),
+      ])
+    // The other account's draft of the same day page, from before: it started from a page theirs has moved on from.
+    try await h.store.put(
+      PageDraft(
+        pageId: day, owner: "user-2", base: ContentKey.of(baseDocument), baseDocument: baseDocument,
+        document: typed("Theirs too"), singleDeleteIds: [], sent: nil, changedAt: noon))
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await h.engine.saveNow()
+    #expect(await current(h.engine)?.drafts == stuck("Invalid editor document"))
+
+    // The server answers as the other account.
+    await h.engine.refresh()
+
+    #expect(await current(h.engine)?.owner == "user-2")
+    #expect(await current(h.engine)?.drafts == behind(), "merged, not held for the first account's reason")
+    #expect(await h.engine.merging(day) != nil)
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Theirs too!"), singleDeleteIds: [], startedFrom: typed("Theirs too"),
+      expectedOwner: "user-2")
+    #expect(await current(h.engine)?.drafts == behind())
+    #expect(await h.saves.count == 1)
+    #expect(await h.transport.unscripted == [])
+  }
+
   @Test func the_state_names_the_owner_of_the_copy_shown() async throws {
     let other = Session(token: "tok-2", owner: "user-2", expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
     let h = try await DraftHarness(opening + [.failure(TransportError.signedOut)])
