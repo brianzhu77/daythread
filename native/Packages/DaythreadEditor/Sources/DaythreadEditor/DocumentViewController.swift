@@ -169,6 +169,18 @@
       tap.delegate = tapsUnderLines
       tap.cancelsTouchesInView = false
       collectionView.addGestureRecognizer(tap)
+      // A larger text size grows the rows above the line being typed and pushes it down, under the keyboard. The
+      // rows are measured again in the layout after the cells take the new size, so the caret is looked for then.
+      registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
+        // The run loop's next turn, as a line's deferred paste (`LineTextView.replaceSoon`).
+        self.perform(#selector(self.revealCaretAfterTextSizeChange), with: nil, afterDelay: 0)
+      }
+    }
+
+    @objc private func revealCaretAfterTextSizeChange() {
+      guard let line = focusedLine else { return }
+      collectionView.layoutIfNeeded()
+      revealCaret(of: line, animated: false)
     }
 
     public override func viewDidLayoutSubviews() {

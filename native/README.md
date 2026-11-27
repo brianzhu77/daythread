@@ -60,6 +60,31 @@ where nothing listens. A full run takes a few minutes; `-only-testing:` runs one
 The UI tests read the server the way any client does (`GET /api/v1/workspace` on 3741, where sign-in is off). Offline
 is a launch with `-DaythreadServerURL http://127.0.0.1:9` and the same `-DaythreadStoreName` as the launch before it.
 
+The writing tests (`UITests/WritingUITests.swift`) type into today's page and read the page back from the server:
+each types words of its own, at the end of the page under Notes or in the template's empty to-do, since the seed is
+shared and never reset. The one that changes the page "on another device" saves it through `POST /api/v1/saves`
+with the page's revision and content key read first (`SeededServer.save` in `UITests/Launch.swift`, which holds its
+own copy of the web's `textKey`). The simulator keeps the keyboard last used: the tests turn it to English with the
+globe key before typing, and the Chinese test turns it to Pinyin and taps the keys one by one (`typeText` would put
+the letters in past the input method), then back. They need the simulator's keyboard list to hold
+`zh_Hans-Pinyin@sw=Pinyin` after English (Settings, General, Keyboard, Keyboards); the test changes nothing there.
+
+## How typing feels
+
+`Tests/TypingFeelTests.swift` times a keystroke to the list laid out again, 50 characters into the 150th line of a
+page of 300 lines and, for comparison, the 5th of 10, five runs each, with the engine and a store on disk real and a
+server that never answers. It prints each run and the median (search the output for `TypingFeel:`). It only measures
+unless asked to hold the budget, one and a half times the medians measured on the machine that set it (written in
+the test):
+
+```sh
+TEST_RUNNER_DAYTHREAD_FEEL_BUDGET=1 xcodebuild test -project native/Daythread.xcodeproj -scheme Daythread \
+  -only-testing:DaythreadTests/TypingFeelTests \
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath native/DerivedData
+```
+
+Leave it off in CI and on other machines: their times differ, and a budget from this Mac would only be noise there.
+
 `--serve` seeds the same two servers and keeps them until Ctrl-C, for looking at the app by hand: launch it with
 `xcrun simctl launch <simulator> app.daythread.Daythread -DaythreadServerURL http://127.0.0.1:3741
 -DaythreadStoreName test-<anything>` (a `test-` store is removed when the wrapper stops). Screenshots:
