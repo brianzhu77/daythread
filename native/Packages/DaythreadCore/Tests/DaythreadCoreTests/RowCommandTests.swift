@@ -18,12 +18,13 @@ import Testing
       let taskId = try #require(entry.taskId, "taskId: \(entry.name)")
       let written: JSONValue
       if Command.type(of: entry.action) == "undo" {
-        written = Command.undo(targetOperationId: try #require(entry.action.objectValue?["targetOperationId"]?.stringValue))
+        let target = try #require(entry.action.objectValue?["targetOperationId"]?.stringValue)
+        written = Command.undo(targetOperationId: target)
       } else {
         let action = try #require(RowAction(intent: entry.intent), "intent: \(entry.name)")
-        written = try #require(
-          Command.forRow(action, taskId: taskId, pageDate: try Self.day(try #require(entry.day)), today: today),
-          "command: \(entry.name)")
+        let pageDate = try Self.day(try #require(entry.day))
+        let command = Command.forRow(action, taskId: taskId, pageDate: pageDate, today: today)
+        written = try #require(command, "command: \(entry.name)")
       }
       #expect(JSON.write(written) == JSON.write(entry.action), "command: \(entry.name)")
     }

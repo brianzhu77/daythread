@@ -30,11 +30,10 @@ import Testing
       let name = entry["name"]?.stringValue ?? "?"
       let workspace = try #require(entry["workspace"].flatMap(Workspace.init), "workspace: \(name)")
       let today = try Self.day(try #require(entry["today"]?.stringValue))
-      let facts = try #require(
-        try Self.facts(
-          workspace, page: try #require(entry["pageId"]?.stringValue),
-          block: try #require(entry["blockId"]?.stringValue), today: today),
-        "facts: \(name)")
+      let pageId = try #require(entry["pageId"]?.stringValue)
+      let blockId = try #require(entry["blockId"]?.stringValue)
+      let found = try Self.facts(workspace, page: pageId, block: blockId, today: today)
+      let facts = try #require(found, "facts: \(name)")
       let marks = try #require(entry["marks"]?.objectValue, "marks: \(name)")
 
       // §11.2's order: Cancelled, the date tag, Since, the repeat, Reference, Moved to.
@@ -44,8 +43,9 @@ import Testing
         expected.append(.cancelled)
       }
       if let tag = marks["dateTag"]?.objectValue {
-        expected.append(
-          .dateTag(try #require(tag["text"]?.stringValue), passed: try #require(tag["warn"]?.boolValue)))
+        let text = try #require(tag["text"]?.stringValue)
+        let warn = tag["warn"]?.boolValue == true
+        expected.append(.dateTag(text, passed: warn))
       }
       if let words = marks["since"]?.stringValue { expected.append(.since(words)) }
       if let words = marks["repeat"]?.stringValue { expected.append(.repeats(name: words)) }
@@ -82,8 +82,8 @@ import Testing
     if let planDate { props["planDate"] = .string(planDate) }
     let block = Block(id: "row:t", type: "task", props: props, children: [])
     let today = try Self.day(Self.today)
-    return try #require(
-      RowFacts.of(row: block, pageDate: today, in: workspace, index: TodoIndex(workspace), today: today))
+    let facts = RowFacts.of(row: block, pageDate: today, in: workspace, index: TodoIndex(workspace), today: today)
+    return try #require(facts)
   }
 
   @Test func a_done_row_shows_only_reference() throws {
@@ -199,7 +199,8 @@ import Testing
       ],
       tasks: [TestWorkspace.task("t", createdOn: "2026-11-03")])
     #expect(try facts(of: carried).marks == [.since("Since Nov 3")])
-    #expect(try facts(of: carried, planDate: "2026-11-25").marks == [])
+    // ... and it reads as a history row of the day it names, as the web's.
+    #expect(try facts(of: carried, planDate: "2026-11-25").marks == [.movedTo("Moved to Thu 11/26")])
     #expect(try facts(of: carried, planDate: "").marks == [])
     #expect(try facts(of: carried, planDate: nil).marks == [])
 

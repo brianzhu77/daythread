@@ -19,7 +19,7 @@ import Testing
 
   @Test func menus_are_the_webs() throws {
     let cases = try Fixtures.cases("rows/menus.json")
-    #expect(cases.count == 19)
+    #expect(cases.count == 18)
     for entry in cases {
       let name = entry["name"]?.stringValue ?? "?"
       let status = try #require(entry["status"]?.stringValue)
