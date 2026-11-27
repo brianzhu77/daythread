@@ -75,6 +75,9 @@ public actor SyncEngine {
   var draftWaitNumber = 0
   /// Pages whose save is on its way.
   var savesInFlight: Set<String> = []
+  /// Pages whose own save was turned away for now and waits for the next try (the server failed it, or it was left
+  /// for the retry schedule): only these are said to be tried again.
+  var savesRetrying: Set<String> = []
   /// Pages whose document the server refused, with its reason: not sent again until he acts. Kept in memory only, so
   /// such a draft is sent once more at the next launch; everything else that holds a draft is read from the store.
   var refusedDrafts: [String: String] = [:]
@@ -632,6 +635,7 @@ public actor SyncEngine {
     retry?.cancel()
     retry = nil
     failedPasses = 0
+    savesRetrying = []
   }
 
   private func listenForTheNetwork() {

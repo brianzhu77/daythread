@@ -330,6 +330,7 @@ extension SyncEngine {
     return draft.sent != nil || draftWaits[draft.pageId] == nil
   }
 
+  /// `retrying`: a try is planned. A draft is said to be tried again only when that try is for its own save.
   func draftStatuses(retrying: Bool) -> [DraftStatus] {
     accountDrafts.map { draft in
       let state: DraftStatus.State =
@@ -339,7 +340,7 @@ extension SyncEngine {
           switch standing(of: draft) {
           case .stuck(let reason): .stuck(reason)
           case .behind: .behind
-          case .free: offline ? .offline : retrying ? .retrying : .waiting
+          case .free: offline ? .offline : retrying && savesRetrying.contains(draft.pageId) ? .retrying : .waiting
           }
         }
       return DraftStatus(id: draft.pageId, state: state)
@@ -365,6 +366,7 @@ extension SyncEngine {
   private func forgetDraft(pageId: String, owner: String) {
     drafts.removeAll { $0.owner == owner && $0.pageId.utf8.elementsEqual(pageId.utf8) }
     if draftOrigins[pageId]?.owner == owner { draftOrigins[pageId] = nil }
+    savesRetrying.remove(pageId)
   }
 
   // MARK: The wait after a change
@@ -399,6 +401,7 @@ extension SyncEngine {
   func forgetDraftWork() {
     cutDraftWaitsShort()
     savesInFlight = []
+    savesRetrying = []
     refusedDrafts = [:]
     landedSaves = [:]
     draftOrigins = [:]
@@ -465,8 +468,9 @@ extension SyncEngine {
         try await hold(save, because: status == 400 ? "bad-request" : reason ?? "refused", status: status, pass)
         continue
       } catch {
-        // Kept as sent; the pass's failure plans the next try.
+        // Kept as sent; the pass's failure plans the next try. A pass dropped for another account plans none.
         savesInFlight.remove(save.pageId)
+        if !Task.isCancelled { savesRetrying.insert(save.pageId) }
         throw error
       }
       switch try await settle(outcome, of: save, pass) {
@@ -490,6 +494,7 @@ extension SyncEngine {
       case .savedElsewhere:
         guard !loaded, !sentAgain.contains(save.pageId) else {
           later.insert(save.pageId)
+          savesRetrying.insert(save.pageId)
           done.leftForRetry = true
           continue
         }
@@ -517,6 +522,7 @@ extension SyncEngine {
         if pageHasBase(of: save) {
           // The load shows the page it was built on after all: not behind, so tried again later, not in this pass.
           later.insert(save.pageId)
+          savesRetrying.insert(save.pageId)
           done.leftForRetry = true
         }
         publish()
@@ -570,6 +576,7 @@ extension SyncEngine {
         try await keep(draft)
       }
       savesInFlight.insert(draft.pageId)
+      savesRetrying.remove(draft.pageId)
       publish()
       return DraftSave(
         pageId: draft.pageId, owner: copy.owner, operationId: sent.operationId, document: sent.document,
