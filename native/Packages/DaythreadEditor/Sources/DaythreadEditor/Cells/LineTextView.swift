@@ -10,6 +10,8 @@
     func lineTextView(_ line: LineTextView, didPress key: EditablePage.Key) -> Bool
     /// Marked text was set or committed, which a text view does not always report as a change of its text.
     func lineTextViewMarkedTextDidChange(_ line: LineTextView)
+    /// The line has given the keyboard up: its resign is over.
+    func lineTextViewDidGiveUpKeyboard(_ line: LineTextView)
     /// Whether some row in that direction takes a caret.
     func lineTextView(_ line: LineTextView, canMoveCaret direction: LineTextView.Direction) -> Bool
     /// The caret goes to the next row in that direction that takes one, as near to `point` (in the line's
@@ -246,9 +248,16 @@
     /// of the text (seen on the simulator), so the line would stay composing; it is committed here, and read.
     @discardableResult
     override func resignFirstResponder() -> Bool {
+      isGivingUpKeyboard = true
       if markedTextRange != nil { unmarkText() }
-      return super.resignFirstResponder()
+      let resigned = super.resignFirstResponder()
+      isGivingUpKeyboard = false
+      lineDelegate?.lineTextViewDidGiveUpKeyboard(self)
+      return resigned
     }
+
+    /// True while the line's resign is under way: what it commits then must not take the keyboard back.
+    private(set) var isGivingUpKeyboard = false
 
     override func deleteBackward() {
       let atStart = markedTextRange == nil && selectedRange == NSRange(location: 0, length: 0)
