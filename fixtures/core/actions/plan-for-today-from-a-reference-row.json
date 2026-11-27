@@ -1,0 +1,107 @@
+{
+  "before": {
+    "schemaVersion": 2,
+    "revision": 4,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "day:2026-11-26",
+        "type": "daily",
+        "date": "2026-11-26",
+        "title": "2026-11-26",
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"f1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:01:00.000Z"
+      },
+      {
+        "id": "day:2026-11-30",
+        "type": "daily",
+        "date": "2026-11-30",
+        "title": "2026-11-30",
+        "document": "[{\"id\":\"day:2026-11-30:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-30:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-30\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-11-30\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:01:00.000Z"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "editor-task:r1",
+        "title": "Write the report",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-30",
+        "sourcePageId": "day:2026-11-30"
+      }
+    ],
+    "deletedTasks": [],
+    "receipts": {},
+    "undo": {
+      "operationId": "op-4",
+      "revision": 4
+    }
+  },
+  "intent": {
+    "kind": "bring-today"
+  },
+  "taskId": "editor-task:r1",
+  "day": "2026-11-26",
+  "today": "2026-11-26",
+  "action": {
+    "type": "plan-task",
+    "taskId": "editor-task:r1",
+    "date": "2026-11-26",
+    "today": "2026-11-26"
+  },
+  "receipt": {
+    "operationId": "cmd-plan-for-today-from-a-reference-row",
+    "message": "Planned for 2026-11-26",
+    "entityId": "editor-task:r1",
+    "revision": 5,
+    "fingerprint": "c128:4f76e97cd9a7fcb900ada27cd1b064f4"
+  },
+  "after": {
+    "schemaVersion": 2,
+    "revision": 5,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "day:2026-11-26",
+        "type": "daily",
+        "date": "2026-11-26",
+        "title": "2026-11-26",
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"f1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:01:00.000Z"
+      },
+      {
+        "id": "day:2026-11-30",
+        "type": "daily",
+        "date": "2026-11-30",
+        "title": "2026-11-30",
+        "document": "[{\"id\":\"day:2026-11-30:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-30:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-30\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:01:00.000Z"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "editor-task:r1",
+        "title": "Write the report",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-30",
+        "sourcePageId": "day:2026-11-30"
+      }
+    ],
+    "deletedTasks": [],
+    "receipts": {},
+    "undo": {
+      "operationId": "cmd-plan-for-today-from-a-reference-row",
+      "revision": 5
+    }
+  },
+  "plannedAfter": "2026-11-26",
+  "notice": "Planned for today"
+}

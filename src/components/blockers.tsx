@@ -2,22 +2,17 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from '@heroui/react'
-import { blockedNow, blockersOf, loopReason, type Blocked } from '../domain/task-links'
+import { blockersOf, loopReason } from '../domain/task-links'
 import { liveTaskIds } from '../domain/workspace'
 import { taskIdOfRow, todoLine, todoRowId } from '../domain/todos-source'
 import { todosSourceId, type Property } from '../domain/database'
 import type { Task, Workspace } from '../domain/types'
+import { blockedByWords, blockedIn } from './blockers-view'
 import { PropertyEditor } from './property-editors'
 import { RowMenu } from './row-menu'
 import { useWorkspace } from './use-day'
 
-const worked = new WeakMap<Workspace, Map<string, Blocked>>()
-/** Every to-do blocked now, worked out once for each copy of the workspace. */
-export function blockedIn(ws: Workspace): Map<string, Blocked> {
-  let found = worked.get(ws)
-  if (!found) { found = blockedNow(ws, liveTaskIds(ws)); worked.set(ws, found) }
-  return found
-}
+export { blockedIn }
 /** Its blockers that are still to-dos, in force or not: what the picker ticks, and the menu counts. */
 export const linkedBlockers = (ws: Workspace, taskId: string): Task[] => blockersOf(ws, taskId).flatMap(id => ws.tasks.find(t => t.id === id) ?? [])
 /** What would make a loop as this to-do's blocker, by To-dos row id, with why: greyed in a picker rather than refused after (Jazz). */
@@ -57,9 +52,9 @@ export function BlockedMark({ taskId }: { taskId: string }) {
     else toast("That to-do's line is gone", { timeout: 6000 })
   }
   const [first] = blocked.by
-  if (blocked.by.length === 1) return <button type="button" contentEditable={false} className="blocked-mark" {...noCaret} onClick={() => open(first!)}><span className="blocked-mark-words">Blocked by {first!.title}</span></button>
+  if (blocked.by.length === 1) return <button type="button" contentEditable={false} className="blocked-mark" {...noCaret} onClick={() => open(first!)}><span className="blocked-mark-words">{blockedByWords(blocked)}</span></button>
   return <span contentEditable={false} className="blocked-mark-menu" {...noCaret}>
-    <RowMenu label={`Blocked by ${blocked.by.length}`} trigger={<span className="blocked-mark-words">Blocked by {blocked.by.length}</span>} triggerClass="blocked-mark" groups={[{ items: blocked.by.map(t => ({ label: t.title, onSelect: () => open(t) })) }]} />
+    <RowMenu label={blockedByWords(blocked)} trigger={<span className="blocked-mark-words">{blockedByWords(blocked)}</span>} triggerClass="blocked-mark" groups={[{ items: blocked.by.map(t => ({ label: t.title, onSelect: () => open(t) })) }]} />
   </span>
 }
 

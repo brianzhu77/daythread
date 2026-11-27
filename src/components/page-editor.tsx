@@ -42,7 +42,6 @@ import { buttonChanging, useRunButton } from './button-run'
 import { readSteps } from '../domain/buttons'
 import { announceSave, changedBy, claim, clearOwn, landedSave, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn, type DraftSlot } from './draft-slots'
 import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../domain/workspace'
-import { carriedSince } from '../domain/carried'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
 import { recentPages, visiblePages, parentOf } from '../domain/page-tree'
@@ -62,12 +61,13 @@ import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
 import { databaseKeys, onDatabaseCell } from './database-keys'
-import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './dates'
-import { notTodayText } from './task-row'
+import { addDays, fromIso, longLabel, todayIso } from './dates'
+import { rowNotices, rowNoticeText } from './row-notices'
+import { hasDateFacts, rowMarks } from './row-marks'
 import { tagDecorations } from './tag-decorations'
 import { endOfLineAbove, rowArrows } from './row-arrows'
 import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, registerEditorHold, rememberLeaveSave, sendHolding, trackLeaveSave } from './editor-flush'
-import { noticeWithNext, repeatMenuLabel, repeatPages, repeatsIn, undoHoldPages } from './todo-repeat-view'
+import { repeatMenuLabel, repeatPages, repeatsIn, undoHoldPages } from './todo-repeat-view'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { BlockedMark, blockedByLabel, openBlockerPicker } from './blockers'
@@ -82,7 +82,8 @@ import { ChipPageDate, DateChipInPage, DateMenu, dateChipPaste, type DateMenuIte
 import { dayEvents } from '../domain/chip-events'
 import { mayRead, readDate, type Reading } from '../domain/date-reading'
 import { mentionText } from '../domain/date-chip'
-import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
+import { RowActionsContext, menuGroups, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
+import { rowAction } from './row-menu-model'
 
 /** A normal connection answers before this, and shows nothing. */
 const pausedAfterMs = 400
@@ -277,22 +278,22 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const taskLine = useRef<HTMLDivElement>(null)
   // B92: on today's page, how long carry-over has brought it, from 7 days on. Older pages show what was, so nothing there.
   const today = todayIso()
-  const since = useMemo(() => (seen && workspace && role === 'plan' && planDate === today ? carriedSince(workspace, seen, today) : null), [workspace, seen?.status, seen?.paused, t, role, planDate, today]) // eslint-disable-line react-hooks/exhaustive-deps
+  const marks = useMemo(() => rowMarks(workspace, seen, { role, planDate, today, planned, storedStatus: t?.status }), [workspace, seen?.status, seen?.paused, t, role, planDate, today, planned]) // eslint-disable-line react-hooks/exhaustive-deps
   return <div ref={taskLine} className="editor-task" data-role={role} data-draft={t ? undefined : true} data-status={t?.status ?? 'draft'}>
     <input contentEditable={false} type="checkbox" {...tickOnly} aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={shown === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && tick.toggle((to, r) => ({ text: to === 'done' ? 'Task completed' : 'Task reopened', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${shown === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
     {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
-    {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
-    {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
+    {marks.cancelled && <span contentEditable={false} className="editor-cancelled-tag">{marks.cancelled}</span>}
+    {marks.reference && <span contentEditable={false} className="editor-reference-tag">{marks.reference}</span>}
     {/* A history row: the task's plan moved on to a later day; the row stays as the record of where it was. */}
-    {role === 'plan' && seen?.status === 'open' && planned && planDate && planned !== planDate && <span contentEditable={false} className="editor-reference-tag">Moved to {shortLabel(planned)}</span>}
+    {marks.movedTo && <span contentEditable={false} className="editor-reference-tag">{marks.movedTo}</span>}
     {/* A done or cancelled task keeps the button's space, hidden, so a long title doesn't reflow when it's ticked (#9). */}
-    {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(seen?.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: todayIso(), today: todayIso() }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
+    {marks.planForToday && <button className="editor-plan-action" contentEditable={false} {...(marks.planForToday === 'active' ? { onClick: () => void run({ type: 'plan-task', taskId, date: todayIso(), today: todayIso() }, r => ({ text: rowNotices.plannedForToday, undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
     {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(t!.status === 'open' && workspace ? [{ items: [{ label: blockedByLabel(workspace, t!.id), onSelect: () => openBlockerPicker(t!.id, taskLine.current) }, ...(repeat || t!.title.trim() ? [{ label: repeatMenuLabel(repeat), onSelect: () => openRepeatEditor(t!.id, taskLine.current) }] : [])] }] : []), { items: [{ label: 'Copy', onSelect: () => rows!.copyRow(blockId) }, ...(copy ? [{ label: 'Copy link to line', onSelect: copy }] : [])] }]} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {/* One group at the line's end, so a deadline and "Since" sit together rather than one wrapping under the other at 390. */}
-    {seen && seen.status === 'open' && (hasDateFacts(seen) || since || repeat) && <span contentEditable={false} className="editor-date-tag">
-      {hasDateFacts(seen) && <DateTag task={seen} today={todayIso()} pageDate={planDate || todayIso()} />}
-      {since && <span className="editor-since is-since">Since {sinceLabel(since, todayIso())}</span>}
+    {seen && seen.status === 'open' && (hasDateFacts(seen) || marks.since || marks.repeat) && <span contentEditable={false} className="editor-date-tag">
+      {marks.dateTag && <DateTag task={seen} today={today} pageDate={planDate || today} label={marks.dateTag.text} />}
+      {marks.since && <span className="editor-since is-since">{marks.since}</span>}
       {repeat && <RepeatMark taskId={seen.id} rule={repeat} focusRow={rows ? () => rows.focusRow(blockId) : undefined} />}
     </span>}
     {t && <BlockedMark taskId={t.id} />}
@@ -462,15 +463,6 @@ function copiedLink(html: string, plain: string): { url: string; text: string } 
 /** "Today", "Mon, Oct 19": the app's day format, for "Saved before · {day}". */
 function dayLabel(day: string): string {
   return day === todayIso() ? 'Today' : longLabel(day)
-}
-
-// Inside a document only real dates earn a chip; "Unscheduled" is list-screen vocabulary and would be noise here.
-/** "Nov 3", with the year when it isn't this one: the date chip's words without its weekday, which a long line has no room for. */
-function sinceLabel(day: string, today: string): string {
-  return fromIso(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(day.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }) })
-}
-function hasDateFacts(task: Task): boolean {
-  return Boolean(task.deadlineOn || task.attentionOn)
 }
 
 const touchHandleSize = 44
@@ -2556,11 +2548,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   async function rowAct(blockId: string, t: Task, intent: RowIntent) {
     const today = todayIso(), day = page.date
     if (!day) return
-    const action: Action =
-      intent.kind === 'move' ? { type: 'plan-task', taskId: t.id, date: intent.date, from: day, today }
-      : intent.kind === 'bring-today' ? { type: 'plan-task', taskId: t.id, date: today, today }
-      : intent.kind === 'not-today' ? { type: 'not-today', taskId: t.id, date: day, onlyThisDay: true }
-      : { type: 'task-status', taskId: t.id, status: intent.kind === 'cancel' ? 'cancelled' : 'open', today }
+    const action: Action = rowAction(intent, t.id, day, today)
     // The caret leaves a row that goes: to the end of the line above (Jazz §3).
     const index = nodes().findIndex(n => n.id === blockId)
     const above = index > 0 ? nodes()[index - 1]!.id : null
@@ -2569,15 +2557,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const operationId = newOperationId()
     const holds = repeatPages(latest() ?? latestWorkspace.current, action)
     const receipt = await onServer(action, operationId)
-    if (!receipt) { notDone('Not done · your text is kept'); return }
+    if (!receipt) { notDone(rowNotices.notDone); return }
     // The menu took focus; give it back to the row (or the line above, if the row left) so ⌘Z and typing go on.
     const caretTo = editor.getBlock(blockId) ? blockId : above && editor.getBlock(above) ? above : null
     if (caretTo && (caretHere || document.activeElement === document.body || !editor.domElement?.contains(document.activeElement))) { editor.setTextCursorPosition(caretTo, 'end'); editor.focus() }
-    const text =
-      intent.kind === 'move' ? `Moved to ${noticeDate(intent.date)}`
-      : intent.kind === 'bring-today' ? 'On today'
-      : intent.kind === 'not-today' ? (receipt.message.startsWith('Removed from') ? `Removed from ${weekday(day)} · still planned for ${weekday(plannedOn(latestWorkspace.current, t.id) ?? day)}` : notTodayText(t, day, today))
-      : intent.kind === 'cancel' ? noticeWithNext('Cancelled', receipt, today) : 'Restored'
+    const text = rowNoticeText(intent, { task: t, day, today, receipt, plannedAfter: plannedOn(latestWorkspace.current, t.id) })
     const undoHolds = undoHoldPages(latest() ?? latestWorkspace.current, receipt, holds)
     const key: string = toast(text, {
       timeout: 8000,
@@ -2591,8 +2575,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     closeRowNotice()
     let refused = ''
     const receipt = await sendHolding(holds.filter(id => id !== page.id), () => onServer({ type: 'undo', targetOperationId: operationId }, newOperationId(), { inlineRefusal: /Cannot undo after later changes/, onRefused: m => { refused = m } }))
-    if (receipt) toast('Undone', { timeout: 4000 })
-    else notDone(refused ? "Can't undo · changed since" : "Couldn't undo · your text is kept")
+    if (receipt) toast(rowNotices.undone, { timeout: 4000 })
+    else notDone(refused ? rowNotices.cantUndo : rowNotices.couldntUndo)
   }
   /**
    * A12 at 390 (Jazz §2): the handle selects one open task row, and the selection bar shows its actions instead of
