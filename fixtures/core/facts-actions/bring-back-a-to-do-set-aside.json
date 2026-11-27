@@ -1,7 +1,7 @@
 {
   "before": {
     "schemaVersion": 2,
-    "revision": 4,
+    "revision": 5,
     "timezone": "America/Vancouver",
     "pages": [
       {
@@ -9,7 +9,7 @@
         "type": "daily",
         "date": "2026-11-26",
         "title": "2026-11-26",
-        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"69243ab1-6b71-418b-a96c-0e5036fee122\",\"type\":\"task\",\"props\":{\"taskId\":\"316cc2d6-f5a7-446f-81d0-e6cb4511d93b\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Water the plants\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
       },
       {
         "id": "errands",
@@ -31,13 +31,24 @@
         "attentionOn": null,
         "createdOn": "2026-11-26",
         "sourcePageId": "errands"
+      },
+      {
+        "id": "316cc2d6-f5a7-446f-81d0-e6cb4511d93b",
+        "title": "Water the plants",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "day:2026-11-26"
       }
     ],
     "deletedTasks": [],
     "receipts": {},
     "undo": {
-      "operationId": "op-3",
-      "revision": 4
+      "operationId": "add-water",
+      "revision": 5
     }
   },
   "taskId": "editor-task:bike",
@@ -53,12 +64,12 @@
     "operationId": "cmd-bring-back-a-to-do-set-aside",
     "message": "Planned for 2026-11-26",
     "entityId": "editor-task:bike",
-    "revision": 5,
+    "revision": 6,
     "fingerprint": "c128:e8599a95fd4657ee56a387e4262f5285"
   },
   "after": {
     "schemaVersion": 2,
-    "revision": 5,
+    "revision": 6,
     "timezone": "America/Vancouver",
     "pages": [
       {
@@ -66,7 +77,7 @@
         "type": "daily",
         "date": "2026-11-26",
         "title": "2026-11-26",
-        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"71d24657-6425-4b32-92b5-887c1d4ed7cd\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:bike\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Fix the bike\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"69243ab1-6b71-418b-a96c-0e5036fee122\",\"type\":\"task\",\"props\":{\"taskId\":\"316cc2d6-f5a7-446f-81d0-e6cb4511d93b\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Water the plants\",\"styles\":{}}],\"children\":[]},{\"id\":\"71d24657-6425-4b32-92b5-887c1d4ed7cd\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:bike\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Fix the bike\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
       },
       {
         "id": "errands",
@@ -88,13 +99,24 @@
         "attentionOn": null,
         "createdOn": "2026-11-26",
         "sourcePageId": "errands"
+      },
+      {
+        "id": "316cc2d6-f5a7-446f-81d0-e6cb4511d93b",
+        "title": "Water the plants",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "day:2026-11-26"
       }
     ],
     "deletedTasks": [],
     "receipts": {},
     "undo": {
       "operationId": "cmd-bring-back-a-to-do-set-aside",
-      "revision": 5
+      "revision": 6
     }
   },
   "notice": "On today"
