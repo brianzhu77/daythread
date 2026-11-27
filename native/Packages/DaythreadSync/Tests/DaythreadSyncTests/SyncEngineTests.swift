@@ -2276,6 +2276,42 @@ struct Answer: Sendable, CustomTestStringConvertible {
     #expect(await h.transport.unscripted == [])
   }
 
+  @Test func an_applied_answer_whose_whole_load_brings_another_account_is_not_answered_applied() async throws {
+    let h = try await Harness(
+      opening + [
+        // Changes from another revision than the copy's, so the workspace is loaded whole; it comes back as another
+        // account's.
+        applied(try addingDay(from: 9, to: 10, "2026-11-24")),
+        .workspace(.full(try board(3, days: ["2026-11-24", "2026-11-25"], rows: []), owner: "user-2")),
+      ], copy: try board(5, rows: []))
+    await h.engine.start()
+
+    let performed = await h.engine.perform(action: Command.ensureDay(yesterday))
+
+    #expect(performed == .signedOut, "never a state of another account")
+    #expect(await current(h.engine)?.owner == "user-2")
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func the_undo_slot_is_the_shown_accounts_own() async throws {
+    let h = try await Harness(opening, copy: try board(5, rows: [], undo: marker("op-one", 5)))
+    await h.engine.start()
+    #expect(await current(h.engine)?.undoSlot == UndoMarker(operationId: "op-one", revision: 5))
+
+    // The server answers as another account whose copy holds a slot of its own revision.
+    await h.transport.add([.workspace(.full(try board(2, rows: [], undo: marker("op-two", 2)), owner: "user-2"))])
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.owner == "user-2")
+    #expect(await current(h.engine)?.undoSlot == UndoMarker(operationId: "op-two", revision: 2))
+
+    // And as the first again, whose copy now holds none: nothing, not the other account's.
+    await h.transport.add([.workspace(.full(try board(6, rows: []), owner: "user-1"))])
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.owner == "user-1")
+    #expect(await current(h.engine)?.undoSlot == nil)
+    #expect(await h.transport.unscripted == [])
+  }
+
   @Test func unsent_says_whether_anything_of_his_waits() async throws {
     let nothing = try await Harness(opening, copy: try board(5, rows: [row("t1")]))
     await nothing.engine.start()
