@@ -413,6 +413,225 @@ private func settled(_ day: RowScreen) async throws {
     day.close()
   }
 
+  /// The page with `Notes` between filler, scrolled so `Notes` is at the top under the bar and holds the caret: the
+  /// header is off screen above, so the list can move by whatever the strip changes.
+  private func typingInNotes(_ day: RowScreen) async throws -> UITextView {
+    #expect(day.editor.scroll(toRow: "notes", animated: false))
+    try await settled(day)
+    let notes = try day.line("Notes")
+    #expect(notes.becomeFirstResponder())
+    try await settled(day)
+    return notes
+  }
+
+  private static let filler = (1...30).map { line("f\($0)", "Line \($0)") }
+
+  /// Today's page with `Notes` lower down: filler, then `Notes`, then filler.
+  private static func longToday() -> [JSONValue] {
+    [page(today, Array(filler.prefix(15)) + [line("notes", "Notes")] + Array(filler.suffix(15)))]
+  }
+
+  private func expectInPlace(
+    _ notes: UITextView, at before: CGRect, _ what: String, sourceLocation: SourceLocation = #_sourceLocation
+  ) {
+    let after = notes.convert(notes.bounds, to: nil)
+    #expect(notes.isFirstResponder, "\(what): the keyboard stays up", sourceLocation: sourceLocation)
+    #expect(
+      abs(after.minY - before.minY) <= 0.5, "\(what): the line was at \(before.minY), now \(after.minY)",
+      sourceLocation: sourceLocation)
+  }
+
+  @Test func the_line_being_typed_stays_when_the_strip_appears_shrinks_and_goes() async throws {
+    let pages = Self.longToday()
+    let h = try await harness(pages: pages, tasks: [task("paint", "Order the paint", due: monday)])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    #expect(day.factsView.isHidden)
+    let notes = try await typingInNotes(day)
+    let before = notes.convert(notes.bounds, to: nil)
+
+    let both = [task("taxes", "File the taxes", due: today), task("rent", "Pay the rent", due: today)]
+    try await load(h, day, try copy(revision: 2, pages: pages, tasks: both))
+    #expect(!day.factsView.isHidden, "the strip appeared")
+    expectInPlace(notes, at: before, "appearing")
+
+    try await load(h, day, try copy(revision: 3, pages: pages, tasks: [both[0]]))
+    #expect(day.facts.dueSoon.count == 1, "a row left")
+    expectInPlace(notes, at: before, "shrinking")
+
+    let done = task("taxes", "File the taxes", status: "done", due: today)
+    try await load(h, day, try copy(revision: 4, pages: pages, tasks: [done]))
+    #expect(day.factsView.isHidden, "the last row left")
+    expectInPlace(notes, at: before, "going")
+    day.close()
+  }
+
+  @Test func the_line_being_typed_stays_when_the_fold_opens_and_closes() async throws {
+    let pages = AllThree.pages(todayLines: AllThree.todayLines + Self.filler)
+    let h = try await harness(pages: pages)
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    // On screen under the strip, as when he opens the fold while typing a little further down.
+    let notes = try day.line("Notes")
+    #expect(notes.becomeFirstResponder())
+    try await settled(day)
+    let before = notes.convert(notes.bounds, to: nil)
+    let closed = strip(day).height
+
+    day.factsModel.notTodayOpen = true
+    try await settled(day)
+    #expect(strip(day).height > closed)
+    expectInPlace(notes, at: before, "opening")
+
+    day.factsModel.notTodayOpen = false
+    try await settled(day)
+    #expect(abs(strip(day).height - closed) <= 0.5)
+    expectInPlace(notes, at: before, "closing")
+    day.close()
+  }
+
+  // MARK: How it looks
+
+  /// The strip drawn on its own, `width` points wide at `size`, in light mode, laid out.
+  private func drawnStrip(_ facts: DayFacts, width: CGFloat, size: UIContentSizeCategory, open: Bool = false) throws
+    -> (UIHostingController<DayFactsView>, UIWindow)
+  {
+    let model = DayFactsModel()
+    model.show(facts)
+    model.notTodayOpen = open
+    let host = UIHostingController(rootView: DayFactsView(model: model))
+    host.safeAreaRegions = []
+    host.view.backgroundColor = .systemBackground
+    let window = try testWindow(width: width)
+    window.overrideUserInterfaceStyle = .light
+    let root = UIViewController()
+    root.traitOverrides.preferredContentSizeCategory = size
+    window.rootViewController = root
+    window.makeKeyAndVisible()
+    root.addChild(host)
+    root.view.addSubview(host.view)
+    host.didMove(toParent: root)
+    let height = host.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
+    host.view.frame = CGRect(x: 0, y: 0, width: width, height: height)
+    window.layoutIfNeeded()
+    host.view.layoutIfNeeded()
+    return (host, window)
+  }
+
+  /// The view's pixels, one per point, as RGBA bytes.
+  private func pixels(of view: UIView) throws -> (bytes: [UInt8], width: Int, height: Int) {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = true
+    let image = UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { _ in
+      _ = view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+    }
+    let cg = try #require(image.cgImage)
+    let width = cg.width
+    let height = cg.height
+    var bytes = [UInt8](repeating: 0, count: width * height * 4)
+    try bytes.withUnsafeMutableBytes { buffer in
+      let context = try #require(
+        CGContext(
+          data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+      context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+    }
+    return (bytes, width, height)
+  }
+
+  /// The runs of pixel rows that hold ink (anything clearly darker than the page or the box), top to bottom.
+  private func inkBands(of view: UIView) throws -> [ClosedRange<Int>] {
+    let (bytes, width, height) = try pixels(of: view)
+    var bands: [ClosedRange<Int>] = []
+    var start: Int?
+    for y in 0..<height {
+      let ink = (0..<width).contains { x in
+        let i = (y * width + x) * 4
+        let red = 0.2126 * Double(bytes[i])
+        let green = 0.7152 * Double(bytes[i + 1])
+        let blue = 0.0722 * Double(bytes[i + 2])
+        return (red + green + blue) / 255 < 0.75
+      }
+      if ink, start == nil { start = y }
+      if !ink, let first = start {
+        bands.append(first...(y - 1))
+        start = nil
+      }
+    }
+    if let first = start { bands.append(first...(height - 1)) }
+    return bands
+  }
+
+  /// Today's facts with only `Due soon`: one row per title, each `Was due Mon`.
+  private func dueSoonOnly(_ titles: [String]) throws -> DayFacts {
+    let workspace = try copy(
+      pages: [page(today, [line("a", "Morning")])],
+      tasks: titles.enumerated().map { task("t\($0.offset)", $0.element, due: LocalDate("2026-11-23")!) })
+    return DayFacts.of(day: today, in: workspace, index: TodoIndex(workspace), today: today)
+  }
+
+  @Test func due_soon_rows_are_44_points_apart() throws {
+    let (host, window) = try drawnStrip(try dueSoonOnly(["Taxes", "Rent"]), width: 402, size: .large)
+    let bands = try inkBands(of: host.view)
+    // The box's label, then one line per row: the tag beside the words.
+    try #require(bands.count == 3, "bands: \(bands)")
+    let apart = bands[2].lowerBound - bands[1].lowerBound
+    #expect(apart >= 44, "rows \(apart) apart")
+    window.isHidden = true
+  }
+
+  @Test func at_the_largest_size_a_rows_tag_is_nearer_its_own_words_than_the_next_row() throws {
+    let (host, window) = try drawnStrip(
+      try dueSoonOnly(["Taxes", "Rent"]), width: 402, size: .accessibilityExtraExtraExtraLarge)
+    let bands = try inkBands(of: host.view)
+    // The label, then each row's words and its tag under them.
+    try #require(bands.count == 5, "bands: \(bands)")
+    let wordsToTag = bands[2].lowerBound - bands[1].upperBound
+    let tagToNext = bands[3].lowerBound - bands[2].upperBound
+    #expect(wordsToTag < tagToNext, "words to tag \(wordsToTag), tag to the next row \(tagToNext)")
+    window.isHidden = true
+  }
+
+  /// Quiet controls, as the web's: nothing in the strip is drawn in the accent colour, or in any colour.
+  @Test func the_strip_draws_no_accent_colour() throws {
+    let workspace = try copy(pages: AllThree.pages(), tasks: AllThree.tasks())
+    let facts = DayFacts.of(day: today, in: workspace, index: TodoIndex(workspace), today: today)
+    let (host, window) = try drawnStrip(facts, width: 402, size: .large, open: true)
+    let (bytes, width, height) = try pixels(of: host.view)
+    let coloured = stride(from: 0, to: width * height * 4, by: 4).filter { i in
+      let channels = [bytes[i], bytes[i + 1], bytes[i + 2]].map(Int.init)
+      return channels.max()! - channels.min()! > 64
+    }.count
+    #expect(coloured == 0, "\(coloured) coloured pixels")
+    window.isHidden = true
+  }
+
+  @Test func at_the_accessibility_sizes_the_events_line_takes_more_than_one_line() throws {
+    // Two events and nothing else: today's page holds one, yesterday's the other.
+    let workspace = try copy(
+      pages: [
+        page(today, [event("ev1", "Standup with Lu ", chip("e-standup", on: today, at: "10:30"))]),
+        page(yesterday, [event("ev3", "Lunch with Kathy ", chip("e-lunch", on: today))]),
+      ], tasks: [])
+    let facts = DayFacts.of(day: today, in: workspace, index: TodoIndex(workspace), today: today)
+    #expect(facts.events?.text == "Lunch with Kathy · 10:30 AM Standup with Lu")
+    #expect(facts.dueSoon.isEmpty && facts.notToday == nil)
+    for category in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge] {
+      let font = UIFont.preferredFont(
+        forTextStyle: .subheadline, compatibleWith: UITraitCollection(preferredContentSizeCategory: category))
+      let (host, window) = try drawnStrip(facts, width: 402, size: category)
+      let fitted = host.sizeThatFits(in: CGSize(width: CGFloat(402), height: CGFloat.greatestFiniteMagnitude))
+      if category.isAccessibilityCategory {
+        #expect(fitted.height > font.lineHeight * 1.5, "\(fitted.height) for a line of \(font.lineHeight)")
+      } else {
+        #expect(fitted.height < font.lineHeight * 1.9, "one line: \(fitted.height) for a line of \(font.lineHeight)")
+      }
+      #expect(fitted.width <= 402.5, "nothing wider than the strip: \(fitted.width)")
+      window.isHidden = true
+    }
+  }
+
   @Test func at_the_largest_text_size_the_strip_grows_and_keeps_its_width() async throws {
     var measured: [(height: CGFloat, width: CGFloat, margins: CGFloat)] = []
     for size in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge] {
