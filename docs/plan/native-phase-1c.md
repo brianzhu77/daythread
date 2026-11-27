@@ -62,6 +62,21 @@ and offers Undo by §11.5's rule. Nothing is drawn ahead: a row action is sent a
   status (`src/components/page-editor.tsx:286`: `role === 'reference'` alone), and §11.2 also says the marks are the
   web's, held by shared cases. The plan follows the web for this one mark; every other mark is open-only, as both
   say. It shows only at regular width, so a phone never sees the difference.
+- **The spike was run before Task 2 (2026-11-26) and changes Tasks 6 and 7** (its result is at the end of this
+  plan; the design's §11.3 says the same now). Where a task's text below disagrees with these, these win:
+  - There is **no list context menu** (`contextMenuConfigurationForItemsAt` is not implemented). Wherever a task
+    says "the context menu", it means **the menu of the row's circle button**: `circle.menu` set to the row's
+    actions from the Core's menu model, `showsMenuAsPrimaryAction = false`, so a touch and hold (or a secondary
+    click) on the circle opens it and a tap still ticks. A row with no actions has no menu on its circle.
+  - **The swipe provider answers nil for the row that holds the caret** (the system resigns the keyboard to open a
+    swipe, and a flick while typing would do so by accident). Every other to-do row has its swipe.
+  - **⌘/** presents the same `UIMenu` through a `UIEditMenuInteraction` on the caret row's cell, at the caret
+    (`presentEditMenu(with:)`; the delegate's `editMenuInteraction(_:menuFor:suggestedActions:)` supplies the
+    menu). Mac Catalyst was built and not run in the spike: if it does not present there, ⌘/ presents the action
+    sheet anchored to the row, and the report says which.
+  - Task 6's Step 1 is done; its builder starts at Step 2, and first checks one thing the spike saw and did not
+    pin down: whether a tap in the middle of a line's words puts the caret where it was tapped (see the spike
+    result).
 - A correction found while building is written here with its reason before the code that follows it.
 
 ## Review Focus
@@ -995,4 +1010,38 @@ Nothing in this task is code, and Brian does the tapping: the app writes to his 
 
 ## Spike result
 
-Written by Task 6's builder.
+Run on the simulator on 2026-11-26, ahead of Task 6, in a scratch branch (`spike/native-1c-row-actions`, never
+merged). Observed unless marked as reasoning.
+
+1. **A trailing swipe opens reliably on an editable row** (keyboard down; caret in that row; caret in another
+   row), and the whole cell moves with it, the text view and the circle included: the 1b layout needs no change.
+   The list layout's `trailingSwipeActionsConfigurationProvider` is enough (no delegate), it is asked once per
+   swipe that starts, and its index path is the row to act on. The swiped row is drawn as the system draws it.
+2. **Accidental starts.** It did not start while the caret was dragged with the loupe, while a selection handle
+   was dragged, or on a vertical scroll that drifted 30 pt sideways. It did start on a quick 40 pt sideways flick
+   inside a line and on a slow 40 pt drag. The space-bar caret drag was not tested (it happens on the keyboard).
+3. **Typing after a swipe.** Opening a swipe on the row being typed in resigns its first responder (the keyboard
+   goes down); with the caret in another row that row keeps the keyboard and typing goes on. A tap on the words
+   while a swipe is open only closes the swipe. Tapping an action that redraws the row (a tick) closed the swipe
+   cleanly and typing in the row afterwards worked.
+4. **The list's context menu is unusable on these rows**: a touch and hold on the words opened it instead of
+   placing the caret, and with the caret in the row it appeared together with the text's Select menu. On the
+   trailing margin and on the marks line it opened alone. On the circle the list never asks; **a 1.2 s press on
+   the circle ticked the to-do on release** (as the app is today). With `circle.menu` set and
+   `showsMenuAsPrimaryAction` false, a touch and hold shows the button's menu and does not tick; a tap still
+   ticks. Mac Catalyst built; not run.
+5. **The marks line through `secondaryAttributedText` is safe**: the text view stays exactly over the words'
+   guide, the row grows with both lines, typing reconfigures nothing, and the package's tests pass with marks on
+   every to-do row. A touch on the marks goes to the text view (the caret lands in the words). The marks are not
+   in the cell's accessibility elements and must be added.
+6. **A key command can open a real menu for a row**: a `UIKeyCommand` calling
+   `UIEditMenuInteraction.presentEditMenu(with:)` on an interaction added to the focused row's cell, placed at
+   the caret; the keyboard and caret stay. On the phone the items show as the edit menu's bar. Not run on Mac
+   Catalyst (reasoning: it presents as a pop-up menu there).
+7. **Also seen.** Dragging the page down closes an open swipe. An open swipe when the page is replaced or the row
+   deleted from outside was not tried. `UIListContentView` already carries a long-press recognizer whose delegate
+   is the cell. **And one thing to pin down first in Task 6:** in the spike's runs a tap at the centre of a line
+   put the caret at offset 0 (typing gave "ZWater the plants"), while a tap near the end put it at the end; it
+   was seen after a swipe had been opened and closed, and not checked without one. If a tap in the middle of the
+   words does not put the caret where it was tapped, that is a defect of slice 1b, to be fixed with its own
+   failing test before anything else.

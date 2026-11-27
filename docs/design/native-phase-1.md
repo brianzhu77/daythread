@@ -725,29 +725,32 @@ In this order, separated by ` · `, each only when it applies, and only on an **
 **Where they are.** The web's phone app has a handle on the caret's line that turns the bottom bar into the
 row's actions; it has that because a web page has no swipe. The app adds **no control to a row**: a button on
 the caret's row would take width from its words or move them when the caret arrives. It uses what the system
-gives a list's row:
+gives a list's row and a button, as a trial on the simulator showed they behave on rows whose words are a text
+view (2026-11-26):
 
 - **A trailing swipe on a to-do row**, as in Mail and Reminders: the actions the web's phone bar puts first,
   then `More`. On today's plan row: `Tomorrow`, the off item, `More`. On a later day's plan row: the off item,
   `More`. On a reference row: `Plan for today` (when it applies), `More`. On a past day: `Bring to today`. On a
   cancelled row: `Restore`. `More` opens the system's action sheet with the rest in the web's order (the
   Another day options, `Pick date…`, `Cancel task` as its destructive item). No full-swipe action: a swipe that
-  runs on never does anything by itself. A leading swipe stays the system's Back. So a to-do can be moved
-  without bringing the keyboard up.
-- **The context menu of the row** (a secondary click on the Mac and with a pointer; a touch and hold on the row
-  outside its words, where the system's text selection does not take it): all of the row's actions as one
-  system menu, in the web's `⋯` order, with **Another day** as a titled group.
-- **⌘/** with a hardware keyboard opens the row's actions for the caret's row, as on the web (as the action
-  sheet, anchored to the row: the system has no way to open a context menu from a key).
+  runs on never does anything by itself, and a short sideways flick only shows the buttons. A leading swipe
+  stays the system's Back. So a to-do can be moved without bringing the keyboard up.
+  **The row being typed in has no swipe**: the system would take the keyboard away to open it, and a flick
+  while typing would do that by accident.
+- **A touch and hold on the row's circle** opens all of the row's actions as one system menu (the button's own
+  menu), in the web's `⋯` order, with **Another day** as a titled group; a tap still ticks. This is how the row
+  being typed in is reached on a phone, and on the Mac a click and hold or a secondary click on the circle does
+  the same. (Before this a long press on the circle ticked when released; it no longer does.)
+- **⌘/** with a hardware keyboard opens the same menu for the caret's row at the caret, as on the web (the
+  system's edit menu, which a key may open).
 - **VoiceOver**: the same actions are custom actions of the line.
 - `Pick date…` opens the system's calendar (`UICalendarView`, as the day picker of 1a: a popover on a wide
   screen, a sheet on the phone), days before today not selectable; choosing a day moves the to-do there and
   closes it.
 
-Whether a swipe and a context menu can live on a row whose words are a text view (the circle and the words sit
-on the cell, and every touch off a control goes to the words) is **tried on the simulator before anything is
-built on it**. If the swipe cannot be made reliable there, the builder stops and says so, and the fallback is
-decided then.
+**Not used, and why** (the trial): the list's own context menu. On a row whose words are a text view a touch
+and hold on the words opened it in place of the caret, and with the caret in the row it appeared together with
+the text's own Select menu. A touch and hold on the words is the text's.
 
 ### 11.4 What an action sends, and when
 
