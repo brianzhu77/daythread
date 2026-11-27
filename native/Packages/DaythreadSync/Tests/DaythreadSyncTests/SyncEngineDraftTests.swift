@@ -223,7 +223,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(opening)
     await h.engine.start()
 
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["gone-1"], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["gone-1"], startedFrom: baseDocument, expectedOwner: "user-1")
 
     let drafts = try await h.drafts
     #expect(drafts.count == 1)
@@ -244,7 +244,7 @@ private struct DraftHarness {
   @Test func a_draft_is_drawn_by_a_new_engine_on_the_same_store() async throws {
     let h = try await DraftHarness(opening)
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     let gate = Gate()
     let transport = FakeTransport([.gated(gate)])
@@ -267,7 +267,7 @@ private struct DraftHarness {
     await h.engine.start()
 
     for (count, words) in ["Walk", "Walk the", "Walk the dog"].enumerated() {
-      try await h.engine.keepDraft(pageId: day, document: typed(words), singleDeleteIds: [], startedFrom: baseDocument)
+      try await h.engine.keepDraft(pageId: day, document: typed(words), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
       await until { await h.waits.asked.count == count + 1 }
     }
     await until {
@@ -299,7 +299,7 @@ private struct DraftHarness {
   @Test func saveNow_sends_without_the_wait() async throws {
     let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: typed("Walk"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await until { await h.waits.inProgress == 1 }
 
     await h.engine.saveNow()
@@ -316,7 +316,7 @@ private struct DraftHarness {
   @Test func the_answer_removes_the_draft_and_the_page_is_the_servers() async throws {
     let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: typed("Walk"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.saveNow()
 
@@ -335,7 +335,7 @@ private struct DraftHarness {
     let gate = Gate()
     let h = try await DraftHarness(opening + [.gated(gate)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     let saving = Task { await h.engine.saveNow() }
     await gate.reached()
 
@@ -345,7 +345,7 @@ private struct DraftHarness {
       try await h.drafts.first?.sent
         == PageDraft.Sent(operationId: first.operationId, document: typed("Walk"), action: first.action))
 
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     #expect(try await h.drafts.first?.document == typed("Walk the dog"), "kept at once, while the save is away")
     #expect(try await h.drafts.first?.sent?.document == typed("Walk"))
     #expect(await current(h.engine)?.workspace?.page(day)?.document == typed("Walk the dog"))
@@ -380,7 +380,7 @@ private struct DraftHarness {
     // The server took the request, and its answer was lost on the way back.
     let h = try await DraftHarness(opening + [.failure(TransportError.offline)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["r-a", "r-b"], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["r-a", "r-b"], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.saveNow()
     let first = try #require(await h.saves.first)
     #expect(
@@ -393,7 +393,7 @@ private struct DraftHarness {
 
     // Past midnight he types more, and one row he had removed is back while another is gone.
     h.clock.set(noon.addingTimeInterval(12 * 3600 + 300))
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: ["r-b", "r-c"], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: ["r-b", "r-c"], startedFrom: baseDocument, expectedOwner: "user-1")
     #expect(
       try await h.drafts.first?.sent
         == PageDraft.Sent(operationId: first.operationId, document: typed("Walk"), action: first.action))
@@ -423,7 +423,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(opening)
     await h.engine.start()
     await h.transport.goOffline()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     for count in 2...5 {
       await until { await h.waits.inProgress == 1 }
       await h.waits.elapse()
@@ -448,7 +448,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(opening, reachability: network)
     await h.engine.start()
     await h.transport.goOffline()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await until { await h.waits.inProgress == 1 }
     await h.waits.elapse()
     await until { await h.waits.asked.count == 2 }
@@ -473,7 +473,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [answer, .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     #expect(await current(h.engine)?.workspace?.task("editor-task:r1")?.status == .open)
 
     try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
@@ -509,10 +509,10 @@ private struct DraftHarness {
     let gate = Gate()
     let h = try await DraftHarness(opening + [.gated(gate)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     let saving = Task { await h.engine.saveNow() }
     await gate.reached()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(more: "Then call"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(more: "Then call"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     // The server marks the new to-do's row as planned for the day: the page is not what was sent.
     await gate.open(try saved(from: 5, to: 6, document: withTodo(planned: true), tasks: [todo("open")]))
@@ -540,10 +540,10 @@ private struct DraftHarness {
   @Test func typing_back_to_the_page_as_it_was_removes_the_draft_and_sends_nothing() async throws {
     let h = try await DraftHarness(opening)
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await until { await h.waits.inProgress == 1 }
 
-    try await h.engine.keepDraft(pageId: day, document: baseDocument, singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: baseDocument, singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     #expect(try await h.drafts == [])
     #expect(await current(h.engine)?.drafts == [])
@@ -558,12 +558,12 @@ private struct DraftHarness {
     let gate = Gate()
     let h = try await DraftHarness(opening + [.gated(gate)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     let leaving = Task { await h.engine.signOut(discardingUnsent: true) }
     await gate.reached()
 
     await #expect(throws: SyncError.notReady) {
-      try await h.engine.keepDraft(pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument)
+      try await h.engine.keepDraft(pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     }
     await h.engine.saveNow()
     await h.waits.elapse()
@@ -586,7 +586,7 @@ private struct DraftHarness {
     await gate.reached()
 
     await #expect(throws: SyncError.notReady) {
-      try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+      try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     }
     #expect(try await h.drafts == [])
 
@@ -602,7 +602,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [replay, .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
     await h.engine.settled()
 
@@ -634,7 +634,7 @@ private struct DraftHarness {
         .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
     await h.engine.settled()
     await h.engine.saveNow()
@@ -664,7 +664,7 @@ private struct DraftHarness {
         storedTick("op-waiting", "editor-task:r1", base: 3),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.saveNow()
 
@@ -678,14 +678,14 @@ private struct DraftHarness {
     let gate = Gate()
     let h = try await DraftHarness(opening + [.gated(gate)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     // The write that records what is sent lands; reading the drafts back after it does not.
     await h.store.fail("drafts")
     let saving = Task { await h.engine.saveNow() }
     await gate.reached()
     let first = try #require(await h.saves.first)
 
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.store.heal()
     #expect(try await h.drafts.first?.sent?.operationId == first.operationId, "his newer words kept what was sent")
 
@@ -712,7 +712,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [.gated(gate), .session(other), .workspace(.full(theirs, owner: "user-2"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     let saving = Task { await h.engine.saveNow() }
     await gate.reached()
 
@@ -739,7 +739,7 @@ private struct DraftHarness {
     let signOutGate = Gate()
     let h = try await DraftHarness(opening + [.gated(answerGate), .gated(signOutGate)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     let saving = Task { await h.engine.saveNow() }
     await answerGate.reached()
     let leaving = Task { await h.engine.signOut(discardingUnsent: true) }
@@ -764,7 +764,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [.workspace(.full(served(6, document: typed("Theirs")), owner: "user-1"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.refresh()
     await h.waits.elapse()
@@ -791,7 +791,7 @@ private struct DraftHarness {
         .workspace(.full(served(6, document: typed("Theirs")), owner: "user-1")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.saveNow()
 
@@ -814,7 +814,7 @@ private struct DraftHarness {
         .workspace(.unchanged(revision: 5, owner: "user-1")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.saveNow()
 
@@ -840,7 +840,7 @@ private struct DraftHarness {
         .saved(.refused(message: savedElsewhere)),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.saveNow()
 
@@ -872,7 +872,7 @@ private struct DraftHarness {
         .workspace(.full(served(6, document: typed("Theirs")), owner: "user-1")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.saveNow()
 
@@ -892,7 +892,7 @@ private struct DraftHarness {
         .workspace(.full(served(7, document: typed("Theirs again")), owner: "user-1")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["gone-1"], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["gone-1"], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.refresh()
     #expect(await current(h.engine)?.drafts == behind())
     let merged = "[\(paragraph("p1", "Morning")),\(paragraph("p2", "Theirs again")),\(paragraph("p3", "Walk"))]"
@@ -901,7 +901,7 @@ private struct DraftHarness {
     await h.engine.refresh()
     let before = try await h.drafts
     #expect(
-      try await h.engine.rebaseDraft(pageId: day, baseDocument: typed("Theirs"), document: merged, singleDeleteIds: [])
+      try await h.engine.rebaseDraft(pageId: day, baseDocument: typed("Theirs"), document: merged, singleDeleteIds: [], expectedOwner: "user-1")
         == false)
     #expect(try await h.drafts == before)
     #expect(await current(h.engine)?.drafts == behind())
@@ -912,7 +912,7 @@ private struct DraftHarness {
     let asked = await h.waits.asked.count
     #expect(
       try await h.engine.rebaseDraft(
-        pageId: day, baseDocument: typed("Theirs again"), document: merged, singleDeleteIds: []))
+        pageId: day, baseDocument: typed("Theirs again"), document: merged, singleDeleteIds: [], expectedOwner: "user-1"))
     await h.engine.settled()
 
     let saves = await h.saves
@@ -932,7 +932,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [.workspace(.full(served(6, document: typed("Theirs")), owner: "user-1"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["gone-1"], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["gone-1"], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.refresh()
     #expect(await current(h.engine)?.drafts == behind())
     let merged = "[\(paragraph("p1", "Morning")),\(paragraph("p2", "Theirs")),\(paragraph("p3", "Walk"))]"
@@ -941,7 +941,7 @@ private struct DraftHarness {
     // "p2" is a row of the merged page: a save never names a row it keeps.
     #expect(
       try await h.engine.rebaseDraft(
-        pageId: day, baseDocument: typed("Theirs"), document: merged, singleDeleteIds: ["gone-1", "p2"]))
+        pageId: day, baseDocument: typed("Theirs"), document: merged, singleDeleteIds: ["gone-1", "p2"], expectedOwner: "user-1"))
     await h.engine.settled()
 
     let saves = await h.saves
@@ -956,10 +956,10 @@ private struct DraftHarness {
   @Test func a_save_whose_answer_was_lost_then_a_relaunch_is_recognised() async throws {
     let h = try await DraftHarness(opening + [.failure(TransportError.offline)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.saveNow()
     let first = try #require(await h.saves.first)
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk the dog"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     // The app is quit and opened again; the first save had landed as revision 6.
     let transport = FakeTransport([
@@ -992,7 +992,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [.workspace(.full(trashed, owner: "user-1"))], copy: servedWithNotes(5, notesPage(baseDocument)))
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: notes, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: notes, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.refresh()
     await h.waits.elapse()
@@ -1029,7 +1029,7 @@ private struct DraftHarness {
         .saved(.refused(message: "Invalid editor document")), .workspace(.unchanged(revision: 5, owner: "user-1")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.saveNow()
 
     #expect(await current(h.engine)?.drafts == stuck("Invalid editor document"))
@@ -1045,7 +1045,7 @@ private struct DraftHarness {
     ]
     for (count, refusal) in refusals.enumerated() {
       await h.transport.add([.failure(TransportError.refused(status: refusal.status, reason: refusal.reason))])
-      try await h.engine.keepDraft(pageId: day, document: typed("Walk \(count)"), singleDeleteIds: [], startedFrom: baseDocument)
+      try await h.engine.keepDraft(pageId: day, document: typed("Walk \(count)"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
       #expect(await current(h.engine)?.drafts == waiting())
       await until { await h.waits.inProgress == 1 }
       await h.waits.elapse()
@@ -1071,11 +1071,11 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [.workspace(.full(served(6, document: typed("Theirs")), owner: "user-1"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.refresh()
     #expect(await h.engine.draft(of: day)?.document == typed("Walk"))
 
-    await h.engine.discardDraft(pageId: day)
+    await h.engine.discardDraft(pageId: day, expectedOwner: "user-1")
 
     #expect(try await h.drafts == [])
     #expect(await h.engine.draft(of: day) == nil)
@@ -1092,7 +1092,7 @@ private struct DraftHarness {
     let back = Session(token: "tok-3", owner: "user-1", expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
     let h = try await DraftHarness(opening + [.failure(TransportError.signedOut)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     // His session ends: signed out, with the copy and the draft kept out of sight.
     await h.engine.refresh()
     #expect(await current(h.engine)?.phase == .signedOut)
@@ -1137,7 +1137,7 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [.saved(.ownerMismatch(owner: "user-2")), .workspace(.full(theirs, owner: "user-2"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.saveNow()
     await h.engine.settled()
@@ -1158,7 +1158,7 @@ private struct DraftHarness {
   @Test func signing_out_with_a_draft_asks_first() async throws {
     let h = try await DraftHarness(opening + [.failure(TransportError.offline), .done])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     #expect(await h.engine.signOut(discardingUnsent: false) == 1)
 
@@ -1189,7 +1189,7 @@ private struct DraftHarness {
         .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
     await h.engine.settled()
     await h.engine.saveNow()
@@ -1226,7 +1226,7 @@ private struct DraftHarness {
     await h.engine.refresh()
 
     try await h.engine.keepDraft(
-      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.waits.elapse()
     await h.engine.saveNow()
     await h.engine.settled()
@@ -1244,13 +1244,13 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [try saved(from: 5, to: 6, document: withTodo(planned: true), tasks: [todo("open")])])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.saveNow()
     #expect(try await h.drafts == [], "the answer removed the draft")
 
     // The screen types on the page it sent, before it has drawn the server's.
     try await h.engine.keepDraft(
-      pageId: day, document: withTodo(more: "Then call"), singleDeleteIds: [], startedFrom: withTodo())
+      pageId: day, document: withTodo(more: "Then call"), singleDeleteIds: [], startedFrom: withTodo(), expectedOwner: "user-1")
     await h.waits.elapse()
     await h.engine.saveNow()
     await h.engine.settled()
@@ -1264,13 +1264,13 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [.workspace(.full(served(6, document: typed("Theirs")), owner: "user-1"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.refresh()
-    await h.engine.discardDraft(pageId: day)
+    await h.engine.discardDraft(pageId: day, expectedOwner: "user-1")
 
     // A keystroke made before the screen drew the server's page again.
     try await h.engine.keepDraft(
-      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument)
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.waits.elapse()
     await h.engine.saveNow()
     await h.engine.settled()
@@ -1293,9 +1293,9 @@ private struct DraftHarness {
     await h.engine.start()
 
     #expect(await h.engine.merging(day) == nil, "no draft of his, and another account's is not his")
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     try await h.engine.keepDraft(
-      pageId: notes, document: typed("Note"), singleDeleteIds: [], startedFrom: baseDocument)
+      pageId: notes, document: typed("Note"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     #expect(await h.engine.merging(day) == nil, "a draft that is not behind")
 
     await h.engine.refresh()
@@ -1313,7 +1313,7 @@ private struct DraftHarness {
     let back = Session(token: "tok-3", owner: "user-1", expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
     let h = try await DraftHarness(opening + [.failure(TransportError.signedOut)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.refresh()
     await h.transport.add([.session(other), .workspace(.full(served(1), owner: "user-2")), .done])
     try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
@@ -1341,7 +1341,7 @@ private struct DraftHarness {
     await h.engine.start()
 
     #expect(
-      try await h.engine.rebaseDraft(pageId: day, baseDocument: baseDocument, document: typed("Walk"), singleDeleteIds: [])
+      try await h.engine.rebaseDraft(pageId: day, baseDocument: baseDocument, document: typed("Walk"), singleDeleteIds: [], expectedOwner: "user-1")
         == false)
 
     await h.engine.settled()
@@ -1357,7 +1357,7 @@ private struct DraftHarness {
         .workspace(.full(served(6, document: typed("Walk")), owner: "user-1")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await h.engine.saveNow()
 
@@ -1374,11 +1374,11 @@ private struct DraftHarness {
       opening, copy: served(5, tasks: [otherTask]),
       entries: [storedTick("op-held", "other", base: 5, heldFor: "conflict")])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
     await h.engine.settled()
 
-    await h.engine.discardDraft(pageId: day)
+    await h.engine.discardDraft(pageId: day, expectedOwner: "user-1")
 
     #expect(try await h.store.entries().map(\.operationId) == ["op-held"], "a tick on a to-do that is not his to drop")
     let state = await current(h.engine)
@@ -1406,7 +1406,7 @@ private struct DraftHarness {
         .outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
     await h.engine.settled()
     await h.engine.saveNow()
@@ -1444,11 +1444,11 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [.saved(.ownerMismatch(owner: "user-2")), .workspace(.full(theirs, owner: "user-2")), .done])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.saveNow()
     // The session still names user-1; the copy shown, and the draft he is told about, are user-2's.
     try await h.engine.keepDraft(
-      pageId: day, document: typed("Theirs too"), singleDeleteIds: [], startedFrom: typed("Theirs"))
+      pageId: day, document: typed("Theirs too"), singleDeleteIds: [], startedFrom: typed("Theirs"), expectedOwner: "user-1")
     #expect(await current(h.engine)?.drafts == waiting())
 
     #expect(await h.engine.signOut(discardingUnsent: true) == 0)
@@ -1462,13 +1462,13 @@ private struct DraftHarness {
     let gate = Gate()
     let h = try await DraftHarness(opening + [.gated(gate)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
     await h.engine.settled()
     let saving = Task { await h.engine.saveNow() }
     await gate.reached()
 
-    await h.engine.discardDraft(pageId: day)
+    await h.engine.discardDraft(pageId: day, expectedOwner: "user-1")
 
     #expect(try await h.store.entries().count == 1, "the save on its way makes the to-do")
     let ticked = try changes(from: 6, to: 7, tasks: [todo("done", version: 2)])
@@ -1490,12 +1490,12 @@ private struct DraftHarness {
   @Test func discarding_one_pages_draft_keeps_a_tick_on_a_to_do_another_pages_draft_made() async throws {
     let h = try await DraftHarness(opening, copy: servedWithNotes(5, notesPage(baseDocument)))
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
-    try await h.engine.keepDraft(pageId: notes, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    try await h.engine.keepDraft(pageId: notes, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     try await h.engine.enqueue(action: tick("editor-task:r1"), label: #"ticked "Buy milk""#)
     await h.engine.settled()
 
-    await h.engine.discardDraft(pageId: day)
+    await h.engine.discardDraft(pageId: day, expectedOwner: "user-1")
 
     #expect(try await h.store.entries().count == 1, "the notes page's draft still makes the to-do")
     #expect(await current(h.engine)?.workspace?.task("editor-task:r1")?.status == .done)
@@ -1505,12 +1505,12 @@ private struct DraftHarness {
     let gate = Gate()
     let h = try await DraftHarness(opening + [.gated(gate)])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     let saving = Task { await h.engine.saveNow() }
     await gate.reached()
-    await h.engine.discardDraft(pageId: day)
+    await h.engine.discardDraft(pageId: day, expectedOwner: "user-1")
     try await h.engine.keepDraft(
-      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument)
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await gate.open(.saved(.refused(message: "Invalid editor document")))
     await saving.value
@@ -1527,7 +1527,7 @@ private struct DraftHarness {
   @Test func a_discarding_sign_out_leaves_no_discarded_draft_in_memory_when_the_store_cannot_be_read() async throws {
     let h = try await DraftHarness(opening + [.done])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.store.fail("drafts")
 
     #expect(await h.engine.signOut(discardingUnsent: true) == 0)
@@ -1545,13 +1545,13 @@ private struct DraftHarness {
         try saved(from: 5, to: 6, document: typed("Walk")), try saved(from: 6, to: 7, document: typed("Walk on")),
       ])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.saveNow()
     #expect(try await h.drafts == [], "the answer removed the draft")
 
     // The screen made this keystroke on the page as it was before the save; it reaches the engine after the answer.
     try await h.engine.keepDraft(
-      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument)
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     let draft = try #require(try await h.drafts.first)
     #expect(draft.baseDocument == typed("Walk"))
@@ -1572,12 +1572,12 @@ private struct DraftHarness {
     let h = try await DraftHarness(
       opening + [try saved(from: 5, to: 6, document: withTodo(planned: true), tasks: [todo("open")])])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.saveNow()
     #expect(try await h.drafts == [], "the answer removed the draft")
 
     try await h.engine.keepDraft(
-      pageId: day, document: withTodo(more: "Then call"), singleDeleteIds: [], startedFrom: baseDocument)
+      pageId: day, document: withTodo(more: "Then call"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.waits.elapse()
     await h.engine.saveNow()
     await h.engine.settled()
@@ -1596,11 +1596,11 @@ private struct DraftHarness {
   @Test func a_keystroke_typed_on_neither_the_copys_page_nor_a_landed_saves_base_is_taken_as_given() async throws {
     let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: typed("Walk"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.saveNow()
 
     try await h.engine.keepDraft(
-      pageId: day, document: typed("Theirs too"), singleDeleteIds: [], startedFrom: typed("Theirs"))
+      pageId: day, document: typed("Theirs too"), singleDeleteIds: [], startedFrom: typed("Theirs"), expectedOwner: "user-1")
     await h.waits.elapse()
     await h.engine.saveNow()
     await h.engine.settled()
@@ -1613,15 +1613,15 @@ private struct DraftHarness {
   @Test func a_discarded_draft_forgets_the_save_that_landed_before_it() async throws {
     let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: typed("Walk"))])
     await h.engine.start()
-    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.engine.saveNow()
     try await h.engine.keepDraft(
-      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument)
-    await h.engine.discardDraft(pageId: day)
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await h.engine.discardDraft(pageId: day, expectedOwner: "user-1")
 
     // A keystroke on the page as it was before the save, made before the screen drew the server's page again.
     try await h.engine.keepDraft(
-      pageId: day, document: typed("Walk off"), singleDeleteIds: [], startedFrom: baseDocument)
+      pageId: day, document: typed("Walk off"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
     await h.waits.elapse()
     await h.engine.saveNow()
     await h.engine.settled()
@@ -1629,6 +1629,101 @@ private struct DraftHarness {
     #expect(try await h.drafts.first?.baseDocument == baseDocument)
     #expect(await current(h.engine)?.drafts == behind())
     #expect(await h.saves.count == 1)
+  }
+
+  // MARK: Whose state it is
+
+  @Test func the_state_names_the_owner_of_the_copy_shown() async throws {
+    let other = Session(token: "tok-2", owner: "user-2", expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
+    let h = try await DraftHarness(opening + [.failure(TransportError.signedOut)])
+    await h.engine.start()
+    #expect(await current(h.engine)?.owner == "user-1")
+
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.phase == .signedOut)
+    #expect(await current(h.engine)?.owner == nil, "no copy is shown")
+
+    await h.transport.add([.session(other), .workspace(.full(served(1), owner: "user-2"))])
+    try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
+    #expect(await current(h.engine)?.owner == "user-2")
+  }
+
+  @Test func calls_made_for_another_account_than_the_copy_shown_are_refused() async throws {
+    let h = try await DraftHarness(
+      opening + [.workspace(.full(served(6, document: typed("Theirs")), owner: "user-1"))])
+    await h.engine.start()
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.drafts == behind())
+    let drafts = try await h.drafts
+    let state = await current(h.engine)
+    let asked = await h.waits.asked.count
+    let log = await h.store.log.count
+
+    await #expect(throws: SyncError.notReady) {
+      try await h.engine.keepDraft(
+        pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: typed("Theirs"),
+        expectedOwner: "user-2")
+    }
+    #expect(
+      try await h.engine.rebaseDraft(
+        pageId: day, baseDocument: typed("Theirs"), document: typed("Walk on"), singleDeleteIds: [],
+        expectedOwner: "user-2") == false)
+    await h.engine.discardDraft(pageId: day, expectedOwner: "user-2")
+    await h.engine.settled()
+
+    #expect(try await h.drafts == drafts)
+    #expect(await current(h.engine) == state, "nothing was published")
+    #expect(await h.waits.asked.count == asked, "no save was scheduled")
+    #expect(await h.store.log.count == log, "nothing was written")
+    #expect(await h.saves == [])
+  }
+
+  @Test func calls_made_while_no_copy_is_shown_are_refused() async throws {
+    let gate = Gate()
+    let h = try await DraftHarness([.gated(gate)], copy: nil)
+    let kept = PageDraft(
+      pageId: day, owner: "user-1", base: ContentKey.of(baseDocument), baseDocument: baseDocument,
+      document: typed("Walk"), singleDeleteIds: [], sent: nil, changedAt: noon)
+    try await h.store.put(kept)
+    let starting = Task { await h.engine.start() }
+    await gate.reached()
+
+    await #expect(throws: SyncError.notReady) {
+      try await h.engine.keepDraft(
+        pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument,
+        expectedOwner: "user-1")
+    }
+    #expect(
+      try await h.engine.rebaseDraft(
+        pageId: day, baseDocument: baseDocument, document: typed("Walk on"), singleDeleteIds: [],
+        expectedOwner: "user-1") == false)
+    await h.engine.discardDraft(pageId: day, expectedOwner: "user-1")
+    #expect(try await h.drafts == [kept])
+
+    await gate.open(.failure(TransportError.offline))
+    await starting.value
+  }
+
+  @Test func a_keep_made_before_a_sign_in_to_another_account_is_not_stored_under_it() async throws {
+    let other = Session(token: "tok-2", owner: "user-2", expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
+    let h = try await DraftHarness(
+      opening + [.session(other), .workspace(.full(served(1), owner: "user-2"))])
+    await h.engine.start()
+
+    // The screen made this keep under the first account; it reaches the engine after the sign-in.
+    try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
+    await #expect(throws: SyncError.notReady) {
+      try await h.engine.keepDraft(
+        pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument,
+        expectedOwner: "user-1")
+    }
+    await h.engine.settled()
+
+    #expect(try await h.drafts == [])
+    #expect(await current(h.engine)?.drafts == [])
+    #expect(await h.saves == [])
   }
 
   @Test func two_devices() async throws {
@@ -1641,8 +1736,8 @@ private struct DraftHarness {
     // Both type in the morning's line and add one of their own, offline from each other.
     let mine = "[\(paragraph("p1", "Morning run")),\(paragraph("pa", "Call mom"))]"
     let theirs = "[\(paragraph("p1", "Morning tea")),\(paragraph("pb", "Buy bread"))]"
-    try await one.engine.keepDraft(pageId: day, document: mine, singleDeleteIds: [], startedFrom: baseDocument)
-    try await two.engine.keepDraft(pageId: day, document: theirs, singleDeleteIds: [], startedFrom: baseDocument)
+    try await one.engine.keepDraft(pageId: day, document: mine, singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    try await two.engine.keepDraft(pageId: day, document: theirs, singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
 
     await one.engine.saveNow()
     await two.engine.saveNow()
@@ -1654,7 +1749,7 @@ private struct DraftHarness {
     await two.engine.settled()
     let more = "[\(paragraph("p1", "Morning run")),\(paragraph("pa", "Call mom")),\(paragraph("pc", "Then the gym"))]"
     // Typed on the page his own save made.
-    try await one.engine.keepDraft(pageId: day, document: more, singleDeleteIds: [], startedFrom: mine)
+    try await one.engine.keepDraft(pageId: day, document: more, singleDeleteIds: [], startedFrom: mine, expectedOwner: "user-1")
     await one.engine.saveNow()
     #expect(await current(one.engine)?.drafts == behind())
     #expect(try await one.merge())
@@ -1766,6 +1861,6 @@ private struct Device {
     let draft = try #require(await engine.draft(of: day))
     let merged = PageMerge.merge(base: pair.baseDocument, mine: draft.document, theirs: pair.theirs)
     return try await engine.rebaseDraft(
-      pageId: day, baseDocument: pair.theirs, document: merged.document, singleDeleteIds: draft.singleDeleteIds)
+      pageId: day, baseDocument: pair.theirs, document: merged.document, singleDeleteIds: draft.singleDeleteIds, expectedOwner: "user-1")
   }
 }

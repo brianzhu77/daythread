@@ -438,6 +438,45 @@ private struct DayScreen {
     await h.server.release()
   }
 
+  /// Whichever comes first, the keep on its way or the load that shows another account's copy, nothing he typed
+  /// under one account is stored under the other, whose day page has the same id.
+  @Test(arguments: ["keep first", "load first"])
+  func a_call_queued_under_one_account_is_not_made_under_another(_ order: String) async throws {
+    let h = try await harness()
+    let day = try DayScreen(h.model)
+    await h.server.add([.workspace(.full(try copy(revision: 1, pages: [page(today, base)]), owner: "two"))])
+    let refreshing: Task<Void, Never>
+    if order == "keep first" {
+      await h.store.holdPut()
+      let walk = try day.type(" t", atEndOf: "Walk")
+      await h.store.putHeld()
+      // Waits in the model behind the keep whose store write is held.
+      walk.insertText("he")
+      refreshing = Task { [model = h.model] in await model.refresh() }
+      try await turns()
+      await h.store.releasePut()
+    } else {
+      await h.store.holdReplace()
+      refreshing = Task { [model = h.model] in await model.refresh() }
+      await h.store.replaceHeld()
+      // Both wait: the first for the store section the load has, the second in the model behind it.
+      let walk = try day.type(" t", atEndOf: "Walk")
+      walk.insertText("he")
+      try await turns()
+      await h.store.releaseReplace()
+    }
+    await refreshing.value
+    try await until { h.model.state.owner == "two" }
+    try await turns()
+
+    let puts = await h.store.puts
+    #expect(puts.allSatisfy { $0.owner == "one" }, "stored as two's: \(puts.map { words(of: $0.document) })")
+    #expect(try await h.store.drafts().allSatisfy { $0.owner == "one" })
+    #expect(h.model.state.drafts.isEmpty)
+    #expect(!h.model.isWriting(todayId), "the new account's page is not held as unstored")
+    day.close()
+  }
+
   @Test func a_to_do_typed_offline_can_be_ticked_and_both_arrive_in_order() async throws {
     let h = try await harness([page(today, document([line("a", "Morning"), todoLine("r1", "")]))])
     let day = try DayScreen(h.model)
