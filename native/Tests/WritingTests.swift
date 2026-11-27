@@ -14,10 +14,6 @@ private let yesterday = LocalDate("2026-11-24")!
 private let todayId = "day:2026-11-25"
 private let yesterdayId = "day:2026-11-24"
 
-private func line(_ id: String, _ words: String) -> String {
-  #"{"id":"\#(id)","type":"paragraph","props":{},"content":[{"type":"text","text":"\#(words)","styles":{}}],"children":[]}"#
-}
-
 /// A to-do's row; `planned` as the server writes it back once a save made its to-do.
 private func todoLine(_ id: String, _ words: String, planned: Bool = false) -> String {
   let props =
@@ -69,38 +65,12 @@ private func changes(from: Int, to revision: Int, pages: [JSONValue] = [], tasks
       ])))
 }
 
-/// The words of a document's lines, in page order.
-private func words(of document: String?) -> [String] {
-  guard let document else { return [] }
-  let page = EditablePage(document: document, pageDate: nil)
-  return page.textBlocks.compactMap { page.content(of: $0)?.plain }
-}
-
 /// The page saves the server was sent, in order: the page and the document.
 private func saves(_ server: TestServer) async -> [(pageId: String?, document: String?)] {
   await server.sent.compactMap { action in
     guard let object = action.objectValue, object["type"]?.stringValue == "save-editor" else { return nil }
     return (object["pageId"]?.stringValue, object["document"]?.stringValue)
   }
-}
-
-/// Waits, a few milliseconds at a time, for an answer only an actor can give; records an issue after two seconds.
-@MainActor
-private func eventually(
-  _ condition: () async -> Bool, sourceLocation: SourceLocation = #_sourceLocation
-) async throws {
-  for _ in 0..<400 {
-    if await condition() { return }
-    try await Task.sleep(nanoseconds: 5_000_000)
-  }
-  Issue.record("Timed out waiting", sourceLocation: sourceLocation)
-}
-
-/// Lets the main run loop turn for a while, so the screen acts on whatever it was told; for asserting that something
-/// did not happen.
-@MainActor
-private func turns() async throws {
-  try await Task.sleep(nanoseconds: 300_000_000)
 }
 
 /// The day screen in a phone-sized window, its lines' text views read as he sees them.

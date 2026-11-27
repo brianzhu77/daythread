@@ -1,0 +1,517 @@
+import DaythreadCore
+import DaythreadSync
+import Foundation
+import SwiftUI
+import Testing
+import UIKit
+
+@testable import DaythreadEditor
+@testable import DaythreadUI
+
+/// Thursday, the day these tests run on.
+private let today = LocalDate("2026-11-26")!
+private let yesterday = LocalDate("2026-11-25")!
+/// A later day with a page, and one without.
+private let monday = LocalDate("2026-11-30")!
+private let tuesday = LocalDate("2026-12-01")!
+/// The day "Sort the shed" was planned on.
+private let shedDay = LocalDate("2026-11-20")!
+/// A past day with no page.
+private let saturdayBefore = LocalDate("2026-11-21")!
+/// Noon UTC on Thursday, Nov 26 2026.
+private let thursdayNoon = Date(timeIntervalSince1970: 1_795_694_400)
+private let two = Session(token: "token-two", owner: "two", expiresAt: thursdayNoon.addingTimeInterval(86_400 * 30))
+
+private func heading(_ id: String, _ words: String) -> String {
+  #"{"id":"\#(id)","type":"heading","props":{"level":2},"content":[{"type":"text","text":"\#(words)","styles":{}}],"children":[]}"#
+}
+
+/// A bullet holding `words` then the chip, as an event is written on a page.
+private func event(_ id: String, _ words: String, _ chip: String) -> String {
+  #"{"id":"\#(id)","type":"bulletListItem","props":{},"content":[{"type":"text","text":"\#(words)","styles":{}},\#(chip)],"children":[]}"#
+}
+
+/// A page that is not a day's.
+private func document(_ id: String, _ title: String, _ lines: [String]) -> JSONValue {
+  .object([
+    "id": .string(id), "type": .string("document"), "date": .null, "title": .string(title),
+    "document": .string("[\(lines.joined(separator: ","))]"),
+  ])
+}
+
+private func trashed(_ page: JSONValue) -> JSONValue {
+  var object = page.objectValue!
+  object["trashedAt"] = .string("2026-11-26T08:00:00.000Z")
+  object["trashId"] = .string("batch-1")
+  return .object(object)
+}
+
+/// `fixtures/core/facts/cases.json`'s "today with all three parts", in the screens' fixtures: today's page has an
+/// `Events` heading and two events, yesterday's page an all-day event of today's, a page of errands the to-dos' rows,
+/// and three to-dos are set aside.
+private enum AllThree {
+  static let todayLines = [
+    heading("h0", "TODO"), row("r-rent", "rent", "Pay the rent"), heading("h1", "Events"),
+    event("ev1", "Standup with Lu ", chip("e-standup", on: today, at: "10:30")),
+    event("ev2", "Dentist ", chip("e-dentist", on: today, at: "15:00")), line("notes", "Notes"),
+  ]
+
+  static func pages(todayLines: [String] = todayLines) -> [JSONValue] {
+    [
+      page(today, todayLines),
+      page(yesterday, [event("ev3", "Lunch with Kathy ", chip("e-lunch", on: today))]),
+      document(
+        "errands", "Errands",
+        [
+          row("x-taxes", "taxes", "File the taxes", reference: true),
+          row("x-invoice", "invoice", "Send the invoice", reference: true),
+          row("x-report", "report", "Start the report", reference: true),
+          row("x-bike", "bike", "Fix the bike", reference: true),
+          row("x-paint", "paint", "Order the paint", reference: true),
+          row("x-fence", "fence", "Mend the fence", reference: true),
+        ]),
+      page(shedDay, [row("r-shed", "shed", "Sort the shed", on: shedDay)]),
+      page(monday, [line("m1", "Plans")]),
+    ]
+  }
+
+  static func tasks(aside: Bool = true) -> [JSONValue] {
+    [
+      task("taxes", "File the taxes", due: today),
+      task("invoice", "Send the invoice", due: LocalDate("2026-11-23")!),
+      task("report", "Start the report", start: today),
+      task("bike", "Fix the bike", due: today, paused: aside),
+      task("paint", "Order the paint", due: LocalDate("2026-11-27")!),
+      task("shed", "Sort the shed", paused: aside, start: shedDay),
+      task("fence", "Mend the fence", paused: aside),
+      task("rent", "Pay the rent", due: today),
+    ]
+  }
+
+  static let dueSoon = [
+    ["File the taxes", "Due today"], ["Send the invoice", "Was due Mon"], ["Start the report", "Start today"],
+    ["Fix the bike", "Not today · Due today"], ["Sort the shed", "Not today"],
+  ]
+}
+
+private func tags(_ rows: [DayFacts.Row]?) -> [[String]] {
+  (rows ?? []).map { [$0.words, $0.tag ?? ""] }
+}
+
+/// Lets the run loop turn, so the strip's height reaches the list, then lays the screen out.
+@MainActor
+private func settled(_ day: RowScreen) async throws {
+  day.drawn()
+  try await turns()
+  day.drawn()
+}
+
+/// The strip above the day's page (`native-phase-1.md` §12.2, §12.3): which parts show on which day, the facts
+/// handed over only when they change, the strip's place and height in the header, the fold, and an account change.
+@MainActor
+@Suite(.serialized) struct DayFactsViewTests {
+  private var thursday: Clock {
+    let clock = Clock()
+    clock.date = thursdayNoon
+    return clock
+  }
+
+  private func harness(pages: [JSONValue] = AllThree.pages(), tasks: [JSONValue] = AllThree.tasks()) async throws
+    -> Harness
+  {
+    try await Harness(copy: try copy(pages: pages, tasks: tasks), clock: thursday, sleep: neverEnding)
+  }
+
+  /// Loads `workspace` as the server's next copy and waits for the screen to draw it.
+  private func load(_ h: Harness, _ day: RowScreen, _ workspace: Workspace) async throws {
+    await h.server.add([.workspace(.full(workspace, owner: "one"))])
+    await h.model.refresh()
+    try await soon { h.model.state.workspace?.revision == workspace.revision }
+    try await settled(day)
+  }
+
+  private func header(_ day: RowScreen) -> DayHeaderView { day.screen.headerView }
+
+  /// The strip's frame in the header's coordinates.
+  private func strip(_ day: RowScreen) -> CGRect {
+    day.factsView.convert(day.factsView.bounds, to: header(day))
+  }
+
+  /// The header as the list lays it out: its supplementary view's frame.
+  private func supplementary(_ day: RowScreen) throws -> CGRect {
+    let list = try #require(day.screen.list)
+    return try #require(
+      list.layoutAttributesForSupplementaryElement(
+        ofKind: UICollectionView.elementKindSectionHeader, at: IndexPath(item: 0, section: 0))?.frame)
+  }
+
+  private func firstRow(_ day: RowScreen) throws -> CGRect {
+    let list = try #require(day.screen.list)
+    return try #require(list.layoutAttributesForItem(at: IndexPath(item: 0, section: 0))?.frame)
+  }
+
+  /// The hosting controller of the strip, for the height its content asks for.
+  private func host(_ day: RowScreen) throws -> UIHostingController<DayFactsView> {
+    try #require(day.screen.children.compactMap { $0 as? UIHostingController<DayFactsView> }.first)
+  }
+
+  /// The height the strip's content needs at the strip's width.
+  private func needed(_ day: RowScreen) throws -> CGFloat {
+    try host(day).sizeThatFits(in: CGSize(width: strip(day).width, height: .greatestFiniteMagnitude)).height
+  }
+
+  // MARK: What shows, and when
+
+  @Test func the_parts_follow_the_workspace_and_the_day() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+
+    #expect(day.facts.events?.text == "Lunch with Kathy · 10:30 AM Standup with Lu")
+    #expect(day.facts.events?.more == "+1 more")
+    #expect(day.facts.eventsHeadingId == "h1")
+    #expect(tags(day.facts.dueSoon) == AllThree.dueSoon)
+    #expect(day.facts.notToday?.title == "Not today · 3")
+    #expect(
+      tags(day.facts.notToday?.rows) == [["Fix the bike", "Due today"], ["Sort the shed", ""], ["Mend the fence", "Unscheduled"]])
+    #expect(!day.factsView.isHidden)
+
+    day.screen.open(yesterday)
+    try await settled(day)
+    #expect(day.facts.events == nil && day.facts.notToday == nil, "yesterday: Due soon only")
+    #expect(!day.facts.dueSoon.isEmpty)
+    #expect(!day.factsView.isHidden)
+
+    day.screen.open(monday)
+    try await settled(day)
+    #expect(day.facts.events == nil && day.facts.notToday == nil, "a later day with a page: Due soon only")
+    #expect(!day.facts.dueSoon.isEmpty)
+    #expect(!day.factsView.isHidden)
+
+    day.screen.open(tuesday)
+    try await settled(day)
+    #expect(day.facts == .none)
+    #expect(day.factsView.isHidden, "a later day without a page has no strip")
+
+    day.screen.open(saturdayBefore)
+    try await settled(day)
+    #expect(tags(day.facts.dueSoon) == [["Sort the shed", "Not today"]])
+    #expect(!day.factsView.isHidden, "a past day without a page has its strip")
+    let empty = day.screen.emptyView.convert(day.screen.emptyView.bounds, to: nil)
+    let stripInWindow = day.factsView.convert(day.factsView.bounds, to: nil)
+    #expect(day.screen.emptyState?.text == "No page for Saturday, Nov 21")
+    #expect(empty.minY >= stripInWindow.maxY - 0.5, "No page for … \(empty) under the strip \(stripInWindow)")
+    day.close()
+  }
+
+  @Test(arguments: ["in Trash", "being made"])
+  func todays_strip_shows_without_its_page(_ kind: String) async throws {
+    var pages = AllThree.pages()
+    if kind == "in Trash" { pages[0] = trashed(pages[0]) } else { pages.removeFirst() }
+    let h = try await harness(pages: pages)
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    switch (kind, day.screen.content) {
+    case ("in Trash", .inTrash?), ("being made", .askingForToday?): break
+    default: Issue.record("today is \(String(describing: day.screen.content))")
+    }
+    #expect(day.facts.events?.text == "Lunch with Kathy · All day", "only the event on another page is read")
+    #expect(day.facts.eventsHeadingId == nil)
+    #expect(tags(day.facts.dueSoon).first == ["File the taxes", "Due today"])
+    #expect(tags(day.facts.dueSoon).contains(["Pay the rent", "Due today"]), "no page of today holds its row")
+    #expect(day.facts.notToday?.title == "Not today · 3")
+    #expect(!day.factsView.isHidden)
+    day.close()
+  }
+
+  // MARK: Handed over only when they change
+
+  @Test func a_load_that_changes_the_facts_redraws_them_and_one_that_does_not_hands_nothing_over() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let changes = day.factsModel.changes
+
+    try await load(
+      h, day,
+      try copy(revision: 2, pages: AllThree.pages(), tasks: AllThree.tasks() + [task("milk", "Buy milk", due: today)]))
+    #expect(tags(day.facts.dueSoon).last == ["Buy milk", "Due today"])
+    #expect(day.factsModel.changes == changes + 1)
+
+    let reads = day.screen.factsReads
+    var lines = AllThree.todayLines
+    lines[5] = line("notes", "Notes for the day")
+    try await load(
+      h, day,
+      try copy(
+        revision: 3, pages: AllThree.pages(todayLines: lines),
+        tasks: AllThree.tasks() + [task("milk", "Buy milk", due: today)]))
+    #expect(day.words.contains("Notes for the day"), "the load was drawn")
+    #expect(day.screen.factsReads > reads, "the facts were read for the state")
+    #expect(day.factsModel.changes == changes + 1, "the same facts are not handed over again")
+    day.close()
+  }
+
+  @Test func the_facts_are_not_worked_out_on_a_keystroke() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let reads = day.screen.factsReads
+    let published = h.model.state.published
+
+    try day.type("!", atEndOf: "Notes")
+    day.drawn()
+    #expect(h.model.state.published == published, "no state has arrived")
+    #expect(day.screen.factsReads == reads)
+
+    try await soon { h.model.state.published != published }
+    day.drawn()
+    #expect(day.screen.factsReads > reads, "read once a state arrives")
+    day.close()
+  }
+
+  /// The facts are read from the workspace the screen draws, his unsaved words drawn in, with that workspace's own
+  /// index: an index of the engine's copy would still see the row he removed.
+  @Test func the_strip_follows_his_unsaved_words() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    #expect(!tags(day.facts.dueSoon).contains(["Pay the rent", "Due today"]), "its row is on today's page")
+
+    let rent = try day.line("Pay the rent")
+    #expect(rent.becomeFirstResponder())
+    rent.selectedRange = NSRange(location: 0, length: (rent.text as NSString).length)
+    rent.deleteBackward()
+    rent.deleteBackward()
+    #expect(!day.words.contains("Pay the rent"), "the row is gone from the screen")
+    try await soon { !h.model.state.drafts.isEmpty }
+    try await settled(day)
+
+    #expect(h.model.workspace?.dayPage(today)?.document.contains("r-rent") == true, "the server's page keeps the row")
+    #expect(tags(day.facts.dueSoon).contains(["Pay the rent", "Due today"]), "\(tags(day.facts.dueSoon))")
+    day.close()
+  }
+
+  // MARK: Its place and height in the header
+
+  @Test func an_empty_strip_takes_no_room() async throws {
+    let h = try await harness(pages: [page(today, [line("a", "Morning")])], tasks: [])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    #expect(day.facts == .none)
+    #expect(day.factsView.isHidden)
+
+    let header = header(day)
+    let plain = DayHeaderView {}
+    plain.show(DayHeading(for: today, today: today), status: nil)
+    plain.directionalLayoutMargins = header.directionalLayoutMargins
+    let width = header.bounds.width
+    let alone = plain.systemLayoutSizeFitting(
+      CGSize(width: width, height: 0), withHorizontalFittingPriority: .required,
+      verticalFittingPriority: .fittingSizeLevel)
+    #expect(abs(header.bounds.height - alone.height) <= 0.5, "\(header.bounds.height) against \(alone.height)")
+    #expect(abs(try supplementary(day).height - header.bounds.height) <= 0.5)
+    day.close()
+  }
+
+  @Test(arguments: [320, 402, 1024] as [CGFloat])
+  func the_strip_takes_the_headers_width_inside_the_rows_margins(_ width: CGFloat) async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model, width: width)
+    try await settled(day)
+    let header = header(day)
+    let margins = header.layoutMarginsGuide.layoutFrame
+    let strip = strip(day)
+    #expect(abs(strip.minX - margins.minX) <= 0.5, "at \(width): starts at \(strip.minX), margin \(margins.minX)")
+    #expect(abs(strip.maxX - margins.maxX) <= 0.5, "at \(width): ends at \(strip.maxX), margin \(margins.maxX)")
+    // The page's own lines start where the strip does.
+    let notes = try day.line("Notes")
+    let lineStart = notes.convert(notes.bounds, to: nil).minX
+    let stripStart = day.factsView.convert(day.factsView.bounds, to: nil).minX
+    #expect(abs(lineStart - stripStart) <= 1, "at \(width): the line at \(lineStart), the strip at \(stripStart)")
+    #expect(abs(strip.height - (try needed(day))) <= 0.5, "at \(width): nothing of the strip is cut")
+    day.close()
+  }
+
+  @Test func the_strips_words_wrap_and_its_height_follows_the_width() async throws {
+    let long = String(repeating: "Write the long report ", count: 10).prefix(200)
+    let tasks = [task("long", String(long), due: today)]
+    var heights: [CGFloat: CGFloat] = [:]
+    for width in [320, 1024] as [CGFloat] {
+      let h = try await harness(pages: [page(today, [line("a", "Morning")])], tasks: tasks)
+      let day = try RowScreen(h.model, width: width)
+      try await settled(day)
+      #expect(day.facts.dueSoon.map(\.words) == [String(long)])
+      let strip = strip(day)
+      heights[width] = strip.height
+      #expect(abs(strip.height - (try needed(day))) <= 0.5, "at \(width): the strip is as tall as its words")
+      #expect(
+        abs(try supplementary(day).height - header(day).bounds.height) <= 0.5,
+        "at \(width): the header's supplementary is as tall as the header")
+      let fitted = header(day).systemLayoutSizeFitting(
+        CGSize(width: header(day).bounds.width, height: 0), withHorizontalFittingPriority: .required,
+        verticalFittingPriority: .fittingSizeLevel)
+      #expect(abs(header(day).bounds.height - fitted.height) <= 0.5, "at \(width): the header holds all it has")
+      day.close()
+    }
+    #expect(heights[320]! > heights[1024]!, "narrower, the words wrap onto more lines: \(heights)")
+  }
+
+  @Test func opening_the_fold_lays_the_header_out_again() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let strip = strip(day)
+    let header = try supplementary(day)
+    let row = try firstRow(day)
+
+    day.factsModel.notTodayOpen = true
+    try await settled(day)
+    let grown = strip(day).height - strip.height
+    #expect(grown > 20, "the fold's rows show: \(grown)")
+    #expect(abs((try supplementary(day).height - header.height) - grown) <= 0.5)
+    #expect(abs((try firstRow(day).minY - row.minY) - grown) <= 0.5)
+    #expect(abs(strip(day).height - (try needed(day))) <= 0.5)
+    day.close()
+  }
+
+  @Test func the_line_being_typed_stays_when_the_strip_changes() async throws {
+    let filler = (1...30).map { line("f\($0)", "Line \($0)") }
+    let pages = AllThree.pages(todayLines: AllThree.todayLines + filler)
+    let h = try await harness(pages: pages)
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let notes = try day.line("Notes")
+    #expect(notes.becomeFirstResponder())
+    try await settled(day)
+    let before = notes.convert(notes.bounds, to: nil)
+    let stripBefore = strip(day).height
+
+    try await load(
+      h, day, try copy(revision: 2, pages: pages, tasks: AllThree.tasks() + [task("milk", "Buy milk", due: today)]))
+    #expect(tags(day.facts.dueSoon).last == ["Buy milk", "Due today"])
+    #expect(strip(day).height > stripBefore, "the strip grew")
+    #expect(notes.isFirstResponder, "the keyboard stays up")
+    let after = notes.convert(notes.bounds, to: nil)
+    #expect(abs(after.minY - before.minY) <= 0.5, "the line was at \(before.minY), now \(after.minY)")
+    day.close()
+  }
+
+  @Test func at_the_largest_text_size_the_strip_grows_and_keeps_its_width() async throws {
+    var measured: [(height: CGFloat, width: CGFloat, margins: CGFloat)] = []
+    for size in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge] {
+      let h = try await harness()
+      let day = try RowScreen(h.model, size: size)
+      try await settled(day)
+      let strip = strip(day)
+      measured.append((strip.height, strip.width, header(day).layoutMarginsGuide.layoutFrame.width))
+      #expect(abs(strip.height - (try needed(day))) <= 0.5, "at \(size.rawValue) nothing is cut")
+      day.close()
+    }
+    #expect(measured[1].height > measured[0].height)
+    #expect(abs(measured[1].width - measured[1].margins) <= 0.5, "the width is the margins': \(measured)")
+  }
+
+  // MARK: The fold
+
+  @Test func the_fold_is_closed_at_first_and_forgotten_off_today() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    #expect(!day.factsModel.notTodayOpen)
+
+    day.factsModel.notTodayOpen = true
+    day.screen.open(yesterday)
+    try await settled(day)
+    day.screen.open(nil)
+    try await settled(day)
+    #expect(day.facts.notToday != nil)
+    #expect(!day.factsModel.notTodayOpen, "leaving today forgets the fold")
+
+    day.factsModel.notTodayOpen = true
+    try await load(h, day, try copy(revision: 2, pages: AllThree.pages(), tasks: AllThree.tasks(aside: false)))
+    #expect(day.facts.notToday == nil)
+    #expect(!day.factsModel.notTodayOpen, "the list emptied: the fold is forgotten")
+    day.close()
+  }
+
+  @Test func the_fold_survives_a_new_host() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    day.factsModel.notTodayOpen = true
+    try await settled(day)
+    let width = strip(day).width
+    let height = strip(day).height
+
+    let second = UIHostingController(rootView: DayFactsView(model: day.factsModel))
+    let window = try testWindow(width: 402)
+    window.rootViewController = second
+    window.makeKeyAndVisible()
+    window.layoutIfNeeded()
+    #expect(day.factsModel.notTodayOpen)
+    let again = second.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
+    #expect(abs(again - height) <= 0.5, "the new host draws the fold open: \(again) against \(height)")
+    window.isHidden = true
+    day.close()
+  }
+
+  // MARK: Accounts and controls
+
+  @Test func an_account_change_empties_the_strip() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    #expect(!day.factsView.isHidden)
+
+    await h.server.add([.done])
+    #expect(await h.model.signOut(discardingUnsent: true) == .signedOut)
+    try await soon { h.model.state.workspace == nil }
+    try await settled(day)
+    #expect(day.facts == .none, "no copy shown: no facts of the first account")
+    #expect(day.factsView.isHidden)
+
+    let theirs = try copy(
+      revision: 5, pages: [page(today, [line("a", "Morning")])], tasks: [task("plumber", "Call the plumber", due: today)])
+    await h.server.add([.session(two), .workspace(.full(theirs, owner: "two"))])
+    #expect(await h.model.signIn(email: "two@example.com", password: "secret") == nil)
+    try await soon { h.model.state.owner == "two" && h.model.state.workspace != nil }
+    try await settled(day)
+    #expect(tags(day.facts.dueSoon) == [["Call the plumber", "Due today"]], "their own facts")
+    #expect(day.facts.notToday == nil && day.facts.events == nil)
+    #expect(!day.factsView.isHidden)
+    day.close()
+  }
+
+  @Test func the_controls_report_only_while_enabled() throws {
+    let facts = DayFacts.of(
+      day: today, in: try copy(pages: AllThree.pages(), tasks: AllThree.tasks()),
+      index: TodoIndex(try copy(pages: AllThree.pages(), tasks: AllThree.tasks())), today: today)
+    let items = try #require(facts.notToday?.menu.items)
+    let move = try #require(items.first)
+    let pick = try #require(items.last)
+    #expect(move.title == "Tomorrow · Fri 11/27")
+    #expect(pick.title == "Pick date…")
+
+    let model = DayFactsModel()
+    model.show(facts)
+    var reports: [String] = []
+    model.onEvents = { reports.append("events") }
+    model.onBringBack = { reports.append("back \($0)") }
+    model.onAnotherDay = { reports.append("move \($0) \($1.value)") }
+    model.onPickDate = { reports.append("pick \($0)") }
+
+    model.enabled = false
+    model.eventsTapped()
+    model.bringBack("bike")
+    model.choose(move, for: "bike")
+    model.choose(pick, for: "bike")
+    #expect(reports.isEmpty)
+
+    model.enabled = true
+    model.eventsTapped()
+    model.bringBack("bike")
+    model.choose(move, for: "bike")
+    model.choose(pick, for: "bike")
+    #expect(reports == ["events", "back bike", "move bike 2026-11-27", "pick bike"])
+  }
+}
