@@ -467,6 +467,30 @@ private struct DraftHarness {
     #expect(await h.transport.unscripted == [])
   }
 
+  @Test func a_save_the_server_failed_says_it_is_tried_again() async throws {
+    let h = try await DraftHarness(opening + [.failure(TransportError.server(status: 500))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+
+    await h.engine.saveNow()
+
+    #expect(await h.waits.asked.last == .seconds(2))
+    #expect(await current(h.engine)?.drafts == [DraftStatus(id: day, state: .retrying)])
+  }
+
+  @Test func a_draft_not_yet_sent_is_not_said_to_be_tried_again_for_a_tick_the_server_failed() async throws {
+    let h = try await DraftHarness(
+      opening + [.failure(TransportError.server(status: 500))], copy: served(5, tasks: [otherTask]))
+    await h.engine.start()
+    try await h.engine.enqueue(action: tick("other"), label: "Tick other")
+    await h.engine.settled()
+    #expect(await h.waits.asked.last == .seconds(2), "the tick is tried again")
+
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+
+    #expect(await current(h.engine)?.drafts == waiting(), "its own save has not failed")
+  }
+
   @Test func a_tick_on_a_to_do_typed_into_a_draft_is_sent_after_that_drafts_save() async throws {
     let answer = try saved(from: 5, to: 6, document: withTodo(planned: true), tasks: [todo("open")], receipt: 6)
     let ticked = try changes(from: 6, to: 7, tasks: [todo("done", version: 2)])
