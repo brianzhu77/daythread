@@ -112,8 +112,13 @@ private func eventually(_ condition: () async -> Bool) async -> Bool {
   return await condition()
 }
 
-/// The state a new reader of `states` gets at once.
+/// The state a new reader of `states` gets at once, without its number (see `numbered` for it).
 private func current(_ engine: SyncEngine) async -> SyncState? {
+  await numbered(engine)?.unnumbered
+}
+
+/// The state a new reader of `states` gets at once.
+private func numbered(_ engine: SyncEngine) async -> SyncState? {
   await engine.states.first { _ in true }
 }
 
@@ -896,7 +901,10 @@ private struct Harness {
       seen.append(value)
       if value.phase == .ready { break }
     }
-    #expect(seen == [state(.starting, nil, signedIn: false), state(.starting, copy), state(.ready, copy, address: one)])
+    #expect(
+      seen.map(\.unnumbered)
+        == [state(.starting, nil, signedIn: false), state(.starting, copy), state(.ready, copy, address: one)])
+    #expect(seen.map(\.published) == [0, 1, 2], "each state is numbered once, in the order published")
     #expect(await current(h.engine) == state(.ready, copy, address: one))
   }
 
@@ -1302,21 +1310,29 @@ private func row(_ id: String, title: String? = nil, status: String = "open", ve
     + #""version":\#(version)}"#
 }
 
-/// A workspace at `revision` holding today's page (unless `days` says otherwise) and `rows`.
-private func board(_ revision: Int, days: [String] = ["2026-11-25"], rows: [String]) throws -> Workspace {
+/// A workspace at `revision` holding today's page (unless `days` says otherwise) and `rows`, with the server's Undo
+/// slot when `undo` is given (as JSON text).
+private func board(
+  _ revision: Int, days: [String] = ["2026-11-25"], rows: [String], undo: String? = nil
+) throws -> Workspace {
   let pages = days.map { #"{"id":"day:\#($0)","type":"daily","date":"\#($0)","title":"\#($0)","document":"[]"}"# }
   let text =
     #"{"revision":\#(revision),"timezone":"UTC","pages":[\#(pages.joined(separator: ","))],"#
-    + #""tasks":[\#(rows.joined(separator: ","))]}"#
+    + #""tasks":[\#(rows.joined(separator: ","))]\#(undo.map { #","undo":\#($0)"# } ?? "")}"#
   return try required(Workspace(try JSON.parse(text)))
 }
 
-/// Changes from `from` to `revision` that write `rows`.
-private func upserting(from: Int, to revision: Int, _ rows: [String]) throws -> WorkspaceChanges {
+/// Changes from `from` to `revision` that write `rows`, and leave the server's Undo slot as `undo` when given.
+private func upserting(from: Int, to revision: Int, _ rows: [String], undo: String? = nil) throws -> WorkspaceChanges {
   let text =
     #"{"from":\#(from),"revision":\#(revision),"timezone":"UTC","pages":{"upsert":[],"remove":[]},"#
-    + #""tasks":{"upsert":[\#(rows.joined(separator: ","))],"remove":[]}}"#
+    + #""tasks":{"upsert":[\#(rows.joined(separator: ","))],"remove":[]}\#(undo.map { #","undo":\#($0)"# } ?? "")}"#
   return try required(WorkspaceChanges(try JSON.parse(text)))
+}
+
+/// The server's Undo slot for the command `operationId`, as JSON text.
+private func marker(_ operationId: String, _ revision: Int) -> String {
+  #"{"operationId":"\#(operationId)","revision":\#(revision)}"#
 }
 
 /// The tick the app sends for `taskId`.
@@ -1571,12 +1587,13 @@ private let yesterday = LocalDate("2026-11-24")!
 
 private let conflict: FakeTransport.Reply = .outcome(.held(reason: "conflict", rows: [], stale: false, owner: "user-1"))
 
-/// Changes from `from` to `revision` that add the day page for `date`.
-private func addingDay(from: Int, to revision: Int, _ date: String) throws -> WorkspaceChanges {
+/// Changes from `from` to `revision` that add the day page for `date`, and leave the server's Undo slot as `undo`
+/// (JSON text) when given.
+private func addingDay(from: Int, to revision: Int, _ date: String, undo: String? = nil) throws -> WorkspaceChanges {
   let page = #"{"id":"day:\#(date)","type":"daily","date":"\#(date)","title":"\#(date)","document":"[]"}"#
   let text =
     #"{"from":\#(from),"revision":\#(revision),"timezone":"UTC","pages":{"upsert":[\#(page)],"remove":[]},"#
-    + #""tasks":{"upsert":[],"remove":[]}}"#
+    + #""tasks":{"upsert":[],"remove":[]}\#(undo.map { #","undo":\#($0)"# } ?? "")}"#
   return try required(WorkspaceChanges(try JSON.parse(text)))
 }
 
@@ -1911,7 +1928,7 @@ struct Answer: Sendable, CustomTestStringConvertible {
     let action = Command.ensureDay(yesterday)
     let performed = await h.engine.perform(action: action)
 
-    #expect(performed == .applied)
+    #expect(performed.answer != nil, "applied")
     #expect(await current(h.engine)?.workspace?.dayPage(yesterday) != nil, "in before it returns")
     let sends = await h.transport.sends
     #expect(sends.count == 3)
@@ -1995,7 +2012,7 @@ struct Answer: Sendable, CustomTestStringConvertible {
     await h.engine.start()
 
     let action = Command.ensureDay(yesterday)
-    #expect(await h.engine.perform(action: action) == .applied)
+    #expect(await h.engine.perform(action: action).answer != nil, "applied")
 
     #expect(await current(h.engine)?.workspace?.dayPage(yesterday) != nil, "in before it returns")
     let sends = await h.transport.sends
@@ -2048,7 +2065,7 @@ struct Answer: Sendable, CustomTestStringConvertible {
     await gate.open(applied(tickAnswer))
 
     #expect(await restoring.value == .refused("forbidden"))
-    #expect(await starting.value == .applied, "sent, and answered with its own outcome")
+    #expect(await starting.value.answer != nil, "sent, and answered with its own outcome")
     #expect(await h.transport.sends.count == 3)
   }
 
@@ -2156,6 +2173,160 @@ struct Answer: Sendable, CustomTestStringConvertible {
     #expect(await h.engine.perform(action: Command.ensureDay(yesterday)) == .signedOut)
     #expect(await h.calls == [.account(token: "tok-1")])
   }
+
+  // MARK: The answer, its receipt, and the state that holds it
+
+  @Test func perform_answers_with_the_receipt_and_the_operation_id() async throws {
+    let receipt: JSONValue = .object(["revision": .number("6"), "message": .string("Moved to Tue, Nov 24")])
+    let h = try await Harness(
+      opening + [
+        .outcome(.applied(receipt: receipt, changes: try addingDay(from: 5, to: 6, "2026-11-24"), owner: "user-1")),
+        .outcome(.alreadyApplied(owner: "user-1")),
+        .workspace(.full(try board(7, days: ["2026-11-23", "2026-11-24", "2026-11-25"], rows: []), owner: "user-1")),
+      ], copy: try board(5, rows: []))
+    await h.engine.start()
+
+    let answer = try #require(await h.engine.perform(action: Command.ensureDay(yesterday)).answer)
+    let sent = await h.transport.sends.last?.operationId
+    #expect(answer.operationId == sent)
+    #expect(answer.receipt == receipt)
+
+    let again = try #require(await h.engine.perform(action: Command.ensureDay(LocalDate("2026-11-23")!)).answer)
+    let sentAgain = await h.transport.sends.last?.operationId
+    #expect(again.operationId == sentAgain)
+    #expect(again.operationId != answer.operationId)
+    #expect(again.receipt == nil, "already applied: the server sent no receipt")
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func perform_held_then_sent_again_answers_with_its_one_operation_id() async throws {
+    let h = try await Harness(
+      opening + [
+        .outcome(.held(reason: "changed-since", rows: [], stale: true, owner: "user-1")),
+        .workspace(.full(try board(6, rows: []), owner: "user-1")),
+        applied(try addingDay(from: 6, to: 7, "2026-11-24")),
+      ], copy: try board(5, rows: []))
+    await h.engine.start()
+
+    let answer = try #require(await h.engine.perform(action: Command.ensureDay(yesterday)).answer)
+
+    #expect(await h.transport.sends.map(\.operationId) == [answer.operationId, answer.operationId])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func perform_answer_names_the_state_that_holds_it() async throws {
+    let earlier = LocalDate("2026-11-23")!
+    let h = try await Harness(
+      opening + [
+        applied(try addingDay(from: 5, to: 6, "2026-11-24")),
+        // Changes that do not start from the copy's revision: the answer is in once the whole load is.
+        applied(try addingDay(from: 9, to: 10, "2026-11-23")),
+        .workspace(.full(try board(10, days: ["2026-11-23", "2026-11-24", "2026-11-25"], rows: []), owner: "user-1")),
+      ], copy: try board(5, rows: []))
+    let published = Published(h.engine)
+    await h.engine.start()
+
+    for date in [yesterday, earlier] {
+      let answer = try #require(await h.engine.perform(action: Command.ensureDay(date)).answer)
+
+      let states = await published.all(through: h.engine)
+      #expect(states.map(\.published) == Array(0..<states.count), "each state is numbered once, in order")
+      let holding = try #require(states.first { $0.published == answer.published })
+      #expect(holding.workspace?.dayPage(date) != nil, "the state it names holds it")
+      #expect(
+        states.filter { $0.published < answer.published }.allSatisfy { $0.workspace?.dayPage(date) == nil },
+        "no earlier one does")
+    }
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func the_undo_slot_follows_the_copy() async throws {
+    let h = try await Harness(opening, copy: try board(5, rows: [row("t1")]))
+    await h.engine.start()
+    #expect(await current(h.engine)?.undoSlot == nil)
+
+    // A command takes the slot.
+    await h.transport.add([applied(try addingDay(from: 5, to: 6, "2026-11-24", undo: marker("op-move", 6)))])
+    _ = try #require(await h.engine.perform(action: Command.ensureDay(yesterday)).answer)
+    #expect(await current(h.engine)?.undoSlot == UndoMarker(operationId: "op-move", revision: 6))
+
+    // So does a tick.
+    let ticked = try upserting(from: 6, to: 7, [row("t1", status: "done", version: 2)], undo: marker("op-tick", 7))
+    await h.transport.add([applied(ticked)])
+    try await h.engine.enqueue(action: done("t1"), label: #"ticked "t1""#)
+    await h.engine.settled()
+    #expect(await current(h.engine)?.undoSlot == UndoMarker(operationId: "op-tick", revision: 7))
+
+    // A day page made empties it.
+    await h.transport.add([applied(try addingDay(from: 7, to: 8, "2026-11-23", undo: "null"))])
+    _ = try #require(await h.engine.perform(action: Command.ensureDay(LocalDate("2026-11-23")!)).answer)
+    #expect(await current(h.engine)?.undoSlot == nil)
+
+    // A load: the slot is the workspace's only while it is of the workspace's own revision.
+    await h.transport.add([
+      .workspace(.full(try board(9, rows: [row("t1")], undo: marker("op-elsewhere", 9)), owner: "user-1"))
+    ])
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.undoSlot == UndoMarker(operationId: "op-elsewhere", revision: 9))
+    await h.transport.add([
+      .workspace(.full(try board(10, rows: [row("t1")], undo: marker("op-elsewhere", 9)), owner: "user-1"))
+    ])
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.undoSlot == nil)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func unsent_says_whether_anything_of_his_waits() async throws {
+    let nothing = try await Harness(opening, copy: try board(5, rows: [row("t1")]))
+    await nothing.engine.start()
+    #expect(await current(nothing.engine)?.unsent == false)
+
+    let pendingTick = try await Harness(
+      opening + [offline], copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"))])
+    await pendingTick.engine.start()
+    #expect(await current(pendingTick.engine)?.pending == 1)
+    #expect(await current(pendingTick.engine)?.unsent == true)
+
+    let heldTick = try await Harness(
+      opening, copy: try board(5, rows: [row("t1")]), entries: [stored("op-1", done("t1"), heldFor: "conflict")])
+    await heldTick.engine.start()
+    #expect(await current(heldTick.engine)?.held.count == 1)
+    #expect(await current(heldTick.engine)?.unsent == true)
+
+    let waitingTick = try await Harness(
+      opening, copy: try board(5, rows: [row("t1")]),
+      entries: [stored("op-1", done("t1"), heldFor: "conflict"), stored("op-2", undone("t1"))])
+    await waitingTick.engine.start()
+    #expect(await current(waitingTick.engine)?.waiting == 1)
+    #expect(await current(waitingTick.engine)?.pending == 0)
+    #expect(await current(waitingTick.engine)?.unsent == true)
+
+    let draft = try await Harness(opening, copy: try board(5, rows: []))
+    await draft.engine.start()
+    let words = #"[{"id":"p1","type":"paragraph","props":{},"content":[{"type":"text","text":"Walk","styles":{}}],"children":[]}]"#
+    try await draft.engine.keepDraft(
+      pageId: "day:2026-11-25", document: words, singleDeleteIds: [], startedFrom: "[]", expectedOwner: "user-1")
+    #expect(await current(draft.engine)?.unsent == true)
+
+    // The engine's own request for today's page, not sent for want of a network, is not his.
+    let ownRequest = try await Harness(opening + [offline], copy: try board(5, days: [], rows: []))
+    await ownRequest.engine.start()
+    #expect(try await ownRequest.store.entries().map(\.asksForADay) == [true])
+    #expect(await current(ownRequest.engine)?.unsent == false)
+  }
+
+  @Test func an_undo_refused_is_reported_as_refused() async throws {
+    let message = "Cannot undo after later changes; current values kept"
+    let h = try await Harness(
+      opening + [
+        .outcome(.refused(message: message, owner: "user-1")), .workspace(.unchanged(revision: 5, owner: "user-1")),
+      ], copy: try board(5, rows: []))
+    await h.engine.start()
+
+    #expect(await h.engine.perform(action: Command.undo(targetOperationId: "op-move")) == .refused(message))
+    #expect(await h.calls.last == .workspace(token: "tok-1", have: 5), "after a load")
+    #expect(await h.transport.unscripted == [])
+  }
 }
 
 // MARK: - A held tick merged with what changed on the server
@@ -2188,7 +2359,7 @@ private final class Published: Sendable {
 
   /// What was published up to and including the engine's current state.
   func all(through engine: SyncEngine) async -> [SyncState] {
-    let last = await current(engine)
+    let last = await numbered(engine)
     await until { await seen.all.last == last }
     return await seen.all
   }
