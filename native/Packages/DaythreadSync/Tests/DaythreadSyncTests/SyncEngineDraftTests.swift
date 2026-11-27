@@ -1685,6 +1685,59 @@ private struct DraftHarness {
     #expect(await h.saves.count == 1)
   }
 
+  @Test
+  func a_keystroke_on_its_way_when_a_save_landed_on_a_draft_opened_after_a_relaunch_starts_from_what_was_sent()
+    async throws
+  {
+    // The load fails, so the draft is not sent before he types.
+    let h = try await DraftHarness([
+      .account(Account(owner: "user-1", email: "one@example.com", signIn: true)), .failure(TransportError.offline),
+      try saved(from: 5, to: 6, document: typed("Walk on")),
+    ])
+    // Draft D, typed on P0 before the relaunch: this engine never saw the page it was created on.
+    try await h.store.put(
+      PageDraft(
+        pageId: day, owner: "user-1", base: ContentKey.of(baseDocument), baseDocument: baseDocument,
+        document: typed("Walk"), singleDeleteIds: [], sent: nil, changedAt: noon))
+    await h.engine.start()
+
+    // The screen opened the page as the draft draws it, and types on it.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: typed("Walk"), expectedOwner: "user-1")
+    await h.engine.saveNow()
+    #expect(try await h.drafts == [], "the answer removed the draft")
+
+    // A keystroke made before the answer reached the screen, which still had the page it opened.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on by"), singleDeleteIds: [], startedFrom: typed("Walk"),
+      expectedOwner: "user-1")
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.baseDocument == typed("Walk on"))
+    #expect(draft.base == ContentKey.of(typed("Walk on")))
+    #expect(await current(h.engine)?.drafts == waiting())
+    #expect(await h.engine.merging(day) == nil, "nothing to merge")
+  }
+
+  @Test func a_keystroke_typed_on_the_page_a_save_left_starts_from_it() async throws {
+    // The server took the save and left the page as it was before (a rewrite back to an earlier version).
+    let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: baseDocument)])
+    await h.engine.start()
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await h.engine.saveNow()
+    #expect(try await h.drafts == [])
+    #expect(await current(h.engine)?.workspace?.page(day)?.document == baseDocument)
+
+    // He types on the page as the save left it, which is also the page the draft was created on.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Run"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.baseDocument == baseDocument)
+    #expect(await current(h.engine)?.drafts == waiting())
+  }
+
   // MARK: Whose state it is
 
   @Test func the_state_names_the_owner_of_the_copy_shown() async throws {

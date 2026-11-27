@@ -739,6 +739,68 @@ private struct DayScreen {
     day.close()
   }
 
+  /// A draft kept from before a relaunch is opened as it is drawn, and his next words are saved; a keystroke on its
+  /// way when that save lands is typed onto what was saved.
+  @Test func a_keystroke_on_its_way_when_a_save_landed_on_a_draft_from_before_a_relaunch_is_not_doubled()
+    async throws
+  {
+    let drafted = document([line("a", "Morning"), line("b", "Walk the dog")])
+    let store = TestStore()
+    try await store.replace(with: try copy(pages: [page(today, base), page(yesterday, base)]), owner: "one")
+    try await store.put(
+      PageDraft(
+        pageId: todayId, owner: "one", base: ContentKey.of(base), baseDocument: base, document: drafted,
+        singleDeleteIds: [], sent: nil, changedAt: noon))
+    // The load finds no network, so the draft is not sent before he types.
+    let server = TestServer([.account(Account(owner: "one", email: "one@example.com", signIn: true))])
+    let tokens = MemoryTokenStore()
+    try tokens.write(one)
+    let engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: neverEnding, now: { noon })
+    let model = AppModel(engine: engine, now: { noon })
+    model.start()
+    try await until { model.workspace != nil }
+    await engine.settled()
+    let day = try DayScreen(model)
+    #expect(day.words == ["Morning", "Walk the dog"])
+
+    try day.type("!", atEndOf: "Walk the dog")
+    try await eventually {
+      await engine.draft(of: todayId).map { words(of: $0.document) } == ["Morning", "Walk the dog!"]
+    }
+    let saved = document([line("a", "Morning"), line("b", "Walk the dog!")])
+    await server.add([
+      .saved(
+        .applied(
+          receipt: .object(["revision": .number("2")]),
+          changes: try changes(from: 1, to: 2, pages: [page(today, saved)]), owner: "one"))
+    ])
+    await server.holdSaves()
+    let saving = model.saveNow()
+    try await eventually { await server.waitingCalls == 1 }
+
+    // His next keystroke waits in the model behind words for another day, whose store write is held.
+    await store.holdPut()
+    model.wrote(
+      pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
+      startedFrom: base, owner: "one")
+    await store.putHeld()
+    try day.type("?", atEndOf: "Walk the dog!")
+
+    // The save's answer comes first and removes the draft; then the keystroke reaches the engine.
+    await server.release()
+    try await turns()
+    await store.releasePut()
+    await saving.value
+    try await until { model.state.drafts.contains { $0.id == todayId } }
+    try await turns()
+
+    #expect(day.words == ["Morning", "Walk the dog!?"])
+    #expect(day.status == nil)
+    #expect(model.state.drafts.first { $0.id == todayId }?.state == .waiting, "nothing to merge")
+    #expect(await saves(server).count == 1, "no merged page was saved")
+    day.close()
+  }
+
   @Test func a_state_that_changes_only_his_words_leaves_the_list_alone() async throws {
     let todoRow =
       #"{"id":"t","type":"task","props":{"taskId":"t-open"},"content":[{"type":"text","text":"Water the plants","styles":{}}],"children":[]}"#
