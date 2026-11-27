@@ -487,6 +487,74 @@
         #expect(got.first?.menu.groups.first?.items.map(\.title) == ["Remove from Thu"], "with the menu as it is now")
       }
 
+      @Test func a_menu_made_for_one_row_reports_nothing_once_its_cell_shows_another() throws {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let cell = TodoBlockCell(frame: CGRect(x: 0, y: 0, width: 390, height: 80))
+        window.addSubview(cell)
+        let page = try makePage(
+          [taskRow("a", "k-a", "Water the plants"), taskRow("b", "k-b", "Call the bank")], id: "day:\(today)",
+          date: today, type: "daily")
+        let workspace = try makeWorkspace(pages: [page], tasks: [todo("k-a"), todo("k-b")])
+        let rows = BlockRows.rows(for: page, in: workspace, today: try #require(LocalDate(today)))
+        var reported: [String] = []
+        // What the list does when it gives the cell to another row: the cell's actions report for that row now.
+        func show(_ row: BlockRow) {
+          guard case .todo(let taskId, let status, _, let facts) = row.kind else { return }
+          cell.configure(
+            status: status, facts: facts, canBeTicked: true, depth: 0, text: AttributedString("words"), editable: true,
+            rowID: row.id, delegate: nil, onTick: {},
+            onRowAction: { _ in
+              reported.append(taskId)
+              return true
+            })
+        }
+        show(rows[0])
+        let oldItem = try menuItem(cell.circle.menu, "Not today")
+        let oldCustom = try #require(cell.line.accessibilityCustomActions?.first { $0.name == "Not today" })
+        let rowAMenu = menu(cell.circle.menu)
+        show(rows[1])
+        #expect(menu(cell.circle.menu) == rowAMenu, "row B offers the same actions")
+
+        // A menu still up from row A, run after its cell shows row B: nothing is reported, for either row.
+        oldItem.performWithSender(nil, target: nil)
+        #expect(oldCustom.actionHandler?(oldCustom) == false)
+        #expect(reported.isEmpty)
+
+        try menuItem(cell.circle.menu, "Not today").performWithSender(nil, target: nil)
+        #expect(reported == ["k-b"], "the new menu reports once, for row B")
+        let newCustom = try #require(cell.line.accessibilityCustomActions?.first { $0.name == "Not today" })
+        #expect(newCustom.actionHandler?(newCustom) == true)
+        #expect(reported == ["k-b", "k-b"])
+      }
+
+      @Test func a_menu_made_for_one_to_do_reports_nothing_once_its_row_holds_another() throws {
+        let screen = try Screen.editing(
+          [taskRow("plan", "k-a", "Water the plants"), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-a"), todo("k-b")], today: today)
+        var requests: [RowRequest] = []
+        screen.controller.onRowAction = { requests.append($0) }
+        let cell = try cell(screen, 0)
+        let oldItem = try menuItem(cell.circle.menu, "Not today")
+        let oldCustom = try #require(cell.line.accessibilityCustomActions?.first { $0.name == "Not today" })
+        // The same row now holds another to-do, whose actions are the same.
+        let other = try page(
+          [taskRow("plan", "k-b", "Water the plants"), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-a"), todo("k-b")])
+        screen.controller.replace(document: other.document, in: other.workspace)
+        screen.window.layoutIfNeeded()
+        #expect(try screen.cell(0) === cell, "reconfigured in place")
+
+        oldItem.performWithSender(nil, target: nil)
+        #expect(oldCustom.actionHandler?(oldCustom) == false)
+        #expect(requests.isEmpty)
+
+        try menuItem(cell.circle.menu, "Not today").performWithSender(nil, target: nil)
+        #expect(requests.map(\.taskId) == ["k-b"])
+        #expect(requests.map(\.rowID) == ["plan"])
+      }
+
       @Test func the_button_reports_only_while_the_row_offers_it() throws {
         let (screen, requests) = try everyKind()
         let reference = try cell(screen, 1)
