@@ -1072,3 +1072,34 @@ merged). Observed unless marked as reasoning.
    was seen after a swipe had been opened and closed, and not checked without one. If a tap in the middle of the
    words does not put the caret where it was tapped, that is a defect of slice 1b, to be fixed with its own
    failing test before anything else.
+
+## Decisions made while building (2026-11-26 to 2026-11-27)
+
+The calls I made on Brian's behalf while the plan ran, in the order they were made, each with what it costs if
+it is wrong. The design (`native-phase-1.md` §11) and this plan's Corrections hold the ones that changed what
+the app does.
+
+| Decision | Why | If it is wrong |
+|---|---|---|
+| No control is added to a row; actions are on a trailing swipe, the circle's menu, ⌘/ and accessibility actions | An ellipsis on the caret's row would take width from the words or move them | On a phone the actions are found only by swiping or by holding the circle |
+| The marks go on one line under the words, not at the trailing end of the first line | The words keep the row's full width; it is the system list's secondary text | A layout change in one cell |
+| Row actions are sent and waited for, not queued; they need a connection | Nothing predicted is stored; a queued move would have to be drawn ahead | A later slice draws them ahead and queues them |
+| `Reference` stays on a done or cancelled reference row | The web draws it | Nothing on a phone, where the mark is hidden |
+| No list context menu; the full menu is the circle button's own (touch and hold; a tap still ticks) | The spike: a list context menu on rows whose touches go to a text view opened instead of placing the caret | The caret row's actions on a phone are found only by holding its circle |
+| The row being typed in has no swipe; none while text is selected | Opening a swipe there drops the keyboard | He moves the caret to swipe that row, or holds its circle |
+| ⌘/ presents the caret row's menu through the edit menu interaction | The only public way to present a menu from a key | On the Mac it may not present (never shown either way; in Task 12's hand checks, with an action sheet as the fallback) |
+| `Plan for today` is on every open reference row, also when planned today | The web does this and the shared case says so | One condition |
+| The notice's words wrap rather than staying on one line | Long notices and large text sizes would cut words | A one-property change |
+| A red commit that does not compile because the API under test does not exist yet counts as the failing-tests commit | Swift cannot fail a test of a missing symbol otherwise; stubs would put product code in the red commit | Nothing in behaviour |
+| Tasks 5 and 10 were started before the reviews of the tasks they build on had ended | They build only against those tasks' public interfaces | A merge of fix commits (it cost nothing) |
+| Builders' commit trailers and two `fix(native)` prefixes are left as written | No history rewrite | Nothing in behaviour |
+| A paste still waiting for the run loop's next turn when the page is replaced is dropped, as in slice 1b | Reporting it from inside `replace` made a draft that could undo the server's change; merging it inside the editor is a design of its own | A paste lost when a server update lands in the same turn; he sees it and pastes again |
+| From the accessibility text sizes, `Plan for today` sits under the row's words and marks | Beside the words it cut its own title and left the words one per line | A layout constant |
+| Task 10's `wip:` commit was not carried over: its red commit was cherry-picked and its implementation squashed under the plan's title | Keeps red-before-green and the commit convention without rewriting anything published | Nothing in the tree (checked by diff against the task branch) |
+| The notice uses the system material, not glass | On the real screen the rows beneath showed through its words, badly in dark at the largest text size | One line and two screenshots |
+| On a phone the notice sits directly under the status bar, over the previous and next-day buttons, not under the navigation bar | Under the bar it half-covered the day's title; the web's phone layout puts its notice under the status bar | One anchor and its tests; it hides those buttons while it shows (a swipe up dismisses it) |
+| A row action on the row being composed in is not refused | §11.4 step 1: an action commits the composition and goes on | One action on facts a moment old, which the server judges |
+
+Left for a later slice, with why: the model building one to-do index per published state and sharing it with
+the editor (today one is built per arriving state on the main actor: about 49 ms in Debug for 3,000 to-dos,
+with the keystroke budget holding); `expectedOwner` passed into `perform`; the paste merge above.
