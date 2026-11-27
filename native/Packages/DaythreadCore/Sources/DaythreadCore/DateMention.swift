@@ -1,5 +1,7 @@
 /// A `@date` chip in a line, as `readMention` in `src/domain/date-chip.ts` reads it.
 struct DateMention {
+  /// Never empty: one event however many lines hold the chip.
+  let eventId: String
   let date: LocalDate
   /// `HH:mm`, or nil when the chip has none or its time is not one.
   let time: String?
@@ -14,6 +16,7 @@ struct DateMention {
       // 0 to 99 as 19xx, so a chip dated before the year 100 is not a chip.
       !date.value.hasPrefix("00")
     else { return nil }
+    self.eventId = eventId
     self.date = date
     time = object["props"]?.objectValue?["time"]?.stringValue.flatMap { Self.validTime($0) ? $0 : nil }
   }
@@ -35,11 +38,18 @@ struct DateMention {
 
   /// `15:00` reads `3pm`, `09:30` `9:30am`, `12:00` `12pm`, `00:15` `12:15am`.
   static func timeLabel(_ time: String) -> String {
+    guard let (clock, isMorning) = twelveHour(time) else { return time }
+    return "\(clock)\(isMorning ? "am" : "pm")"
+  }
+
+  /// The 12-hour clock of an `HH:mm` (`3`, `9:30`) and whether it is before noon; `timeLabel` and
+  /// `EventWords.shortTime` spell the meridiem differently.
+  static func twelveHour(_ time: String) -> (clock: String, isMorning: Bool)? {
     let parts = time.split(separator: ":").compactMap { Int($0) }
-    guard parts.count == 2 else { return time }
+    guard parts.count == 2 else { return nil }
     let (hour, minute) = (parts[0], parts[1])
     let clock = hour % 12 == 0 ? 12 : hour % 12
-    return "\(clock)\(minute == 0 ? "" : ":" + (minute < 10 ? "0" : "") + String(minute))\(hour < 12 ? "am" : "pm")"
+    return ("\(clock)\(minute == 0 ? "" : ":" + (minute < 10 ? "0" : "") + String(minute))", hour < 12)
   }
 
   /// `HH:mm`, 00:00 to 23:59, ASCII digits only.
