@@ -316,18 +316,30 @@
         #expect(
           cell.hitTest(cell.circle.convert(CGPoint(x: cell.circle.bounds.midX, y: cell.circle.bounds.midY), to: cell), with: nil)
             === cell.circle)
-        // A touch on the marks line goes to the words' text view, which puts the caret in the words where it is
-        // nearest to the touch.
+        // A touch on the marks line goes to the words' text view, as a touch below its words does: the caret goes in
+        // the words, at their end (the text view's closest position to a point under its last line).
         let content = try #require(cell.contentView as? UIListContentView)
         let marks = content.convert(try #require(content.secondaryTextLayoutGuide).layoutFrame, to: cell)
         #expect(!marks.isEmpty)
         let onMarks = CGPoint(x: marks.minX + 4, y: marks.midY)
         #expect(cell.hitTest(onMarks, with: nil) === cell.line)
         let position = try #require(cell.line.closestPosition(to: cell.convert(onMarks, to: cell.line)))
-        #expect(cell.line.offset(from: cell.line.beginningOfDocument, to: position) <= 1, "the caret goes in the words")
-        // The words are drawn no further than the button's leading edge, at every text size.
+        #expect(cell.line.offset(from: cell.line.beginningOfDocument, to: position) == ("Read the lease" as NSString).length)
+        // The words never run under the button, at any text size: beside them it starts where they end; from the
+        // accessibility sizes it is under the words and the marks, the words keeping the row's width, inside the row.
         let words = cell.line.convert(cell.line.bounds, to: cell)
-        #expect(words.maxX <= button.convert(button.bounds, to: cell).minX)
+        let buttonFrame = button.convert(button.bounds, to: cell)
+        #expect(!words.intersects(buttonFrame) && !marks.intersects(buttonFrame))
+        #expect(cell.bounds.insetBy(dx: -0.5, dy: -0.5).contains(buttonFrame), "nothing of the button is cut")
+        if category.isAccessibilityCategory {
+          #expect(buttonFrame.minY >= marks.maxY - 0.5, "under the marks")
+          #expect(abs(buttonFrame.minX - words.minX) < 0.5, "where the words start")
+          let plain = try Screen.editing(
+            [taskRow("plan", "k-plan", "Read the lease")], tasks: [todo("k-plan")], category: category, today: today)
+          #expect(abs(try self.cell(plain, 0).line.bounds.width - cell.line.bounds.width) < 0.5, "the words keep the width")
+        } else {
+          #expect(words.maxX <= buttonFrame.minX)
+        }
       }
 
       // MARK: one action at a time

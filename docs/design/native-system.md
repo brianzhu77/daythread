@@ -76,6 +76,9 @@
 | Moved to Fri 11/27 | The same line, on a plan row whose to-do was planned on a later day since, at regular width only |
 | Blocked by Buy paint, Blocked by 2 | A line of its own under the marks (or alone in their place), on an open to-do blocked by open to-dos: the blocker's title for one, the count for more |
 | Due tomorrow, Since Nov 3, Repeats every week, Blocked by Buy paint | The marks line's VoiceOver label: one element after the words, the marks drawn at that width, in order, comma-joined |
+| Tomorrow, Not today, Not on Fri, Remove from Fri, Plan for today, Bring to today, Restore, More | A to-do row's trailing swipe (the system's swipe actions, default look), the web's phone bar's first actions then `More`: today's plan row `Tomorrow` (unless planned tomorrow), the off item, `More`; a later day's plan row the off item (`Not on Fri`, or `Remove from Fri` when the to-do is planned on another day), `More`; a reference row `Plan for today` (unless planned today), `More`; a past day `Bring to today`; a cancelled row `Restore`. `More` is there when the menu holds more and is reported, the host shows what it holds. No action runs on a full swipe. None on a done row, a text row, the row being typed in, or anywhere while words are selected |
+| Tomorrow · Fri, Nov 27, Another day, Tomorrow · Fri 11/27, This weekend · Sat 11/28, Next week · Mon 11/30, Pick date…, Cancel task | The row's menu: every action in the web's `⋯` order, as the system menu of the row's circle (a touch and hold, a click and hold or a secondary click; a tap still ticks). `Tomorrow · Fri, Nov 27` and the off item first on a plan row (`Plan for today` first on a reference row, `Restore` alone on a cancelled one, `Bring to today` alone on a past day), then `Another day` as a titled inline group of the web's options (`Tomorrow · Fri 11/27` only where Tomorrow is not already first) and `Pick date…`, then `Cancel task`, the one destructive item. The same menu opens with ⌘/ at the caret of the row being typed in (the system's edit menu), and its items, flattened, are the words' VoiceOver custom actions |
+| Plan for today | The reference row's own button, on every open reference row (also one already planned today, as the web): a plain system button, caption text in the secondary colour, at the row's trailing end, level with the words' first line, the words and marks ending before it; from the accessibility text sizes it goes under the words and marks, where they start, and the words keep the row's width (as the web wraps it under a title that would get too narrow, and as the notice puts its button) |
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
 | Today, Tasks, Calendar, Pages | The tab bar's tabs, the web's places in its order: the system's tab bar with its default appearance (the floating glass capsule on iOS 26). Symbols: `<day of month>.calendar` for Today (the account's today, `26.calendar` on the 26th; it changes at the account's midnight), `checkmark.square`, `calendar`, `doc.text` |
 | Search | The system's search tab (`UISearchTab`), its own title and symbol, after the four; the system draws it apart, as the round button at the end of the bar |
@@ -104,6 +107,13 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
     size class, so a rotation or a resized window redraws them without new rows. The words keep the first line and
     their width; a tap on the marks puts the caret in the words. A row with no marks has no secondary text and is
     drawn as before. VoiceOver reads the row as the circle, the words, then the marks as one element.
+  - **The row's actions** (slice 1c) are the system's: the list's trailing swipe, the circle's own menu, the edit
+    menu for ⌘/, VoiceOver custom actions on the words. The one control added to a row is the reference row's
+    `Plan for today` button, placed on the cell as the circle is, with the content's trailing margin (from the
+    accessibility sizes its bottom margin) widened by its size so the system lays the words and marks out clear of
+    it; it takes its own touches, and a touch on the
+    marks line goes to the words (the caret at their end). While an action is out, its row's words and marks are
+    drawn in the tertiary label colour, in place.
 - **Separator:** one hairline in the system's separator colour.
 - **Placeholder:** a `rectangle.dashed` symbol and the block's name in secondary colour.
 

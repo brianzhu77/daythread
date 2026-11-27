@@ -33,6 +33,27 @@
     /// the run loop. A tick does not take the caret from the line being typed.
     public var onTick: ((_ taskId: String) -> Void)?
 
+    /// The one callback for a row's actions: a swipe action, `More`, an item of the circle's menu, ⌘/'s menu (the
+    /// same), a VoiceOver custom action, the `Plan for today` button. The list presents nothing itself.
+    public var onRowAction: ((RowRequest) -> Void)?
+
+    /// The row an action is out for: drawn dimmed (its words and marks in `.tertiaryLabel`), and every row's actions
+    /// report nothing until it is nil again. Typing and ticking go on.
+    public var actingRow: String? {
+      didSet {
+        guard actingRow != oldValue else { return }
+        // In place, not by a snapshot: the row may be the one being typed or composed in.
+        for id in [oldValue, actingRow].compactMap({ $0 }) {
+          (cell(for: id) as? TodoBlockCell)?.setDimmed(id == actingRow)
+        }
+      }
+    }
+
+    /// The row's frame in the list's coordinates, for a popover; nil when it is not drawn.
+    public func sourceRect(ofRow rowID: String) -> CGRect? {
+      cell(for: rowID)?.frame
+    }
+
     /// Called on the main actor after each change he makes, with the page's document and the rows he removed one at a
     /// time. Never for `edit` or `replace`.
     public var onChange: ((_ document: String, _ singleDeleteIds: [String]) -> Void)?
@@ -118,12 +139,12 @@
       didSet {
         guard headerView !== oldValue else { return }
         oldValue?.removeFromSuperview()
-        collectionView.setCollectionViewLayout(Self.layout(withHeader: headerView != nil), animated: false)
+        collectionView.setCollectionViewLayout(Self.layout(using: listConfiguration), animated: false)
       }
     }
 
     private lazy var collectionView: UICollectionView = {
-      let view = UICollectionView(frame: .zero, collectionViewLayout: Self.layout(withHeader: false))
+      let view = UICollectionView(frame: .zero, collectionViewLayout: Self.layout(using: listConfiguration))
       view.backgroundColor = .systemBackground
       view.allowsSelection = false
       view.alwaysBounceVertical = true
@@ -132,16 +153,24 @@
       return view
     }()
 
-    private static func layout(withHeader: Bool) -> UICollectionViewLayout {
+    /// The list as the system lays it out, the rows' trailing swipe included.
+    var listConfiguration: UICollectionLayoutListConfiguration {
       var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
       configuration.showsSeparators = false
       // The section's own background lies over the list's background view, where a day without a page says so; the
       // list itself is the page's background.
       configuration.backgroundColor = .clear
-      configuration.headerMode = withHeader ? .supplementary : .none
+      configuration.headerMode = headerView != nil ? .supplementary : .none
       // The header is the page's first line, not a section title: no gap above it beyond its own margins.
       configuration.headerTopPadding = 0
-      return UICollectionViewCompositionalLayout { _, environment in
+      configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
+        self?.trailingSwipeActions(at: indexPath)
+      }
+      return configuration
+    }
+
+    private static func layout(using configuration: UICollectionLayoutListConfiguration) -> UICollectionViewLayout {
+      UICollectionViewCompositionalLayout { _, environment in
         let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
         // A plain list pins its header to the top; this one is the page's first line and scrolls away with it.
         for header in section.boundarySupplementaryItems { header.pinToVisibleBounds = false }
@@ -526,10 +555,14 @@
           return
         }
         cell.configure(
-          status: status, facts: facts, canBeTicked: row.canBeTicked, depth: row.depth,
+          status: status, facts: facts, canBeTicked: row.canBeTicked, dimmed: id == self.actingRow, depth: row.depth,
           text: self.drawn[id] ?? AttributedString(),
-          editable: self.editableIDs.contains(id), rowID: id, delegate: self.lineInput
-        ) { [weak self] in self?.onTick?(taskId) }
+          editable: self.editableIDs.contains(id), rowID: id, delegate: self.lineInput,
+          onTick: { [weak self] in self?.onTick?(taskId) },
+          onRowAction: { [weak self] kind in
+            guard let self, let menu = facts?.menu else { return false }
+            return self.reportRowAction(RowRequest(kind: kind, rowID: id, taskId: taskId, menu: menu))
+          })
       }
       let separator = UICollectionView.CellRegistration<SeparatorBlockCell, String> { [weak self] cell, _, id in
         cell.configure(depth: self?.rowsByID[id]?.depth ?? 0)
@@ -617,6 +650,14 @@
 
     func lineTextView(_ line: LineTextView, moveCaret direction: LineTextView.Direction, near point: CGPoint) {
       screen?.moveCaret(from: line, going: direction, near: point)
+    }
+
+    func lineTextViewHasRowMenu(_ line: LineTextView) -> Bool {
+      screen?.hasRowMenu(line) ?? false
+    }
+
+    func lineTextViewShowRowMenu(_ line: LineTextView) {
+      screen?.showRowMenu(line)
     }
   }
 
@@ -1013,8 +1054,57 @@
 
     /// The text view a row's cell holds now, if the list has made one.
     private func lineView(for id: String) -> LineTextView? {
+      (cell(for: id) as? LineBlockCell)?.line
+    }
+
+    /// A row's cell, if the list has made one.
+    private func cell(for id: String) -> UICollectionViewCell? {
       guard let item = orderedIDs.firstIndex(of: id) else { return nil }
-      return (collectionView.cellForItem(at: IndexPath(item: item, section: 0)) as? LineBlockCell)?.line
+      return collectionView.cellForItem(at: IndexPath(item: item, section: 0))
+    }
+
+    // MARK: the row's actions
+
+    /// Hands a row's request to the host, unless an action is already out. True when it was handed on.
+    private func reportRowAction(_ request: RowRequest) -> Bool {
+      guard actingRow == nil, let onRowAction else { return false }
+      onRowAction(request)
+      return true
+    }
+
+    /// A to-do row's trailing swipe: the actions the web's phone bar puts first, then `More` when the menu holds more,
+    /// none on a full swipe. None on the row being typed in (the system would take the keyboard away to open it),
+    /// none anywhere while words are selected (a handle dragged sideways would open one), and none while an action is
+    /// out.
+    fileprivate func trailingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+      guard actingRow == nil, orderedIDs.indices.contains(indexPath.item) else { return nil }
+      let id = orderedIDs[indexPath.item]
+      guard let row = rowsByID[id], case .todo(let taskId, _, _, let facts) = row.kind, let menu = facts?.menu else {
+        return nil
+      }
+      if let line = focusedLine, line.rowID == id || line.selectedRange.length > 0 { return nil }
+      func action(_ title: String, _ kind: RowRequest.Kind) -> UIContextualAction {
+        UIContextualAction(style: .normal, title: title) { [weak self] _, _, done in
+          let reported = self?.reportRowAction(RowRequest(kind: kind, rowID: id, taskId: taskId, menu: menu)) ?? false
+          done(reported)
+        }
+      }
+      // `More` holds the rest, `Cancel task` among it.
+      let actions = menu.swipe.map { action($0.title, .action($0.action)) } + (menu.more.isEmpty ? [] : [action("More", .more)])
+      guard !actions.isEmpty else { return nil }
+      let configuration = UISwipeActionsConfiguration(actions: actions)
+      // A swipe that runs on only shows the buttons.
+      configuration.performsFirstActionWithFullSwipe = false
+      return configuration
+    }
+
+    /// Whether ⌘/ has the row's actions to open for `line`.
+    fileprivate func hasRowMenu(_ line: LineTextView) -> Bool {
+      (line.superview as? TodoBlockCell)?.hasRowMenu ?? false
+    }
+
+    fileprivate func showRowMenu(_ line: LineTextView) {
+      (line.superview as? TodoBlockCell)?.presentRowMenu()
     }
 
     // MARK: the arrow keys
