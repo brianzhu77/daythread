@@ -422,6 +422,210 @@
         #expect(line.isFirstResponder)
         #expect(line.selectedRange == NSRange(location: 4, length: 0))
       }
+
+      // MARK: a request that has gone stale
+
+      /// Today's page with `blocks`, as the server sends it in its workspace with `tasks`.
+      private func page(_ blocks: [Block], tasks: [JSONValue]) throws -> (document: String, workspace: Workspace) {
+        let page = try makePage(blocks, id: "day:\(today)", date: today, type: "daily")
+        return (page.document, try makeWorkspace(pages: [page], tasks: tasks))
+      }
+
+      @Test func an_open_menu_item_run_after_its_row_left_reports_nothing() throws {
+        let (screen, requests) = try everyKind()
+        let item = try menuItem(try cell(screen, 0).circle.menu, "Not today")
+        let more = try #require(swipe(screen, 0)?.actions.first { $0.title == "More" })
+        // The server moved the to-do away: its row is not on the page any more.
+        let moved = try page(
+          [taskRow("ref", "k-ref", "Read the lease", reference: true), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-plan"), todo("k-ref")])
+        screen.controller.replace(document: moved.document, in: moved.workspace)
+        screen.window.layoutIfNeeded()
+        item.performWithSender(nil, target: nil)
+        more.handler(more, UIView(), { _ in })
+        #expect(requests().isEmpty)
+      }
+
+      @Test func an_open_menu_item_whose_action_left_the_rows_menu_reports_nothing() throws {
+        let (screen, requests) = try everyKind()
+        let plan = try cell(screen, 0)
+        let notToday = try menuItem(plan.circle.menu, "Not today")
+        let more = try #require(swipe(screen, 0)?.actions.first { $0.title == "More" })
+        let custom = try #require(plan.line.accessibilityCustomActions?.first { $0.name == "Not today" })
+        // Cancelled on another device: the row's one action is now Restore.
+        let cancelled = try page(
+          [taskRow("plan", "k-plan", "Water the plants"), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-plan", status: "cancelled")])
+        screen.controller.replace(document: cancelled.document, in: cancelled.workspace)
+        screen.window.layoutIfNeeded()
+        #expect(try screen.cell(0) === plan, "reconfigured in place")
+        #expect(menu(plan.circle.menu) == ["Restore"])
+        notToday.performWithSender(nil, target: nil)
+        more.handler(more, UIView(), { _ in })
+        _ = custom.actionHandler?(custom)
+        #expect(requests().isEmpty)
+      }
+
+      @Test func an_open_menu_item_whose_action_is_still_offered_reports_the_current_menu() throws {
+        let (screen, requests) = try everyKind()
+        let tomorrow = try #require(LocalDate("2026-11-27"))
+        let item = try menuItem(try cell(screen, 0).circle.menu, "Tomorrow · Fri, Nov 27")
+        // Planned tomorrow on another device: Tomorrow is no longer first, but Another day still holds it.
+        let planned = try makePage(
+          [taskRow("later", "k-plan", "Water the plants", planDate: "2026-11-27")], id: "day:2026-11-27",
+          date: "2026-11-27", type: "daily")
+        let blocks = [taskRow("plan", "k-plan", "Water the plants"), block("p", "paragraph", text: "Notes")]
+        let mine = try makePage(blocks, id: "day:\(today)", date: today, type: "daily")
+        screen.controller.replace(
+          document: mine.document, in: try makeWorkspace(pages: [mine, planned], tasks: [todo("k-plan")]))
+        screen.window.layoutIfNeeded()
+        let now = try cell(screen, 0).circle.menu
+        #expect(menu(now).first == "Remove from Thu")
+        item.performWithSender(nil, target: nil)
+        let got = requests()
+        #expect(got.map(\.kind) == [.action(.move(tomorrow))], "reported once")
+        #expect(got.first?.menu.groups.first?.items.map(\.title) == ["Remove from Thu"], "with the menu as it is now")
+      }
+
+      @Test func the_button_reports_only_while_the_row_offers_it() throws {
+        let (screen, requests) = try everyKind()
+        let reference = try cell(screen, 1)
+        let done = try page(
+          [
+            taskRow("plan", "k-plan", "Water the plants"), taskRow("ref", "k-ref", "Read the lease", reference: true),
+          ],
+          tasks: [todo("k-plan"), todo("k-ref", status: "done")])
+        screen.controller.replace(document: done.document, in: done.workspace)
+        screen.window.layoutIfNeeded()
+        #expect(reference.planButton.isHidden)
+        reference.planButton.sendActions(for: .primaryActionTriggered)
+        #expect(requests().isEmpty)
+      }
+
+      // MARK: the button's place
+
+      @Test func plan_for_today_ends_at_the_rows_trailing_margin() throws {
+        let long = "A paragraph long enough to wrap, so its words reach the trailing margin of the row on a phone"
+        let screen = try Screen.editing(
+          [taskRow("ref", "k-ref", "Read the lease", reference: true), block("p", "paragraph", text: long)],
+          tasks: [todo("k-ref")], today: today)
+        let reference = try cell(screen, 0)
+        let paragraph = try screen.line(1)
+        let title = try #require(reference.planButton.titleLabel)
+        let titleFrame = title.convert(title.bounds, to: screen.list)
+        let margin = paragraph.convert(paragraph.bounds, to: screen.list).maxX
+        #expect(abs(titleFrame.maxX - margin) < 1, "the title ends at \(titleFrame.maxX), the margin is \(margin)")
+        let words = reference.line.convert(reference.line.bounds, to: screen.list)
+        #expect(abs(titleFrame.minX - words.maxX - 8) < 1, "the gap before the title is \(titleFrame.minX - words.maxX)")
+      }
+
+      @Test func plan_for_today_follows_bold_text() throws {
+        let screen = try Screen.editing(
+          [taskRow("ref", "k-ref", "Read the lease", reference: true)], tasks: [todo("k-ref")], today: today)
+        func bold() throws -> Bool {
+          let title = try cell(screen, 0).planButton.configuration?.attributedTitle
+          let font = try #require(title?.runs.first?.uiKit.font)
+          return font.fontDescriptor.symbolicTraits.contains(.traitBold)
+        }
+        #expect(!(try bold()))
+        screen.window.traitOverrides.legibilityWeight = .bold
+        screen.window.layoutIfNeeded()
+        #expect(try bold())
+        screen.window.traitOverrides.legibilityWeight = .regular
+        screen.window.layoutIfNeeded()
+        #expect(!(try bold()))
+      }
+
+      // MARK: dimming
+
+      private func colour(_ line: LineTextView, at offset: Int) -> UIColor? {
+        line.attributedText.attribute(.foregroundColor, at: offset, effectiveRange: nil) as? UIColor
+      }
+
+      @Test func a_row_off_screen_takes_the_dimmed_look_when_it_scrolls_in() throws {
+        let filler = (0..<40).map { block("f\($0)", "paragraph", text: "Line \($0)") }
+        let screen = try Screen.editing(
+          filler + [taskRow("plan", "k-plan", "Water the plants")], tasks: [todo("k-plan")], height: 400,
+          today: today)
+        let last = IndexPath(item: 40, section: 0)
+        // Near enough for the list to make the cell ahead of time, not on screen.
+        screen.list.scrollToItem(at: IndexPath(item: 30, section: 0), at: .bottom, animated: false)
+        screen.list.layoutIfNeeded()
+        screen.controller.actingRow = "plan"
+        screen.list.scrollToItem(at: last, at: .bottom, animated: false)
+        screen.list.layoutIfNeeded()
+        let cell = try #require(screen.list.cellForItem(at: last) as? TodoBlockCell)
+        #expect(colour(cell.line, at: 0) == .tertiaryLabel)
+        screen.controller.actingRow = nil
+        screen.list.layoutIfNeeded()
+        #expect(colour(cell.line, at: 0) == .label)
+      }
+
+      @Test(arguments: [NSRange(location: 5, length: 0), NSRange(location: 4, length: 5)])
+      func dimming_the_row_being_typed_in_keeps_the_caret_and_the_keyboard(selection: NSRange) throws {
+        let screen = try Screen.editing(
+          [taskRow("plan", "k-plan", "Water the plants"), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-plan")], today: today)
+        var changes = 0
+        screen.controller.onChange = { _, _ in changes += 1 }
+        let line = try screen.focus(0)
+        line.selectedRange = selection
+        let watch = KeyboardWatch(screen)
+        screen.controller.actingRow = "plan"
+        screen.window.layoutIfNeeded()
+        #expect(colour(line, at: 0) == .tertiaryLabel)
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == selection)
+        screen.controller.actingRow = nil
+        screen.window.layoutIfNeeded()
+        #expect(colour(line, at: 0) == .label)
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == selection)
+        #expect(changes == 0, "dimming reports nothing")
+        #expect(watch.droppedWhileTyping == 0)
+      }
+
+      @Test func typing_while_dimmed_lands_at_the_caret_in_the_dimmed_look() throws {
+        let screen = try Screen.editing(
+          [taskRow("plan", "k-plan", "Water the plants"), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-plan")], today: today)
+        var changes = 0
+        screen.controller.onChange = { _, _ in changes += 1 }
+        let line = try screen.focus(0, at: 5)
+        screen.controller.actingRow = "plan"
+        screen.window.layoutIfNeeded()
+        line.insertText("!")
+        screen.window.layoutIfNeeded()
+        #expect(try screen.words()[0] == "Water! the plants")
+        #expect(line.selectedRange == NSRange(location: 6, length: 0))
+        #expect(colour(line, at: 5) == .tertiaryLabel)
+        #expect(changes == 1)
+        screen.controller.actingRow = nil
+        screen.window.layoutIfNeeded()
+        #expect(colour(line, at: 5) == .label)
+        #expect(line.selectedRange == NSRange(location: 6, length: 0))
+      }
+
+      @Test func dimming_a_row_being_composed_in_waits_for_the_composition() throws {
+        let screen = try Screen.editing(
+          [taskRow("plan", "k-plan", "Water the plants"), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-plan")], today: today)
+        let line = try screen.focus(0)
+        line.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
+        let marked = try #require(line.markedTextRange)
+        screen.controller.actingRow = "plan"
+        screen.window.layoutIfNeeded()
+        #expect(line.markedTextRange != nil, "the marked text is left alone")
+        #expect(line.text(in: marked) == "今")
+        line.unmarkText()
+        screen.window.layoutIfNeeded()
+        #expect(try screen.words()[0] == "Water the plants今")
+        #expect(colour(line, at: 0) == .tertiaryLabel, "dimmed once the composition ends")
+        #expect(line.isFirstResponder)
+        screen.controller.actingRow = nil
+        screen.window.layoutIfNeeded()
+        #expect(colour(line, at: 0) == .label)
+      }
     }
   }
 #endif
