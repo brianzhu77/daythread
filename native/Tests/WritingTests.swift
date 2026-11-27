@@ -385,6 +385,59 @@ private struct DayScreen {
     await h.server.release()
   }
 
+  @Test func a_row_removed_before_a_merge_is_still_named_in_the_save_after_it() async throws {
+    let h = try await harness([page(today, document([line("a", "Morning"), todoLine("t", ""), line("b", "Walk")]))])
+    let day = try DayScreen(h.model)
+    // Backspace on the empty to-do removes its row, one at a time.
+    let empty = try day.line("")
+    #expect(empty.becomeFirstResponder())
+    empty.selectedRange = NSRange(location: 0, length: 0)
+    empty.deleteBackward()
+    try await until { h.model.state.drafts.map(\.id) == [todayId] }
+    // Once the row's removal has been animated.
+    try await until { day.words == ["Morning", "Walk"] }
+
+    await h.server.holdSaves()
+    try await loaded(
+      h, today: document([line("a", "Morning"), todoLine("t", ""), line("b", "Walk"), line("c", "Call mum")]))
+    try await eventually { await h.server.waitingCalls == 1 }
+
+    try await until { day.words == ["Morning", "Walk", "Call mum"] }
+    let action = try #require(await h.server.sent.last?.objectValue)
+    #expect(words(of: action["document"]?.stringValue) == ["Morning", "Walk", "Call mum"])
+    #expect(action["singleDeleteIds"] == .array([.string("t")]), "the save after the merge still names the row")
+    day.close()
+    await h.server.release()
+  }
+
+  @Test func a_merged_draft_of_a_day_that_is_not_open_names_only_the_rows_still_gone() async throws {
+    let before = document([line("a", "Morning"), todoLine("t", "Tea"), todoLine("u", "Call"), line("b", "Walk")])
+    let h = try await harness([page(today, "[]"), page(yesterday, before)])
+
+    // He removed both to-dos' rows one at a time on yesterday's page, which no screen shows now.
+    h.model.wrote(
+      pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk")]), singleDeleteIds: ["t", "u"],
+      startedFrom: before)
+    try await until { h.model.state.drafts.map(\.id) == [yesterdayId] }
+
+    // Another device changed the second to-do's words: its row stays, and the save must not name it.
+    await h.server.holdSaves()
+    let theirs = document([
+      line("a", "Morning"), todoLine("t", "Tea"), todoLine("u", "Call mum"), line("b", "Walk"), line("c", "Read"),
+    ])
+    await h.server.add([
+      .workspace(.full(try copy(revision: 2, pages: [page(today, "[]"), page(yesterday, theirs)]), owner: "one"))
+    ])
+    await h.model.refresh()
+    try await eventually { await h.server.waitingCalls == 1 }
+
+    let action = try #require(await h.server.sent.last?.objectValue)
+    #expect(action["pageId"]?.stringValue == yesterdayId)
+    #expect(words(of: action["document"]?.stringValue) == ["Morning", "Call mum", "Walk", "Read"])
+    #expect(action["singleDeleteIds"] == .array([.string("t")]))
+    await h.server.release()
+  }
+
   @Test func a_to_do_typed_offline_can_be_ticked_and_both_arrive_in_order() async throws {
     let h = try await harness([page(today, document([line("a", "Morning"), todoLine("r1", "")]))])
     let day = try DayScreen(h.model)

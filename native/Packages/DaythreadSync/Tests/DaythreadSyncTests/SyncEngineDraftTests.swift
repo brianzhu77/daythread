@@ -900,7 +900,9 @@ private struct DraftHarness {
     // The page moved again before the screen's merge was handed over.
     await h.engine.refresh()
     let before = try await h.drafts
-    #expect(try await h.engine.rebaseDraft(pageId: day, baseDocument: typed("Theirs"), document: merged) == false)
+    #expect(
+      try await h.engine.rebaseDraft(pageId: day, baseDocument: typed("Theirs"), document: merged, singleDeleteIds: [])
+        == false)
     #expect(try await h.drafts == before)
     #expect(await current(h.engine)?.drafts == behind())
     await h.engine.settled()
@@ -908,7 +910,9 @@ private struct DraftHarness {
 
     await h.transport.add([try saved(from: 7, to: 8, document: merged)])
     let asked = await h.waits.asked.count
-    #expect(try await h.engine.rebaseDraft(pageId: day, baseDocument: typed("Theirs again"), document: merged))
+    #expect(
+      try await h.engine.rebaseDraft(
+        pageId: day, baseDocument: typed("Theirs again"), document: merged, singleDeleteIds: []))
     await h.engine.settled()
 
     let saves = await h.saves
@@ -921,6 +925,31 @@ private struct DraftHarness {
     #expect(await h.waits.asked.count == asked, "saved at once, with no wait")
     #expect(try await h.drafts == [])
     #expect(await current(h.engine)?.workspace?.page(day)?.document == merged)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func rebasing_keeps_the_rows_named() async throws {
+    let h = try await DraftHarness(
+      opening + [.workspace(.full(served(6, document: typed("Theirs")), owner: "user-1"))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: ["gone-1"], startedFrom: baseDocument)
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.drafts == behind())
+    let merged = "[\(paragraph("p1", "Morning")),\(paragraph("p2", "Theirs")),\(paragraph("p3", "Walk"))]"
+    await h.transport.add([try saved(from: 6, to: 7, document: merged)])
+
+    // "p2" is a row of the merged page: a save never names a row it keeps.
+    #expect(
+      try await h.engine.rebaseDraft(
+        pageId: day, baseDocument: typed("Theirs"), document: merged, singleDeleteIds: ["gone-1", "p2"]))
+    await h.engine.settled()
+
+    let saves = await h.saves
+    #expect(saves.count == 1)
+    #expect(saves.first?.document == merged)
+    let action = try saves.first.map { try JSON.parse($0.action) }
+    #expect(action?.objectValue?["singleDeleteIds"] == .array([.string("gone-1")]))
+    #expect(try await h.drafts == [])
     #expect(await h.transport.unscripted == [])
   }
 
@@ -1311,7 +1340,9 @@ private struct DraftHarness {
     let h = try await DraftHarness(opening)
     await h.engine.start()
 
-    #expect(try await h.engine.rebaseDraft(pageId: day, baseDocument: baseDocument, document: typed("Walk")) == false)
+    #expect(
+      try await h.engine.rebaseDraft(pageId: day, baseDocument: baseDocument, document: typed("Walk"), singleDeleteIds: [])
+        == false)
 
     await h.engine.settled()
     #expect(try await h.drafts == [])
@@ -1734,6 +1765,7 @@ private struct Device {
     let pair = try #require(await engine.merging(day))
     let draft = try #require(await engine.draft(of: day))
     let merged = PageMerge.merge(base: pair.baseDocument, mine: draft.document, theirs: pair.theirs)
-    return try await engine.rebaseDraft(pageId: day, baseDocument: pair.theirs, document: merged.document)
+    return try await engine.rebaseDraft(
+      pageId: day, baseDocument: pair.theirs, document: merged.document, singleDeleteIds: draft.singleDeleteIds)
   }
 }
