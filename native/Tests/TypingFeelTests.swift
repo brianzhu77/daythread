@@ -5,6 +5,7 @@ import UIKit
 import XCTest
 
 @testable import Daythread
+import DaythreadEditor
 @testable import DaythreadUI
 
 /// How typing feels on a long page (`native-phase-1.md` §10.7): the time from a keystroke to the list having laid
@@ -71,6 +72,8 @@ final class TypingFeelTests: XCTestCase {
     window.layoutIfNeeded()
 
     let list = try XCTUnwrap(screen.list)
+    let editor = try XCTUnwrap(screen.children.compactMap { $0 as? DocumentViewController }.first)
+    XCTAssertEqual(editor.today, Self.today, "the rows' facts are read, as on the day screen")
     list.scrollToItem(at: IndexPath(item: target - 1, section: 0), at: .centeredVertically, animated: false)
     window.layoutIfNeeded()
     let words = Self.words(of: target)
@@ -142,17 +145,49 @@ final class TypingFeelTests: XCTestCase {
 
   /// A model signed in as `one`, on a store on disk holding today's page of `count` lines, its engine past its first
   /// pass; from then on the server holds every call, saves included, and answers none.
+  /// Every third line of the page (the first, the fourth, …) is a to-do due tomorrow, so its row draws a marks line;
+  /// the lines typed into (the 150th, the 5th) are not. The workspace holds 3,000 to-dos in all: the rest are
+  /// planned on the 30 days before, 100 a day, so the rows' facts read an index of a workspace that size.
   private func model(page count: Int) async throws -> AppModel {
-    let lines = (1...count).map { index in
-      #"{"id":"line-\#(index)","type":"paragraph","props":{},"content":[{"type":"text","text":"\#(Self.words(of: index))","styles":{}}],"children":[]}"#
+    func todo(_ id: String) -> JSONValue {
+      .object([
+        "id": .string(id), "title": .string("A to-do"), "status": .string("open"), "paused": .bool(false),
+        "version": .number("1"), "deadlineOn": .string("2026-11-26"), "attentionOn": .null,
+      ])
     }
-    let page: JSONValue = .object([
-      "id": .string("day:\(Self.today.value)"), "type": .string("daily"), "date": .string(Self.today.value),
-      "title": .string(""), "document": .string("[\(lines.joined(separator: ","))]"),
-    ])
+    func todoRow(_ id: String, _ taskId: String, on day: LocalDate, words: String) -> String {
+      #"{"id":"\#(id)","type":"task","props":{"taskId":"\#(taskId)","role":"plan","planDate":"\#(day.value)"},"content":[{"type":"text","text":"\#(words)","styles":{}}],"children":[]}"#
+    }
+    func dayPage(_ day: LocalDate, _ lines: [String]) -> JSONValue {
+      .object([
+        "id": .string("day:\(day.value)"), "type": .string("daily"), "date": .string(day.value),
+        "title": .string(""), "document": .string("[\(lines.joined(separator: ","))]"),
+      ])
+    }
+    var tasks: [JSONValue] = []
+    let lines = (1...count).map { index in
+      guard index % 3 == 1 else {
+        return #"{"id":"line-\#(index)","type":"paragraph","props":{},"content":[{"type":"text","text":"\#(Self.words(of: index))","styles":{}}],"children":[]}"#
+      }
+      tasks.append(todo("todo-\(index)"))
+      return todoRow("line-\(index)", "todo-\(index)", on: Self.today, words: Self.words(of: index))
+    }
+    var pages = [dayPage(Self.today, lines)]
+    var day = Self.today
+    while tasks.count < 3_000 {
+      day = try XCTUnwrap(day.adding(days: -1))
+      let rows = (0..<min(100, 3_000 - tasks.count)).map { index in
+        let id = "past-\(day.value)-\(index)"
+        tasks.append(todo(id))
+        return todoRow(id, id, on: day, words: "Something to do")
+      }
+      pages.append(dayPage(day, rows))
+    }
     let copy = try XCTUnwrap(
       Workspace(
-        .object(["revision": .number("1"), "timezone": .string("UTC"), "pages": .array([page]), "tasks": .array([])])))
+        .object([
+          "revision": .number("1"), "timezone": .string("UTC"), "pages": .array(pages), "tasks": .array(tasks),
+        ])))
 
     let url = FileManager.default.temporaryDirectory.appendingPathComponent("typing-feel-\(UUID().uuidString).store")
     storeURL = url

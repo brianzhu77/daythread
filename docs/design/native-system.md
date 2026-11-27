@@ -65,7 +65,22 @@
 | 1 later change waiting (N later changes waiting) | The held menu's last line, disabled, while changes wait behind a held one; the web's words |
 | Round trip · N of M pages fail | The More menu, Debug builds only, when any page's document does not write back |
 | Untitled | A page reference whose page has no title |
-| Undo | The notice's only button (a plain system button, footnote text), and the notice's accessibility action of the same name. The notice's other words are composed by the app from `native-phase-1.md` §11.5's table and are added here by the task that first shows them |
+| Undo | The notice's only button (a plain system button, footnote text), and the notice's accessibility action of the same name. The notice's other words are composed by the app from `native-phase-1.md` §11.5's table and are listed below |
+| Moved to Fri, Nov 27 | The notice after a move (`Tomorrow`, an Another day option, a day picked); the day in the long form. 8 seconds, with `Undo` while it is offered |
+| On today | The notice after `Bring to today` on a past day, and after `Plan for today` from a reference row's swipe or menu. 8 seconds, with `Undo` |
+| Planned for today | The notice after the reference row's own `Plan for today` button. 8 seconds, with `Undo` |
+| Not today — won’t carry over, Not on Fri 11/27 | The notice after the off item when the to-do was set aside: the first on today's page (an em dash and a typographic apostrophe, as the web writes it), the second on another day's. 8 seconds, with `Undo` |
+| · due Fri still tracked | Added to those two when the to-do has a Due date: `Not today — won’t carry over · due Fri still tracked` |
+| Removed from Fri · still planned for Mon | The notice after the off item when only a stale row left (the server's message begins `Removed from`): the row's day, then the day the to-do is planned for after the answer. 8 seconds, with `Undo` |
+| Cancelled | The notice after `Cancel task`. 8 seconds, with `Undo` |
+| · Next Mon, Dec 7 | Added to `Cancelled` when the server's receipt names exactly one next to-do of a repeat (`Cancelled · Next Mon, Dec 7`; the year only when it is not this one's) |
+| Restored | The notice after `Restore`. 8 seconds, with `Undo` |
+| Undone | The notice after `Undo` went through. 4 seconds, no button |
+| Can't undo · changed since | The notice when the server refused the Undo because something changed since ("Cannot undo after later changes"). 6 seconds, no button; a straight apostrophe, as the web |
+| Couldn't undo · your text is kept | The notice when the Undo failed for any other reason (no connection, his words not saved first). 6 seconds, no button |
+| Not done · your text is kept | The notice when a row action was not sent (the page's words could not be saved first, or no connection), failed or was refused: nothing changed. 6 seconds, no button. The web's words |
+| (the rest of the row's actions), Cancel | `More` in a row's swipe opens the system's action sheet (`UIAlertController`, `.actionSheet`, default look): the Another day options, `Pick date…` and `Cancel task` (destructive) in the web's order, then the system's `Cancel`. A popover from the row on a wide screen |
+| (the system's calendar) | `Pick date…` opens the system's calendar (`UICalendarView`, as the day's title opens it): no day selected, today the first that can be picked, the days before it greyed by the system. A popover from the row on a wide screen, a sheet on the phone; picking a day closes it and moves the to-do there |
 | Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |
 | Cancelled | A to-do row's marks line, under its words (footnote, secondary colour), on a cancelled to-do's row; the only mark such a row draws besides `Reference` |
 | Due today, Due tomorrow, Due Sun, Due Wed 12/2, Due that day, Start tomorrow, Start Mon · Due Sun 12/6, Unscheduled | The date tag, first on an open to-do's marks line; the web's words (`taskDateTag`), with the day worded against today, or against the row's own plan day for a plan row |
@@ -120,8 +135,8 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
 The notice (`NoticeView`, in `native/Packages/DaythreadUI`; `native-app.md` §9 rule 3), the one line of words that
 says what a row action did:
 
-- **Look:** a floating surface of the system's glass (`UIGlassEffect`, the material iOS 26 gives a surface that floats
-  over content) with the system's capsule corners, capped at 560 points and centred, with a 16-point gutter on a phone.
+- **Look:** a floating surface of the system's material (`UIBlurEffect(style: .systemMaterial)`; not the glass,
+  which on the device's screen let the rows beneath read through the words) with the system's capsule corners, capped at 560 points and centred, with a 16-point gutter on a phone.
   The words are footnote text in the label colour, they wrap at any text size (the button goes under them from the
   accessibility sizes), and `Undo` is a plain system button at least 44 points high. No colour, font, shadow or
   radius of its own.
@@ -133,6 +148,11 @@ says what a row action did:
 - **VoiceOver:** the words are announced when shown; while the notice has `Undo` it does not leave on a timer, and
   once `Undo` is spent or withdrawn its time runs from then. The notice is one accessibility element whose custom
   action is `Undo`. A button that is withdrawn, or used once, never comes back.
+- **When `Undo` is there** (slice 1c): only while nothing of his waits to be sent (no draft, no queued tick, no
+  words on their way to the engine) and the copy says the server's one Undo slot is that action's at the copy's own
+  revision. It is withdrawn the moment that stops (he types, he ticks, another device's change or the day's new page
+  takes the slot, another row action starts), and the notice's words stay until their time. While an action or an
+  Undo is out, its row is dimmed and no other row action runs.
 
 ## Not decided yet
 

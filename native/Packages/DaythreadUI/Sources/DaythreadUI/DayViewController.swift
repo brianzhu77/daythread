@@ -2,6 +2,7 @@
   import DaythreadCore
   import DaythreadEditor
   import DaythreadSync
+  import Observation
   import UIKit
 
   /// One day: its header (the page's first row), its page or what a day without one says, the quiet controls to reach
@@ -115,8 +116,29 @@
     /// The day shown.
     var date: LocalDate { shownDate ?? model.today }
 
-    init(model: AppModel) {
+    /// What a row action's notice is of: the row it was made on, its page and account, and the operation an Undo
+    /// would undo.
+    private struct Acted {
+      let rowID: String
+      let pageId: String
+      let owner: String
+      let operationId: String
+    }
+
+    /// The notice, over the page under the navigation bar; it says what the last row action did.
+    let notice: NoticeView
+    /// The notice showing is of this action; nil when it offers no Undo.
+    private var noticeOf: Acted?
+    /// A row action or an Undo is out: no other runs until it is answered (§11.4, one at a time).
+    private var acting = false
+    /// The indexes the last `ListReading`s were read with, newest first, and the workspaces they are of: the list's
+    /// workspace and a state's are read again at the next state, at no cost.
+    private var readingIndexes: [(workspace: Workspace, index: TodoIndex)] = []
+
+    /// `noticeSleep`: how the notice waits out its time (tests hold it).
+    init(model: AppModel, noticeSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep) {
       self.model = model
+      notice = NoticeView(sleep: noticeSleep)
       super.init(nibName: nil, bundle: nil)
     }
 
@@ -150,6 +172,8 @@
       }
       heldButton.tintColor = .systemRed
       document.onTick = { [weak self] taskId in self?.tick(taskId) }
+      document.onRowAction = { [weak self] request in self?.rowRequested(request) }
+      notice.onUndo = { [weak self] operationId in self?.undo(operationId) }
       document.onChange = { [weak self] document, singleDeleteIds in self?.wrote(document, singleDeleteIds) }
       document.onComposingChange = { [weak self] composing in
         if !composing { self?.compositionEnded() }
@@ -163,6 +187,11 @@
       document.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       view.addSubview(document.view)
       document.didMove(toParent: self)
+      // Over the page, pinned to the screen's edges: the notice places itself under the safe area's top, and only
+      // its surface takes touches.
+      notice.frame = view.bounds
+      notice.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      view.addSubview(notice)
       // The list stays on a day without a page, holding the empty state as its background, so pull to refresh works
       // on every day.
       list?.refreshControl = refreshControl
@@ -187,6 +216,8 @@
       // Read so that this runs again once a page's last call is answered: a state passed over while the screen was
       // ahead is then drawn.
       _ = model.answeredWrites
+      // Before the page is drawn, so its rows' marks read this today; a new today redraws them at midnight.
+      if document.today != model.today { document.today = model.today }
       let date = date
       let status = StatusLine.text(
         state: state, keepsChanges: model.keepsChanges, pageId: model.workspace?.dayPage(date)?.id, merged: saysMerged)
@@ -295,12 +326,26 @@
       } else {
         // His words stay; the list is handed the new workspace only when it would draw a row of them differently.
         let drawn = workspace.drawing(draft: mine, of: page.id)
-        if ListReading(of: mine, in: drawn) != listWorkspace.map({ ListReading(of: mine, in: $0) }) {
+        if reading(mine, on: page.date, in: drawn) != listWorkspace.map({ reading(mine, on: page.date, in: $0) }) {
           replaceList(with: mine, in: drawn)
           listWorkspace = drawn
         }
       }
       mergeIfBehind()
+    }
+
+    /// What the list reads of `workspace` for `document`, at the model's today. The index is built again only for
+    /// another workspace than the one read last.
+    private func reading(_ document: String, on pageDate: LocalDate?, in workspace: Workspace) -> ListReading {
+      let index: TodoIndex
+      if let cached = readingIndexes.first(where: { $0.workspace == workspace }) {
+        index = cached.index
+      } else {
+        index = TodoIndex(workspace)
+        // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time.
+        readingIndexes = Array(([(workspace, index)] + readingIndexes).prefix(2))
+      }
+      return ListReading(of: document, pageDate: pageDate, in: workspace, index: index, today: model.today)
     }
 
     /// Every page replace hands the list, so tests can tell a replace that happened from one that did not.
@@ -403,6 +448,140 @@
       guard model.tick(taskId: taskId) else { return }
       tickFeedback.impactOccurred()
       showDay()
+    }
+
+    // MARK: A row's actions
+
+    /// The list's report of a row's action (`native-phase-1.md` §11.3, §11.4). Nothing while another is out.
+    private func rowRequested(_ request: RowRequest) {
+      guard !acting, document.actingRow == nil else { return }
+      switch request.kind {
+      case .more: presentMore(request)
+      case .action(.pickDate): presentDatePicker(for: request)
+      case .action(let action): run(action, on: request)
+      }
+    }
+
+    /// The rest of the row's actions, in the web's order, as the system's action sheet: a popover from the row on a
+    /// wide screen.
+    private func presentMore(_ request: RowRequest) {
+      let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+      for item in request.menu.more {
+        sheet.addAction(
+          UIAlertAction(title: item.title, style: item.destructive ? .destructive : .default) { [weak self] _ in
+            if item.action == .pickDate {
+              self?.presentDatePicker(for: request)
+            } else {
+              self?.run(item.action, on: request)
+            }
+          })
+      }
+      sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+      anchor(sheet.popoverPresentationController, to: request.rowID)
+      present(sheet, animated: true)
+    }
+
+    /// `Pick date…`: the system's calendar, nothing selected, no day before today; a day picked closes it and moves
+    /// the to-do there. A popover from the row on a wide screen, a sheet on the phone.
+    private func presentDatePicker(for request: RowRequest) {
+      let workspace = model.workspace
+      let picker = DayPickerViewController(
+        selected: nil, notBefore: model.today, written: workspace?.writtenDays() ?? [],
+        weekStartsOnMonday: workspace?.weekStartsOnMonday ?? false,
+        timezone: workspace?.timezone ?? TimeZone.current.identifier
+      ) { [weak self] day in
+        self?.dismiss(animated: true)
+        self?.run(.move(day), on: request)
+      }
+      picker.modalPresentationStyle = .popover
+      if let popover = picker.popoverPresentationController {
+        anchor(popover, to: request.rowID)
+        let sheet = popover.adaptiveSheetPresentationController
+        sheet.detents = [.medium(), .large()]
+        sheet.selectedDetentIdentifier = DayPickerViewController.firstDetent(
+          for: traitCollection.preferredContentSizeCategory)
+      }
+      present(picker, animated: true)
+    }
+
+    private func anchor(_ popover: UIPopoverPresentationController?, to rowID: String) {
+      guard let popover, let list else { return }
+      popover.sourceView = list
+      popover.sourceRect = document.sourceRect(ofRow: rowID) ?? CGRect(x: list.bounds.midX, y: list.bounds.midY, width: 0, height: 0)
+    }
+
+    /// §11.4: what he composes is committed, the row is dimmed while the command is out, and the notice says what
+    /// happened; `Undo` only while the server would take it.
+    private func run(_ action: RowAction, on request: RowRequest) {
+      guard !acting, document.actingRow == nil, let open = openPage, let owner = open.owner,
+        case .page(let page)? = content, let pageDate = page.date
+      else { return }
+      document.commitComposition()
+      acting = true
+      document.actingRow = request.rowID
+      // The command about to go takes the server's slot: an Undo of the action before would be refused.
+      notice.withdrawUndo()
+      noticeOf = nil
+      Task { [weak self, model] in
+        let acted = await model.act(
+          action, taskId: request.taskId, pageId: open.id, pageDate: pageDate, owner: owner)
+        guard let self else { return }
+        self.acting = false
+        self.document.actingRow = nil
+        switch acted {
+        case .done(let text, let operationId):
+          let offers = model.offersUndo(operationId)
+          self.notice.show(Notice(text: text, kind: .done, undoing: offers ? operationId : nil))
+          if offers {
+            self.noticeOf = Acted(rowID: request.rowID, pageId: open.id, owner: owner, operationId: operationId)
+            self.followUndo(operationId)
+          }
+        case .notDone:
+          self.notice.show(Notice(text: RowNotice.notDone, kind: .failed, undoing: nil))
+        }
+      }
+    }
+
+    /// While the notice offers `Undo` for `operationId`, every change that may end it is looked at; once the model no
+    /// longer offers it, it leaves the notice for good.
+    private func followUndo(_ operationId: String) {
+      guard noticeOf?.operationId == operationId, notice.shown?.undoing == operationId else { return }
+      let offers = withObservationTracking {
+        model.offersUndo(operationId)
+      } onChange: { [weak self] in
+        // Called before the change is made: it is read again on the main actor's next turn.
+        Task { @MainActor in self?.followUndo(operationId) }
+      }
+      if !offers {
+        noticeOf = nil
+        notice.withdrawUndo()
+      }
+    }
+
+    /// `Undo` runs like an action: its row is dimmed while it is out, when it is still on the page.
+    private func undo(_ operationId: String) {
+      guard !acting, document.actingRow == nil, let acted = noticeOf, acted.operationId == operationId else { return }
+      noticeOf = nil
+      document.commitComposition()
+      acting = true
+      let onPage = document.document.map { Self.holds($0, row: acted.rowID) } ?? false
+      if onPage { document.actingRow = acted.rowID }
+      Task { [weak self, model] in
+        let said = await model.undo(operationId, pageId: acted.pageId, owner: acted.owner)
+        guard let self else { return }
+        self.acting = false
+        self.document.actingRow = nil
+        self.notice.show(said)
+      }
+    }
+
+    private static func holds(_ document: String, row id: String) -> Bool {
+      var stack = Document.blocks(document)
+      while let block = stack.popLast() {
+        if block.id.utf8.elementsEqual(id.utf8) { return true }
+        stack.append(contentsOf: block.children)
+      }
+      return false
     }
 
     // MARK: Other days

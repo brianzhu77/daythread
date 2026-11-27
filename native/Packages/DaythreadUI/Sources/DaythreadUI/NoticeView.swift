@@ -25,8 +25,9 @@ extension Notice.Kind {
 /// web's phone app shows its notices. iOS has no component for it. The host pins this view to its own edges; only the
 /// notice's surface takes touches, the rest of the page is reached through it.
 ///
-/// The surface is the system's glass (`UIGlassEffect`), which is the material iOS 26 gives a surface that floats
-/// over content, as its tab bar and bar buttons float; a blur is what an older system gave such a surface. It
+/// The surface is the system's material (`UIBlurEffect(style: .systemMaterial)`), not its glass: on the device's
+/// screen the glass let the rows beneath read through the notice's words (dark at the largest text size most of
+/// all) and bent a row's circle into a mark at its end, while the material keeps the words on a quiet ground. It
 /// never becomes first responder, so the keyboard and the caret of the page stay as they are.
 @MainActor
 final class NoticeView: UIView {
@@ -42,7 +43,7 @@ final class NoticeView: UIView {
   private let voiceOverRunning: @MainActor () -> Bool
   private let announce: @MainActor (String) -> Void
 
-  private let surface = UIVisualEffectView(effect: UIGlassEffect())
+  private let surface = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
   private let content = UIStackView()
   private let label = UILabel()
   private var button: UIButton?
@@ -148,6 +149,8 @@ final class NoticeView: UIView {
   private func build() {
     surface.isHidden = true
     surface.cornerConfiguration = .capsule(maximumRadius: 24)
+    // A material, unlike the glass, is drawn to its corners only when clipped to them.
+    surface.clipsToBounds = true
     surface.translatesAutoresizingMaskIntoConstraints = false
     addSubview(surface)
 
