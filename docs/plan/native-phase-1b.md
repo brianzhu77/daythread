@@ -18,7 +18,9 @@ Observation, Swift Testing, XCTest. TypeScript only in `src/server/api-v1.ts`, i
 **Spec:** `docs/design/native-phase-1.md` §10 (slice 1b), with §5 "Merging, not overwriting" and §7; under
 `docs/design/native-app.md` §5 to §9. Executors read §10 in full.
 
-**Status (2026-11-26):** not started.
+**Status (2026-11-26):** Tasks 1 to 14 built; on the simulator against the seeded local servers, writing, the merge
+and Chinese with the Pinyin keyboard pass as UI tests, and the screenshots are in `tests/evidence/native-phase-1b/`.
+Task 15, on his data, is his.
 
 ## Global Constraints
 
@@ -762,7 +764,16 @@ Nothing in this task is code, and Brian does the typing: the app writes to his r
   today's page in the app: it is on the web after a reload. He types one on the web: it is in the app after
   pull to refresh. He types in both without refreshing either: both lines are on both.
 - [ ] Chinese: 「今天买菜 / 明天开会」 with the Pinyin keyboard, on a new line and in a to-do: nothing split,
-  doubled or lost.
+  doubled or lost. (A UI test types "jintian" and the first candidate on a new line and on a new to-do on the
+  simulator; this is the same on his phone, with his keyboard's own candidates and longer phrases.)
+- [ ] By hand, what no test drives:
+  - Dictation: a sentence dictated into a line goes in as words, once, and is saved.
+  - Arrow keys from a hardware keyboard (or the Mac): Up and Down in the middle of a wrapped line move within it;
+    at its first or last visual row they move to the line above or below, near the same place across.
+  - `[] ` typed at the start of an empty line near the bottom of a page scrolled down: the line becomes a to-do,
+    stays above the keyboard and keeps the caret.
+  - The software keyboard's Backspace at the start of a line (a bullet, then a paragraph): the first makes it a
+    paragraph, the second joins it to the line above, the caret at the join.
 - [ ] The audit still reports "0 of N pages fail". Record the results here and set the status line.
 
 ## Order and independence

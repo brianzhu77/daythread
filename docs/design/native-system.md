@@ -60,7 +60,7 @@
 | Not saved? — ticked "…" may already be in | The same, held because it may already be applied |
 | Not saved — can't do this now: ticked "…" | The same, refused for any other reason; the web's sentence with a straight apostrophe (the web's source writes a typographic one; the app keeps straight apostrophes, as its other strings do) |
 | Keep mine, Discard | Each held change's actions; "Keep mine" only when it was held, not refused; "Discard" destructive |
-| Tue, Nov 3 · This page is in Trash (· This page is gone, · the server's reason) | The "Not saved" menu's section for a draft the engine keeps and does not send, before the held changes: the page's day (short form) and why. The button shows for such a draft as for a held change. The day is left out when the copy no longer has the page |
+| `<day> · <reason>`: Tue, Nov 3 · This page is in Trash (· This page is gone, · the server's reason) | The "Not saved" menu's section title for a draft the engine keeps and does not send, before the held changes: the page's day in its short form ("Tue, Nov 3", not the long `<day>` above) and why. The button shows for such a draft as for a held change. The day is left out when the copy no longer has the page. A day whose page is in Trash shows its empty state, not the draft's status line |
 | Copy draft, Discard draft | That section's actions: "Copy draft" puts the draft's words on the pasteboard as plain text, one line per row; "Discard draft" (destructive) drops the draft, and the page is drawn as the server has it |
 | 1 later change waiting (N later changes waiting) | The held menu's last line, disabled, while changes wait behind a held one; the web's words |
 | Round trip · N of M pages fail | The More menu, Debug builds only, when any page's document does not write back |
@@ -79,6 +79,9 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
 
 - **Text** (paragraph, heading, bullet, numbered, quote): the system's text styles in the user's Dynamic Type size;
   a bullet or number is a drawn image in a column set by the widest number; a quote adds a separator-coloured bar.
+  On a day page the words are a system text view (TextKit 2, not scrolling, no inset of its own) lying over the
+  row's label, with the system's caret, selection, autocorrection, dictation and input methods; the keyboard is the
+  system's default. The line being typed stays above the keyboard, also when the text size changes while it is up.
 - **To-do:** a system button holding an SF Symbol (`circle`, `checkmark.circle.fill`, `xmark.circle`, changed with the
   symbol replace transition), at least 44 points square, and the text; a finished one in secondary colour, struck
   through. It keeps the system's pressed look; one that cannot be ticked keeps its status's colour, not the system's
