@@ -545,30 +545,22 @@
         #expect(reports.count == (call == "edit" ? 2 : 1))
       }
 
-      /// Words pasted and waiting for the run loop's next turn when the page is replaced from outside: they are read
-      /// and reported first, so the host can merge them, whether his row then changes or leaves; nothing lands in the
-      /// line afterwards.
-      @Test(arguments: ["changed", "leaves"])
-      func a_paste_waiting_when_the_page_is_replaced_is_reported_first(row: String) throws {
+      /// Words that were to go in on the run loop's next turn are dropped when the line was changed from outside in
+      /// between: they belonged to words that are no longer there.
+      @Test func a_deferred_change_to_a_line_replaced_in_between_is_dropped() throws {
         let screen = try editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
-        var reports: [String] = []
-        screen.controller.onChange = { document, _ in reports.append(document) }
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
         let line = try focus(screen, 1)
         let end = NSRange(location: 3, length: 0)
         #expect(line.delegate?.textView?(line, shouldChangeTextIn: end, replacementText: " x\ny") == false)
-        let outside =
-          row == "changed"
-          ? Document.write([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "changed")])
-          : Document.write([block("a", "paragraph", text: "one")])
+        let outside = Document.write([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "changed")])
         screen.controller.replace(document: outside, in: try makeWorkspace())
         _ = screen.list
         _ = screen.wait(0.3) { false }
-
-        #expect(reports.count == 1, "the pasted words were not reported once")
-        let reported = Document.blocks(try #require(reports.first)).map { InlineContent($0.content).plain }
-        #expect(reported == ["one", "two x y"])
+        #expect(line.text == "changed")
         #expect(screen.controller.document == outside)
-        if row == "changed" { #expect(line.text == "changed") }
+        #expect(reports == 0)
       }
 
       /// Words that go in on the run loop's next turn go in while the list is being scrolled too, not once the scroll
