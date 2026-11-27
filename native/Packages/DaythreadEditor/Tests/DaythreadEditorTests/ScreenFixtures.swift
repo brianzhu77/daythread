@@ -76,6 +76,12 @@
       return line
     }
 
+    /// Whether any view of the window has the keyboard: a line, or anything the screen holds it with.
+    var holdsKeyboard: Bool {
+      func holds(_ view: UIView) -> Bool { view.isFirstResponder || view.subviews.contains(where: holds) }
+      return holds(window)
+    }
+
     /// The page's blocks as the screen has them now.
     func blocks() throws -> [Block] {
       Document.blocks(try #require(controller.document))

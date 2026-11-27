@@ -301,6 +301,89 @@
         #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
       }
 
+      /// A composition that ends because the keyboard is being put away (swiped down, the host ending editing, a tap
+      /// elsewhere) is merged and drawn, and the keyboard stays away: nothing takes it back for his words.
+      @Test(arguments: ["server changed his row", "server deleted his to-do"])
+      func a_composition_ended_by_putting_the_keyboard_away_keeps_it_away(_ outsideChange: String) throws {
+        let todo = outsideChange == "server deleted his to-do"
+        let middle =
+          todo
+          ? block("b", "task", ["taskId": .string("editor-task:b"), "role": .string("plan"), "planDate": .string("")], text: "two")
+          : block("b", "paragraph", text: "two")
+        let screen = try Screen.editing([block("a", "paragraph", text: "one"), middle, block("c", "paragraph", text: "three")])
+        var reports = 0
+        var ended = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        screen.controller.onComposingChange = { if !$0 { ended += 1 } }
+        let line = try screen.focus(1)
+        let watch = KeyboardWatch(screen)
+        compose("今天", in: line)
+        let outside =
+          todo
+          ? Document.write([block("a", "paragraph", text: "one"), block("c", "paragraph", text: "three")])
+          : Document.write([
+            block("a", "paragraph", text: "one"), block("b", "paragraph", text: "TWO"),
+            block("c", "paragraph", text: "three"),
+          ])
+        screen.controller.replace(document: outside, in: try makeWorkspace())
+
+        line.resignFirstResponder()
+        _ = screen.wait(0.5) { false }
+
+        #expect(try screen.words() == (todo ? ["one", "two今天", "three"] : ["one", "TWO", "two今天", "three"]))
+        #expect(screen.controller.itemCount == (todo ? 3 : 4))
+        #expect(!screen.holdsKeyboard, "the keyboard was taken back")
+        #expect(watch.droppedWhileTyping == 1)
+        #expect(reports == 1)
+        #expect(ended == 1)
+      }
+
+      /// Another page while composing, with a change from outside held: his words are reported for the page he wrote
+      /// them in, and nothing takes the keyboard for that page.
+      @Test func another_page_while_a_change_is_held_reports_his_words_and_takes_no_keyboard() throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        var reports: [String] = []
+        screen.controller.onChange = { document, _ in reports.append(document) }
+        let line = try screen.focus(1)
+        compose("今天", in: line)
+        screen.controller.replace(
+          document: Document.write([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "TWO")]),
+          in: try makeWorkspace())
+        let next = try makePage([block("x", "paragraph", text: "other")], id: "q")
+        screen.controller.edit(page: next, in: try makeWorkspace())
+        _ = screen.wait(0.3) { false }
+
+        #expect(reports.count == 1)
+        let reported = Document.blocks(try #require(reports.first)).map { InlineContent($0.content).plain }
+        #expect(reported == ["one", "TWO", "two今天"])
+        #expect(screen.controller.document == next.document)
+        #expect(!screen.holdsKeyboard, "the keyboard was taken for the old page")
+      }
+
+      /// A merge that leaves no row holding his words, while his row is gone: the keyboard is given up before the row
+      /// leaves the list, rather than taken away with it.
+      @Test func a_merge_that_leaves_no_row_for_his_words_gives_the_keyboard_up_first() throws {
+        let screen = try Screen.editing([
+          block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two"),
+          block("c", "paragraph", text: "three"),
+        ])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        // No merge the app makes drops his words; this stands in for one that did.
+        let without = Document.write([block("a", "paragraph", text: "one"), block("c", "paragraph", text: "three")])
+        screen.controller.mergeAfterComposing = { _, _, _ in without }
+        let line = try screen.focus(1)
+        compose("今天", in: line)
+        screen.controller.replace(document: without, in: try makeWorkspace())
+        line.unmarkText()
+        _ = screen.wait(0.3) { false }
+
+        #expect(try screen.words() == ["one", "three"])
+        #expect(screen.controller.itemCount == 2)
+        #expect(!screen.holdsKeyboard)
+        #expect(reports == 1)
+      }
+
       /// Two changes from outside in one composition: the merge starts from the page before the first, and keeps both.
       @Test func two_outside_changes_during_one_composition_are_both_kept() throws {
         let workspace = try makeWorkspace()

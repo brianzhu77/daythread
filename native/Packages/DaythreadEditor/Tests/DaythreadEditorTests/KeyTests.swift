@@ -100,6 +100,27 @@
         #expect(reports == 1)
       }
 
+      /// A pending paste that completes a shortcut, then Return in the same turn: the paste makes the row a to-do once,
+      /// and the key, whose line is no longer the row's, makes no second change.
+      @Test func a_pending_paste_that_makes_a_shortcut_leaves_no_stale_key() throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "[]Call"), block("b", "paragraph", text: "two")])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(0, at: 2)
+        // A line separator: pasted, it is cleaned to one space, deferred to the next turn.
+        let separator = String(Character(Unicode.Scalar(0x2028)!))
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: NSRange(location: 2, length: 0), replacementText: separator) == false)
+        line.insertText("\n")
+        _ = screen.wait(0.3) { false }
+
+        #expect(try screen.blocks().map(\.type) == ["task", "paragraph"])
+        #expect(try screen.words() == ["Call", "two"])
+        #expect(reports == 1)
+        let todo = try #require(try screen.cell(0) as? TodoBlockCell)
+        #expect(todo.line.isFirstResponder)
+        #expect(todo.line.selectedRange == NSRange(location: 0, length: 0))
+      }
+
       /// A restructure that holds the keyboard (a row rebuilt as a to-do) does not move the list.
       @Test func holding_the_keyboard_does_not_scroll_the_list() throws {
         let screen = try Screen.editing((0..<60).map { block("p\($0)", "paragraph", text: "Line \($0)") })
