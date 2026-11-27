@@ -563,6 +563,21 @@
         #expect(reports == 0)
       }
 
+      /// Words that go in on the run loop's next turn go in while the list is being scrolled too, not once the scroll
+      /// has ended.
+      @Test func a_deferred_change_goes_in_while_the_list_is_scrolled() throws {
+        let screen = try editing([block("a", "paragraph", text: "one")])
+        let line = try focus(screen, 0)
+        let end = NSRange(location: 3, length: 0)
+        #expect(line.delegate?.textView?(line, shouldChangeTextIn: end, replacementText: " x\ny") == false)
+        // The run loop turns in the mode it is in while a finger drags the list.
+        let deadline = Date().addingTimeInterval(1)
+        while line.text != "one x y", Date() < deadline {
+          RunLoop.current.run(mode: .tracking, before: Date().addingTimeInterval(0.05))
+        }
+        #expect(line.text == "one x y")
+      }
+
       /// A text view that still shows words the page no longer holds (a change from outside it has not drawn yet) is
       /// drawn again from the page; what it showed is not written over the page.
       @Test func a_line_shown_stale_is_redrawn_from_the_page_and_not_written() throws {
