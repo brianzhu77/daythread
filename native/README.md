@@ -95,6 +95,16 @@ TEST_RUNNER_DAYTHREAD_FEEL_BUDGET=1 xcodebuild test -project native/Daythread.xc
   -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath native/DerivedData
 ```
 
+The two typing tests type with the strip above the page on screen (100 to-dos set aside, 100 due, 200 date chips on the
+past pages), and print beside each median the time to the engine's state drawn, which is not budgeted: that is where
+the strip's facts show, since the day screen reads them for each state it draws. A third test,
+`test_the_strips_facts_on_a_large_workspace`, prints the time to build the index of 3,000 to-dos and the time of
+today's facts read from it. A median is the middle of five runs; read the runs beside it, since a run that overlaps
+other work on the machine (another build, a simulator in use) reads high. The measurement must be run alone: check
+`pgrep -fl xcodebuild` first, and discard and repeat a run that overlapped another. The medians measured are written at
+the end of `docs/plan/native-phase-1d.md` ("Cost, measured"). A wait for the engine's state that fails says what the
+model held when it gave up and, after a further two minutes, whether the state came late or not at all.
+
 Leave it off in CI and on other machines: their times differ, and a budget from this Mac would only be noise there.
 
 `--serve` seeds the same two servers and keeps them until Ctrl-C, for looking at the app by hand: launch it with

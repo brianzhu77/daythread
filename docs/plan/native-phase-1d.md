@@ -862,5 +862,46 @@ Nothing in this task is code, and Brian does the tapping: the app writes to his 
 
 ## Cost, measured
 
-To be written by Task 7: the medians of `TodoIndex(workspace)` and of `DayFacts.of` on the large workspace, and the
-two typing medians with the strip on screen, with the machine, the simulator and the date.
+Measured 2026-11-27 on an Apple M4 Mac (macOS 27.0.1, Xcode 27.2), the iPhone 17 simulator on iOS 26.5, a Debug
+build, `TEST_RUNNER_DAYTHREAD_FEEL_BUDGET=1 xcodebuild test ... -only-testing:DaythreadTests/TypingFeelTests` (the
+README's command), nothing else running (`pgrep -fl xcodebuild` empty before each run). Each figure is the median of a
+run's five inner runs; the spread is the lowest and highest of the invocations.
+
+The facts on a large workspace (`test_the_strips_facts_on_a_large_workspace`: 3,000 to-dos on 300 day pages of 10
+rows, 200 chips, 100 set aside, 100 due with no row today), milliseconds, five invocations:
+
+| | medians per invocation | spread |
+|---|---|---|
+| `TodoIndex(workspace)` | 56.905, 57.162, 54.225, 55.450, 53.773 | 53.8 to 57.2 |
+| `DayFacts.of(day: today, ...)` | 3.617, 3.403, 3.426, 3.382, 3.278 | 3.3 to 3.6 |
+
+The index is built once for each state the day screen draws, and the facts read it once: about 60 ms a state on a
+workspace of this size, nearly all of it the index (it parses every page's document).
+
+Typing with the strip on screen (100 set aside, 100 due, 200 chips on the past pages), milliseconds per keystroke to
+the list laid out, five invocations (the budget's figures, 7.040 and 2.671, were measured before slice 1c made the
+fixture heavier; the limit is 1.5 times them, 10.56 and 4.01):
+
+| | medians per invocation | spread |
+|---|---|---|
+| 300 lines, line 150 | 9.472, 9.291, 9.274, 9.298, 9.377 | 9.27 to 9.47 |
+| 10 lines, line 5 | 3.287, 3.278, 3.248, 3.344, 3.349 | 3.25 to 3.35 |
+
+The same, before the fixture gained the strip (this branch's base, three invocations): 300 lines 9.973, 9.301,
+9.373; 10 lines 3.651, 3.181, 3.197. The keystroke's own cost is unchanged within the noise.
+
+Per keystroke to the engine's state drawn (not budgeted), where the strip's cost shows, milliseconds:
+
+| | before the strip | with the strip |
+|---|---|---|
+| 300 lines | 164.089, 159.142, 159.443 | 170.317, 173.486, 175.487, 174.158, 171.303 |
+| 10 lines | 87.185, 83.644, 82.977 | 88.475, 88.817, 89.035, 89.555, 89.623 |
+
+So the strip costs about 14 ms a state on the 300-line page (about 160 to about 173) and about 6 ms on the 10-line one
+(about 84 to about 89): the facts' 3.4 ms, the index now holding 200 chips, and the strip's rows being drawn. Both
+typing tests held their budget (the 300-line median is about 89 percent of its limit, the 10-line one 82 percent). The remedy
+of §12.6 (keeping each page's part of the index between states) was not needed.
+
+A reading for the budget: on this machine the 300-line median is 9.27 to 9.47 ms against a limit of 10.56 ms derived
+from a fixture that was lighter, so the margin is under 12 percent; runs on the same machine while other builds ran
+have read up to 10.3. The limit was not changed.
