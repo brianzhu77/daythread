@@ -299,6 +299,193 @@
         screen.window.layoutIfNeeded()
         #expect(try marks(screen, 0) == nil, "without today a row draws no facts")
       }
+
+      // MARK: the circle
+
+      /// The middle of the words' first line, in the cell's coordinates, as the text view lays it out.
+      private func firstLineMidline(of cell: TodoBlockCell) throws -> CGFloat {
+        let line = cell.line
+        let manager = try #require(line.textLayoutManager)
+        var midline: CGFloat?
+        manager.enumerateTextLayoutFragments(from: manager.documentRange.location, options: [.ensuresLayout]) {
+          fragment in
+          if let first = fragment.textLineFragments.first {
+            midline = fragment.layoutFragmentFrame.minY + first.typographicBounds.midY
+          }
+          return false
+        }
+        return line.convert(CGPoint(x: 0, y: try #require(midline)), to: cell).y
+      }
+
+      @Test(arguments: [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge])
+      func the_circle_is_level_with_the_words_first_line(category: UIContentSizeCategory) throws {
+        let screen = try Screen.editing(
+          [
+            row("due", "k-due", "Pay the rent"),
+            row("all", "k-all", "Book the flights"),
+            row("plain", "k-plain", "Call the bank"),
+            row("long", "k-long", "Book the flights for the trip in December and the hotel near the station"),
+            row("paint", "k-paint", "Buy paint"),
+          ],
+          tasks: [
+            todo("k-due", deadlineOn: "2026-11-27"), todo("k-all", deadlineOn: "2026-11-27", createdOn: "2026-11-03"),
+            todo("k-plain"), todo("k-long"), todo("k-paint", title: "Buy paint"),
+          ],
+          height: 3000, category: category, today: today, pages: [try draft(carrying: ["k-all"])],
+          rest: [
+            ("todoRepeats", .array([weekly("k-all")])), ("links", .array([link(blocked: "k-all", blocker: "k-paint")])),
+          ])
+        #expect(try marks(screen, 0) != nil)
+        #expect(try marks(screen, 1)?.string.contains("\n") == true, "the second row has three lines")
+        #expect(try marks(screen, 2) == nil)
+        #expect(try marks(screen, 3) == nil)
+        let long = try cell(screen, 3)
+        let bodyLine = UIFont.preferredFont(forTextStyle: .body, compatibleWith: long.traitCollection).lineHeight
+        #expect(long.line.bounds.height > bodyLine * 1.5, "the long words wrap")
+
+        var offsets: [CGFloat] = []
+        for item in 0..<4 {
+          let cell = try cell(screen, item)
+          let midline = try firstLineMidline(of: cell)
+          #expect(
+            abs(cell.circle.center.y - midline) < 1,
+            "row \(item): the circle's centre \(cell.circle.center.y) is level with the first line's middle \(midline)")
+          offsets.append(cell.circle.center.y - cell.line.frame.minY)
+        }
+        // One rule for every row: the same offset from the row's own first line.
+        #expect(offsets.allSatisfy { abs($0 - offsets[0]) < 0.5 }, "offsets from the first line: \(offsets)")
+        #expect(try cell(screen, 0).circle.bounds.width >= 44, "the touch target is kept")
+      }
+
+      // MARK: facts that change while he composes
+
+      @Test func facts_that_change_while_he_composes_are_drawn_when_he_commits() throws {
+        let screen = try Screen.editing(
+          [row("due", "k-due", "Pay the rent"), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-due", deadlineOn: "2026-11-27")], today: today)
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(0)
+        line.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
+        screen.controller.today = LocalDate("2026-11-27")
+        screen.window.layoutIfNeeded()
+        #expect(try marks(screen, 0)?.string == "Due tomorrow", "the row being composed in is not redrawn")
+        let cell = try cell(screen, 0)
+        line.unmarkText()
+        screen.window.layoutIfNeeded()
+        #expect(try marks(screen, 0)?.string == "Due today")
+        #expect(try screen.cell(0) === cell)
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == NSRange(location: 13, length: 0))
+        #expect(try screen.words()[0] == "Pay the rent今")
+        #expect(reports == 1, "only the composition's commit is reported")
+      }
+
+      @Test func facts_that_change_while_he_composes_nothing_are_drawn_when_it_ends() throws {
+        let screen = try Screen.editing(
+          [row("due", "k-due", "Pay the rent"), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-due", deadlineOn: "2026-11-27")], today: today)
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(0, at: 3)
+        line.setMarkedText("x", selectedRange: NSRange(location: 1, length: 0))
+        screen.controller.today = LocalDate("2026-11-27")
+        line.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
+        line.unmarkText()
+        screen.window.layoutIfNeeded()
+        #expect(try marks(screen, 0)?.string == "Due today")
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == NSRange(location: 3, length: 0))
+        #expect(reports == 0)
+      }
+
+      @Test func facts_changed_from_outside_while_he_composes_are_drawn_when_he_commits() throws {
+        let screen = try Screen.editing(
+          [row("due", "k-due", "Pay the rent"), block("p", "paragraph", text: "Notes")],
+          tasks: [todo("k-due", deadlineOn: "2026-11-27")], today: today)
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(0)
+        line.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
+        // The server sets the row's plan day to the Due day.
+        let moved = try makePage(
+          [row("due", "k-due", "Pay the rent", planDate: "2026-11-27"), block("p", "paragraph", text: "Notes")],
+          id: "day:\(today)", date: today, type: "daily")
+        screen.controller.replace(
+          document: moved.document,
+          in: try makeWorkspace(pages: [moved], tasks: [todo("k-due", deadlineOn: "2026-11-27")]))
+        screen.window.layoutIfNeeded()
+        #expect(try marks(screen, 0)?.string == "Due tomorrow", "the row being composed in is not redrawn")
+        line.unmarkText()
+        screen.window.layoutIfNeeded()
+        #expect(try marks(screen, 0)?.string == "Due that day")
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == NSRange(location: 13, length: 0))
+        #expect(try screen.words()[0] == "Pay the rent今")
+        #expect(reports == 1)
+      }
+
+      // MARK: the marks element
+
+      @Test func a_reused_cell_speaks_for_the_row_it_now_shows() throws {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let cell = TodoBlockCell(frame: CGRect(x: 0, y: 0, width: 390, height: 80))
+        window.addSubview(cell)
+        let day = try #require(LocalDate(today))
+        let page = try makePage(
+          [row("due", "k-due", "Pay the rent"), row("plain", "k-plain", "Call the bank")], id: "day:\(day.value)",
+          date: day.value, type: "daily")
+        let workspace = try makeWorkspace(
+          pages: [page], tasks: [todo("k-due", deadlineOn: "2026-11-27"), todo("k-plain")])
+        let rows = BlockRows.rows(for: page, in: workspace, today: day)
+        func show(_ row: BlockRow) {
+          guard case .todo(_, let status, _, let facts) = row.kind else { return }
+          cell.configure(
+            status: status, facts: facts, canBeTicked: true, depth: 0, text: AttributedString("words"),
+            editable: true, rowID: row.id, delegate: nil, onTick: {})
+          cell.updateConfiguration(using: cell.configurationState)
+          let height = cell.systemLayoutSizeFitting(
+            CGSize(width: 390, height: 0), withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+          ).height
+          cell.frame = CGRect(x: 0, y: 0, width: 390, height: height)
+          cell.layoutIfNeeded()
+        }
+        func marksFrame() throws -> CGRect {
+          let content = try #require(cell.contentView as? UIListContentView)
+          let guide = try #require(content.secondaryTextLayoutGuide)
+          return content.convert(guide.layoutFrame, to: cell)
+        }
+        func check(hasMarks: Bool, label: String?) throws {
+          let elements = try #require(cell.accessibilityElements)
+          #expect(elements.count == (hasMarks ? 3 : 2))
+          guard hasMarks, let marks = elements.last as? UIAccessibilityElement else { return }
+          #expect(marks.accessibilityLabel == label)
+          let frame = try marksFrame()
+          #expect(!frame.isEmpty)
+          #expect(marks.accessibilityFrameInContainerSpace == frame)
+        }
+        show(rows[0])
+        try check(hasMarks: true, label: "Due tomorrow")
+        show(rows[1])
+        try check(hasMarks: false, label: nil)
+        show(rows[0])
+        try check(hasMarks: true, label: "Due tomorrow")
+
+        // Other marks of the same height: the frame is the line's as drawn now, without the cell laid out again.
+        let later = BlockRows.rows(for: page, in: workspace, today: LocalDate("2026-11-27"))
+        guard case .todo(_, let status, _, let facts) = later[0].kind else { return }
+        cell.configure(
+          status: status, facts: facts, canBeTicked: true, depth: 0, text: AttributedString("words"), editable: true,
+          rowID: later[0].id, delegate: nil, onTick: {})
+        cell.updateConfiguration(using: cell.configurationState)
+        cell.contentView.layoutIfNeeded()
+        let marks = try #require(cell.accessibilityElements?.last as? UIAccessibilityElement)
+        #expect(marks.accessibilityLabel == "Due today")
+        #expect(marks.accessibilityFrameInContainerSpace == (try marksFrame()))
+      }
     }
   }
 #endif
