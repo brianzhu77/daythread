@@ -25,11 +25,12 @@
         return (screen, constraint)
       }
 
-      /// Scrolls the list so row `item` is in the middle of what it shows, and lets the layout settle.
+      /// Scrolls the list so row `item` is in the middle of what it shows (or the page at its top, for a row near it).
       private func show(_ item: Int, on screen: Screen) throws {
         let list = screen.list
         let row = try #require(list.layoutAttributesForItem(at: IndexPath(item: item, section: 0)))
-        list.setContentOffset(CGPoint(x: 0, y: row.frame.midY - list.bounds.height / 2), animated: false)
+        let middle = row.frame.midY - list.bounds.height / 2
+        list.setContentOffset(CGPoint(x: 0, y: max(-list.adjustedContentInset.top, middle)), animated: false)
         _ = screen.list
       }
 
@@ -109,6 +110,42 @@
         #expect(line.selectedRange == selection)
       }
 
+      /// The header on screen above his line, as on a morning with the page at its top: the list moves up by as much
+      /// as the header grew, and the header goes up under the top.
+      @Test func a_header_that_grows_on_screen_keeps_the_typed_line_where_it_is() throws {
+        let (screen, height) = try page(header: 100)
+        let line = try screen.focus(2, at: 2)
+        _ = screen.wait(1) { false }
+        let before = frameInWindow(line)
+        let offset = screen.list.contentOffset.y
+
+        height.constant = 300
+        screen.controller.headerDidChange()
+        _ = screen.list
+
+        #expect(abs(frameInWindow(line).minY - before.minY) < 0.5, "his line stays where it is on the screen")
+        #expect(abs(screen.list.contentOffset.y - (offset + 200)) < 0.5)
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == NSRange(location: 2, length: 0))
+      }
+
+      /// The header partly on screen above his line: the list moves down by as much as the header shrank.
+      @Test func a_header_that_shrinks_on_screen_keeps_the_typed_line_where_it_is() throws {
+        let (screen, height) = try page(header: 300)
+        let list = screen.list
+        list.setContentOffset(CGPoint(x: 0, y: -list.adjustedContentInset.top + 250), animated: false)
+        let line = try screen.focus(2, at: 2)
+        _ = screen.wait(1) { false }
+        let before = frameInWindow(line)
+
+        height.constant = 100
+        screen.controller.headerDidChange()
+        _ = screen.list
+
+        #expect(abs(frameInWindow(line).minY - before.minY) < 0.5, "his line stays where it is on the screen")
+        #expect(line.isFirstResponder)
+      }
+
       /// Nothing is above the top to scroll to: the page stays at its top and his line moves up with the header.
       @Test func a_header_that_shrinks_with_the_page_at_its_top_leaves_it_at_its_top() throws {
         let (screen, height) = try page(header: 300)
@@ -125,6 +162,31 @@
         #expect(line.isFirstResponder)
       }
 
+      /// A page shorter than the screen has nothing to scroll: the list stays at its top and his line moves with the
+      /// header, as the list's own bounds allow no other place.
+      @Test func on_a_page_shorter_than_the_screen_the_typed_line_moves_with_the_header() throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        let header = UIView()
+        let height = header.heightAnchor.constraint(equalToConstant: 100)
+        height.priority = .required - 1
+        height.isActive = true
+        screen.controller.headerView = header
+        let line = try screen.focus(1, at: 1)
+        _ = screen.wait(1) { false }
+        let list = screen.list
+        let top = -list.adjustedContentInset.top
+        let before = frameInWindow(line)
+
+        height.constant = 200
+        screen.controller.headerDidChange()
+        _ = screen.list
+
+        #expect(abs(screen.list.contentOffset.y - top) < 0.5, "the list stays at its top")
+        #expect(abs(frameInWindow(line).minY - (before.minY + 100)) < 0.5)
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == NSRange(location: 1, length: 0))
+      }
+
       @Test func without_a_line_typed_in_the_rows_move_with_the_header() throws {
         let (screen, height) = try page(header: 100)
         let before = screen.list.contentOffset
@@ -137,9 +199,11 @@
         #expect(abs(frameInWindow(try screen.cell(0)).minY - (first.minY + 200)) < 0.5)
       }
 
-      @Test func a_header_change_while_he_composes_keeps_his_marked_text() throws {
+      /// In `l30`, with the header off screen, and in `l3`, with it on screen and the list moved under him.
+      @Test(arguments: [29, 2])
+      func a_header_change_while_he_composes_keeps_his_marked_text(item: Int) throws {
         let (screen, height) = try page(header: 100)
-        let line = try type(in: 29, on: screen)
+        let line = try type(in: item, on: screen)
         line.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
         let marked = try #require(line.markedTextRange)
         let markedRange = NSRange(
@@ -155,7 +219,7 @@
         let after = try #require(line.markedTextRange, "his marked text is still marked")
         #expect(line.offset(from: line.beginningOfDocument, to: after.start) == markedRange.location)
         #expect(line.offset(from: after.start, to: after.end) == markedRange.length)
-        #expect(line.text == "Li今ne 30")
+        #expect(line.text == "Li今ne \(item + 1)")
         #expect(screen.controller.isComposing)
         #expect(screen.controller.appliedSnapshots == snapshots, "no snapshot was applied")
         #expect(abs(frameInWindow(line).minY - before.minY) < 0.5)
