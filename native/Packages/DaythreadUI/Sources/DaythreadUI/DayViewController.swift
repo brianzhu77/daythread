@@ -88,8 +88,8 @@
     private var merging = false
     /// The last merge put a line of his below the server's; the status line says so until he types again.
     private var saysMerged = false
-    /// Looks again for the end of a composition that holds up a merge.
-    private var mergeAfterComposition: Task<Void, Never>?
+    /// A merge waits for the composition to end (`onComposingChange`).
+    private var mergeAfterComposition = false
     /// The documents handed to the list's `replace`, in order (tests read it).
     private(set) var replacedDocuments: [String] = []
     /// Where "Copy draft" puts the draft's words.
@@ -122,7 +122,6 @@
 
     isolated deinit {
       dayTimer?.invalidate()
-      mergeAfterComposition?.cancel()
       if let openPage { model.closed(openPage.id) }
     }
 
@@ -149,6 +148,9 @@
       heldButton.tintColor = .systemRed
       document.onTick = { [weak self] taskId in self?.tick(taskId) }
       document.onChange = { [weak self] document, singleDeleteIds in self?.wrote(document, singleDeleteIds) }
+      document.onComposingChange = { [weak self] composing in
+        if !composing { self?.compositionEnded() }
+      }
       document.headerView = headerView
       headerView.onResize = { [weak self] in self?.emptyBackground.setNeedsLayout() }
       registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (self: Self, _) in self.setNeedsUpdateProperties() }
@@ -307,8 +309,7 @@
       self.openPage = nil
       listWorkspace = nil
       saysMerged = false
-      mergeAfterComposition?.cancel()
-      mergeAfterComposition = nil
+      mergeAfterComposition = false
     }
 
     /// The list's report of a change he made. Not a place to read `document.document`: the list hands it over.
@@ -334,7 +335,7 @@
         model.state.drafts.contains(where: { $0.id.utf8.elementsEqual(open.id.utf8) && $0.state == .behind })
       else { return }
       guard !document.isComposing else {
-        mergeWhenCompositionEnds()
+        mergeAfterComposition = true
         return
       }
       merging = true
@@ -350,7 +351,7 @@
           // Not behind any more (the state saying so is on its way), or another page; or he began composing. A state
           // passed over as ahead meanwhile is drawn now, and a behind draft of the day now open is merged.
           self.merging = false
-          if self.document.isComposing { self.mergeWhenCompositionEnds() }
+          if self.document.isComposing { self.mergeAfterComposition = true }
           self.setNeedsUpdateProperties()
           return
         }
@@ -373,17 +374,13 @@
       }
     }
 
-    /// The list reports each change of its words, but not a composition that ends with nothing typed; so while he
-    /// composes the screen looks again shortly, and merges once he has stopped.
-    private func mergeWhenCompositionEnds() {
-      guard mergeAfterComposition == nil else { return }
-      mergeAfterComposition = Task { [weak self] in
-        while self?.document.isComposing == true {
-          do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
-        }
-        self?.mergeAfterComposition = nil
-        self?.mergeIfBehind()
-      }
+    /// The list says when a composition ends, also one that ends with nothing typed (which reports no change of its
+    /// words) and one ended by losing the keyboard; what he committed has been reported by then. A merge that waited
+    /// for it is made now.
+    private func compositionEnded() {
+      guard mergeAfterComposition else { return }
+      mergeAfterComposition = false
+      mergeIfBehind()
     }
 
     /// Draws the tap before returning, so the circle changes in the frame it is tapped.
