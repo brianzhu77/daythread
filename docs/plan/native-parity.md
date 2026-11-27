@@ -1,10 +1,10 @@
 # Native app: what it holds against the web app
 
-- Author: Claude · 2026-11-25 · status: **phase 1b built and seen on the simulator** (`docs/plan/native-phase-1b.md`),
-  its check on his own data to come (task 15); phase 1a (`docs/plan/native-phase-1a.md`) and phase 0
-  (`docs/plan/native-phase-0.md`) before it.
-- The app ticks a to-do, starts or restores a day's page, and types into a day page's lines; nothing else is changed
-  from it. This list is checked
+- Author: Claude · 2026-11-25 · status: **phase 1c built and seen on the simulator** (`docs/plan/native-phase-1c.md`),
+  its check on his own data to come (task 12); phases 1b, 1a and 0 before it (`docs/plan/native-phase-1b.md`,
+  `native-phase-1a.md`, `native-phase-0.md`).
+- The app ticks a to-do, starts or restores a day's page, types into a day page's lines, and moves, sets aside,
+  cancels and restores a to-do from its row, with Undo; nothing else is changed from it. This list is checked
   against the Swift code, not the plan; where it says "draws", the code draws it today. Update it in the same change
   as any screen or block kind it names.
 - Marks: **built** (the app has it, and the note says how much), **placeholder** (the app shows a named stand-in and
@@ -47,7 +47,9 @@ placeholder row: its name and a dashed rectangle, no content, and its children a
 | Numbered list item | built, typed into | "1." and on, counted per run of siblings (from its `start` when it has one) |
 | Quote | built, typed into | Body text with a bar at the leading edge |
 | Divider | built | One hairline; made by `---`, removed by Backspace on the line under it |
-| To-do row (`task`) | built, typed into and ticked | Its words are typed into like any line's. The status of its to-do, as the copy has it with the ticks not yet answered played over it: open, done, cancelled. Done and cancelled are dimmed and struck through. A tap on the circle (a button, VoiceOver "Complete …") ticks an open to-do and reopens a done one in the frame it is tapped, with a light haptic; a second tap within 500 ms is dropped. A cancelled to-do, one the copy does not hold and one of a status the app does not know cannot be ticked. A repeating to-do's next one appears when the server answers. Paused is read but not drawn. A to-do typed in the app is drawn open and can be ticked at once, before its save (see Editing). No cancel, no dates, no menu, no Undo |
+| To-do row (`task`) | built, typed into and ticked | Its words are typed into like any line's. The status of its to-do, as the copy has it with the ticks not yet answered played over it: open, done, cancelled. Done and cancelled are dimmed and struck through. A tap on the circle (a button, VoiceOver "Complete …") ticks an open to-do and reopens a done one in the frame it is tapped, with a light haptic; a second tap within 500 ms is dropped. A cancelled to-do, one the copy does not hold and one of a status the app does not know cannot be ticked. A repeating to-do's next one appears when the server answers. Paused is read but not drawn. A to-do typed in the app is drawn open and can be ticked at once, before its save (see Editing). Its marks and actions are the next rows |
+| A to-do row's marks | built | The web's, in its order and words (held to the web's by shared cases): `Cancelled`; the date tag (`Due tomorrow`, `Was due Tue` in red, `Start Tue · Due Mon 12/7`, …); `Since Nov 19` on today's plan row of a to-do carried a week or more; the repeat mark (the `repeat` symbol, read by VoiceOver as `Repeats every week`); `Reference` and `Moved to Fri 11/27` at regular width only, as the web hides them on a phone; `Blocked by Buy paint` (or `Blocked by 2`) on a line of its own, words only. A done row shows none. **Differs:** on one quiet line under the words (footnote, secondary colour), where the web puts them at the line's end |
+| A to-do row's actions | built | The web's `rowMenu`, case for case: `Tomorrow`, `Not today` (`Not on Fri`, `Remove from Fri`), `Plan for today`, `Bring to today`, Another day (`This weekend`, `Next week`, `Pick date…`, the system's calendar), `Cancel task`, `Restore`. Each says what it did in a notice at the top, in the web's words, with `Undo` while the server can still undo it (the web's rule: nothing of his waits to be sent and the server's one Undo slot is that action's). The reference row's own `Plan for today` button is on every open reference row, as on the web. **Differs:** the actions are reached by a trailing swipe (the phone bar's first actions, then `More` with the rest) and by a touch and hold on the row's circle (all of them, the web's `⋯` order), and ⌘/ at the caret, not a handle on the caret's line; the row being typed in has no swipe. Nothing is drawn ahead: an action is sent and waited for, so it needs a connection (offline: `Not done · your text is kept`), and while it is out its row is dimmed. A to-do typed and not saved has its actions too: its words are saved first. The repeat editor, the Blocked by picker, Copy, Copy link to line, Comment and the notice after a tick are absent |
 | Imported checklist line (`sourceChecklist`) | placeholder | Shown as "Block" |
 | Date chip (`@date`) | built as text | The chip's stored text, as the web's plain text reads it. Not drawn as a chip. In a line being typed into it is one position wide: it can be deleted, not typed into, and is written back as it was read |
 | Page reference (`[[`) | built as text | The page's title, or "Untitled". Not drawn as a chip, not tappable. A line link is read the same way. In a line being typed into, one position wide, as a date chip |
@@ -83,7 +85,7 @@ shown.
 | Arrow keys between lines | built from a hardware keyboard and on the Mac | Up and down move to the next line at the top and bottom of a line |
 | Paste | built, plain text only | Line breaks and tabs become spaces; the web pastes lines and blocks |
 | Selecting across lines, dragging lines, `/`, `@` and `[[` menus, the formatting bar, styles from the keyboard | absent | |
-| Undo | built in part | Typing inside one line is the text view's own undo; a split, a join and a removed row cannot be undone (1c) |
+| Undo | built in part | Typing inside one line is the text view's own undo; a split, a join and a removed row cannot be undone. A row action's Undo is the notice's button (see the to-do row's actions); the system's undo gestures and ⌘Z do not undo a row action |
 | When it is saved | built | Kept on the device the moment it is typed, under his account, and drawn from there after a relaunch, offline too. Saved 450 ms after the last change, as on the web, and at once when he leaves the day, when the app leaves the foreground and when the network comes back. While an input method composes, the words already committed are saved on that same schedule; what is being composed is never in the document until it is committed |
 | A page changed on the server while he typed | built, merged without asking | **Differs:** the app merges the page line by line against the page he started from (each line's kind, properties and words on their own), so his lines and the other device's are both kept, and says `Latest loaded · your changes are below their lines` only when a line was changed by both differently (the server's stays and his words go in a line below it). The web's "Load latest" merges only when he presses it, adds every line he touched as a copy below the server's page, and turns a changed to-do into a bullet |
 | A to-do typed and then ticked | built, before its save | **Differs:** the app draws a new to-do as open from the words on the device, so it can be ticked at once, offline too; the tick waits behind the page's save. The web cannot tick it until the save lands |
@@ -121,5 +123,13 @@ shown.
   merged (see Editing) and saved. A page gone or in Trash, or a document the server will not take, is not sent
   again: the words are kept on the device. A save refused for another account (`expectedOwner`) loads and stops.
 - "Sign out" counts words not saved with the changes not sent.
+- A row's actions (slice 1c), each sent and waited for, not through the outbox, with `readsBeyond: true`, on the
+  copy's revision (a stale copy is loaded and the command sent once more), and only after his words on that page are
+  saved in the same pass; never while the page still has a draft (then `Not done · your text is kept`):
+  `plan-task` (`taskId`, `date`, `from` the page's day, `today`) for `Tomorrow`, an Another day option and a picked
+  day; `plan-task` without `from` for `Bring to today` and `Plan for today`; `not-today` (`date` the page's day,
+  `onlyThisDay: true`) for the off item; `task-status` `cancelled` or `open` (with `today`) for `Cancel task` and
+  `Restore`; `undo` (`targetOperationId`) for the notice's `Undo`. `today` is the account's day, where the web sends
+  the device's.
 
-Nothing else is sent: no cancel, no delete of a page, no Undo.
+Nothing else is sent: no delete of a page, no repeat or blocker change, no date set.

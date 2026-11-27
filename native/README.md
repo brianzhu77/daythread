@@ -7,8 +7,9 @@ third-party packages, no web view.
   (`Tests/`) and its UI tests (`UITests/`). The `App/`, `Tests/` and `UITests/` folders are synchronised groups: a file
   added there is in the target without a project edit.
 - `Packages/`: `DaythreadCore` (records, lossless JSON), `DaythreadSync` (server client, Keychain, store on the device,
-  `SyncEngine`), `DaythreadEditor` (a page's rows; a line's words are typed into, one row at a time, and a to-do's
-  circle ticks), `DaythreadUI` (the screens and `AppModel`). Each package's own tests run with `swift test` in its
+  `SyncEngine`), `DaythreadEditor` (a page's rows; a line's words are typed into, one row at a time, a to-do's
+  circle ticks, and a to-do row draws its marks and reports its actions: the swipe, the circle's menu, ⌘/),
+  `DaythreadUI` (the screens and `AppModel`; a row action is run there, with its notice and Undo). Each package's own tests run with `swift test` in its
   folder.
 
 ## Build
@@ -50,7 +51,14 @@ native/scripts/ui-test.sh --serve                                               
 The wrapper starts two throwaway servers from this checkout, each on SQLite in a directory under the system temp
 directory: 3741 with sign-in off, seeded with today's page and its to-dos, and 3742 with sign-in on. "Water the
 plants" is only read by the tests; each test that ticks has a to-do of its own ("Tick me offline", "Tick me twice";
-"Tick me" is left for looking by hand), since the seed is shared by every test and never reset. It passes the
+"Tick me" is left for looking by hand), since the seed is shared by every test and never reset. For the to-do row
+(slice 1c) it adds, planned on today's page, rows with each kind of mark ("Pay the rent" due tomorrow, "File the
+return" due three days ago, "Book the venue" with a Start and a Due date, "Water the fern" repeating weekly, "Paint
+the fence" blocked by "Buy paint", "Return the parcel" cancelled, "Renew the passport" carried from eight days ago by
+today's draft, so it reads `Since`) and one to-do for each test that acts on a row ("Move me", "Set me aside",
+"Cancel me", "Undo me", "Pick a day for me"). The row tests (`UITests/RowUITests.swift`) keep their screenshots as
+attachments in the test results (`-resultBundlePath`, then `xcrun xcresulttool export attachments`); the ones in
+`tests/evidence/native-phase-1c/` came from there. It passes the
 addresses and the seeded day to the UI tests (`TEST_RUNNER_DAYTHREAD_SERVER_URL`,
 `TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_TODAY`), runs
 `xcodebuild test`, and on exit stops both servers, removes their directories and removes the stores the tests made in

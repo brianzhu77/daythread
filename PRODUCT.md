@@ -13,11 +13,14 @@ Home Screen app) and in a Mac browser, to start and end his day, keep notes, and
 records he used to keep in Notion and Craft. He writes notes in Chinese and English; the interface is English.
 
 **A native app:** a native app for iPhone and Mac is being built in Swift (`docs/design/native-app.md`). Phase 0,
-phase 1a and phase 1b are built: it signs in, shows any day from a copy on the device, offline too, and ticks a to-do
+phases 1a, 1b and 1c are built: it signs in, shows any day from a copy on the device, offline too, and ticks a to-do
 in the frame it is tapped; a tick made offline is kept and sent when the server can be reached, and a tick the server
 will not take is named, with Keep mine and Discard. Since 1b he types into a day's lines (Return, Backspace, the typed
 shortcuts, a new to-do that can be ticked at once, Chinese through the system's input methods); what he types is on
-the device at once, saved on its own, and merged line by line with what another device saved, without asking. Pages
+the device at once, saved on its own, and merged line by line with what another device saved, without asking. Since
+1c a to-do's row shows the web's marks (dates, Since, the repeat, Blocked by) on a line under its words, and from a
+swipe or a touch and hold on its circle it can be moved to another day, brought to today, set aside, cancelled and
+restored, with a notice and Undo; these wait for the server, so they need a connection. Pages
 that are not days, chips, links and the formatting bar are not editable yet. The web app and the Home Screen app
 remain what he uses daily until phase 1 is done.
 
@@ -62,7 +65,8 @@ model configured and says "Simulated" when none is set. A mocked reply is never 
 - **Native app:** iPhone and Mac, in Swift, on the same server. Any day from a copy on the device (previous, next, a
   calendar, Today), with the offline line when it cannot update; a to-do is ticked at once and the tick is sent
   when it can be, offline too; a day's lines are typed into, kept on the device as he types and saved 450 ms after
-  the last change, offline too. Its list of what is built is `docs/plan/native-parity.md`.
+  the last change, offline too; a to-do's row shows its marks and can be moved, set aside, cancelled and restored,
+  with Undo, while online. Its list of what is built is `docs/plan/native-parity.md`.
 - **Offline:** the shell and the last loaded workspace open offline; drafts are kept and retried; failures are shown
   quietly with Retry.
 - **Dark mode** follows the system setting; no switch in the app.

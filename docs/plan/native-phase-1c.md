@@ -23,7 +23,8 @@ and offers Undo by §11.5's rule. Nothing is drawn ahead: a row action is sent a
 `.superpowers/sdd/native-phase-1/web-facts-1c.md`; what the app has today in
 `.superpowers/sdd/native-phase-1/native-facts-1c.md`. Where either disagrees with the code, the code wins.
 
-**Status (2026-11-26):** Written; not started.
+**Status (2026-11-27):** Tasks 1 to 11 built; the row driven on the simulator against the seeded server
+(`native/UITests/RowUITests.swift`), screenshots in `tests/evidence/native-phase-1c/`. Task 12, on his data, to come.
 
 ## Global Constraints
 

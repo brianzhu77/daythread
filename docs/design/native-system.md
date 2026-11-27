@@ -1,6 +1,7 @@
 # The native app's system
 
-- Author: Claude · 2026-11-25 · status: **started in phase 0; phase 1a's strings added and seen on the simulator.** Brian's rule (2026-11-25): where a system component
+- Author: Claude · 2026-11-25 · status: **started in phase 0; the strings of phases 1a, 1b and 1c added and seen on the simulator** (1c's
+  screenshots in `tests/evidence/native-phase-1c/`). Brian's rule (2026-11-25): where a system component
   and the web's look conflict, native wins. The rule and its table are in `docs/design/native-app.md` section 9.
   `DESIGN.md` stays the web app's system.
 
@@ -79,7 +80,7 @@
 | Can't undo · changed since | The notice when the server refused the Undo because something changed since ("Cannot undo after later changes"). 6 seconds, no button; a straight apostrophe, as the web |
 | Couldn't undo · your text is kept | The notice when the Undo failed for any other reason (no connection, his words not saved first). 6 seconds, no button |
 | Not done · your text is kept | The notice when a row action was not sent (the page's words could not be saved first, or no connection), failed or was refused: nothing changed. 6 seconds, no button. The web's words |
-| (the rest of the row's actions), Cancel | `More` in a row's swipe opens the system's action sheet (`UIAlertController`, `.actionSheet`, default look): the Another day options, `Pick date…` and `Cancel task` (destructive) in the web's order, then the system's `Cancel`. A popover from the row on a wide screen |
+| (the rest of the row's actions), Cancel | `More` in a row's swipe opens the system's action sheet (`UIAlertController`, `.actionSheet`, default look): the Another day options, `Pick date…` and `Cancel task` (destructive) in the web's order, then the system's `Cancel`. A popover from the row, on a wide screen and, on iOS 26, on the phone too, where the system shows no `Cancel` item: a tap outside the popover puts it away |
 | (the system's calendar) | `Pick date…` opens the system's calendar (`UICalendarView`, as the day's title opens it): no day selected, today the first that can be picked, the days before it greyed by the system. A popover from the row on a wide screen, a sheet on the phone; picking a day closes it and moves the to-do there |
 | Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |
 | Cancelled | A to-do row's marks line, under its words (footnote, secondary colour), on a cancelled to-do's row; the only mark such a row draws besides `Reference` |
@@ -141,7 +142,8 @@ says what a row action did:
   accessibility sizes), and `Undo` is a plain system button at least 44 points high. No colour, font, shadow or
   radius of its own.
 - **Place:** at the top, one system spacing under the safe area's top (so under the navigation bar, never over its
-  items), above the page. Only its surface takes touches; the rest of the screen is the page's. It never becomes first
+  items), above the page: while it shows it floats over the page's first rows (with the page at its top, over the
+  day's header). Only its surface takes touches; the rest of the screen is the page's. It never becomes first
   responder, so the keyboard and the caret stay as they were.
 - **Time:** one at a time, a new one replaces the one showing. It leaves after 8 seconds, `Undone` after 4, a failure
   after 6, or when swiped up (also VoiceOver's escape gesture). A tap on the words does nothing.
