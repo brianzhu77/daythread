@@ -158,10 +158,10 @@ private final class Samples {
     try await until { [model = h.model] in model.state.workspace != nil }
     await h.engine.settled()
 
+    // The pass has ended; the last state it published may reach the model after its end does.
+    try await until { [model = h.model] in model.state.pending == 0 && model.state.held.isEmpty }
     #expect(h.status("t-open") == .open)
     #expect(h.model.workspace == h.model.state.workspace)
-    #expect(h.model.state.pending == 0)
-    #expect(h.model.state.held.isEmpty)
     #expect(await h.server.sent.count == sentBefore)
   }
 

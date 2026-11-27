@@ -66,8 +66,8 @@ public final class AppModel {
   /// The owner of the last state that showed a copy.
   @ObservationIgnored private var shownOwner: String?
 
-  /// Counts the times a page stopped having calls waiting: its last call answered, or its calls dropped. Observed, so a screen that held back an outside change
-  /// while it was ahead (`isWriting`) looks again once it is not.
+  /// Counts the times a page stopped having calls waiting: its last call answered, or its calls dropped. Observed, so
+  /// a screen that held back an outside change while it was ahead (`isWriting`) looks again once it is not.
   private(set) var answeredWrites = 0
   /// The calls for pages' words not yet handed to the engine, in the order made; `callInFlight` is the one it is
   /// answering. A single task hands them over one at a time (`sendCalls`), so they reach the engine in that order.
@@ -359,10 +359,10 @@ extension AppModel {
   /// Hands the engine the open page's document after a change. Never awaited by the caller. While it waits behind
   /// the page's earlier calls, a newer document for the same page takes its place: only the newest words need to
   /// reach the engine. `startedFrom` is the page his words were typed onto, which the engine takes as the base of a
-  /// draft it does not have yet; of several documents that went as one, the first one's. Made under the account the
-  /// state shows; with none shown there is no page to write on, and nothing is done.
-  public func wrote(pageId: String, document: String, singleDeleteIds: [String], startedFrom: String) {
-    guard let owner = state.owner else { return }
+  /// draft it does not have yet; of several documents that went as one, the first one's. `owner` is the account whose
+  /// page the screen's words were typed on, which may no longer be the one the state shows: the engine refuses the
+  /// call on another account's copy.
+  public func wrote(pageId: String, document: String, singleDeleteIds: [String], startedFrom: String, owner: String) {
     if let last = queuedCalls.indices.last, case .keep(let waiting, _, _, let firstStart) = queuedCalls[last].call,
       waiting.utf8.elementsEqual(pageId.utf8), queuedCalls[last].owner == owner
     {

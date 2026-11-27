@@ -187,9 +187,10 @@
     }
 
     /// Shows a page for editing. `page` is the workspace's (the draft's document when it has one). The page that is
-    /// being edited, given again, is a change from outside, as `replace`.
-    public func edit(page: Page, in workspace: Workspace) {
-      if editedPage != nil, page.id == shownPageID {
+    /// being edited, given again, is a change from outside, as `replace`; unless `afresh`: then it is another page with
+    /// the same id (another account's), and what he composed is committed into the one before first.
+    public func edit(page: Page, in workspace: Workspace, afresh: Bool = false) {
+      if !afresh, editedPage != nil, page.id == shownPageID {
         replace(document: page.document, in: workspace)
         return
       }
@@ -738,7 +739,21 @@
     }
 
     /// A line's resign is over: what a commit during it left to draw is drawn now that no line holds the keyboard.
+    ///
+    /// A line its cell is giving to another row resigns inside the list's reuse of that cell: the draw waits for the
+    /// main actor's next turn. The line has the keyboard no more, so nothing he types comes between; a `replace`
+    /// that does is that draw's page, as during the resign.
     fileprivate func lineDidGiveUpKeyboard(_ line: LineTextView) {
+      guard redrawAfterResign != nil else { return }
+      guard !line.isBeingReleased else {
+        // The run loop's next turn, as a line's deferred paste (`LineTextView.replaceSoon`).
+        perform(#selector(drawAfterResign), with: nil, afterDelay: 0)
+        return
+      }
+      drawAfterResign()
+    }
+
+    @objc private func drawAfterResign() {
       guard let pending = redrawAfterResign, let pageID = shownPageID else { return }
       redrawAfterResign = nil
       redraw(pageID: pageID, pageDate: pageDate, in: pending.workspace)

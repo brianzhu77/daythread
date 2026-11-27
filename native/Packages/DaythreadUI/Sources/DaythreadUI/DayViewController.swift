@@ -73,6 +73,9 @@
     /// from outside (by `edit`, a change from outside, or a merge), never one of its own changes coming back.
     private struct OpenPage {
       let id: String
+      /// The account whose page the list was handed: his words on it are that account's, and are written, merged and
+      /// stored under it only. Nil when no copy was shown, so nothing he types is written.
+      let owner: String?
       var startedFrom: String
       /// The rows he removed one at a time that the list names: as it last reported them, carried over each page it
       /// has been handed since as it carries them (`DraftMerging.rowsStillRemoved`), so what it would report next.
@@ -260,14 +263,20 @@
     /// or a merge is being handed over) its words are the truth, and only what else the list draws (to-dos' circles,
     /// page titles) follows the workspace. Once the engine has it all, a page that differs from the screen's was
     /// changed from outside (a save's answer, a load with no draft, a discard), and the list takes it.
+    ///
+    /// The same page of another account (the engine moved to that account's copy on its own) is another page, whether
+    /// or not the screen is ahead: the words on screen are the first account's.
     private func edit(_ page: Page, in workspace: Workspace) {
-      guard let open = openPage, open.id.utf8.elementsEqual(page.id.utf8), let mine = document.document else {
+      let owner = model.state.owner
+      guard let open = openPage, open.id.utf8.elementsEqual(page.id.utf8), open.owner == owner,
+        let mine = document.document
+      else {
         let previous = openPage?.id
         // Another page: what he was composing on the one before is reported for that one, so `openPage` moves after.
-        document.edit(page: page, in: workspace)
+        document.edit(page: page, in: workspace, afresh: openPage != nil)
         if let previous { model.closed(previous) }
         model.opened(page.id)
-        openPage = OpenPage(id: page.id, startedFrom: page.document)
+        openPage = OpenPage(id: page.id, owner: owner, startedFrom: page.document)
         listWorkspace = workspace
         saysMerged = false
         mergeIfBehind()
@@ -316,8 +325,11 @@
     private func wrote(_ document: String, _ singleDeleteIds: [String]) {
       guard let openPage else { return }
       self.openPage?.singleDeleteIds = singleDeleteIds
-      model.wrote(
-        pageId: openPage.id, document: document, singleDeleteIds: singleDeleteIds, startedFrom: openPage.startedFrom)
+      if let owner = openPage.owner {
+        model.wrote(
+          pageId: openPage.id, document: document, singleDeleteIds: singleDeleteIds,
+          startedFrom: openPage.startedFrom, owner: owner)
+      }
       if saysMerged {
         saysMerged = false
         setNeedsUpdateProperties()
@@ -331,7 +343,7 @@
     /// behind again, and the page is merged again (merging twice is safe, the merge settles); or the page is the
     /// server's, and the list takes it.
     private func mergeIfBehind() {
-      guard let open = openPage, !merging, let owner = model.state.owner,
+      guard let open = openPage, !merging, let owner = open.owner, model.state.owner == owner,
         model.state.drafts.contains(where: { $0.id.utf8.elementsEqual(open.id.utf8) && $0.state == .behind })
       else { return }
       guard !document.isComposing else {
@@ -346,10 +358,12 @@
         guard let self else { return }
         // From here to the hand-over nothing suspends: the words merged are the words on screen, and no keystroke
         // can come between.
-        guard let pair, self.openPage?.id.utf8.elementsEqual(pageId.utf8) == true, !self.document.isComposing,
-          let mine = self.document.document, let workspace = self.model.workspace
+        guard let pair, self.openPage?.id.utf8.elementsEqual(pageId.utf8) == true, self.openPage?.owner == owner,
+          self.model.state.owner == owner, !self.document.isComposing, let mine = self.document.document,
+          let workspace = self.model.workspace
         else {
-          // Not behind any more (the state saying so is on its way), or another page; or he began composing. A state
+          // Not behind any more (the state saying so is on its way), or another page, or another account's copy (the
+          // pair may be that account's, the words on screen are not); or he began composing. A state
           // passed over as ahead meanwhile is drawn now, and a behind draft of the day now open is merged.
           self.merging = false
           if self.document.isComposing { self.mergeAfterComposition = true }

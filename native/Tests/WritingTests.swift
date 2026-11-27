@@ -282,7 +282,7 @@ private struct DayScreen {
     // the server holds; words kept for another day publish a state at once.)
     h.model.wrote(
       pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
-      startedFrom: base)
+      startedFrom: base, owner: "one")
     try await until { h.model.state.drafts.count == 2 }
     #expect(day.status == "Latest loaded · your changes are below their lines", "until he types again")
     #expect(day.words == merged)
@@ -357,7 +357,7 @@ private struct DayScreen {
     // No screen shows yesterday: the model alone has its draft.
     h.model.wrote(
       pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk the dog")]),
-      singleDeleteIds: [], startedFrom: base)
+      singleDeleteIds: [], startedFrom: base, owner: "one")
     try await until { h.model.state.drafts.map(\.id) == [yesterdayId] }
 
     await h.server.holdSaves()
@@ -417,7 +417,7 @@ private struct DayScreen {
     // He removed both to-dos' rows one at a time on yesterday's page, which no screen shows now.
     h.model.wrote(
       pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk")]), singleDeleteIds: ["t", "u"],
-      startedFrom: before)
+      startedFrom: before, owner: "one")
     try await until { h.model.state.drafts.map(\.id) == [yesterdayId] }
 
     // Another device changed the second to-do's words: its row stays, and the save must not name it.
@@ -667,7 +667,7 @@ private struct DayScreen {
     await h.store.holdPut()
     h.model.wrote(
       pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
-      startedFrom: base)
+      startedFrom: base, owner: "one")
     await h.store.putHeld()
     try day.type("!", atEndOf: "Walk the dog")
 
@@ -720,7 +720,7 @@ private struct DayScreen {
     await h.store.holdPut()
     h.model.wrote(
       pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
-      startedFrom: base)
+      startedFrom: base, owner: "one")
     await h.store.putHeld()
     try day.type("?", atEndOf: "Walk the dog!")
 
@@ -849,7 +849,7 @@ private struct DayScreen {
     // While the save waits for the network, his words on another day are stored at once.
     h.model.wrote(
       pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
-      startedFrom: base)
+      startedFrom: base, owner: "one")
     try await eventually { await h.store.puts.contains { $0.pageId == yesterdayId } }
     #expect(await h.server.waitingCalls == 1, "the save is still on its way")
     day.close()
@@ -883,7 +883,7 @@ private struct DayScreen {
 
     h.model.wrote(
       pageId: todayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
-      startedFrom: base)
+      startedFrom: base, owner: "one")
 
     try await until { heard.value.withLock { $0 } }
     #expect(!h.model.isWriting(todayId))

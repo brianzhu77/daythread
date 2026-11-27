@@ -265,6 +265,10 @@
     /// True while the line's resign is under way: what it commits then must not take the keyboard back.
     private(set) var isGivingUpKeyboard = false
 
+    /// True while its cell gives the line to another row, or to none (`LineBlockCell.releaseLine`): the list is
+    /// dequeuing or configuring the cell, and must not be given a snapshot from inside that.
+    var isBeingReleased = false
+
     override func deleteBackward() {
       let atStart = markedTextRange == nil && selectedRange == NSRange(location: 0, length: 0)
       if atStart, lineDelegate?.lineTextView(self, didPress: .backspace) == true { return }

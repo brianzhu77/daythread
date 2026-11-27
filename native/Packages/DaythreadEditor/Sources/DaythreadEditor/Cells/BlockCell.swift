@@ -103,7 +103,9 @@
     final func releaseLine() {
       line.cancelPendingReplacement()
       guard line.isFirstResponder else { return }
+      line.isBeingReleased = true
       line.resignFirstResponder()
+      line.isBeingReleased = false
     }
 
     override func prepareForReuse() {
