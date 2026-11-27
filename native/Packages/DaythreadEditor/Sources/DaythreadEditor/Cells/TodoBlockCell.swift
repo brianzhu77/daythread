@@ -167,34 +167,50 @@
     private var onRowAction: ((RowRequest.Kind) -> Bool)?
     /// The actions the circle's menu, ⌘/ and VoiceOver offer now; nil when the row has none.
     private var actions: RowMenu?
-    private var actionsShown = false
 
-    /// The circle's menu, ⌘/'s and VoiceOver's custom actions, made again only when the row's actions change (the
-    /// row reconfigured in place, a reused cell): never on a keystroke.
-    private func showActions(_ menu: RowMenu?) {
-      guard !actionsShown || menu != actions else { return }
+    /// The row and the to-do a menu or a custom action was made for.
+    private struct ActionsOwner: Equatable {
+      let rowID: String
+      let taskId: String
+    }
+
+    /// The row and to-do the cell shows now; nil before its first configure.
+    private var actionsOwner: ActionsOwner?
+
+    /// The circle's menu, ⌘/'s and VoiceOver's custom actions, made again only when the row's actions change or the
+    /// cell is given another row or to-do (the row reconfigured in place, a reused cell): never on a keystroke.
+    private func showActions(_ menu: RowMenu?, for owner: ActionsOwner) {
+      guard owner != actionsOwner || menu != actions else { return }
       actions = menu
-      actionsShown = true
-      circle.menu = menu.map(makeMenu)
+      actionsOwner = owner
+      circle.menu = menu.map { makeMenu($0, for: owner) }
       line.accessibilityCustomActions = menu.map { menu in
         menu.groups.flatMap(\.items).map { item in
           UIAccessibilityCustomAction(name: item.title) { [weak self] _ in
-            self?.onRowAction?(.action(item.action)) ?? false
+            self?.report(.action(item.action), for: owner) ?? false
           }
         }
       }
     }
 
+    /// Reports `kind` only while the cell still shows the row and to-do the menu or custom action was made for: UIKit
+    /// may keep a menu up while its cell is given another row offering the same action, and the request would go to
+    /// that row, one he never asked for.
+    private func report(_ kind: RowRequest.Kind, for owner: ActionsOwner) -> Bool {
+      guard owner == actionsOwner, let onRowAction else { return false }
+      return onRowAction(kind)
+    }
+
     /// The row's actions as one system menu, in the web's `⋯` order: each group inline, `Another day` with its title,
     /// `Cancel task` destructive.
-    private func makeMenu(_ menu: RowMenu) -> UIMenu {
+    private func makeMenu(_ menu: RowMenu, for owner: ActionsOwner) -> UIMenu {
       UIMenu(
         children: menu.groups.map { group in
           UIMenu(
             title: group.title ?? "", options: .displayInline,
             children: group.items.map { item in
               UIAction(title: item.title, attributes: item.destructive ? .destructive : []) { [weak self] _ in
-                _ = self?.onRowAction?(.action(item.action))
+                _ = self?.report(.action(item.action), for: owner)
               }
             })
         })
@@ -301,7 +317,7 @@
     func configure(
       status: TodoTask.Status?, facts: RowFacts?, canBeTicked: Bool, dimmed: Bool = false, depth: Int,
       text: AttributedString,
-      editable: Bool, rowID: String, delegate: LineTextViewDelegate?, onTick: @escaping () -> Void,
+      editable: Bool, rowID: String, taskId: String, delegate: LineTextViewDelegate?, onTick: @escaping () -> Void,
       onRowAction: @escaping (RowRequest.Kind) -> Bool = { _ in false }
     ) {
       self.status = status
@@ -316,7 +332,7 @@
       circle.accessibilityTraits = canBeTicked ? .button : [.button, .notEnabled]
       setDepth(depth)
       setWords(text, look: wordsLook, editable: editable, rowID: rowID, delegate: delegate)
-      showActions(facts?.menu)
+      showActions(facts?.menu, for: ActionsOwner(rowID: rowID, taskId: taskId))
       isAccessibilityElement = false
       circle.accessibilityValue =
         switch status {

@@ -498,10 +498,10 @@
           pages: [page], tasks: [todo("k-due", deadlineOn: "2026-11-27"), todo("k-plain")])
         let rows = BlockRows.rows(for: page, in: workspace, today: day)
         func show(_ row: BlockRow) {
-          guard case .todo(_, let status, _, let facts) = row.kind else { return }
+          guard case .todo(let taskId, let status, _, let facts) = row.kind else { return }
           cell.configure(
             status: status, facts: facts, canBeTicked: true, depth: 0, text: AttributedString("words"),
-            editable: true, rowID: row.id, delegate: nil, onTick: {})
+            editable: true, rowID: row.id, taskId: taskId, delegate: nil, onTick: {})
           cell.updateConfiguration(using: cell.configurationState)
           let height = cell.systemLayoutSizeFitting(
             CGSize(width: 390, height: 0), withHorizontalFittingPriority: .required,
@@ -533,10 +533,10 @@
 
         // Other marks of the same height: the frame is the line's as drawn now, without the cell laid out again.
         let later = BlockRows.rows(for: page, in: workspace, today: LocalDate("2026-11-27"))
-        guard case .todo(_, let status, _, let facts) = later[0].kind else { return }
+        guard case .todo(let taskId, let status, _, let facts) = later[0].kind else { return }
         cell.configure(
           status: status, facts: facts, canBeTicked: true, depth: 0, text: AttributedString("words"), editable: true,
-          rowID: later[0].id, delegate: nil, onTick: {})
+          rowID: later[0].id, taskId: taskId, delegate: nil, onTick: {})
         cell.updateConfiguration(using: cell.configurationState)
         cell.contentView.layoutIfNeeded()
         let marks = try #require(cell.accessibilityElements?.last as? UIAccessibilityElement)

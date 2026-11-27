@@ -564,7 +564,7 @@
         cell.configure(
           status: status, facts: facts, canBeTicked: row.canBeTicked, dimmed: id == self.actingRow, depth: row.depth,
           text: self.drawn[id] ?? AttributedString(),
-          editable: self.editableIDs.contains(id), rowID: id, delegate: self.lineInput,
+          editable: self.editableIDs.contains(id), rowID: id, taskId: taskId, delegate: self.lineInput,
           onTick: { [weak self] in self?.onTick?(taskId) },
           onRowAction: { [weak self] kind in self?.reportRowAction(kind, row: id, taskId: taskId) ?? false })
       }

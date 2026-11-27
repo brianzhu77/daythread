@@ -504,7 +504,7 @@
           guard case .todo(let taskId, let status, _, let facts) = row.kind else { return }
           cell.configure(
             status: status, facts: facts, canBeTicked: true, depth: 0, text: AttributedString("words"), editable: true,
-            rowID: row.id, delegate: nil, onTick: {},
+            rowID: row.id, taskId: taskId, delegate: nil, onTick: {},
             onRowAction: { _ in
               reported.append(taskId)
               return true
