@@ -1,0 +1,790 @@
+import DaythreadCore
+import DaythreadSync
+import Foundation
+import Testing
+import UIKit
+
+@testable import DaythreadEditor
+@testable import DaythreadUI
+
+/// Thursday, the day these tests run on.
+private let today = LocalDate("2026-11-26")!
+private let yesterday = LocalDate("2026-11-25")!
+private let tomorrow = LocalDate("2026-11-27")!
+private let saturday = LocalDate("2026-11-28")!
+/// Noon UTC on Thursday, Nov 26 2026.
+private let thursdayNoon = Date(timeIntervalSince1970: 1_795_694_400)
+
+private func line(_ id: String, _ words: String) -> String {
+  #"{"id":"\#(id)","type":"paragraph","props":{},"content":[{"type":"text","text":"\#(words)","styles":{}}],"children":[]}"#
+}
+
+/// A to-do's row: a plan row on `planDate`, or a reference row with no plan day.
+private func row(_ id: String, _ taskId: String, _ words: String, reference: Bool = false, on planDate: LocalDate = today)
+  -> String
+{
+  let props =
+    reference
+    ? #"{"taskId":"\#(taskId)","role":"reference","planDate":""}"#
+    : #"{"taskId":"\#(taskId)","role":"plan","planDate":"\#(planDate.value)"}"#
+  let content = words.isEmpty ? "[]" : #"[{"type":"text","text":"\#(words)","styles":{}}]"#
+  return #"{"id":"\#(id)","type":"task","props":\#(props),"content":\#(content),"children":[]}"#
+}
+
+private func page(_ date: LocalDate, _ lines: [String]) -> JSONValue {
+  .object([
+    "id": .string("day:\(date.value)"), "type": .string("daily"), "date": .string(date.value), "title": .string(""),
+    "document": .string("[\(lines.joined(separator: ","))]"),
+  ])
+}
+
+private func task(_ id: String, _ title: String, status: String = "open", due: LocalDate? = nil, version: Int = 1)
+  -> JSONValue
+{
+  .object([
+    "id": .string(id), "title": .string(title), "status": .string(status), "paused": .bool(false),
+    "version": .number(String(version)), "deadlineOn": due.map { .string($0.value) } ?? .null, "attentionOn": .null,
+  ])
+}
+
+/// The server's Undo slot for `operationId` at `revision`, as the workspace carries it.
+private func marker(_ operationId: String, _ revision: Int) -> JSONValue {
+  .object(["operationId": .string(operationId), "revision": .number(String(revision))])
+}
+
+private func copy(revision: Int = 1, pages: [JSONValue], tasks: [JSONValue], undo: JSONValue? = nil) throws
+  -> Workspace
+{
+  var object: JSONObject = [
+    "revision": .number(String(revision)), "timezone": .string("UTC"), "pages": .array(pages), "tasks": .array(tasks),
+  ]
+  if let undo { object["undo"] = undo }
+  return try #require(Workspace(.object(object)))
+}
+
+/// From `from` to `revision`, writing `pages` and `tasks`; the slot is this command's when `undo` names it.
+private func changes(
+  from: Int, to revision: Int, pages: [JSONValue] = [], tasks: [JSONValue] = [], undo operationId: String? = nil
+) throws -> WorkspaceChanges {
+  var object: JSONObject = [
+    "from": .number(String(from)), "revision": .number(String(revision)), "timezone": .string("UTC"),
+    "pages": .object(["upsert": .array(pages), "remove": .array([])]),
+    "tasks": .object(["upsert": .array(tasks), "remove": .array([])]),
+  ]
+  object["undo"] = operationId.map { marker($0, revision) } ?? .null
+  return try #require(WorkspaceChanges(.object(object)))
+}
+
+private func applied(_ changes: WorkspaceChanges, receipt: JSONValue = .object(["message": .string("Done")]))
+  -> TestServer.Reply
+{
+  .outcome(.applied(receipt: receipt, changes: changes, owner: "one"))
+}
+
+private func savedAs(_ changes: WorkspaceChanges) -> TestServer.Reply {
+  .saved(.applied(receipt: .object(["revision": .number(String(changes.revision))]), changes: changes, owner: "one"))
+}
+
+/// The words of a document's lines, in page order.
+private func words(of document: String?) -> [String] {
+  guard let document else { return [] }
+  let page = EditablePage(document: document, pageDate: nil)
+  return page.textBlocks.compactMap { page.content(of: $0)?.plain }
+}
+
+private func type(of action: JSONValue) -> String? { action.objectValue?["type"]?.stringValue }
+
+/// Waits, a few milliseconds at a time, for `condition`; records an issue after ten seconds. The deadline is long
+/// because the wait is not what is measured: CI's machines are several times slower than this one.
+@MainActor
+private func soon(_ condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+  let clock = ContinuousClock()
+  let deadline = clock.now.advanced(by: .seconds(10))
+  while !condition() {
+    guard clock.now < deadline else {
+      Issue.record("Timed out waiting", sourceLocation: sourceLocation)
+      return
+    }
+    try await Task.sleep(nanoseconds: 5_000_000)
+  }
+}
+
+/// `soon` for an answer only an actor can give.
+@MainActor
+private func eventually(_ condition: () async -> Bool, sourceLocation: SourceLocation = #_sourceLocation)
+  async throws
+{
+  let clock = ContinuousClock()
+  let deadline = clock.now.advanced(by: .seconds(10))
+  while !(await condition()) {
+    guard clock.now < deadline else {
+      Issue.record("Timed out waiting", sourceLocation: sourceLocation)
+      return
+    }
+    try await Task.sleep(nanoseconds: 5_000_000)
+  }
+}
+
+/// Lets the main run loop turn for a while, so the screen acts on whatever it was told; for asserting that something
+/// did not happen.
+@MainActor
+private func turns() async throws {
+  try await Task.sleep(nanoseconds: 300_000_000)
+}
+
+/// The day screen in a phone-sized window, its rows read and acted on as he does: a swipe's action, an item of the
+/// circle's menu, a tap on a button. Its notice never leaves on its own, so a test reads it at leisure.
+@MainActor
+private struct RowScreen {
+  let window: UIWindow
+  let screen: DayViewController
+
+  init(_ model: AppModel, on day: LocalDate? = nil) throws {
+    screen = DayViewController(model: model, noticeSleep: neverEnding)
+    window = try testWindow(width: 402)
+    window.rootViewController = UINavigationController(rootViewController: screen)
+    window.makeKeyAndVisible()
+    if let day { screen.open(day) }
+    drawn()
+  }
+
+  func drawn() {
+    screen.updatePropertiesIfNeeded()
+    window.layoutIfNeeded()
+  }
+
+  var editor: DocumentViewController {
+    screen.children.compactMap { $0 as? DocumentViewController }.first!
+  }
+
+  var notice: Notice? { screen.notice.shown }
+
+  /// The rows' cells, top to bottom.
+  private var cells: [UICollectionViewCell] {
+    drawn()
+    guard let list = screen.list else { return [] }
+    return list.visibleCells.filter { !$0.isHidden }.sorted { $0.frame.minY < $1.frame.minY }
+  }
+
+  var lines: [UITextView] { cells.compactMap { Self.textView(in: $0) } }
+
+  /// What each line shows, top to bottom.
+  var words: [String] { lines.map(\.text) }
+
+  func line(_ words: String) throws -> UITextView {
+    try #require(lines.first { $0.text == words }, "no line reads \"\(words)\"")
+  }
+
+  func cell(_ words: String) throws -> UICollectionViewCell {
+    try #require(cells.first { Self.textView(in: $0)?.text == words }, "no row reads \"\(words)\"")
+  }
+
+  /// Puts the caret at the end of the line that reads `words` and types `text` there, as the keyboard does.
+  @discardableResult
+  func type(_ text: String, atEndOf words: String) throws -> UITextView {
+    let line = try line(words)
+    #expect(line.becomeFirstResponder())
+    line.selectedRange = NSRange(location: (line.text as NSString).length, length: 0)
+    line.insertText(text)
+    return line
+  }
+
+  /// The trailing swipe the list offers for the row, as the system asks for it.
+  func swipe(_ words: String) throws -> UISwipeActionsConfiguration? {
+    let list = try #require(screen.list)
+    let indexPath = try #require(list.indexPath(for: try cell(words)))
+    return editor.listConfiguration.trailingSwipeActionsConfigurationProvider?(indexPath)
+  }
+
+  func swipeTitles(_ words: String) throws -> [String] {
+    try swipe(words)?.actions.compactMap(\.title) ?? []
+  }
+
+  /// Taps the swipe's action named `title` on the row.
+  func swipe(_ words: String, _ title: String) throws {
+    let action = try #require(try swipe(words)?.actions.first { $0.title == title }, "no swipe \(title) on \(words)")
+    action.handler(action, UIView(), { _ in })
+  }
+
+  /// Picks the item `title` of the row's circle menu (a touch and hold on the circle).
+  func menu(_ words: String, _ title: String) throws {
+    let circle = try #require(Self.button(in: try cell(words)) { $0.accessibilityLabel == "Complete \(words)" })
+    let items = (circle.menu?.children ?? []).flatMap { ($0 as? UIMenu)?.children ?? [$0] }
+    let item = try #require(items.compactMap { $0 as? UIAction }.first { $0.title == title }, "no \(title)")
+    item.performWithSender(nil, target: nil)
+  }
+
+  func tick(_ words: String) throws {
+    let circle = try #require(Self.button(in: try cell(words)) { $0.accessibilityLabel == "Complete \(words)" })
+    circle.sendActions(for: .primaryActionTriggered)
+  }
+
+  /// The reference row's own `Plan for today` button.
+  func planForToday(_ words: String) throws {
+    let button = try #require(Self.button(in: try cell(words)) { $0.configuration?.title == "Plan for today" })
+    button.sendActions(for: .primaryActionTriggered)
+  }
+
+  /// The notice's `Undo`, tapped.
+  func undo() throws {
+    let button = try #require(Self.button(in: screen.notice) { $0.configuration?.title == "Undo" }, "no Undo")
+    button.sendActions(for: .primaryActionTriggered)
+  }
+
+  /// The row's marks line, as the list draws it under the words.
+  func marks(_ words: String) throws -> String? {
+    (try cell(words).contentConfiguration as? UIListContentConfiguration)?.secondaryAttributedText?.string
+  }
+
+  /// Whether the row's words are drawn dimmed, as while its action is out.
+  func dimmed(_ words: String) throws -> Bool {
+    let line = try line(words)
+    return line.attributedText.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor == .tertiaryLabel
+  }
+
+  func close() {
+    screen.presentedViewController?.dismiss(animated: false)
+    window.endEditing(true)
+    window.isHidden = true
+  }
+
+  private static func textView(in view: UIView) -> UITextView? {
+    if let view = view as? UITextView { return view }
+    return view.subviews.lazy.compactMap { textView(in: $0) }.first
+  }
+
+  private static func button(in view: UIView, where matches: (UIButton) -> Bool) -> UIButton? {
+    if let button = view as? UIButton, matches(button) { return button }
+    for subview in view.subviews {
+      if let found = button(in: subview, where: matches) { return found }
+    }
+    return nil
+  }
+}
+
+/// A row's action run from the day screen (`native-phase-1.md` §11.4, §11.5): his words saved first, the command sent
+/// and waited for, the notice, and Undo only while the server would take it.
+@MainActor
+@Suite struct RowActionTests {
+  private let water = task("t1", "Water the plants")
+  private let read = task("t2", "Read the lease")
+  private var thursday: Clock {
+    let clock = Clock()
+    clock.date = thursdayNoon
+    return clock
+  }
+
+  private func harness(
+    pages: [JSONValue], tasks: [JSONValue], relay: StateRelay? = nil, engineClock: EngineClock? = nil
+  ) async throws -> Harness {
+    try await Harness(
+      copy: try copy(pages: pages, tasks: tasks), clock: thursday, sleep: neverEnding, relay: relay,
+      engineClock: engineClock)
+  }
+
+  /// Today's page: a line, a plan row of `t1`, a plan row of `t2`, a line.
+  private var todayPage: JSONValue {
+    page(
+      today,
+      [
+        line("a", "Morning"), row("r1", "t1", "Water the plants"), row("r2", "t2", "Read the lease"),
+        line("b", "Walk"),
+      ])
+  }
+
+  /// What the server answers a move of `t1` to tomorrow on revision `from`: today's page without its row, tomorrow's
+  /// with it, and the slot this operation's.
+  private func movedToTomorrow(from: Int = 1, operationId: String?) throws -> WorkspaceChanges {
+    try changes(
+      from: from, to: from + 1,
+      pages: [
+        page(today, [line("a", "Morning"), row("r2", "t2", "Read the lease"), line("b", "Walk")]),
+        page(tomorrow, [row("r1", "t1", "Water the plants", on: tomorrow)]),
+      ], undo: operationId)
+  }
+
+  /// Answers the call the server holds with `reply`, made with the operation id it was sent under, and returns it.
+  @discardableResult
+  private func answerHeld(_ h: Harness, _ reply: (String) throws -> TestServer.Reply) async throws -> String {
+    await h.server.callHeld()
+    let operationId = try #require(await h.server.operationIds.last)
+    await h.server.add([try reply(operationId)])
+    await h.server.release()
+    return operationId
+  }
+
+  /// Moves `t1` to tomorrow from its swipe; the server's answer leaves the slot this operation's. Returns the
+  /// operation once the notice shows.
+  private func moveWithUndo(_ h: Harness, _ day: RowScreen) async throws -> String {
+    await h.server.hold()
+    try day.swipe("Water the plants", "Tomorrow")
+    let operationId = try await answerHeld(h) { applied(try movedToTomorrow(operationId: $0)) }
+    try await soon { day.notice != nil }
+    #expect(day.notice == Notice(text: "Moved to Fri, Nov 27", kind: .done, undoing: operationId))
+    return operationId
+  }
+
+  // MARK: His words first
+
+  @Test func an_action_waits_for_unsaved_words_to_be_saved_first() async throws {
+    let h = try await harness(
+      pages: [page(today, [line("a", "Morning"), row("r1", "editor-task:r1", "")])], tasks: [])
+    let day = try RowScreen(h.model)
+    try day.type("Buy milk", atEndOf: "")
+    // The caret goes back to the line above: the row being typed in has no swipe.
+    _ = try day.line("Morning").becomeFirstResponder()
+    try await soon { (try? day.swipeTitles("Buy milk")) == ["Tomorrow", "Not today", "More"] }
+
+    let saved = page(today, [line("a", "Morning"), row("r1", "editor-task:r1", "Buy milk")])
+    await h.server.add([
+      savedAs(try changes(from: 1, to: 2, pages: [saved], tasks: [task("editor-task:r1", "Buy milk")])),
+      applied(
+        try changes(
+          from: 2, to: 3,
+          pages: [
+            page(today, [line("a", "Morning")]),
+            page(tomorrow, [row("r1", "editor-task:r1", "Buy milk", on: tomorrow)]),
+          ])),
+    ])
+    try day.swipe("Buy milk", "Tomorrow")
+    try await soon { day.notice != nil }
+
+    let sent = await h.server.sent
+    #expect(sent.map { type(of: $0) } == ["save-editor", "plan-task"])
+    #expect(words(of: sent.first?.objectValue?["document"]?.stringValue) == ["Morning", "Buy milk"])
+    #expect(sent.last == Command.planTask(taskId: "editor-task:r1", date: tomorrow, from: today, today: today))
+    #expect(day.notice?.text == "Moved to Fri, Nov 27")
+    #expect(day.words == ["Morning"])
+    day.close()
+  }
+
+  @Test func an_action_is_not_sent_when_the_pages_draft_cannot_be_saved() async throws {
+    for stuck in [false, true] {
+      let h = try await harness(pages: [todayPage], tasks: [water, read])
+      let day = try RowScreen(h.model)
+      try day.type(" the dog", atEndOf: "Walk")
+      try await soon { !h.model.state.drafts.isEmpty }
+      // Offline: no reply at all. Stuck: the server will not take the document.
+      if stuck { await h.server.add([.saved(.refused(message: "The document is not acceptable"))]) }
+
+      try day.swipe("Water the plants", "Not today")
+      try await soon { day.notice != nil }
+
+      #expect(day.notice == Notice(text: "Not done · your text is kept", kind: .failed, undoing: nil), "stuck: \(stuck)")
+      let sent = await h.server.sent
+      #expect(!sent.contains { type(of: $0) == "not-today" }, "stuck: \(stuck)")
+      #expect(sent.map { type(of: $0) } == ["save-editor"], "its save was tried; stuck: \(stuck)")
+      #expect(day.words == ["Morning", "Water the plants", "Read the lease", "Walk the dog"], "stuck: \(stuck)")
+      #expect(h.model.state.drafts.map(\.id) == ["day:2026-11-26"], "the words are kept; stuck: \(stuck)")
+      #expect(day.editor.actingRow == nil)
+      day.close()
+    }
+  }
+
+  @Test func the_row_leaves_and_the_caret_goes_to_the_line_above() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    let typing = try day.type(" now", atEndOf: "Water the plants")
+    try await soon { !h.model.state.drafts.isEmpty }
+    #expect(try day.swipe("Water the plants now") == nil, "the row being typed in has no swipe")
+
+    let typed = [
+      line("a", "Morning"), row("r1", "t1", "Water the plants now"), row("r2", "t2", "Read the lease"),
+      line("b", "Walk"),
+    ]
+    await h.server.add([
+      savedAs(try changes(from: 1, to: 2, pages: [page(today, typed)])),
+      applied(try movedToTomorrow(from: 2, operationId: nil)),
+    ])
+    // The circle's menu reaches the row he types in.
+    try day.menu("Water the plants now", "Tomorrow · Fri, Nov 27")
+    try await soon { day.notice != nil }
+    try await soon { day.words == ["Morning", "Read the lease", "Walk"] }
+
+    #expect(!typing.isFirstResponder)
+    let above = try day.line("Morning")
+    #expect(above.isFirstResponder, "the keyboard stays, in the line above")
+    #expect(above.selectedRange == NSRange(location: 7, length: 0), "at its end")
+    #expect(await h.server.sent.map { type(of: $0) } == ["save-editor", "plan-task"])
+    day.close()
+  }
+
+  @Test func typing_during_an_action_is_merged() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    await h.server.hold()
+    try day.swipe("Water the plants", "Tomorrow")
+    await h.server.callHeld()
+
+    // He types in another line while the command is out.
+    try day.type(" the dog", atEndOf: "Walk")
+    try await soon { !h.model.state.drafts.isEmpty }
+    try await answerHeld(h) { _ in applied(try movedToTomorrow(operationId: nil)) }
+    try await soon { day.notice != nil }
+
+    let merged = ["Morning", "Read the lease", "Walk the dog"]
+    try await soon { day.words == merged }
+    #expect(day.notice?.undoing == nil, "his words wait to be sent")
+    await h.model.saveNow().value
+    try await eventually {
+      await words(of: h.server.sent.last { type(of: $0) == "save-editor" }?.objectValue?["document"]?.stringValue)
+        == merged
+    }
+    #expect(day.words == merged)
+    day.close()
+  }
+
+  @Test func a_failure_says_so_and_changes_nothing() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    let before = day.words
+    await h.server.add([
+      .outcome(.refused(message: "Task not found", owner: "one")), .workspace(.unchanged(revision: 1, owner: "one")),
+    ])
+    try day.swipe("Water the plants", "Not today")
+    try await soon { day.notice != nil }
+
+    #expect(day.notice == Notice(text: "Not done · your text is kept", kind: .failed, undoing: nil))
+    #expect(day.words == before)
+    #expect(h.model.workspace?.dayPage(today)?.document == h.model.state.workspace?.dayPage(today)?.document)
+    #expect(h.model.state.workspace?.revision == 1)
+    #expect(day.editor.actingRow == nil)
+    day.close()
+  }
+
+  // MARK: The notice
+
+  /// The notice after `act` on a copy of `pages` and `tasks`, shown on `shown`'s page, the server answering with
+  /// `receipt` and nothing changed.
+  private func notice(
+    pages: [JSONValue], tasks: [JSONValue], on shown: LocalDate? = nil,
+    receipt: JSONValue = .object(["message": .string("Done")]), _ act: (RowScreen) throws -> Void
+  ) async throws -> String? {
+    let h = try await harness(pages: pages, tasks: tasks)
+    let day = try RowScreen(h.model, on: shown)
+    await h.server.add([applied(try changes(from: 1, to: 2), receipt: receipt)])
+    try act(day)
+    try await soon { day.notice != nil }
+    defer { day.close() }
+    return day.notice?.text
+  }
+
+  @Test func the_notices_words() async throws {
+    let plan = [page(today, [row("r1", "t1", "Water the plants")])]
+    let reference = [page(today, [row("r2", "t2", "Read the lease", reference: true)])]
+
+    #expect(
+      try await notice(pages: plan, tasks: [water]) { try $0.swipe("Water the plants", "Tomorrow") }
+        == "Moved to Fri, Nov 27")
+    #expect(
+      try await notice(
+        pages: [page(yesterday, [row("r1", "t1", "Water the plants", on: yesterday)]), page(today, [])],
+        tasks: [water], on: yesterday
+      ) { try $0.swipe("Water the plants", "Bring to today") } == "On today")
+    #expect(
+      try await notice(pages: reference, tasks: [read]) { try $0.swipe("Read the lease", "Plan for today") }
+        == "On today")
+    #expect(
+      try await notice(pages: reference, tasks: [read]) { try $0.planForToday("Read the lease") }
+        == "Planned for today")
+    #expect(
+      try await notice(pages: plan, tasks: [water]) { try $0.swipe("Water the plants", "Not today") }
+        == "Not today — won’t carry over")
+    #expect(
+      try await notice(pages: plan, tasks: [task("t1", "Water the plants", due: tomorrow)]) {
+        try $0.swipe("Water the plants", "Not today")
+      } == "Not today — won’t carry over · due Fri still tracked")
+    #expect(
+      try await notice(
+        pages: [page(today, []), page(saturday, [row("r1", "t1", "Water the plants", on: saturday)])],
+        tasks: [water], on: saturday
+      ) { try $0.swipe("Water the plants", "Not on Sat") } == "Not on Sat 11/28")
+    // A stale row: the to-do is planned on Friday, and the server says only this row left.
+    #expect(
+      try await notice(
+        pages: [
+          page(today, [row("r1", "t1", "Water the plants")]),
+          page(tomorrow, [row("r9", "t1", "Water the plants", on: tomorrow)]),
+        ], tasks: [water], receipt: .object(["message": .string("Removed from Thu")])
+      ) { try $0.swipe("Water the plants", "Remove from Thu") } == "Removed from Thu · still planned for Fri")
+    #expect(
+      try await notice(
+        pages: plan, tasks: [water],
+        receipt: .object([
+          "message": .string("Cancelled"), "nextTodos": .array([.object(["on": .string("2026-12-07")])]),
+        ])
+      ) { try $0.menu("Water the plants", "Cancel task") } == "Cancelled · Next Mon, Dec 7")
+    #expect(
+      try await notice(pages: plan, tasks: [task("t1", "Water the plants", status: "cancelled")]) {
+        try $0.swipe("Water the plants", "Restore")
+      } == "Restored")
+  }
+
+  // MARK: Undo
+
+  @Test func undo_puts_the_row_back() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    let before = day.words
+    let operationId = try await moveWithUndo(h, day)
+    try await soon { day.words == ["Morning", "Read the lease", "Walk"] }
+
+    await h.server.add([applied(try changes(from: 2, to: 3, pages: [todayPage]))])
+    try day.undo()
+    try await soon { day.notice?.kind == .undone }
+
+    #expect(day.notice == Notice(text: "Undone", kind: .undone, undoing: nil))
+    #expect(await h.server.sent.last == Command.undo(targetOperationId: operationId))
+    try await soon { day.words == before }
+    day.close()
+  }
+
+  @Test func undo_leaves_the_notice_when_he_types() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    _ = try await moveWithUndo(h, day)
+
+    try day.type("!", atEndOf: "Walk")
+    try await soon { day.notice?.undoing == nil }
+    #expect(day.notice?.text == "Moved to Fri, Nov 27", "the words stay until their time")
+    day.close()
+  }
+
+  @Test func undo_leaves_the_notice_when_he_ticks() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    _ = try await moveWithUndo(h, day)
+
+    try day.tick("Read the lease")
+    try await soon { day.notice?.undoing == nil }
+    #expect(day.notice?.text == "Moved to Fri, Nov 27")
+    day.close()
+  }
+
+  @Test func undo_leaves_the_notice_when_the_slot_moves() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    _ = try await moveWithUndo(h, day)
+
+    // Another device's change took the slot.
+    await h.server.add([
+      .workspace(
+        .full(
+          try copy(revision: 3, pages: [todayPage], tasks: [water, read], undo: marker("op-elsewhere", 3)),
+          owner: "one"))
+    ])
+    await h.model.refresh()
+    try await soon { day.notice?.undoing == nil }
+    #expect(day.notice?.text == "Moved to Fri, Nov 27")
+    day.close()
+  }
+
+  @Test func undo_leaves_the_notice_when_a_day_page_is_made() async throws {
+    let engineClock = EngineClock(thursdayNoon)
+    let h = try await harness(pages: [todayPage], tasks: [water, read], engineClock: engineClock)
+    let day = try RowScreen(h.model)
+    await h.server.hold()
+    try day.swipe("Water the plants", "Not today")
+    let operationId = try await answerHeld(h) {
+      applied(
+        try changes(
+          from: 1, to: 2,
+          pages: [page(today, [line("a", "Morning"), row("r2", "t2", "Read the lease"), line("b", "Walk")])],
+          undo: $0))
+    }
+    try await soon { day.notice?.undoing == operationId }
+
+    // The engine's day moves on, and it asks for that day's page; the server's answer empties the slot.
+    engineClock.now = thursdayNoon.addingTimeInterval(86_400)
+    await h.server.add([
+      .workspace(.unchanged(revision: 2, owner: "one")),
+      applied(try changes(from: 2, to: 3, pages: [page(tomorrow, [])])),
+    ])
+    await h.model.refresh()
+    try await soon { day.notice?.undoing == nil }
+    #expect(await h.server.sent.last.flatMap { type(of: $0) } == "ensure-day")
+    #expect(day.notice?.text == "Not today — won’t carry over")
+    day.close()
+  }
+
+  @Test func the_answer_arriving_before_its_state_still_offers_undo() async throws {
+    let relay = StateRelay()
+    let h = try await harness(pages: [todayPage], tasks: [water, read], relay: relay)
+    let day = try RowScreen(h.model)
+    await h.server.hold()
+    try day.swipe("Water the plants", "Tomorrow")
+    await h.server.callHeld()
+    let operationId = try #require(await h.server.operationIds.last)
+    await h.server.add([applied(try movedToTomorrow(operationId: operationId))])
+
+    // The answer reaches the model; the state that holds it does not yet.
+    relay.hold()
+    await h.server.release()
+    await h.engine.settled()
+    try await turns()
+    #expect(day.notice == nil, "nothing is said before the state that holds the answer is known")
+    #expect(try day.dimmed("Water the plants"), "the action is still out")
+
+    relay.release()
+    try await soon { day.notice != nil }
+    #expect(day.notice == Notice(text: "Moved to Fri, Nov 27", kind: .done, undoing: operationId))
+    day.close()
+  }
+
+  @Test func a_refused_undo_says_so() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    _ = try await moveWithUndo(h, day)
+
+    await h.server.add([
+      .outcome(.refused(message: "Cannot undo after later changes; current values kept", owner: "one")),
+      .workspace(.unchanged(revision: 2, owner: "one")),
+    ])
+    try day.undo()
+    try await soon { day.notice?.text != "Moved to Fri, Nov 27" }
+    #expect(day.notice == Notice(text: "Can't undo · changed since", kind: .failed, undoing: nil))
+    day.close()
+  }
+
+  @Test func a_failed_undo_says_so() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    _ = try await moveWithUndo(h, day)
+
+    // No reply: the server cannot be reached.
+    try day.undo()
+    try await soon { day.notice?.text != "Moved to Fri, Nov 27" }
+    #expect(day.notice == Notice(text: "Couldn't undo · your text is kept", kind: .failed, undoing: nil))
+    day.close()
+  }
+
+  @Test func a_second_action_replaces_the_first_notice() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    _ = try await moveWithUndo(h, day)
+    try await soon { day.words == ["Morning", "Read the lease", "Walk"] }
+
+    await h.server.add([applied(try changes(from: 2, to: 3))])
+    try day.swipe("Read the lease", "Not today")
+    try await soon { day.notice?.text == "Not today — won’t carry over" }
+
+    #expect(day.notice?.undoing == nil, "the server's slot is not this operation's")
+    #expect(day.screen.view.subviews.filter { $0 is NoticeView }.count == 1, "one notice")
+    day.close()
+  }
+
+  // MARK: One at a time
+
+  @Test func one_action_at_a_time_on_a_page() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    await h.server.hold()
+    try day.swipe("Water the plants", "Not today")
+    await h.server.callHeld()
+
+    #expect(try day.dimmed("Water the plants"), "its row is dimmed while it is out")
+    #expect(try !day.dimmed("Read the lease"))
+    #expect(try day.swipe("Read the lease") == nil, "a second swipe offers nothing")
+    try day.menu("Read the lease", "Not today")
+    try await turns()
+    #expect(await h.server.sent.count == 1, "nothing more was sent")
+
+    // Typing and ticking go on.
+    try day.type(" the dog", atEndOf: "Walk")
+    #expect(day.words.last == "Walk the dog")
+    try day.tick("Read the lease")
+    #expect(h.status("t2") == .done)
+
+    try await answerHeld(h) { _ in applied(try changes(from: 1, to: 2)) }
+    try await soon { day.notice != nil }
+    #expect(try !day.dimmed("Water the plants"))
+    #expect(await h.server.sent.filter { type(of: $0) == "not-today" }.count == 1)
+    day.close()
+  }
+
+  // MARK: More and Pick date
+
+  @Test func more_opens_the_action_sheet_with_the_rest_in_the_webs_order() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    try day.swipe("Water the plants", "More")
+    try await soon { day.screen.presentedViewController != nil }
+
+    let sheet = try #require(day.screen.presentedViewController as? UIAlertController)
+    #expect(sheet.preferredStyle == .actionSheet)
+    #expect(
+      sheet.actions.map(\.title) == [
+        "This weekend · Sat 11/28", "Next week · Mon 11/30", "Pick date…", "Cancel task", "Cancel",
+      ])
+    #expect(sheet.actions.map(\.style) == [.default, .default, .default, .destructive, .cancel])
+    #expect(await h.server.sent.isEmpty, "opening it sends nothing")
+    day.close()
+  }
+
+  @Test func pick_date_opens_the_calendar_and_moves_to_the_day_picked() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    try day.menu("Water the plants", "Pick date…")
+    try await soon { day.screen.presentedViewController != nil }
+
+    let picker = try #require(day.screen.presentedViewController as? DayPickerViewController)
+    picker.loadViewIfNeeded()
+    let selection = try #require(picker.calendarView.selectionBehavior as? UICalendarSelectionSingleDate)
+    #expect(selection.selectedDate == nil, "nothing selected")
+    #expect(!picker.dateSelection(selection, canSelectDate: DateComponents(year: 2026, month: 11, day: 25)))
+    #expect(picker.dateSelection(selection, canSelectDate: DateComponents(year: 2026, month: 11, day: 26)))
+
+    await h.server.add([applied(try changes(from: 1, to: 2))])
+    picker.dateSelection(selection, didSelectDate: DateComponents(year: 2026, month: 11, day: 30))
+    try await soon { day.notice != nil }
+    #expect(day.notice?.text == "Moved to Mon, Nov 30")
+    #expect(
+      await h.server.sent.last
+        == Command.planTask(taskId: "t1", date: LocalDate("2026-11-30")!, from: today, today: today))
+    try await soon { day.screen.presentedViewController == nil }
+    day.close()
+  }
+
+  // MARK: The marks
+
+  @Test func the_marks_follow_the_drawn_workspace() async throws {
+    let clock = thursday
+    let saturdayPage = page(saturday, [row("r1", "t1", "Water the plants", on: saturday), line("b", "Walk")])
+    let h = try await Harness(
+      copy: try copy(pages: [page(today, []), saturdayPage], tasks: [water, read]), clock: clock, sleep: neverEnding)
+    let day = try RowScreen(h.model, on: saturday)
+    #expect(try day.marks("Water the plants") == nil)
+
+    // A load giving the to-do a Due date redraws its marks.
+    await h.server.add([
+      .workspace(
+        .full(
+          try copy(revision: 2, pages: [page(today, []), saturdayPage], tasks: [task("t1", "Water the plants", due: tomorrow), read]),
+          owner: "one"))
+    ])
+    await h.model.refresh()
+    try await soon { (try? day.marks("Water the plants")) == "Due tomorrow" }
+
+    // A load that changes nothing a row shows hands the list no new workspace.
+    let replaced = day.screen.replacedDocuments.count
+    await h.server.add([
+      .workspace(
+        .full(
+          try copy(
+            revision: 3, pages: [page(today, []), saturdayPage],
+            tasks: [task("t1", "Water the plants", due: tomorrow), task("t2", "Read the whole lease")]), owner: "one"))
+    ])
+    await h.model.refresh()
+    try await soon { h.model.state.workspace?.revision == 3 }
+    try await turns()
+    #expect(day.screen.replacedDocuments.count == replaced)
+    #expect(try day.marks("Water the plants") == "Due tomorrow")
+
+    // At midnight the marks move with today.
+    clock.date = Date(timeIntervalSince1970: 1_795_737_601)
+    NotificationCenter.default.post(name: UIApplication.significantTimeChangeNotification, object: nil)
+    try await soon { (try? day.marks("Water the plants")) == "Due today" }
+    #expect(h.model.today == tomorrow)
+    day.close()
+  }
+}

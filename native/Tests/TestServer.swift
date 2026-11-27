@@ -22,6 +22,8 @@ actor TestServer: ServerTransport {
   private var arrivals: [CheckedContinuation<Void, Never>] = []
   /// The actions sent, in the order they were sent.
   private(set) var sent: [JSONValue] = []
+  /// The operation id each action in `sent` was sent under, at the same index.
+  private(set) var operationIds: [String] = []
   private(set) var unscripted = 0
   /// Workspace loads answered, with a reply or a failure.
   private(set) var loadsAnswered = 0
@@ -88,6 +90,7 @@ actor TestServer: ServerTransport {
     token: String?, operationId: String, action: JSONValue, expectedOwner: String, basis: OutboxBasis
   ) async throws -> CommandOutcome {
     sent.append(action)
+    operationIds.append(operationId)
     guard case .outcome(let outcome) = try await answer() else { throw TransportError.unreadable }
     return outcome
   }
@@ -96,6 +99,7 @@ actor TestServer: ServerTransport {
     token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
   ) async throws -> SaveOutcome {
     sent.append(action)
+    operationIds.append(operationId)
     guard case .saved(let outcome) = try await answer(isSave: true) else { throw TransportError.unreadable }
     return outcome
   }
