@@ -3,6 +3,7 @@
   import DaythreadEditor
   import DaythreadSync
   import Observation
+  import SwiftUI
   import UIKit
 
   /// One day: its header (the page's first row), its page or what a day without one says, the quiet controls to reach
@@ -105,6 +106,14 @@
       self?.spaceUnderHeader ?? .zero
     }
     private(set) lazy var headerView = DayHeaderView { [weak self] in self?.pickDay() }
+    /// The strip above the page: what it shows, its fold, and what it was asked.
+    let factsModel = DayFactsModel()
+    /// The strip, in the header under the title. Its height is its own, reported as its preferred content size.
+    private lazy var factsHost = DayFactsHostingController(rootView: DayFactsView(model: factsModel))
+    /// The strip's view, in the header.
+    var factsView: UIView { factsHost.view }
+    /// How many times the facts were worked out (tests read it).
+    private(set) var factsReads = 0
     private let heldButton = UIBarButtonItem(image: UIImage(systemName: "exclamationmark.triangle"))
     private let moreButton = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
     private lazy var previousButton = symbolButton("chevron.left", label: "Previous day") { $0.step(by: -1) }
@@ -181,6 +190,19 @@
       }
       document.headerView = headerView
       headerView.onResize = { [weak self] in self?.emptyBackground.setNeedsLayout() }
+      factsHost.sizingOptions = [.intrinsicContentSize, .preferredContentSize]
+      factsHost.safeAreaRegions = []
+      factsHost.view.backgroundColor = .clear
+      factsHost.onPreferredContentSizeChange = { [weak self] in self?.stripHeightChanged() }
+      // Its view lies in the list's header: UIKit requires the controller whose view holds it to be its parent.
+      document.addChild(factsHost)
+      headerView.hold(facts: factsHost.view)
+      factsHost.didMove(toParent: document)
+      factsModel.onEvents = { [weak self] in
+        guard let self, let heading = factsModel.facts.eventsHeadingId else { return }
+        // The caret stays where it is: with the keyboard up he sees the heading, and his line where the scroll put it.
+        document.scroll(toRow: heading, animated: true)
+      }
       registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (self: Self, _) in self.setNeedsUpdateProperties() }
 
       addChild(document)
@@ -221,6 +243,14 @@
       } else {
         host.bringSubviewToFront(notice)
       }
+      // A change of the strip's height that came while the screen was away is laid out now.
+      if headerLayoutPending { stripHeightChanged() }
+    }
+
+    /// The header's deferred layout is not run for a screen that is gone; it waits until the screen appears again.
+    override func viewDidDisappear(_ animated: Bool) {
+      super.viewDidDisappear(animated)
+      NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(layOutHeader), object: nil)
     }
 
     /// UIKit calls this again whenever what it reads from `model` changes; a change of day or of an empty state's
@@ -278,19 +308,26 @@
 
     /// Draws the day from what the model draws: its page, edited, or an empty one under what the day says instead.
     private func showDay() {
-      guard let workspace = model.workspace else { return }
+      guard let workspace = model.workspace else {
+        // No copy is shown (signed out, or another account's): nothing of the last account's is said above the page.
+        showFacts(.none)
+        return
+      }
       let date = date
       let content = DayContent.content(for: date, today: model.today, in: workspace)
       self.content = content
       if case .page = content, failed?.date == date { failed = nil }
+      let drawnWith: Workspace
       if case .page(let page) = content {
-        edit(page, in: workspace)
+        drawnWith = edit(page, in: workspace)
       } else {
         // Until the engine has made today's page, an empty one stands in for it. Shown first: what he was composing
         // on the page before is reported for that page.
         if let page = Self.emptyPage(on: date) { document.show(page: page, in: workspace) }
         closePage()
+        drawnWith = workspace
       }
+      updateFacts(from: drawnWith, on: date)
 
       emptyState = emptyState(for: content, on: date)
       if let emptyState { emptyView.configuration = emptyState }
@@ -319,7 +356,11 @@
     ///
     /// The same page of another account (the engine moved to that account's copy on its own) is another page, whether
     /// or not the screen is ahead: the words on screen are the first account's.
-    private func edit(_ page: Page, in workspace: Workspace) {
+    ///
+    /// Returns the workspace the page is drawn against: `workspace` when the list takes the page, else `workspace` with
+    /// his words drawn in.
+    @discardableResult
+    private func edit(_ page: Page, in workspace: Workspace) -> Workspace {
       let owner = model.state.owner
       guard let open = openPage, open.id.utf8.elementsEqual(page.id.utf8), open.owner == owner,
         let mine = document.document
@@ -333,7 +374,7 @@
         listWorkspace = workspace
         saysMerged = false
         mergeIfBehind()
-        return
+        return workspace
       }
       let ahead = merging || model.isWriting(page.id)
       let draft = model.state.drafts.first { $0.id.utf8.elementsEqual(page.id.utf8) }
@@ -341,10 +382,12 @@
       // what was saved, even when that is what the screen already shows.
       if !ahead, draft == nil { openPage?.startedFrom = page.document }
       // A draft behind the server's page is the stored one, older than the screen: it is merged, never taken.
+      let drawnWith: Workspace
       if !ahead, draft?.state != .behind, !page.document.utf8.elementsEqual(mine.utf8) {
         replaceList(with: page.document, in: workspace)
         if draft != nil { openPage?.startedFrom = page.document }
         listWorkspace = workspace
+        drawnWith = workspace
       } else {
         // His words stay; the list is handed the new workspace only when it would draw a row of them differently.
         let drawn = workspace.drawing(draft: mine, of: page.id)
@@ -352,8 +395,48 @@
           replaceList(with: mine, in: drawn)
           listWorkspace = drawn
         }
+        drawnWith = drawn
       }
       mergeIfBehind()
+      return drawnWith
+    }
+
+    // MARK: The strip above the page
+
+    /// Works the day's facts out from `workspace`, the one the page is drawn against, with the index of that same
+    /// value (`DayFacts.of` does not check that they agree). While his words stay on the page, the list's reading has
+    /// already built that index; when the list takes the page, or on a day without one, `todoIndex(of:)` builds it
+    /// here (and keeps it for the next state). Only `showDay` calls this, when a state or the day is drawn: a
+    /// keystroke draws neither.
+    private func updateFacts(from workspace: Workspace, on date: LocalDate) {
+      factsReads += 1
+      showFacts(DayFacts.of(day: date, in: workspace, index: todoIndex(of: workspace), today: model.today))
+    }
+
+    /// Hands `facts` to the strip when they differ from those it shows; the strip takes no room when they are empty.
+    private func showFacts(_ facts: DayFacts) {
+      factsModel.show(facts)
+      let hidden = facts.isEmpty
+      guard factsView.isHidden != hidden else { return }
+      factsView.isHidden = hidden
+      stripHeightChanged()
+    }
+
+    /// The list lays its header out again on the run loop's next turn, once for all the strip's changes until then:
+    /// never inside its own layout pass or a snapshot's apply.
+    private func stripHeightChanged() {
+      headerLayoutPending = true
+      NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(layOutHeader), object: nil)
+      perform(#selector(layOutHeader), with: nil, afterDelay: 0, inModes: [.common])
+    }
+
+    /// A header layout was asked for and has not run.
+    private var headerLayoutPending = false
+
+    @objc private func layOutHeader() {
+      headerLayoutPending = false
+      document.headerDidChange()
+      emptyBackground.setNeedsLayout()
     }
 
     /// What the list reads of `workspace` for `document`, at the model's today. The index is built again only for

@@ -95,6 +95,19 @@
 | Tomorrow, Not today, Not on Fri, Remove from Fri, Plan for today, Bring to today, Restore, More | A to-do row's trailing swipe (the system's swipe actions, default look), the web's phone bar's first actions then `More`: today's plan row `Tomorrow` (unless planned tomorrow), the off item, `More`; a later day's plan row the off item (`Not on Fri`, or `Remove from Fri` when the to-do is planned on another day), `More`; a reference row `Plan for today` (unless planned today), `More`; a past day `Bring to today`; a cancelled row `Restore`. `More` is there when the menu holds more and is reported, the host shows what it holds. No action runs on a full swipe. None on a done row, a text row, the row being typed in, or anywhere while words are selected |
 | Tomorrow · Fri, Nov 27, Another day, Tomorrow · Fri 11/27, This weekend · Sat 11/28, Next week · Mon 11/30, Pick date…, Cancel task | The row's menu: every action in the web's `⋯` order, as the system menu of the row's circle (a touch and hold, a click and hold or a secondary click; a tap still ticks). `Tomorrow · Fri, Nov 27` and the off item first on a plan row (`Plan for today` first on a reference row, `Restore` alone on a cancelled one, `Bring to today` alone on a past day), then `Another day` as a titled inline group of the web's options (`Tomorrow · Fri 11/27` only where Tomorrow is not already first) and `Pick date…`, then `Cancel task`, the one destructive item. The same menu opens with ⌘/ at the caret of the row being typed in (the system's edit menu), and its items, flattened, are the words' VoiceOver custom actions |
 | Plan for today | The reference row's own button, on every open reference row (also one already planned today, as the web): a plain system button, caption text in the secondary colour, at the row's trailing end, level with the words' first line, the words and marks ending before it; from the accessibility text sizes it goes under the words and marks, where they start, and the words keep the row's width (as the web wraps it under a title that would get too narrow, and as the notice puts its button) |
+| Lunch with Kathy · 10:30 AM Standup with Lu | The events line, the strip's first part, on today when today has an event: the `calendar` symbol and the first two events, each `10:30 AM Standup with Lu` (`3 PM` on the hour; the title alone when it has no time), joined by ` · `, on one line cut at its end; at the accessibility text sizes the words take the whole width after the symbol, on up to three lines, then cut (a word that fits on a line is never broken), with `+N more` and the chevron on a line of their own under them. A plain system `Label`, subheadline text, the words and the symbol in the secondary colour: quieter and a little smaller than the page's text, as on the web |
+| Untitled event | An event in that line whose line has no words |
+| · All day | Added to that line when today has exactly one event and it has no time: `Lunch with Kathy · All day` |
+| +1 more (+N more) | After that line's words when there are more than two events, at the end of the line; at the accessibility text sizes on a line of its own under the words, at their leading edge, with the chevron. Never cut |
+| `chevron.right` | After the events line only when it is a button (the page has a top-level heading `Events`, which a tap scrolls to); small, in the secondary colour, never cut. With no such heading the line is words, with no chevron |
+| Lunch with Kathy · 10:30 AM Standup with Lu, +1 more | The events line's VoiceOver label: one element, its words then `, +N more`; the button trait only when it is a button |
+| DUE SOON | The label of the strip's second part (a system `GroupBox`): `Due soon` drawn in capitals (`.textCase(.uppercase)`), footnote semibold in the secondary colour, as the web's small label, so it does not compete with the page's headings. On today and any past day, and on a later day only when it has a page: every open to-do due or started by that day that has no row on that day's page, its words then its tag. Each row of `Due soon` and of `Not today` is at least 44 points tall with its content centred, as the web's rows; a tag under its words stays with them, closer to them than to the next row |
+| Due today, Was due Mon, Start today, Due that day, Unscheduled | A `Due soon` or `Not today` row's tag, the web's `taskDateTag` (footnote, secondary colour, one line, at the row's end, or under the words when the two do not fit; the words wrap. At the largest text sizes a tag wider than the strip itself, such as `Not today · Due today`, wraps under the words rather than be cut). None is red: the strip does not mark a passed date, as on the web (a page's row does). A row whose tag is empty shows its words alone |
+| Not today · Due today, Not today | The tag of a `Due soon` row for a to-do he set aside: `Not today · ` then its tag, or `Not today` alone when its tag is empty |
+| Not today · 3 (Not today · N) | The title of the strip's last part, on today when a to-do is set aside: a system `DisclosureGroup`, folded when the page opens, its title in the secondary colour (a quiet control, as the day's ghost buttons; the system draws its chevron in the label colour, which neither the tint nor the foreground changes); the fold is forgotten when he leaves today or the list empties. Each row: its words and tag, then under them `Bring back` (the system's bordered button, its title in the label colour, not the accent) and the `ellipsis` menu in the secondary colour. A disabled control keeps the system's disabled look |
+| Another day, Tomorrow · Fri 11/27, This weekend · Sat 11/28, Next week · Mon 11/30, Pick date… | A `Not today` row's menu: one section titled `Another day`, the web's options for the weekday (`This weekend` Monday to Thursday only), then `Pick date…` |
+| File the taxes, Due today | A strip row's VoiceOver label: its words, then its tag (the words alone with no tag); `Bring back` and the menu are elements of their own |
+| More for Fix the bike | A `Not today` row's menu button's VoiceOver label: `More for <words>` |
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
 | Today, Tasks, Calendar, Pages | The tab bar's tabs, the web's places in its order: the system's tab bar with its default appearance (the floating glass capsule on iOS 26). Symbols: `<day of month>.calendar` for Today (the account's today, `26.calendar` on the 26th; it changes at the account's midnight), `checkmark.square`, `calendar`, `doc.text` |
 | Search | The system's search tab (`UISearchTab`), its own title and symbol, after the four; the system draws it apart, as the round button at the end of the bar |
@@ -132,6 +145,24 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
     drawn in the tertiary label colour, in place.
 - **Separator:** one hairline in the system's separator colour.
 - **Placeholder:** a `rectangle.dashed` symbol and the block's name in secondary colour.
+
+The strip above a day's page (`DayFactsView`, in `native/Packages/DaythreadUI`, slice 1d.1), the one SwiftUI view on
+the day screen, under the title's stack in the page's header, so it scrolls away with the title:
+
+- **Parts:** SwiftUI's stock parts, configured, never restyled: a `Label` (the `calendar` symbol) in a plain `Button`
+  for the events line, a `GroupBox` titled `Due soon`, a `DisclosureGroup` titled `Not today · N` with a bordered
+  `Button` and a `Menu` under the `ellipsis` symbol on each row. Each part is absent when it has nothing; with
+  nothing at all the strip is hidden and takes no room. Quiet, as the web's: nothing in it is drawn in the accent
+  colour (the tint is set to the label or secondary label colour, a configuration of the system's parts). Spacing
+  between the parts is SwiftUI's default; a row of `Due soon` or `Not today` is at least 44 points tall (8 points of
+  air above and below its words); the header's own system spacing lies between the title's stack and the strip.
+- **Width and height:** the header's full width inside its margins (the page's lines start where it starts), at
+  every width; no padding of its own. Its height is its own, at every text size: a row's words wrap, a tag never
+  does and goes under the words when the two do not fit. Every change of its height (the fold, a row coming or
+  going, the text size) lays the page's header out again on the run loop's next turn, and while a line holds the
+  keyboard that line stays where it is on the screen.
+- **While an action is out** (slice 1d.1's next part): every button and menu of the strip is disabled, and the acting
+  row's words are in the tertiary colour. The fold itself stays usable: opening or closing `Not today` sends nothing.
 
 The notice (`NoticeView`, in `native/Packages/DaythreadUI`; `native-app.md` §9 rule 3), the one line of words that
 says what a row action did:

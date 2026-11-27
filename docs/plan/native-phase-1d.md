@@ -109,6 +109,23 @@ wins.
   (`sizingOptions = [.intrinsicContentSize, .preferredContentSize]`, read in
   `preferredContentSizeDidChange(forChildContentContainer:)`), not through `DayHeaderView.onResize`: the header's
   bounds change only after the list has laid it out again, so `onResize` never sees the strip grow first.
+- **The strip's hosting controller is a child of the list's controller, not of the day screen** (Task 5). Its view
+  lies in the list's header, and UIKit refuses a child whose view is inside another controller's view
+  (`UIViewControllerHierarchyInconsistency`: it "should have parent view controller" `DocumentViewController`). The
+  day screen adds it to `document` (`document.addChild`) and keeps the model; so
+  `preferredContentSizeDidChange(forChildContentContainer:)` reaches the list's controller, which the day screen
+  does not override, and the height's changes are read instead from a subclass of the hosting controller
+  (`DayFactsHostingController`) that observes its own `preferredContentSize`. The plan's other choice stands: the
+  hosting controller's height follows the header's width in the list's self-sizing header (measured at 320, 402 and
+  1024 points), so `UIHostingConfiguration` is not needed.
+- **The events line takes up to three lines at the accessibility text sizes** (Task 5, Brian's ruling in review).
+  §12.3 says it is one line, cut with an ellipsis, `+N more` and the chevron never cut; at
+  `accessibilityExtraExtraExtraLarge` on a phone that left one letter of the words (`L… +1 more ›`). From the
+  accessibility sizes `+N more` and the chevron go on a line of their own under the words, at the words' leading
+  edge (after the symbol's column), so the words have the line's whole width after the symbol and take up to three
+  lines, cut at the tail after that; a word that fits on a line is never broken. Below those sizes it is one line,
+  `+N more` and the chevron uncut at its end, as §12.3 says. The line is still one button when it is one, and
+  VoiceOver's words are unchanged.
 - A correction found while building is written here with its reason before the code that follows it.
 
 ## Review Focus
