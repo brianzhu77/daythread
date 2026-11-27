@@ -113,21 +113,14 @@ final class NoticeFixture {
 
   /// Gives the notice's own task the moment it needs to start its wait.
   func requestedWaits(_ count: Int) async throws -> [Duration] {
-    for _ in 0..<400 {
-      let requested = await waits.requested
-      if requested.count >= count { return requested }
-      try await Task.sleep(nanoseconds: 5_000_000)
+    if !(try await within { await waits.requested.count >= count }) {
+      Issue.record("Timed out waiting for \(count) waits")
     }
-    Issue.record("Timed out waiting for \(count) waits")
     return await waits.requested
   }
 
   func cancelledWait(_ index: Int) async throws -> Bool {
-    for _ in 0..<400 {
-      if await waits.cancelled.contains(index) { return true }
-      try await Task.sleep(nanoseconds: 5_000_000)
-    }
-    return false
+    try await within { await waits.cancelled.contains(index) }
   }
 
   /// Long enough for a wait the notice should not ask for to show itself.
@@ -136,11 +129,19 @@ final class NoticeFixture {
   }
 
   func stays(until condition: () -> Bool) async throws {
-    for _ in 0..<400 {
-      if condition() { return }
+    if !(try await within { condition() }) { Issue.record("Timed out waiting") }
+  }
+
+  /// Whether `condition` holds, checked a few milliseconds at a time for up to ten seconds. The deadline is long
+  /// because the wait is not what is measured: CI's machines are several times slower than this one.
+  private func within(_ condition: () async -> Bool) async throws -> Bool {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: .seconds(10))
+    while !(await condition()) {
+      guard clock.now < deadline else { return false }
       try await Task.sleep(nanoseconds: 5_000_000)
     }
-    Issue.record("Timed out waiting")
+    return true
   }
 
   private func isInsideButton(_ view: UIView) -> Bool {
