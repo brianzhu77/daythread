@@ -466,6 +466,47 @@
         #expect(list.keyboardDismissMode == .interactive)
       }
 
+      /// Seen on the simulator: with the keyboard up, the text size made larger (Control Centre) grew the rows above
+      /// the line being typed, and the line went under the keyboard until the next keystroke.
+      @Test func the_line_being_typed_stays_above_the_keyboard_when_the_text_grows() throws {
+        let screen = try editing((0..<40).map { block("p\($0)", "paragraph", text: "Line \($0)") })
+        let list = screen.list
+        let lowest = try #require(
+          list.indexPathsForVisibleItems.map(\.item).sorted().last { item in
+            guard let cell = list.cellForItem(at: IndexPath(item: item, section: 0)) else { return false }
+            return cell.frame.maxY <= list.bounds.maxY - list.adjustedContentInset.bottom
+          })
+        let keyboardHeight: CGFloat = 300
+        let line = try screen.line(lowest)
+        line.inputView = UIView(frame: CGRect(x: 0, y: 0, width: 390, height: keyboardHeight))
+        defer {
+          line.resignFirstResponder()
+          line.inputView = nil
+          screen.window.traitOverrides.remove(UITraitPreferredContentSizeCategory.self)
+        }
+        _ = try focus(screen, lowest)
+        let guide = list.keyboardLayoutGuide
+        func caret() -> CGRect {
+          let rect = line.caretRect(for: line.selectedTextRange?.end ?? line.endOfDocument)
+          return line.convert(rect, to: screen.window)
+        }
+        let keyboardTop = { list.convert(guide.layoutFrame, to: screen.window).minY }
+        let up = screen.wait {
+          screen.window.layoutIfNeeded()
+          return abs((line.inputView?.bounds.height ?? 0) - keyboardHeight) <= 1 && caret().maxY <= keyboardTop() + 0.5
+        }
+        try #require(up, "the line above the keyboard before the text grows")
+
+        screen.window.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        let clear = screen.wait {
+          screen.window.layoutIfNeeded()
+          return caret().maxY <= keyboardTop() + 0.5
+        }
+        #expect(clear, "the caret ends at \(caret().maxY), the keyboard starts at \(keyboardTop())")
+        let shown = list.convert(list.bounds.inset(by: list.adjustedContentInset), to: screen.window)
+        #expect(shown.contains(caret()), "the caret \(caret()) is outside the list's visible area \(shown)")
+      }
+
       // MARK: a line never speaks for another row or another page
 
       /// Another page while he composes: what he composed is committed into the page he composed it in, and reported
