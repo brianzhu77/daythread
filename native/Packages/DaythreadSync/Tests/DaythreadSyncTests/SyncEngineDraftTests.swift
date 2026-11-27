@@ -1350,10 +1350,13 @@ private struct DraftHarness {
     #expect(await h.saves == [])
   }
 
-  @Test func an_expired_receipt_is_followed_by_a_load_and_the_draft_is_behind() async throws {
+  /// The server's words when the save went in long ago and its receipt has expired.
+  private static let alreadyApplied = "This change was already applied \u{00B7} reload"
+
+  @Test func an_expired_receipt_with_nothing_typed_since_and_the_page_as_sent_removes_the_draft() async throws {
     let h = try await DraftHarness(
       opening + [
-        .saved(.refused(message: "This change was already applied \u{00B7} reload")),
+        .saved(.refused(message: Self.alreadyApplied)),
         .workspace(.full(served(6, document: typed("Walk")), owner: "user-1")),
       ])
     await h.engine.start()
@@ -1363,9 +1366,42 @@ private struct DraftHarness {
 
     #expect(await h.transport.calls.last == .workspace(token: "tok-1", have: 5))
     #expect(await h.saves.count == 1)
-    #expect(try await h.drafts.first?.sent == nil)
-    #expect(await current(h.engine)?.drafts == behind())
+    #expect(try await h.drafts == [], "the save he made is the page")
+    let state = await current(h.engine)
+    #expect(state?.drafts == [])
+    #expect(state?.workspace?.page(day)?.document == typed("Walk"))
     #expect(await h.waits.asked.allSatisfy { $0 == .milliseconds(450) })
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func an_expired_receipt_after_he_typed_more_starts_the_draft_from_what_was_sent() async throws {
+    let gate = Gate()
+    let h = try await DraftHarness(opening + [.gated(gate)])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    let saving = Task { await h.engine.saveNow() }
+    await gate.reached()
+    try await h.engine.keepDraft(
+      pageId: day, document: withTodo(more: "Then call"), singleDeleteIds: [], startedFrom: baseDocument,
+      expectedOwner: "user-1")
+
+    // The save went in long ago; the server has since planned its to-do.
+    await h.transport.add([
+      .workspace(.full(served(6, document: withTodo(planned: true), tasks: [todo("open")]), owner: "user-1"))
+    ])
+    await gate.open(.saved(.refused(message: Self.alreadyApplied)))
+    await saving.value
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.sent == nil)
+    #expect(draft.baseDocument == withTodo())
+    #expect(draft.base == ContentKey.of(withTodo()))
+    #expect(await current(h.engine)?.drafts == behind())
+    #expect(await h.saves.count == 1, "nothing is sent over the server's page")
+    let pair = try #require(await h.engine.merging(day))
+    let merged = PageMerge.merge(base: pair.baseDocument, mine: draft.document, theirs: pair.theirs)
+    #expect(merged.document == withTodo(planned: true, more: "Then call"))
+    #expect(!merged.bothChanged, "his line is not doubled")
     #expect(await h.transport.unscripted == [])
   }
 
