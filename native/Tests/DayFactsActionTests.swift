@@ -426,7 +426,9 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
   // MARK: One at a time
 
   @Test func one_action_at_a_time_across_the_strip_and_the_rows() async throws {
-    let h = try await harness()
+    let bank = task("t2", "Call the bank")
+    let h = try await harness(
+      pages: [page(today, todayLines() + [row("r2", "t2", "Call the bank")])], tasks: [water, bike, bank])
     let day = try RowScreen(h.model)
     try await settled(day)
 
@@ -451,13 +453,15 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     #expect(day.factsModel.acting == "t-aside")
     #expect(!day.factsModel.enabled)
     #expect(day.editor.actingRow == nil, "no row of the page is dimmed")
-    try day.swipe("Water the plants", "Tomorrow")
+    #expect(try day.swipe("Water the plants") == nil, "the page's rows offer no swipe")
+    #expect(try day.swipe("Call the bank") == nil)
+    try day.menu("Water the plants", "Not today")
     try await turns()
     #expect(await h.server.sent.count == 2, "a row's action sends nothing")
 
     // Typing and ticking go on.
     try day.type(" the dog", atEndOf: "Walk")
-    #expect(day.words.last == "Walk the dog")
+    #expect(day.words.contains("Walk the dog"))
     try day.tick("Water the plants")
     #expect(h.status("t1") == .done)
 
@@ -465,7 +469,30 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     try await soon { day.notice?.text == "On today" }
     #expect(day.factsModel.acting == nil)
     #expect(day.factsModel.enabled)
+    #expect(try day.swipeTitles("Call the bank") == ["Tomorrow", "Not today", "More"], "the rows' swipe is back")
     #expect(await h.server.sent.filter { type(of: $0) == "plan-task" }.count == 2)
+    day.close()
+  }
+
+  @Test func a_row_action_out_on_today_holds_the_rows_of_another_day() async throws {
+    let bank = task("t2", "Call the bank")
+    let h = try await harness(
+      pages: [todayPage, page(saturday, [row("s1", "t2", "Call the bank", on: saturday)])], tasks: [water, bike, bank])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    await h.server.hold()
+    try day.swipe("Water the plants", "Tomorrow")
+    try await held(h)
+
+    day.screen.open(saturday)
+    try await settled(day)
+    #expect(day.words == ["Call the bank"])
+    #expect(try day.swipe("Call the bank") == nil, "no swipe while today's action is out")
+
+    try await answerHeld(h) { _ in applied(try changes(from: 1, to: 2)) }
+    await h.engine.settled()
+    try await soon { (try? day.swipe("Call the bank")) != nil }
+    #expect(day.notice == nil, "nothing is said on this day for today's row")
     day.close()
   }
 
