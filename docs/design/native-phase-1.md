@@ -189,8 +189,8 @@ automatic" (`outbox.md` §8.3).
   held.
 - A tick sent again this way and held a second time is held and asked about; the app does not try a third time.
 - Slice 1b applies the same rule to a page's words: lines written on the device and lines changed on the server
-  are merged line by line when the save is refused (the web's `mergeDraft`, run without being asked for), and he
-  is asked nothing.
+  are merged line by line when the save is refused (a three-way merge of the app's own, §10.6; not the web's
+  `mergeDraft`), and he is asked nothing.
 
 **A command that is sent and waited for** does not go through the outbox. `perform(action:)` sends it once, after
 anything pending has been sent, on the copy's revision, and returns what happened: applied (the reply's changes
@@ -431,7 +431,7 @@ The web's rules, read from its editor (BlockNote 0.56's keyboard handling and th
 | Backspace | on an empty line under a divider | The line is removed |
 | Backspace | at the start of a line under a synced block or a database | Nothing. The web joins it into the synced block's last line, which would write it into every page showing that block |
 | Backspace | on a to-do with no words | The row is removed |
-| Tab | hardware keyboard | The line moves under the line before it, with its own nested lines. Not on a heading, not right under a heading, not on the first line of its group, and not under a block the app does not draw the inside of (a database, a synced block, an image): the line would vanish, or be written into a shared block |
+| Tab | hardware keyboard, and the Tab key of an iPad's software keyboard | The line moves under the line before it, with its own nested lines. Not on a heading, not right under a heading, not on the first line of its group, and not under a block the app does not draw the inside of (a database, a synced block, an image): the line would vanish, or be written into a shared block |
 | Shift-Tab | hardware keyboard | The line moves out one level; the lines after it at its old level come under it, as on the web |
 | `# `, `## `, `### `, `- `, `* `, `1. `, `[] `, `> ` at the start of a paragraph | | The line becomes that kind, keeping its id, depth and nested lines. `7. ` starts a numbered list at 7 (`"start":7` in its props, as the web stores it). Backspace straight after puts the characters back. Inside a to-do they are just characters |
 | `---` on a line of its own | | The line becomes a divider and the caret goes to an empty paragraph after it |
@@ -457,7 +457,8 @@ The web's rules, read from its editor (BlockNote 0.56's keyboard handling and th
   added to the cell as the circle is, because a view inside the list's content view gets no touches (found in 1a).
   Bullets, numbers, the quote bar and the circle stay as they are.
 - A tap in a line puts the caret there. A tap in the empty space under the last line puts it at the end of the
-  last line that holds words, or in a new paragraph when the page ends with a block that holds none.
+  last line when it is one he can type in (an empty one too), or in a new paragraph when the page ends with a
+  block that takes no caret.
 - **Typing touches one row.** A keystroke changes that line in the document and lets the text view lay itself
   out. The list is told a row's height changed only when it did. Nothing else is redrawn, and nothing is awaited.
 - **Input methods come first** (`native-app.md` §7). While a text view holds marked text: its row is never
@@ -479,14 +480,19 @@ copy of itself coming back, and nothing computed a moment ago can overwrite what
 
 **The draft.** Each change is handed to the engine, which writes it to the store at once, as that page's draft
 under his account: the document; the page it started from (its text and its key); the rows he removed; and, while
-a save is on its way, exactly what was sent and under which operation: the whole request as first sent, because
-the server recognises a repeated operation only when it is the same request, timestamps included. A crash or a
+a save is on its way, exactly what was sent and under which operation: the whole action as first sent, because
+the server recognises a repeated operation only when its action is the same, timestamps included (the revision
+it is sent on is outside the action and is the copy's at each send). A crash or a
 quit loses nothing. This is a new kind of row in the store, added with a migration that keeps what the store
 already holds.
 
 - **The page a draft started from is the page he typed on**, which the screen tells the engine with his first
   change, never the engine's copy at the moment the change arrives: a load can land between the keystroke and the
-  engine, and a draft that took the newer page as its start would be sent over another device's words.
+  engine, and a draft that took the newer page as its start would be sent over another device's words. One
+  exception, for the same reason turned round: when his last save has just landed and removed its draft, a
+  keystroke that was already on its way still names the page from before that save. The screen's words always
+  come from what it last sent, so such a keystroke starts from what that save sent, not from the older page;
+  otherwise the line he is typing in would be merged with itself and doubled.
 
 - A draft belongs to its account. Day pages and their template lines have the same ids in every account, so a
   draft is never drawn, merged or sent under another one. It is kept, out of sight, until its own account is back;
@@ -513,16 +519,18 @@ page, and an open to-do for each new to-do row that has words. So every screen a
   Newer words wait for the answer, then go as the next save.
 
 **When.** 450 ms after the last change, as on the web; at once when he leaves the day, when the app leaves the
-foreground, and when the network returns; never while an input method is composing.
+foreground, and when the network returns. What an input method is still composing is never in the document, so
+it is never saved; words already committed are saved on the same schedule while he composes the next ones.
 
 **In a pass** the saves go in the same queue as the outbox, each in the order it was made, so a tick on a to-do
 that exists only in a draft is sent after that draft's save. A save's answer is applied to the copy as a
 command's is. Then:
 
 - If he typed nothing since it was sent, the draft is removed and the page is the server's.
-- If he did, the draft stays and now starts from the server's page, and the server's page and his newer words are
-  put together by the merge of §10.6 (the server may have changed what he sent: it marks a new to-do's row as
-  planned for the day, and stamps links).
+- If he did, the draft stays. When the server's page is what was sent, the draft now starts from it and his
+  newer words go as the next save. When the server changed what he sent (it marks a new to-do's row as planned
+  for the day, and stamps links), the draft starts from what was sent, and the server's page and his newer words
+  are put together by the merge of §10.6.
 
 ### 10.6 When the page changed on the server
 
@@ -584,7 +592,7 @@ twin. The web keeps its button until it is given the same merge; the parity list
 | "Saved elsewhere…" (something in the workspace changed since the copy was loaded) | Loads. If this page is as it was, sends the same save once more; he sees nothing. If the page changed, merges |
 | "Page changed elsewhere…" | Loads and merges |
 | the page is gone, or is in Trash | Keeps the draft and does not save into a page he cannot see. The "Not saved" button of §7 offers "Copy draft" and "Discard draft" |
-| the document is not acceptable (it never should be) | The same: keeps the draft, stops sending it, offers "Copy draft" and "Discard draft" |
+| the document is not acceptable (it never should be) | The same: keeps the draft, offers "Copy draft" and "Discard draft", and does not send it again until he changes it (and once more at the next launch) |
 
 **What he sees otherwise.** Nothing while a save is on its way or has landed. Under the title, only when it
 matters: `Offline · saves when you're back`; `Not saved yet · trying again`; `Couldn't save · draft kept`. These
