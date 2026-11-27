@@ -68,6 +68,32 @@ import Testing
     #expect(Receipt(try json(#"{"operationId":"c"}"#)) == nil)
     #expect(Receipt(try json(#"{"message":3}"#)) == nil)
     #expect(Receipt(.null) == nil)
-    #expect(Receipt(try json(#"{"message":"x","nextTodos":[{"taskId":"n","on":"nope"}]}"#)) == nil)
+  }
+
+  @Test func an_unreadable_next_to_dos_list_never_costs_a_notice() throws {
+    let task = try #require(TodoTask(TestWorkspace.task("t")))
+    let today = try Self.day("2026-11-26")
+    let friday = try Self.day("2026-11-27")
+    func notice(_ action: RowAction, _ receipt: String) throws -> String {
+      let receipt = try #require(Receipt(try json(receipt)))
+      return RowNotice.text(
+        after: action, task: task, pageDate: today, today: today, receipt: receipt, plannedAfter: today)
+    }
+    let unreadable = [
+      #"{"message":"Task moved","nextTodos":"soon"}"#,
+      #"{"message":"Task moved","nextTodos":[{"taskId":"n"}]}"#,
+      #"{"message":"Task moved","nextTodos":[{"taskId":"n","on":"nope"}]}"#,
+      #"{"message":"Task moved","nextTodos":[3]}"#,
+    ]
+    for receipt in unreadable {
+      #expect(try notice(.move(friday), receipt) == "Moved to Fri, Nov 27", "\(receipt)")
+      #expect(try notice(.restore, receipt) == "Restored", "\(receipt)")
+      #expect(try notice(.cancel, receipt) == "Cancelled", "\(receipt)")
+    }
+    // An unreadable entry is never the one, and never makes two read as one.
+    let one = #"{"on":"2026-12-07"}"#
+    #expect(try notice(.cancel, #"{"message":"c","nextTodos":[\#(one),{"taskId":"n"}]}"#) == "Cancelled")
+    #expect(try notice(.cancel, #"{"message":"c","nextTodos":[{"taskId":"n"},\#(one)]}"#) == "Cancelled")
+    #expect(try notice(.cancel, #"{"message":"c","nextTodos":[\#(one)]}"#) == "Cancelled · Next Mon, Dec 7")
   }
 }

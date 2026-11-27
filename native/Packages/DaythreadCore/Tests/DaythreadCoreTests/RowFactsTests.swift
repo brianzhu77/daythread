@@ -102,14 +102,50 @@ import Testing
   }
 
   @Test func a_to_do_typed_and_not_saved_shows_no_marks_and_has_its_rows_menu() throws {
-    // A drawn draft's new to-do: in the workspace the screen draws, open, planned on today's page, with no dates,
-    // repeat or blocker.
-    let facts = try facts(of: try workspace())
+    // A drawn draft's new to-do, as the editor writes the row (`editor-task:` id, role `plan`, the page's day as
+    // `planDate`): made by `Workspace.drawing(draft:of:)`, not by the server.
+    let today = try Self.day(Self.today)
+    let saved = try TestWorkspace.make(
+      pages: [TestWorkspace.day(Self.today, rows: [TestWorkspace.row("a")])], tasks: [TestWorkspace.task("a")])
+    let words = JSONValue.array([.object(textRun("Water the plants"))])
+    let typed = NewBlock.make(.todo, id: "n1", content: words, pageDate: today)
+    let drawn = saved.drawing(
+      draft: Document.write([typed]), of: "day:\(Self.today)")
+    #expect(drawn.task("editor-task:n1") != nil)
+
+    let page = try #require(drawn.page("day:\(Self.today)"))
+    let row = try #require(Self.find("n1", in: Document.blocks(page.document)))
+    #expect(row.props["role"]?.stringValue == "plan")
+    #expect(row.props["planDate"]?.stringValue == Self.today)
+    let found = RowFacts.of(row: row, pageDate: page.date, in: drawn, index: TodoIndex(drawn), today: today)
+    let facts = try #require(found)
     #expect(facts.marks == [])
     #expect(facts.blockedBy == nil)
     #expect(facts.planForToday == false)
     #expect(facts.menu?.groups.first?.items.map(\.title) == ["Tomorrow · Fri, Nov 27", "Not today"])
     #expect(facts.spoken(regularWidth: true) == nil)
+  }
+
+  @Test func a_to_do_made_by_return_from_a_plan_row_reads_as_a_plan_row() throws {
+    // The other way the editor makes one: Return at the end of a plan row copies its role and plan day.
+    let today = try Self.day(Self.today)
+    let start = NewBlock.make(
+      .todo, id: "a", content: .array([.object(textRun("First"))]), pageDate: today)
+    let saved = try TestWorkspace.make(
+      pages: [TestWorkspace.page("day:\(Self.today)", type: "daily", date: Self.today, document: Document.write([start]))],
+      tasks: [TestWorkspace.task("editor-task:a")])
+    var page = EditablePage(document: Document.write([start]), pageDate: today, makeID: { "n1" })
+    let pressed = page.press(.returnKey, at: .init(block: "a", offset: 5))
+    let caret = try #require(pressed)
+    _ = page.replaceText(in: caret.block, range: 0..<0, with: "Second")
+    let drawn = saved.drawing(draft: page.document, of: "day:\(Self.today)")
+    let drawnPage = try #require(drawn.page("day:\(Self.today)"))
+    let row = try #require(Self.find(caret.block, in: Document.blocks(drawnPage.document)))
+    let found = RowFacts.of(row: row, pageDate: drawnPage.date, in: drawn, index: TodoIndex(drawn), today: today)
+    let facts = try #require(found)
+    #expect(facts.marks == [])
+    #expect(facts.planForToday == false)
+    #expect(facts.menu?.groups.first?.items.map(\.title) == ["Tomorrow · Fri, Nov 27", "Not today"])
   }
 
   @Test func a_to_do_the_workspace_does_not_hold_has_no_facts() throws {
