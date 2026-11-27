@@ -23,13 +23,13 @@ then what surrounds the day.
 |---|---|---|
 | **1a. Tick, and other days** | A tick drawn at once and kept through offline and a relaunch; what happens when the server holds a change; moving to another day | Tick his to-dos and read any day |
 | **1b. Writing** | Text in a cell: typing, Return, Backspace, lists, headings, a new to-do row, Chinese input. The save path: the draft on the device, `save-editor`, and what he sees when the server refuses a save | Write his day |
-| **1c. The to-do row** | What a row shows beside its words (due and start dates, "Since", the repeat mark, Reference, Moved to, Blocked by) and its menu (Move, Bring to today, Not today, Cancel, Restore, dates). The notice that carries Undo | Manage a to-do without leaving the page |
+| **1c. The to-do row** | What a row shows beside its words (due and start dates, "Since", the repeat mark, Reference, Moved to, Blocked by) and its menu (Move, Bring to today, Not today, Cancel, Restore; the web's day row sets no dates, see §11). The notice that carries Undo | Manage a to-do without leaving the page |
 | **1d. The morning** | The day draft as bands on today's page (`POST /api/v1/day-draft`, the draft's commands), the Not today list, events and Due soon above the page | Start his day in the app |
 | **1e. Tasks, Upcoming, Calendar** | The three screens and the system tab bar that holds them | Plan beyond today |
 | **1f. Chips, menus, moving lines** | `@date` chips drawn and made, the `/` and `@` lists, the formatting bar, drag to move lines | Write as he does on the web |
 | **1g. The day keeps running** | Reminders scheduled on the device; `run-repeats` on opening | Stop opening the web app |
 
-- 1a is designed in §3 to §8 and 1b in §10. Each later slice gets its own section in this document when its turn
+- 1a is designed in §3 to §8, 1b in §10 and 1c in §11. Each later slice gets its own section in this document when its turn
   comes, written against what the earlier slices built, as phase 1 was written against phase 0.
 - 1b follows 1a whatever happens. The order after 1b is looked at again then.
 - **Changed from `native-app.md`:** it lists Tomorrow in phase 1. The web's Tomorrow block is gone (B76); the day
@@ -644,3 +644,212 @@ are the web's words.
 - A repeating to-do ticked while the next day's page has a draft: the server writes that page, and the draft is
   merged at its next save.
 - Every save takes the server's one Undo slot, as on the web. 1c's Undo must know.
+
+## 11. Slice 1c: the to-do row
+
+Written 2026-11-26, against what 1a and 1b built and against the web as it is (`row-actions.tsx`,
+`page-editor.tsx`'s `EditorTask`, `dates.ts`, `carried.ts`, `use-day.tsx`). §2 said this slice holds "its menu
+(Move, Bring to today, Not today, Cancel, Restore, dates)". **The web's day row has no item that sets a date**:
+Start and Due are set in the To-dos database only. So dates are shown here and set nowhere yet; setting them
+comes with Tasks (1e).
+
+### 11.1 Goals, non-goals, anti-goals
+
+**Goals.** A to-do's row on a day page shows what the web's shows beside its words, and he can do to it what the
+web's row menu does, without leaving the page: move it to another day, bring it to today, set it aside, cancel
+it, restore it. After each, a notice says what happened and offers Undo while the server can still undo it.
+
+**Non-goals** (each recorded in §11.8): the repeat editor and the "Blocked by" picker (their marks are shown, not
+changed); Copy, Copy link to line, Comment; opening a blocker's line; the notice after a tick; moving or setting
+aside while offline; the system's own undo (shake, three fingers, ⌘Z) for a row action.
+
+**Anti-goals.** A row action that loses words he has typed and not saved. An Undo button that the server will
+refuse. A row so full of marks that its words are hard to read on a phone. An action he triggers by accident
+while typing or scrolling.
+
+### 11.2 What a row shows
+
+The words are the row, as now. What the web puts at the line's end, the app puts on **one quiet line under the
+words**, as the system's own Reminders does for a date and a repeat (footnote size, the secondary colour): on a
+phone the web's end-of-line group wraps under the words anyway when they are long, and a row whose words keep
+their full width reads better. What is shown, its words and its order are the web's (my call on the placement;
+the alternative is the same group at the trailing end of the first line).
+
+In this order, separated by ` · `, each only when it applies, and only on an **open** to-do unless noted:
+
+| Mark | Words | When |
+|---|---|---|
+| Cancelled | `Cancelled` | the to-do is cancelled (the only mark such a row has) |
+| The date tag | the web's `taskDateTag`: `Due today`, `Due tomorrow`, `Due Sun`, `Due Wed 12/2`, `Was due Mon`, `Due that day`, `Start tomorrow`, `Start Mon · Due Sun 12/6`, `Unscheduled` | it has a Due or a Start date (the web's rules, case for case, held to the web's by shared cases). The whole tag is the system's red when the Due date has passed |
+| Since | `Since Nov 3` (with the year when it is not this one) | a plan row on **today's** page of a to-do carried seven days or more (the web's `carriedSince`) |
+| The repeat mark | the `repeat` symbol; its accessibility label is the web's `Repeats every week` | it is a repeat's current to-do |
+| Reference | `Reference` | the row is not the to-do's plan. **Regular width only**: the web hides it on a phone |
+| Moved to | `Moved to Fri 11/27` | a plan row whose to-do is now planned on another day. **Regular width only**, as on the web |
+
+- **Blocked by** is a line of its own under that one, as on the web: `Blocked by Buy paint`, or `Blocked by 2`
+  for several. It is words only in this slice.
+- **A done row** shows none of these (the web drops them the moment it is ticked), a cancelled row only
+  `Cancelled`. A row whose to-do does not exist yet (typed and not saved) shows none.
+- **A reference row of an open to-do** has the web's quiet `Plan for today` button at its trailing end (a plain
+  button, caption size, the secondary colour), hidden when the to-do is already planned today.
+- A paused to-do has no look of its own on a day page, as on the web (its plan row is gone).
+- VoiceOver reads the line's words, then the marks in order as the row's value; the circle keeps its own label.
+
+### 11.3 The row's actions
+
+**What can be done** is the web's `rowMenu`, case for case (held to it by shared cases):
+
+| The row | Actions, in order |
+|---|---|
+| done, or not on a day page, or its to-do not saved yet | none (the circle reopens a done one) |
+| cancelled (on any day) | `Restore` |
+| open, on a past day | `Bring to today` |
+| open, a reference row, today or later | `Plan for today` (unless planned today) · **Another day** · `Cancel task` |
+| open, a plan row, today or later | `Tomorrow · Fri, Nov 27` (today's page only, unless planned tomorrow) · the off item · **Another day** · `Cancel task` |
+
+- The off item is `Not today` on today's page, `Not on Fri` on a later day, and `Remove from Fri` when the to-do
+  is planned on another day than this row's.
+- **Another day** is a group titled so, with the web's `anotherDayOptions` (`Tomorrow`, `This weekend`, `Next
+  week`, less the page's own day and less a `Tomorrow` already shown above), each as `This weekend · Sat 11/28`,
+  then `Pick date…`.
+- `Cancel task` is the menu's one destructive item.
+
+**Where they are** (the arrangement is the web phone app's: the actions belong to the line the caret is in; the
+controls are the system's):
+
+- **A quiet `ellipsis` button at the trailing end of the to-do row that holds the caret** (accessibility label
+  `Actions for <the to-do's words>`), where the web's phone app has its handle. It opens a system menu with the
+  groups above, as the web's `⋯` menu orders them. It is there only while that row's line has the keyboard and
+  the row has actions.
+- **A trailing swipe on any to-do row** gives the actions the web's phone bar puts first: on today's plan row
+  `Tomorrow` and the off item; on a past day `Bring to today`; on a cancelled row `Restore`; on a reference row
+  `Plan for today`. So a to-do can be moved without bringing the keyboard up. No full-swipe action, and
+  nothing destructive on the swipe: `Cancel task` is in the menu only. (A leading swipe stays the system's
+  Back.)
+- The same actions are the row's accessibility custom actions.
+- `Pick date…` opens the system's calendar (`UICalendarView`, as the day picker of 1a: a popover on a wide
+  screen, a sheet on the phone), days before today not selectable; choosing a day moves the to-do there and
+  closes it.
+
+### 11.4 What an action sends, and when
+
+| Action | Command |
+|---|---|
+| `Tomorrow`, an Another day option, a picked date | `{ type: "plan-task", taskId, date, from: <the page's day>, today }` |
+| `Bring to today`, `Plan for today` | `{ type: "plan-task", taskId, date: today, today }` (no `from`: a past row stays as history) |
+| the off item | `{ type: "not-today", taskId, date: <the page's day>, onlyThisDay: true }` |
+| `Cancel task` | `{ type: "task-status", taskId, status: "cancelled", today }` |
+| `Restore` | `{ type: "task-status", taskId, status: "open", today }` |
+| Undo | `{ type: "undo", targetOperationId }` |
+
+**A row action is sent and waited for; it is not queued and not drawn ahead** (the engine's `perform`, as 1a's
+"Add page"). The web draws a move ahead by running the server's own code in the browser; the app has no such
+code, and a move rewrites two pages (the day template, the place to-dos go, nesting). Drawing that ahead would
+put pages the app guessed under the drafts of 1b, which are merged against the page they started from. So:
+
+1. If the open page has words not yet saved, they are saved first (`saveNow`), and the action waits for that
+   save. A to-do typed a moment ago exists on the server before it is moved.
+2. The command is sent on the copy's revision. Its answer changes the copy, and the screen takes the page as an
+   outside change, as it takes any (§10.5): a row that left leaves, the caret going to the end of the line above
+   if it was in that row.
+3. If he types meanwhile, his words become a draft on the page as it was, and the merge of §10.6 puts them on
+   the page as it now is.
+4. If the save of step 1 cannot finish (offline, a draft behind or stuck), or the command fails or is refused,
+   nothing changes and the notice says `Not done · your text is kept` (the web's words), with no Undo.
+
+- What it costs: **moving, setting aside, cancelling and restoring need a connection** in this slice; a tick
+  does not (1a). Recorded in §11.8.
+- While an action is on its way the row's actions are disabled, so a second one cannot start; nothing else is
+  blocked.
+- `today` in a command is the app's today (the account's time zone, as 1a decided), where the web sends the
+  device's day.
+
+### 11.5 The notice, and Undo
+
+**The notice** is one line of words with at most one button, floating at the top of the screen under the
+navigation bar, where the web's phone app shows its notices. iOS has no system component for it; it is a small
+view of the app's own on the system's material, as quiet as the status line. One at a time: a new one replaces
+the one showing. It leaves after 8 seconds (`Undone` after 4, a failure after 6), or when he swipes it up, and
+VoiceOver announces it. It never covers the line being typed (it is at the top; the keyboard is at the bottom).
+
+**Its words are the web's**, composed by the app as the web composes them:
+
+| After | Words |
+|---|---|
+| a move | `Moved to Fri, Nov 27` |
+| `Bring to today` | `On today` |
+| `Plan for today` | `Planned for today` |
+| the off item, when the to-do was set aside | `Not today — won’t carry over` on today's page; `Not on Fri 11/27` on another day; then ` · due Fri still tracked` when it has a Due date |
+| the off item, when only a stale row left (the receipt's message begins `Removed from`) | `Removed from Fri · still planned for Mon` |
+| `Cancel task` | `Cancelled` |
+| `Restore` | `Restored` |
+| any of them, when the receipt names exactly one next to-do of a repeat | the words, then ` · Next Mon, Dec 7` (with the year when it is not this one) |
+| Undo, done | `Undone` |
+| Undo, refused | `Can't undo · changed since` |
+| a failure | `Not done · your text is kept` |
+
+**Undo is the server's**: one slot, holding the workspace as it was before the newest command; `undo` puts all of
+it back and is refused once anything later has been applied. So:
+
+- The notice has `Undo` only while the workspace says the server's slot is still this action's (the copy's
+  `undo.operationId`). When that changes (a save of words he typed since, a tick, a change from another device,
+  a day page being made), the button leaves the notice and the words stay until their time is up. **The app
+  never shows an Undo the server would refuse for a reason the app already knows.**
+- `Undo` is sent and waited for like an action. If the server still refuses (a change the app had not heard
+  of), the notice says `Can't undo · changed since`.
+- Words he typed after the action and has not saved are not saved first: the undo goes as it is, the server
+  puts the pages back, and his words are merged onto them (§10.6). If their save has already landed, the slot
+  is theirs and Undo has already left the notice.
+- There is no redo, as on the web.
+- An undo is whole: it also takes back what a rule or a repeat did in that command, as on the web.
+
+### 11.6 What is built
+
+- **`DaythreadCore`** (pure, each held to the web's by shared cases in `fixtures/core`): a to-do's dates and the
+  day it was made; `plannedOn` (the newest day page holding a plan row of it); the date tag; `carriedSince` and
+  its label; repeats (which to-do is a repeat's current one, the rule's words); blockers in force and their
+  words; the row's menu model and Another day's options; the notices' words; the commands `plan-task`,
+  `not-today`, `undo`, written as the web writes them.
+- **`DaythreadSync`**: `perform` answers with the receipt and the operation's id; the state publishes the
+  server's Undo marker. (And the leftover of 1b: the "trying again" mark is forgotten when the engine changes
+  account.)
+- **`DaythreadEditor`**: a to-do row draws its marks; the ellipsis button on the caret's row with its menu; the
+  trailing swipe; `Plan for today`; the accessibility actions. The list reports an action to its host and does
+  nothing else: it knows no commands.
+- **`DaythreadUI`**: the action's steps of §11.4; the notice; the date picker; Undo.
+- **The web**: nothing changes in what it does. Where a pure function the app must match lives in a `.tsx` file
+  the fixture script cannot load, it is moved to a `.ts` file beside it and re-exported, unchanged.
+
+### 11.7 How 1c is checked
+
+- **The Core, against the web**: shared cases generated by running the web's own functions: the date tag (every
+  row of the web's own table of examples, on today's, a past and a future page); `carriedSince` (the web's
+  tests' cases); the repeat words; blockers in force; `rowMenu` for each kind of row on a past day, today and a
+  future day, on each weekday for Another day; each notice's words; each command's text equal to the web's
+  action, and `plan-task`, `not-today` and `undo` applied by the server's own code in a case.
+- **The engine**: `perform` gives the receipt; the Undo marker follows the copy; an undo refused is reported as
+  refused.
+- **The row**: each mark drawn when it applies and not otherwise, at the largest text size and in landscape; the
+  ellipsis only on the caret's row; the swipe's actions per kind of row; the menu's items, in order, per kind of
+  row; typing in a row with marks still redraws nothing else.
+- **The screen** (hosted, the test server): an action waits for unsaved words to be saved first; the row leaves
+  and the caret moves up; typing during an action is merged; a failure says so and changes nothing; the notice's
+  words; Undo puts the row back; Undo leaves the notice when the slot moves (a keystroke saved, a tick); a
+  refused undo says so.
+- **On the simulator** (the seeded servers, with a to-do that has dates, one that repeats, one blocked, one
+  carried, one cancelled): move to tomorrow from the swipe and see it on tomorrow's page and on the server;
+  Not today; Cancel and Restore; Undo; `Pick date…`.
+- **His data**, by him: a to-do moved in the app is moved on the web, and the marks on his real rows match the
+  web's.
+
+### 11.8 Not in 1c, recorded
+
+- Moving, setting aside, cancelling and restoring while offline (a row action is waited for). If he needs it,
+  it is drawn ahead and queued in a later slice, with the pages it guesses kept apart from drafts.
+- Setting a Start or a Due date (the web's day row cannot either); with Tasks (1e).
+- The repeat editor and the "Blocked by" picker; tapping a blocker to open its line. Their marks are shown.
+- Copy, Copy link to line, Comment, Delete line as menu items (Backspace removes a line).
+- The notice after a tick (`Task completed · Next Mon, Dec 7`): a tick is queued and may be answered much
+  later; the next to-do appears on its day's page when the answer arrives.
+- The system's undo gestures and ⌘Z for a row action; the text view's own undo is the line's.
+- `Reference` and `Moved to` on a phone (the web hides them there too).
