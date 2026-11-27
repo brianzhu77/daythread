@@ -427,6 +427,8 @@ extension SyncEngine {
     case savedElsewhere
     /// "Page changed elsewhere": the page moved on since the draft started from it.
     case pageChanged
+    /// "This change was already applied": the save went in long ago and its receipt has expired.
+    case appliedLongAgo
   }
 
   /// What the saves of a pass came to.
@@ -443,8 +445,9 @@ extension SyncEngine {
   /// more: after "Saved elsewhere" with the page as it was, the same save goes once more on the new revision (a
   /// refused operation left no receipt, so its id is free); with the page changed, the draft is behind. A second
   /// such answer in the pass, or "Page changed elsewhere" over a page that has the draft's key after all, leaves
-  /// the save for the retry schedule. `loaded`: the pass already loaded after the server held an outbox entry, so
-  /// the copy is as new as this pass will make it.
+  /// the save for the retry schedule. An expired receipt ("This change was already applied") says that exact save
+  /// landed long ago: after the same one load, the draft is settled as for an answer. `loaded`: the pass already
+  /// loaded after the server held an outbox entry, so the copy is as new as this pass will make it.
   func saveDrafts(_ pass: Pass, loaded: Bool) async throws -> SavesDone {
     var done = SavesDone()
     var loaded = loaded
@@ -517,6 +520,19 @@ extension SyncEngine {
           done.leftForRetry = true
         }
         publish()
+      case .appliedLongAgo:
+        if !loaded {
+          try await loadWorkspace(pass, have: copy?.workspace.revision)
+          loaded = true
+        }
+        try await enter(pass)
+        defer { release() }
+        guard copy?.owner == save.owner else { return done }
+        // The exact action landed: settled as an answer is, against the page the load brought.
+        try await settleDraft(save, removingOnlyOntoWhatWasSent: true)
+        await readOutbox()
+        publish()
+        done.landed = true
       }
     }
     return done
@@ -600,9 +616,13 @@ extension SyncEngine {
         publish()
         return .savedElsewhere
       }
-      // An expired receipt says the save went in long ago, not that the document is wrong: the page is not what
-      // the draft started from any more.
-      if message.hasPrefix(Self.pageChangedElsewhere) || message.hasPrefix(Self.alreadyApplied) {
+      // An expired receipt says the save went in long ago, not that the document is wrong.
+      if message.hasPrefix(Self.alreadyApplied) {
+        SyncLog.logger.notice("Save of a page: already applied, loading")
+        publish()
+        return .appliedLongAgo
+      }
+      if message.hasPrefix(Self.pageChangedElsewhere) {
         SyncLog.logger.notice("Save of a page: page changed elsewhere, loading")
         publish()
         return .pageChanged
@@ -636,11 +656,17 @@ extension SyncEngine {
   /// The draft after its save's answer is in the copy: removed when he typed nothing since; otherwise it starts from
   /// the server's page when that page is what was sent, and goes as the next save. When the server changed what it
   /// was sent, the draft starts from what was sent, which leaves it behind the server's page for the screen to
-  /// merge. Runs inside a store section.
-  private func settleDraft(_ save: DraftSave) async throws {
+  /// merge. `removingOnlyOntoWhatWasSent`: the answer says only that the save went in, not that the page is what it
+  /// left (an expired receipt), so a draft with nothing typed since is removed only over a page that is what was
+  /// sent. Runs inside a store section.
+  private func settleDraft(_ save: DraftSave, removingOnlyOntoWhatWasSent: Bool = false) async throws {
     guard var draft = recordedDraft(of: save), let sent = draft.sent, sent.operationId == save.operationId
     else { return }
-    if draft.document.utf8.elementsEqual(sent.document.utf8) {
+    let page = copy?.workspace.page(draft.pageId)?.document
+    let pageIsSent =
+      page.map { ContentKey.storedDocument($0).utf8.elementsEqual(ContentKey.storedDocument(sent.document).utf8) }
+      ?? false
+    if draft.document.utf8.elementsEqual(sent.document.utf8), !removingOnlyOntoWhatWasSent || pageIsSent {
       let origins = draftOrigins[draft.pageId].flatMap { $0.owner == draft.owner ? $0.keys : nil } ?? []
       try await store.removeDraft(pageId: draft.pageId, owner: draft.owner)
       forgetDraft(pageId: draft.pageId, owner: draft.owner)
@@ -652,8 +678,7 @@ extension SyncEngine {
     } else {
       // His newer words go on from this draft: no keystroke starts from an older landed save's page any more.
       landedSaves[draft.pageId] = nil
-      let page = copy?.workspace.page(draft.pageId)?.document
-      if let page, ContentKey.storedDocument(page).utf8.elementsEqual(ContentKey.storedDocument(sent.document).utf8) {
+      if let page, pageIsSent {
         draft.baseDocument = page
       } else {
         draft.baseDocument = sent.document
