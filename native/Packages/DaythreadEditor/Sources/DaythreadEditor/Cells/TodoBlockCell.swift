@@ -89,6 +89,16 @@
         }
         set {}
       }
+
+      /// The frame VoiceOver and UI automation read. The system's own works it out from the container-space frame it
+      /// was given, never from the getter above, so with nothing given it was empty and the element was passed over.
+      override var accessibilityFrame: CGRect {
+        get {
+          guard let cell = accessibilityContainer as? UIView else { return .zero }
+          return UIAccessibility.convertToScreenCoordinates(accessibilityFrameInContainerSpace, in: cell)
+        }
+        set {}
+      }
     }
 
     /// The marks line as last made, and what it was made from: `updateConfiguration` runs on every keystroke in the
