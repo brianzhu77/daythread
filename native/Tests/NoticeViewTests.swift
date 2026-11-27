@@ -414,18 +414,45 @@ private let moved = Notice(text: "Moved to Fri, Nov 27", kind: .done, undoing: "
     #expect(label.convert(label.bounds, to: surface).minY >= side)
   }
 
-  @Test func it_sits_under_the_navigation_bar_and_never_over_the_keyboard() throws {
+  /// On a phone, as the web's phone notice: directly under the status bar, over the navigation bar's band, so the
+  /// page's first rows (the day's title) stay uncovered.
+  @Test func on_a_phone_it_sits_under_the_status_bar_and_never_over_the_keyboard() throws {
     let fixture = try NoticeFixture()
     fixture.show(moved)
     let surface = try #require(fixture.surface)
-    let safeTop = fixture.host.view.safeAreaLayoutGuide.layoutFrame.minY
+    let statusBar = fixture.window.safeAreaInsets.top
 
-    let frame = surface.convert(surface.bounds, to: fixture.host.view)
-    #expect(safeTop >= 96)
-    #expect(frame.minY == safeTop + 8)
+    let frame = surface.convert(surface.bounds, to: fixture.window)
+    #expect(abs(frame.minY - (statusBar + 8)) <= 1, "the capsule's top is at \(frame.minY), the status bar ends at \(statusBar)")
+    #expect(frame.minY >= statusBar, "not over the status bar")
+    #expect(frame.minY < fixture.host.view.safeAreaLayoutGuide.layoutFrame.minY, "over the navigation bar's band")
 
     let keyboard = CGRect(x: 0, y: 874 - 336, width: 393, height: 336)
     #expect(!frame.intersects(keyboard))
+  }
+
+  /// A phone on its side (compact height, also where its width is regular) keeps the phone's place.
+  @Test func on_a_phone_on_its_side_it_sits_under_the_top_of_the_safe_area() throws {
+    let fixture = try NoticeFixture(width: 874)
+    fixture.window.traitOverrides.horizontalSizeClass = .regular
+    fixture.window.traitOverrides.verticalSizeClass = .compact
+    fixture.show(moved)
+    let surface = try #require(fixture.surface)
+    let frame = surface.convert(surface.bounds, to: fixture.window)
+    #expect(abs(frame.minY - (fixture.window.safeAreaInsets.top + 8)) <= 1)
+  }
+
+  /// At regular width (iPad, Mac) it stays under the navigation bar.
+  @Test func at_regular_width_it_sits_under_the_navigation_bar() throws {
+    let fixture = try NoticeFixture(width: 1024)
+    fixture.window.traitOverrides.horizontalSizeClass = .regular
+    fixture.window.traitOverrides.verticalSizeClass = .regular
+    fixture.show(moved)
+    let surface = try #require(fixture.surface)
+    let safeTop = fixture.host.view.safeAreaLayoutGuide.layoutFrame.minY
+    let frame = surface.convert(surface.bounds, to: fixture.host.view)
+    #expect(safeTop >= 96)
+    #expect(frame.minY == safeTop + 8)
   }
 
   @Test func on_a_wide_screen_it_is_capped_and_centred() throws {

@@ -465,6 +465,33 @@ private struct RowScreen {
 
   // MARK: The notice
 
+  /// On a phone the notice sits directly under the status bar, as the web's phone notice does: the page at its top
+  /// keeps the day's title and its first rows uncovered.
+  @Test func on_a_phone_the_notice_leaves_the_days_title_uncovered() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    defer { day.close() }
+    await h.server.add([applied(try changes(from: 1, to: 2))])
+    try day.swipe("Water the plants", "Not today")
+    try await soon { day.notice != nil }
+    day.drawn()
+
+    let surface = try #require(Self.views(in: day.screen.notice).compactMap { $0 as? UIVisualEffectView }.first)
+    let capsule = surface.convert(surface.bounds, to: day.window)
+    let statusBar = day.window.safeAreaInsets.top
+    #expect(abs(capsule.minY - (statusBar + 8)) <= 1, "the capsule's top is at \(capsule.minY), the status bar ends at \(statusBar)")
+    #expect(capsule.minY >= statusBar, "not over the status bar")
+    let title = day.screen.headerView.titleButton
+    let titleFrame = title.convert(title.bounds, to: day.window)
+    #expect(capsule.maxY <= titleFrame.minY, "the capsule ends at \(capsule.maxY), the title starts at \(titleFrame.minY)")
+    let first = try day.line("Morning")
+    #expect(capsule.maxY <= first.convert(first.bounds, to: day.window).minY, "the page's first line uncovered")
+  }
+
+  private static func views(in view: UIView) -> [UIView] {
+    [view] + view.subviews.flatMap { views(in: $0) }
+  }
+
   /// The notice after `act` on a copy of `pages` and `tasks`, shown on `shown`'s page, the server answering with
   /// `receipt` and nothing changed.
   private func notice(
