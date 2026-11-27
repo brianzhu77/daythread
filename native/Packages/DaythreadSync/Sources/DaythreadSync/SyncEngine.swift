@@ -82,6 +82,10 @@ public actor SyncEngine {
   /// it was answered starts from what it sent (`keepDraft`). Kept in memory only: after a relaunch no keystroke is on
   /// its way.
   var landedSaves: [String: LandedSave] = [:]
+  /// The calls about a page's words (`keepDraft`, `rebaseDraft`, `discardDraft`) that changed what is drawn, in this
+  /// engine's lifetime. Each publishes a state with its number before it returns, so a caller that reads this after
+  /// its call knows which state draws what it did, whichever reaches it first.
+  public internal(set) var draftsWritten = 0
 
   // MARK: One pass at a time
 
@@ -728,6 +732,6 @@ public actor SyncEngine {
       SyncState(
         phase: phase, workspace: drawn, offline: offline, held: shown ? held : [], pending: shown ? pending : 0,
         waiting: shown ? behind.count : 0, failure: failure, signedIn: signedIn, enqueued: enqueued,
-        address: address, drafts: draftStatuses(retrying: retry != nil), owner: shownOwner))
+        address: address, drafts: draftStatuses(retrying: retry != nil), owner: shownOwner, draftsWritten: draftsWritten))
   }
 }

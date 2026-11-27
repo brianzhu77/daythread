@@ -62,7 +62,7 @@ extension SyncEngine {
       try await store.removeDraft(pageId: page.id, owner: copy.owner)
       forgetDraft(pageId: page.id, owner: copy.owner)
       refusedDrafts[page.id] = nil
-      publish()
+      publishDrafts()
       return
     }
     try await keep(
@@ -71,7 +71,7 @@ extension SyncEngine {
         baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds, sent: kept?.sent,
         changedAt: now()))
     refusedDrafts[page.id] = nil
-    publish()
+    publishDrafts()
     waitThenSave(page.id)
   }
 
@@ -121,7 +121,7 @@ extension SyncEngine {
     }
     stopDraftWait(page.id)
     refusedDrafts[page.id] = nil
-    publish()
+    publishDrafts()
     askForPass(load: false)
     return true
   }
@@ -155,13 +155,19 @@ extension SyncEngine {
       SyncLog.logger.error("A draft could not be discarded: \(SyncLog.describe(error), privacy: .public)")
       await readOutbox()
       await readDrafts()
-      publish()
+      publishDrafts()
       return
     }
     await readOutbox()
     forgetDraft(pageId: kept.pageId, owner: copy.owner)
     stopDraftWait(kept.pageId)
     refusedDrafts[kept.pageId] = nil
+    publishDrafts()
+  }
+
+  /// Publishes what a call about a page's words did, numbered (`SyncState.draftsWritten`). Runs inside a store section.
+  private func publishDrafts() {
+    draftsWritten += 1
     publish()
   }
 

@@ -489,7 +489,8 @@ private struct DayScreen {
 
     // Offline: the save does not go, so neither does the tick.
     await h.model.saveNow().value
-    #expect(h.model.state.offline)
+    // The pass has ended; the state it published may reach the model after its end does.
+    try await until { h.model.state.offline }
     #expect(await h.server.sent.filter { $0.objectValue?["type"]?.stringValue == "task-status" }.isEmpty)
 
     // Back online: the save, then the tick on the to-do it makes.

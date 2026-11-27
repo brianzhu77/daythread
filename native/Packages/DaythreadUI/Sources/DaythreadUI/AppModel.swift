@@ -76,6 +76,9 @@ public final class AppModel {
   @ObservationIgnored private var sendingCalls: Task<Void, Never>?
   /// Pages whose last document the engine did not store: the screen holds words the engine does not have.
   @ObservationIgnored private var unstored: Set<String> = []
+  /// Pages whose last call the engine answered before the state it published with it arrived, with that state's
+  /// `draftsWritten`: until it arrives, the state here is older than the screen.
+  @ObservationIgnored private var drawnAfter: [String: Int] = [:]
   /// The pages a day screen edits, by how many screens edit each: their drafts are merged by the screen.
   @ObservationIgnored private var openPages: [String: Int] = [:]
   /// For each draft of a page that is not open and was behind, the revision whose copy it was merged with, so each
@@ -259,8 +262,9 @@ public final class AppModel {
     if !records.isEmpty { records = [] }
     lastTicks = [:]
     dropQueuedCalls()
-    if !unstored.isEmpty {
+    if !unstored.isEmpty || !drawnAfter.isEmpty {
       unstored = []
+      drawnAfter = [:]
       answeredWrites += 1
     }
     mergedAt = [:]
@@ -276,6 +280,9 @@ public final class AppModel {
     if state.phase == .signedOut || ownerChanged {
       forgetTicks()
     }
+    let waitedFor = drawnAfter.count
+    drawnAfter = drawnAfter.filter { $0.value > state.draftsWritten }
+    if drawnAfter.count != waitedFor { answeredWrites += 1 }
     if state.phase != .signedOut {
       dropDrawnRecords()
       mergeDraftsNotOpen()
@@ -417,15 +424,23 @@ extension AppModel {
     return Task { await Self.answer(answer) }
   }
 
-  /// Whether the engine may not have what the screen wrote on the page yet: a call for it waits or is being
-  /// answered, or the engine did not store the last one. While it may not, the page the engine publishes can be an
-  /// older version of what is on screen; once it has, the published page is the truth, and a page that differs from
-  /// the screen's was changed from outside. That a state the engine publishes inside a call reaches the model before
-  /// the call's answer does is how the main executor delivers them (first in, first out: the stream's element is
-  /// enqueued before the call's return), not a promise of any API; `answeredWrites` makes the screen look again once
-  /// the answer is in, should an update pass fall between the two.
+  /// Whether the state here may not draw what the screen wrote on the page yet: a call for it waits or is being
+  /// answered, the engine did not store the last one, or the engine answered it and the state it published with it
+  /// has not arrived. While it may not, the page here can be an older version of what is on screen; once it does, the
+  /// published page is the truth, and a page that differs from the screen's was changed from outside. Which reaches
+  /// the model first, a call's answer or the state published inside the call, is not promised, so the state is known
+  /// by its number (`SyncState.draftsWritten`). `answeredWrites` makes the screen look again once it stops.
   func isWriting(_ pageId: String) -> Bool {
     callInFlight?.isFor(pageId) == true || queuedCalls.contains { $0.call.isFor(pageId) } || unstored.contains(pageId)
+      || drawnAfter[pageId] != nil
+  }
+
+  /// The engine answered a call for the page: until a state at its number arrives, the state here does not draw it.
+  private func waitForTheState(of pageId: String, madeUnder owner: String) async {
+    let written = await engine.draftsWritten
+    // Under another account the page's memory went with the one before.
+    guard shownOwner == owner, written > state.draftsWritten else { return }
+    drawnAfter[pageId] = max(drawnAfter[pageId] ?? 0, written)
   }
 
   /// A day screen edits the page: its draft, when behind, is the screen's to merge.
@@ -501,6 +516,7 @@ extension AppModel {
           pageId: pageId, document: document, singleDeleteIds: singleDeleteIds, startedFrom: startedFrom,
           expectedOwner: owner)
         unstored.remove(pageId)
+        await waitForTheState(of: pageId, madeUnder: owner)
         return true
       } catch {
         // The screen keeps his words, and his next change hands them over again; but not words refused because the
@@ -517,7 +533,10 @@ extension AppModel {
         let taken = try await engine.rebaseDraft(
           pageId: pageId, baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds,
           expectedOwner: owner)
-        if taken { unstored.remove(pageId) }
+        if taken {
+          unstored.remove(pageId)
+          await waitForTheState(of: pageId, madeUnder: owner)
+        }
         return taken
       } catch {
         if error as? SyncError != .notReady {
@@ -529,6 +548,7 @@ extension AppModel {
     case .discard(let pageId):
       await engine.discardDraft(pageId: pageId, expectedOwner: owner)
       if shownOwner == owner { unstored.remove(pageId) }
+      await waitForTheState(of: pageId, madeUnder: owner)
       return true
     case .flush:
       return true
