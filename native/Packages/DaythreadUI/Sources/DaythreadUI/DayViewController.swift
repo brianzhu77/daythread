@@ -608,12 +608,14 @@
     private func undo(_ operationId: String) {
       guard !acting, document.actingRow == nil, let acted = noticeOf, acted.operationId == operationId else { return }
       noticeOf = nil
+      // What he composes is committed first: his words would take the server's slot before the Undo reached it, so
+      // once they are reported the Undo is not offered and nothing is sent.
+      document.commitComposition()
       // The button can be tapped in the turn after it stopped being offered, before the observation withdraws it.
       guard model.offersUndo(operationId) else {
         notice.withdrawUndo()
         return
       }
-      document.commitComposition()
       acting = true
       let onPage = document.document.flatMap { Self.block(acted.rowID, in: $0) } != nil
       if onPage { document.actingRow = acted.rowID }
