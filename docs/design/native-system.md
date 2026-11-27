@@ -151,8 +151,11 @@ says what a row action did:
 - **Time:** one at a time, a new one replaces the one showing. It leaves after 8 seconds, `Undone` after 4, a failure
   after 6, or when swiped up (also VoiceOver's escape gesture). A tap on the words does nothing.
 - **VoiceOver:** the words are announced when shown; while the notice has `Undo` it does not leave on a timer, and
-  once `Undo` is spent or withdrawn its time runs from then. The notice is one accessibility element whose custom
-  action is `Undo`. A button that is withdrawn, or used once, never comes back.
+  once `Undo` is spent or withdrawn its time runs from then. The words are an accessibility element that carries
+  `Undo` as its custom action, and the button is an element of its own, so Voice Control and Full Keyboard Access
+  reach it. A button that is withdrawn, or used once, never comes back. Because it does not time out while
+  VoiceOver runs and `Undo` is offered, on a phone it stays over the previous and next-day buttons until `Undo` is
+  used or withdrawn or the notice is dismissed (VoiceOver's escape gesture, or a swipe up).
 - **When `Undo` is there** (slice 1c): only while nothing of his waits to be sent (no draft, no queued tick, no
   words on their way to the engine) and the copy says the server's one Undo slot is that action's at the copy's own
   revision. It is withdrawn the moment that stops (he types, he ticks, another device's change or the day's new page
