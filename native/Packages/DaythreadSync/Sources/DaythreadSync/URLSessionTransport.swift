@@ -96,7 +96,41 @@ public struct URLSessionTransport: ServerTransport {
     return outcome
   }
 
+  public func save(
+    token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
+  ) async throws -> SaveOutcome {
+    // The order the route's schema lists them in.
+    let body: JSONValue = .object([
+      "operationId": .string(operationId),
+      "expectedRevision": .number(String(expectedRevision)),
+      "expectedOwner": .string(expectedOwner),
+      "action": action,
+    ])
+    let (status, reply) = try await exchange(.post, "saves", token: token, body: body, reading: [409])
+    guard let outcome = Self.saveOutcome(status: status, of: reply) else {
+      if status == 409 { throw TransportError.refused(status: 409, reason: reply.objectValue?["error"]?.stringValue) }
+      throw TransportError.unreadable
+    }
+    return outcome
+  }
+
   // MARK: Replies
+
+  /// A save's 200 is the command's applied reply without its `status`; its refusals are 409s told apart by `error`.
+  private static func saveOutcome(status: Int, of reply: JSONValue) -> SaveOutcome? {
+    guard let object = reply.objectValue else { return nil }
+    if status == 409 {
+      switch object["error"]?.stringValue {
+      case "refused": return object["message"]?.stringValue.map { .refused(message: $0) }
+      case "owner-mismatch": return object["owner"]?.stringValue.map { .ownerMismatch(owner: $0) }
+      default: return nil
+      }
+    }
+    guard let receipt = object["receipt"], let json = object["changes"], let changes = WorkspaceChanges(json),
+      let owner = object["owner"]?.stringValue
+    else { return nil }
+    return .applied(receipt: receipt, changes: changes, owner: owner)
+  }
 
   private static func outcome(of reply: JSONValue) -> CommandOutcome? {
     guard let object = reply.objectValue, let status = object["status"]?.stringValue,
@@ -136,6 +170,15 @@ public struct URLSessionTransport: ServerTransport {
     _ method: Method, _ path: String, token: String? = nil, query: [URLQueryItem] = [],
     body: JSONValue? = nil, readsBody: Bool = true
   ) async throws -> JSONValue {
+    try await exchange(method, path, token: token, query: query, body: body, readsBody: readsBody).body
+  }
+
+  /// As `perform`, with the status, and with the replies of the statuses in `reading` returned rather than thrown
+  /// when their body reads: they are answers the caller tells apart.
+  private func exchange(
+    _ method: Method, _ path: String, token: String? = nil, query: [URLQueryItem] = [],
+    body: JSONValue? = nil, readsBody: Bool = true, reading: Set<Int> = []
+  ) async throws -> (status: Int, body: JSONValue) {
     var request = URLRequest(url: try url(path, query: query))
     request.httpMethod = method.rawValue
     request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -157,9 +200,11 @@ public struct URLSessionTransport: ServerTransport {
 
     switch http.statusCode {
     case 200..<300:
-      guard readsBody else { return .null }
+      guard readsBody else { return (http.statusCode, .null) }
       guard let parsed else { throw TransportError.unreadable }
-      return parsed
+      return (http.statusCode, parsed)
+    case let status where reading.contains(status) && parsed != nil:
+      return (status, parsed ?? .null)
     case 429:
       throw TransportError.wait(seconds: Self.wait(of: http, body: parsed))
     case 500...:

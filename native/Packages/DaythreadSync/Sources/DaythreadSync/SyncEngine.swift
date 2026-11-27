@@ -26,13 +26,16 @@ import Foundation
 /// - **The outbox in memory.** `outbox` is what the store's outbox holds, read again inside the same store section as
 ///   every write to it, so no published state has an entry in neither the outbox (drawn as a prediction) nor the
 ///   copy (applied by the server's answer).
+/// - **Drafts.** `drafts` is what the store's drafts hold, kept in step the same way; only the copy's owner's are
+///   drawn or sent. A draft is stored the moment it is given, and its save goes in a pass, after the outbox entries
+///   (see `SyncEngine+Drafts.swift`).
 public actor SyncEngine {
   let transport: any ServerTransport
   let tokens: any TokenStore
   let store: any WorkspaceStore
   let now: @Sendable () -> Date
   private let reachability: any Reachability
-  private let sleep: @Sendable (Duration) async throws -> Void
+  let sleep: @Sendable (Duration) async throws -> Void
   private let broadcast = StateBroadcast(.initial)
 
   // MARK: What is shown
@@ -62,6 +65,34 @@ public actor SyncEngine {
   private var copyRead = false
   /// Whether `copy` may be shown: not while signed out, nor while it belongs to another account than the session's.
   var copyShown = false
+
+  // MARK: Drafts
+
+  /// Every owner's drafts, as the store last answered; see `accountDrafts` for the ones that are shown and sent.
+  var drafts: [PageDraft] = []
+  /// The wait after his last change to a page, by page; its save goes when it ends.
+  var draftWaits: [String: DraftWait] = [:]
+  var draftWaitNumber = 0
+  /// Pages whose save is on its way.
+  var savesInFlight: Set<String> = []
+  /// Pages whose own save was turned away for now and waits for the next try (the server failed it, or it was left
+  /// for the retry schedule): only these are said to be tried again.
+  var savesRetrying: Set<String> = []
+  /// Pages whose document the server refused, with its reason: not sent again until he acts. Kept in memory only, so
+  /// such a draft is sent once more at the next launch; everything else that holds a draft is read from the store.
+  var refusedDrafts: [String: String] = [:]
+  /// By page, the last save that landed and removed its draft (he had typed nothing more): a keystroke made before
+  /// it was answered starts from what it sent (`keepDraft`). Kept in memory only: after a relaunch no keystroke is on
+  /// its way.
+  var landedSaves: [String: LandedSave] = [:]
+  /// By page, the content keys of the pages the screen typed the draft's words onto: the one each keep names, and each
+  /// merge it was handed. A keystroke on its way still carries one of them after the draft's last save (see
+  /// `landedSaves`). Kept in memory only, beside the draft, and dropped with it.
+  var draftOrigins: [String: DraftOrigin] = [:]
+  /// The calls about a page's words (`keepDraft`, `rebaseDraft`, `discardDraft`) that changed what is drawn, in this
+  /// engine's lifetime. Each publishes a state with its number before it returns, so a caller that reads this after
+  /// its call knows which state draws what it did, whichever reaches it first.
+  public internal(set) var draftsWritten = 0
 
   // MARK: One pass at a time
 
@@ -118,6 +149,7 @@ public actor SyncEngine {
   deinit {
     retry?.cancel()
     listening?.cancel()
+    for wait in draftWaits.values { wait.task.cancel() }
   }
 
   /// The current state at once, then each change. Each read is a new stream; one whose reader stops is forgotten.
@@ -194,22 +226,24 @@ public actor SyncEngine {
     while let driver { await driver.value }
   }
 
-  /// Signs in, then loads. A session of another account than the stored copy's erases the copy and its outbox first;
-  /// the same account's are kept and sent. The transport's errors are thrown unchanged. If the device cannot erase or
-  /// keep the session after the server accepted it, it ends signed out with nothing shown and the token cleared, and
-  /// that error is thrown: a new account is never signed in over another account's rows.
+  /// Signs in, then loads. A session of another account than the stored copy's erases the copy and its outbox first,
+  /// and keeps every account's drafts for their own account; the same account's are kept and sent. The transport's
+  /// errors are thrown unchanged. If the device cannot erase or keep the session after the server accepted it, it ends
+  /// signed out with nothing shown and the token cleared, and that error is thrown: a new account is never signed in
+  /// over another account's rows.
   public func signIn(email: String, password: String, timezone: String) async throws {
     let session = try await transport.signIn(email: email, password: password, timezone: timezone)
     await acquire()
     epoch += 1
     running?.cancel()
     stopRetrying()
+    forgetDraftWork()
     answerStalePerformances()
     do {
       await readCopyIfNeeded()
       // A copy that could not be read may still be someone else's, so nothing known erases too.
       if copy?.owner != session.owner {
-        try await store.erase()
+        try await store.eraseKeepingDrafts(except: nil)
         copy = nil
         outbox = []
       }
@@ -239,26 +273,36 @@ public actor SyncEngine {
     // The sign-in reply names no email: the address he signed in with is the account's.
     address = email
     await readOutbox()
+    await readDrafts()
     publish()
     release()
     await requestPass(load: true)
   }
 
-  /// Unless `discardingUnsent`, first tries one pass; then, when changes are still unsent (pending, waiting or held;
-  /// the engine's own request for today's page is not his), signs nobody out and returns how many, so he can be asked.
-  /// Otherwise tells the server, erases the copy, the outbox and the session whatever it answered (a shared device must
-  /// not keep someone's notes), and returns 0. Discarding tries no pass: he has said yes, and sign-out does not wait
-  /// for the network beyond telling the server. The last action wins: a sign-in that completes while the server is
-  /// being told is kept.
+  /// Unless `discardingUnsent`, first tries one pass, with the waits after his last changes cut short; then, when
+  /// changes are still unsent (pending, waiting or held entries, the engine's own request for today's page not being
+  /// his, and each draft of the account shown, whatever it waits for), signs nobody out and returns how many, so he
+  /// can be asked. Otherwise tells the server, erases the copy, the outbox and the session whatever it answered (a
+  /// shared device must not keep someone's notes), and returns 0. Another account's drafts are never erased: when
+  /// discarding, the drafts counted (those of the copy shown) go with the copy, in the same transaction; without
+  /// discarding there are none left to erase, and a draft not shown (a session that ended) is not erased uncounted.
+  /// Discarding tries no pass: he has said yes, and sign-out does not wait for the network beyond telling the server.
+  /// The last action wins: a sign-in that completes while the server is being told is kept.
   ///
-  /// If `erase` throws, it is tried once more; if it still throws, this ends signed out anyway. The copy then stays on
+  /// If the erase throws, it is tried once more; if it still throws, this ends signed out anyway. The copy then stays on
   /// disk but hidden (`start` shows no copy without its session), and is erased at the next sign-in under another
   /// owner.
   @discardableResult
   public func signOut(discardingUnsent: Bool) async -> Int {
-    if !discardingUnsent { await requestPass(load: false) }
+    if !discardingUnsent {
+      await acquire()
+      cutDraftWaitsShort()
+      release()
+      await requestPass(load: false)
+    }
     await acquire()
-    let unsent = outbox.count { !$0.asksForADay }
+    // A draft only waiting out its 450 ms is his words not yet on the server too.
+    let unsent = outbox.count { !$0.asksForADay } + accountDrafts.count
     if !discardingUnsent, unsent > 0 {
       release()
       SyncLog.logger.notice("Sign-out waits for a yes: \(unsent, privacy: .public) changes not sent")
@@ -268,9 +312,13 @@ public actor SyncEngine {
     leaving = true
     running?.cancel()
     stopRetrying()
+    forgetDraftWork()
     answerStalePerformances()
     let signInsBefore = signIns
     let session = try? tokens.read()
+    // The owner whose drafts were counted, not the session's: after an owner mismatch the copy shown is the
+    // server's account while the session still names the other.
+    let discarded = discardingUnsent && copyShown ? copy?.owner : nil
     release()
 
     var reachedServer: Bool?
@@ -293,8 +341,8 @@ public actor SyncEngine {
     leaving = false
     running?.cancel()
     stopRetrying()
-    var erased = (try? await store.erase()) != nil
-    if !erased { erased = (try? await store.erase()) != nil }
+    var erased = (try? await store.eraseKeepingDrafts(except: discarded)) != nil
+    if !erased { erased = (try? await store.eraseKeepingDrafts(except: discarded)) != nil }
     try? tokens.clear()
     let told = reachedServer.map { $0 ? "told" : "offline" } ?? "not told"
     SyncLog.logger.notice("Signed out; server \(told, privacy: .public); copy erased: \(erased, privacy: .public)")
@@ -305,6 +353,10 @@ public actor SyncEngine {
     signedIn = false
     failure = nil
     outbox = []
+    // A read that fails keeps what memory had: the discarded account's drafts must not be among it.
+    if let discarded { drafts.removeAll { $0.owner == discarded } }
+    await readDrafts()
+    forgetDraftWork()
     address = nil
     if let reachedServer { offline = !reachedServer }
     publish()
@@ -323,7 +375,7 @@ public actor SyncEngine {
   struct Superseded: Error {}
 
   /// Returns once a pass that started after this request has finished.
-  private func requestPass(load: Bool) async {
+  func requestPass(load: Bool) async {
     let ticket = askForPass(load: load)
     while finished < ticket, let driver { await driver.value }
   }
@@ -383,12 +435,19 @@ public actor SyncEngine {
         coverRequestsSoFar(pass)
         try await loadWorkspace(pass, have: copy?.workspace.revision)
       }
-      try await drain(pass)
+      let loadedForHolds = try await drain(pass)
+      let saves = try await saveDrafts(pass, loaded: loadedForHolds)
+      // A save that landed may have made the to-do a waiting tick is for.
+      if saves.landed { try await drain(pass) }
       try await performQueued(pass)
       try await enter(pass)
       defer { release() }
       await readOutbox()
-      stopRetrying()
+      if saves.leftForRetry {
+        planRetry(after: nil)
+      } else {
+        stopRetrying()
+      }
       let held = outbox.count { $0.state == .held }
       SyncLog.logger.info(
         "Pass done: revision \(self.copy?.workspace.revision ?? -1, privacy: .public), held \(held, privacy: .public)")
@@ -504,7 +563,15 @@ public actor SyncEngine {
       }
     case .full(let workspace, let owner):
       try await store.replace(with: workspace, owner: owner)
+      // What one account's saves sent, and what the server refused of them, says nothing about another's pages,
+      // which have the same ids.
+      if copy?.owner != owner {
+        landedSaves = [:]
+        draftOrigins = [:]
+        refusedDrafts = [:]
+      }
       copy = (workspace, owner)
+      forgetOverwrittenSaves()
     }
     try await settleHeldTicks()
     copyShown = true
@@ -516,23 +583,28 @@ public actor SyncEngine {
 
   // MARK: Trying again
 
-  /// A pending entry not waiting behind a held one: something a pass could send.
+  /// A pending entry not waiting behind a held one or for a draft's save, or a draft due to be saved: something a
+  /// pass could send.
   private var hasSendable: Bool {
-    let behind = outbox.waiting
-    return outbox.contains { $0.state == .pending && !behind.contains($0.seq) }
+    let behind = outbox.waiting.union(waitingForDrafts(outbox))
+    return outbox.contains { $0.state == .pending && !behind.contains($0.seq) } || accountDrafts.contains(where: isDue)
   }
 
-  /// The engine's own wait, to the second. It is `Task.sleep(nanoseconds:)` and not `Task.sleep(for:)`: built by
+  /// The engine's own wait. It is `Task.sleep(nanoseconds:)` and not `Task.sleep(for:)`: built by
   /// Xcode 26.6, a retry wait made with the latter and cancelled at once (an engine let go right after a pass failed)
   /// aborted the process when its task resumed ("freed pointer was not the last allocation", in `swift_task_dealloc`).
   /// Seen only on the hosted runner, six runs of six in each of the two tests that do exactly that, and gone with
   /// this; never seen built by Xcode 27. Anything that waits and may be cancelled should use this.
   public static let sleep: @Sendable (Duration) async throws -> Void = { duration in
-    try await Task.sleep(nanoseconds: UInt64(max(0, duration.components.seconds)) * 1_000_000_000)
+    // To the nanosecond: the wait after a change is 450 ms.
+    let (seconds, attoseconds) = duration.components
+    let nanoseconds = max(0, seconds) * 1_000_000_000 + max(0, attoseconds) / 1_000_000_000
+    try await Task.sleep(nanoseconds: UInt64(nanoseconds))
   }
 
-  /// Plans the next try after the schedule's wait, or a 429's when longer, replacing any wait in progress.
-  private func planRetry(after error: any Error) {
+  /// Plans the next try after the schedule's wait, or a 429's when longer, replacing any wait in progress. Nil when
+  /// the pass ended well but left a save for later.
+  private func planRetry(after error: (any Error)?) {
     var wait = Self.retryWaits[min(failedPasses, Self.retryWaits.count - 1)]
     if case .wait(let seconds)? = error as? TransportError, .seconds(seconds) > wait { wait = .seconds(seconds) }
     failedPasses += 1
@@ -563,6 +635,7 @@ public actor SyncEngine {
     retry?.cancel()
     retry = nil
     failedPasses = 0
+    savesRetrying = []
   }
 
   private func listenForTheNetwork() {
@@ -633,6 +706,7 @@ public actor SyncEngine {
       }
     }
     await readOutbox()
+    await readDrafts()
   }
 
   private func readSession() -> Result<Session?, any Error> {
@@ -646,9 +720,10 @@ public actor SyncEngine {
     outbox = entries
   }
 
-  /// What is drawn: the copy with every pending entry's action replayed over it in `seq` order, including those this
-  /// build cannot predict (they change nothing) and those waiting behind a held one. A held entry is not replayed, so
-  /// the page shows what the server has.
+  /// What is drawn: the copy with the account's drafts drawn on it, then every pending entry's action replayed over it
+  /// in `seq` order, including those this build cannot predict (they change nothing) and those waiting behind a held
+  /// one, so a tick on a to-do typed only in a draft is drawn too. A held entry is not replayed, so the page shows what
+  /// the server has.
   ///
   /// An entry can be replayed over a copy that already holds its change: after a store call fails between writing
   /// the copy and acknowledging the entry, and while a load-then-acknowledge has the load in the copy. That is
@@ -656,13 +731,14 @@ public actor SyncEngine {
   /// deal with it.
   var drawn: Workspace? {
     guard copyShown, let copy else { return nil }
-    return outbox.lazy.filter { $0.state == .pending }.reduce(copy.workspace) { $0.predicting($1.action) }
+    let typed = drawingDrafts(over: copy.workspace)
+    return outbox.lazy.filter { $0.state == .pending }.reduce(typed) { $0.predicting($1.action) }
   }
 
-  /// Held, pending and waiting entries are said only while the copy they belong to is shown.
+  /// Held, pending and waiting entries, and drafts, are said only while the copy they belong to is shown.
   func publish() {
     let shown = copyShown && copy != nil
-    let behind = outbox.waiting
+    let behind = outbox.waiting.union(waitingForDrafts(outbox))
     let held = outbox.filter { $0.state == .held && !$0.asksForADay }.map(HeldChange.init)
     // He did not make the engine's own request for today's page: it is sent, but not counted as his.
     let pending = outbox.count { $0.state == .pending && !behind.contains($0.seq) && !$0.asksForADay }
@@ -670,6 +746,6 @@ public actor SyncEngine {
       SyncState(
         phase: phase, workspace: drawn, offline: offline, held: shown ? held : [], pending: shown ? pending : 0,
         waiting: shown ? behind.count : 0, failure: failure, signedIn: signedIn, enqueued: enqueued,
-        address: address))
+        address: address, drafts: draftStatuses(retrying: retry != nil), owner: shownOwner, draftsWritten: draftsWritten))
   }
 }

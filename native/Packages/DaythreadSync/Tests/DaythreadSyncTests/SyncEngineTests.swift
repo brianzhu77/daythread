@@ -70,11 +70,14 @@ private func send(
 /// with sign-in off say false.
 private func state(
   _ phase: SyncState.Phase, _ workspace: Workspace?, offline: Bool = false, held: [HeldChange] = [],
-  pending: Int = 0, waiting: Int = 0, failure: SyncFailure? = nil, signedIn: Bool? = nil, address: String? = nil
+  pending: Int = 0, waiting: Int = 0, failure: SyncFailure? = nil, signedIn: Bool? = nil, address: String? = nil,
+  owner: String = "user-1"
 ) -> SyncState {
+  // The owner is the shown copy's, so only a state that shows one names it.
   SyncState(
     phase: phase, workspace: workspace, offline: offline, held: held, pending: pending, waiting: waiting,
-    failure: failure, signedIn: signedIn ?? (phase != .signedOut), address: address)
+    failure: failure, signedIn: signedIn ?? (phase != .signedOut), address: address,
+    owner: workspace == nil ? nil : owner)
 }
 
 /// How the entry `pending(operationId, …)` made reads once the server held it for `reason`.
@@ -200,10 +203,27 @@ actor RecordingStore: WorkspaceStore {
     try await inner.acknowledge(seq: seq, revision: revision)
   }
 
-  func erase() async throws {
-    log.append("erase")
-    try check("erase")
-    try await inner.erase()
+  func drafts() async throws -> [PageDraft] {
+    try check("drafts")
+    return try await inner.drafts()
+  }
+
+  func put(_ draft: PageDraft) async throws {
+    log.append("put \(draft.owner) \(draft.pageId)")
+    try check("put")
+    try await inner.put(draft)
+  }
+
+  func removeDraft(pageId: String, owner: String) async throws {
+    log.append("removeDraft \(owner) \(pageId)")
+    try check("removeDraft")
+    try await inner.removeDraft(pageId: pageId, owner: owner)
+  }
+
+  func eraseKeepingDrafts(except owner: String?) async throws {
+    log.append(owner.map { "eraseKeepingDrafts except \($0)" } ?? "eraseKeepingDrafts")
+    try check("eraseKeepingDrafts")
+    try await inner.eraseKeepingDrafts(except: owner)
   }
 }
 
@@ -287,7 +307,7 @@ private struct Harness {
     await h.engine.start()
 
     #expect(await h.calls == [.account(token: nil), .workspace(token: nil, have: nil)])
-    #expect(await current(h.engine) == state(.ready, served, signedIn: false))
+    #expect(await current(h.engine) == state(.ready, served, signedIn: false, owner: "local"))
     let kept = try await h.kept
     #expect(kept?.owner == "local")
     #expect(kept?.workspace == served)
@@ -329,7 +349,7 @@ private struct Harness {
     #expect(await h.log == ["replace user-2 9"])
     #expect(try await h.kept?.owner == "user-2")
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served, address: one))
+    #expect(await current(h.engine) == state(.ready, served, address: one, owner: "user-2"))
   }
 
   @Test func unchanged_under_another_owner_loads_the_workspace_whole() async throws {
@@ -347,7 +367,7 @@ private struct Harness {
         .account(token: "tok-1"), .workspace(token: "tok-1", have: 5), .workspace(token: "tok-1", have: nil),
       ])
     #expect(await h.log == ["replace user-2 5"])
-    #expect(await current(h.engine) == state(.ready, served, address: one))
+    #expect(await current(h.engine) == state(.ready, served, address: one, owner: "user-2"))
   }
 
   @Test func ensures_today_in_the_accounts_zone_once() async throws {
@@ -483,7 +503,7 @@ private struct Harness {
     #expect(await h.calls.last == .workspace(token: "tok-1", have: nil))
     #expect(try await h.kept?.owner == "user-2")
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served, address: one))
+    #expect(await current(h.engine) == state(.ready, served, address: one, owner: "user-2"))
   }
 
   @Test func a_command_reply_under_another_owner_is_never_applied() async throws {
@@ -499,7 +519,7 @@ private struct Harness {
 
     #expect(await h.log == ["replace user-2 7"])
     #expect(try await h.kept?.owner == "user-2")
-    #expect(await current(h.engine) == state(.ready, served, address: one))
+    #expect(await current(h.engine) == state(.ready, served, address: one, owner: "user-2"))
   }
 
   @Test func offline_keeps_everything_and_says_so() async throws {
@@ -544,11 +564,11 @@ private struct Harness {
     await h.transport.add([.session(second), .workspace(.full(served, owner: "user-2"))])
     try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
 
-    #expect(await h.log == ["erase", "replace user-2 3"])
+    #expect(await h.log == ["eraseKeepingDrafts", "replace user-2 3"])
     #expect(try h.tokens.read() == second)
     #expect(await h.transport.sends == [])
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served, address: two))
+    #expect(await current(h.engine) == state(.ready, served, address: two, owner: "user-2"))
   }
 
   @Test func signing_in_as_the_same_owner_keeps_the_copy_and_sends_its_outbox() async throws {
@@ -564,7 +584,7 @@ private struct Harness {
     try await h.engine.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
 
     #expect(await h.transport.sends == [send("op-1", base: 5, token: "tok-3")])
-    #expect(await !h.log.contains("erase"))
+    #expect(await !h.log.contains { $0.hasPrefix("erase") })
     #expect(try await h.entries == [])
     #expect(await current(h.engine) == state(.ready, try required(copy.applying(applied)), address: one))
   }
@@ -580,10 +600,10 @@ private struct Harness {
     await h.transport.add([.session(second), .workspace(.full(served, owner: "user-2"))])
     try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
 
-    #expect(await h.log == ["erase", "replace user-2 2"])
+    #expect(await h.log == ["eraseKeepingDrafts", "replace user-2 2"])
     #expect(await h.calls.last == .workspace(token: "tok-2", have: nil))
     #expect(try await h.entries == [])
-    #expect(await current(h.engine) == state(.ready, served, address: two))
+    #expect(await current(h.engine) == state(.ready, served, address: two, owner: "user-2"))
   }
 
   @Test func sign_in_errors_are_thrown_unchanged() async throws {
@@ -913,7 +933,7 @@ private struct Harness {
     await gate.open(.workspace(.full(try workspace(9), owner: "user-1")))
     await loading.value
 
-    #expect(await h.log == ["erase"])
+    #expect(await h.log == ["eraseKeepingDrafts except user-1"])
     #expect(try await h.kept == nil)
     #expect(await current(h.engine) == state(.signedOut, nil))
   }
@@ -940,9 +960,9 @@ private struct Harness {
     await loading.value
     watcher.cancel()
 
-    #expect(await h.log == ["erase", "replace user-2 2"])
+    #expect(await h.log == ["eraseKeepingDrafts", "replace user-2 2"])
     #expect(try await h.kept?.owner == "user-2")
-    #expect(await current(h.engine) == state(.ready, served, address: two))
+    #expect(await current(h.engine) == state(.ready, served, address: two, owner: "user-2"))
     #expect(await !recorded.all.contains { $0.workspace?.revision == 9 })
   }
 
@@ -1046,7 +1066,7 @@ private struct Harness {
 
     try await next.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
 
-    #expect(await !h.log.contains("erase"))
+    #expect(await !h.log.contains { $0.hasPrefix("erase") })
     #expect(await transport.sends == [send("op-1", base: 5, token: "tok-3")])
     #expect(try await h.entries == [])
     #expect(await current(next) == state(.ready, try required(copy.applying(applied)), address: one))
@@ -1060,20 +1080,20 @@ private struct Harness {
 
     try await next.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
 
-    #expect(await h.log == ["erase", "replace user-2 2"])
+    #expect(await h.log == ["eraseKeepingDrafts", "replace user-2 2"])
     #expect(await transport.sends == [])
     #expect(try await h.entries == [])
-    #expect(await current(next) == state(.ready, served, address: two))
+    #expect(await current(next) == state(.ready, served, address: two, owner: "user-2"))
   }
 
   @Test func a_copy_an_erase_could_not_remove_stays_hidden_and_is_not_erased_at_launch() async throws {
     let h = try await Harness(opening + [.done], copy: try workspace(5))
     await h.engine.start()
-    await h.store.fail("erase")
+    await h.store.fail("eraseKeepingDrafts")
 
     await h.engine.signOut(discardingUnsent: true)
 
-    #expect(await h.log == ["erase", "erase"])
+    #expect(await h.log == ["eraseKeepingDrafts except user-1", "eraseKeepingDrafts except user-1"])
     #expect(await current(h.engine) == state(.signedOut, nil))
     #expect(try h.tokens.read() == nil)
     #expect(try await h.kept != nil)
@@ -1097,7 +1117,7 @@ private struct Harness {
   @Test func a_sign_in_that_cannot_erase_the_previous_account_fails_signed_out() async throws {
     let h = try await Harness(opening + [.session(second)], copy: try workspace(5))
     await h.engine.start()
-    await h.store.fail("erase")
+    await h.store.fail("eraseKeepingDrafts")
 
     await #expect(throws: StoreRefused.self) {
       try await h.engine.signIn(email: "two@example.com", password: "pw", timezone: "UTC")
@@ -1123,8 +1143,8 @@ private struct Harness {
 
     await h.engine.start()
 
-    #expect(await seen.first == state(.starting, copy, signedIn: false))
-    #expect(await current(h.engine) == state(.ready, copy, signedIn: false))
+    #expect(await seen.first == state(.starting, copy, signedIn: false, owner: "local"))
+    #expect(await current(h.engine) == state(.ready, copy, signedIn: false, owner: "local"))
   }
 
   @Test func a_session_for_another_owner_shows_nothing_until_the_load_replaces_the_copy() async throws {
@@ -1139,7 +1159,7 @@ private struct Harness {
     await h.engine.start()
 
     #expect(await seen.all == [state(.starting, nil), state(.ready, nil)])
-    #expect(await current(h.engine) == state(.ready, served))
+    #expect(await current(h.engine) == state(.ready, served, owner: "user-2"))
     #expect(try await h.kept?.owner == "user-2")
   }
 
@@ -1176,7 +1196,7 @@ private struct Harness {
     #expect(try h.tokens.read() == second)
     #expect(try await h.kept?.owner == "user-2")
     #expect(try await h.kept?.workspace == served)
-    #expect(await current(h.engine) == state(.ready, served, address: two))
+    #expect(await current(h.engine) == state(.ready, served, address: two, owner: "user-2"))
   }
 }
 
@@ -1233,7 +1253,7 @@ private struct Harness {
     await gate.open(.done)
     _ = await signingOut.value
 
-    #expect(await store.log == ["erase"])
+    #expect(await store.log == ["eraseKeepingDrafts except user-1"])
     #expect(try await store.load() == nil)
     #expect(try tokens.read() == nil)
     #expect(await current(engine) == state(.signedOut, nil))
@@ -1260,7 +1280,7 @@ private struct Harness {
       ], session: nil)
 
     await h.engine.start()
-    #expect(await current(h.engine) == state(.ready, local, signedIn: false))
+    #expect(await current(h.engine) == state(.ready, local, signedIn: false, owner: "local"))
 
     try await h.engine.signIn(email: "one@example.com", password: "pw", timezone: "UTC")
     #expect(await current(h.engine) == state(.ready, served, signedIn: true, address: one))
@@ -2629,7 +2649,7 @@ private func applied(_ changes: WorkspaceChanges) -> FakeTransport.Reply {
     await h.engine.refresh()
 
     #expect(await h.calls == [.account(token: nil), .workspace(token: nil, have: 5)])
-    #expect(await current(h.engine) == state(.ready, served, signedIn: false))
+    #expect(await current(h.engine) == state(.ready, served, signedIn: false, owner: "local"))
   }
 
   @Test func nothing_of_the_account_is_sent_once_a_sign_out_has_begun() async throws {
@@ -2697,7 +2717,7 @@ private func applied(_ changes: WorkspaceChanges) -> FakeTransport.Reply {
     await h.waits.elapse()
     await h.engine.settled()
 
-    #expect(await current(h.engine) == state(.ready, served, address: two), "nothing of the first held or pending")
+    #expect(await current(h.engine) == state(.ready, served, address: two, owner: "user-2"), "nothing of the first held or pending")
     #expect(await h.transport.sends.count == sentBefore)
     #expect(try await h.entries == [])
     #expect(try await h.kept?.owner == "user-2")

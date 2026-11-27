@@ -2,9 +2,8 @@
   import UIKit
 
   /// A paragraph, heading, list item or quote: its line in the system's text style for it.
-  final class TextBlockCell: BlockCell {
+  final class TextBlockCell: LineBlockCell {
     private var style: BlockRow.TextStyle = .paragraph
-    private var text = AttributedString()
     private let quoteBar = UIView()
     private lazy var quoteBarLeading = quoteBar.leadingAnchor.constraint(equalTo: leadingAnchor)
 
@@ -29,22 +28,24 @@
     private static let quoteBarWidth: CGFloat = 3
     private static let defaultLeadingMargin = UIListContentConfiguration.cell().directionalLayoutMargins.leading
 
-    func configure(style: BlockRow.TextStyle, depth: Int, text: AttributedString) {
+    func configure(
+      style: BlockRow.TextStyle, depth: Int, text: AttributedString, editable: Bool, rowID: String,
+      delegate: LineTextViewDelegate?
+    ) {
       self.style = style
-      self.text = text
       setDepth(depth)
-      isAccessibilityElement = true
-      accessibilityLabel = String(text.characters)
-      if case .heading = style { accessibilityTraits.insert(.header) } else { accessibilityTraits.remove(.header) }
-      setNeedsUpdateConfiguration()
+      let (textStyle, bold) = Self.font(for: style)
+      setWords(
+        text, look: LineLook(textStyle: textStyle, bold: bold), editable: editable, rowID: rowID, delegate: delegate)
+      // The words are the row's one element.
+      isAccessibilityElement = false
+      accessibilityElements = [line]
+      if case .heading = style { line.addedTraits = .header } else { line.addedTraits = [] }
     }
 
     override func updateConfiguration(using state: UICellConfigurationState) {
       var content = defaultContentConfiguration()
-      let (textStyle, bold) = Self.font(for: style)
-      content.attributedText = InlineAttributedText.display(
-        text, textStyle: textStyle, bold: bold, compatibleWith: state.traitCollection)
-      content.textProperties.adjustsFontForContentSizeCategory = true
+      applyWords(to: &content, traits: state.traitCollection)
 
       if case .quote = style {
         content.directionalLayoutMargins.leading += Self.quoteBarWidth + content.imageToTextPadding
@@ -57,6 +58,7 @@
         content.imageProperties.tintColor = .secondaryLabel
       }
       contentConfiguration = content
+      pinWords()
       quoteBarLeading.constant = Self.defaultLeadingMargin + indentation
       bringSubviewToFront(quoteBar)
     }

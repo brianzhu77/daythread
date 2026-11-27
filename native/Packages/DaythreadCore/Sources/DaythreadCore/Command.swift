@@ -1,3 +1,5 @@
+import Foundation
+
 /// The actions the client sends, as the JSON values the server reads. Keys are written in the order the web app
 /// writes them, so a stored action and a rebuilt one are the same text.
 public enum Command {
@@ -9,6 +11,28 @@ public enum Command {
     action["status"] = .string(status.rawValue)
     if let today { action["today"] = .string(today.value) }
     return .object(action)
+  }
+
+  /// `at` is written as `Date.toISOString()` does, in UTC with milliseconds; `singleDeleteIds` is left out when empty.
+  public static func saveEditor(
+    pageId: String, expectedContent: String, document: String, singleDeleteIds: [String], today: LocalDate,
+    at: Date
+  ) -> JSONValue {
+    var action = JSONObject()
+    action["type"] = .string("save-editor")
+    action["pageId"] = .string(pageId)
+    action["expectedContent"] = .string(expectedContent)
+    action["document"] = .string(document)
+    if !singleDeleteIds.isEmpty { action["singleDeleteIds"] = .array(singleDeleteIds.map { .string($0) }) }
+    action["today"] = .string(today.value)
+    action["at"] = .string(isoTime(at))
+    return .object(action)
+  }
+
+  private static func isoTime(_ date: Date) -> String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.string(from: date)
   }
 
   public static func ensureDay(_ date: LocalDate) -> JSONValue {

@@ -56,6 +56,79 @@ import Testing
     }
   }
 
+  @Test func a_draft_survives_closing_and_opening_the_store() async throws {
+    try await withTemporaryDirectory { directory in
+      let url = directory.appending(path: "store.sqlite")
+      let draft = PageDraft(
+        pageId: "p1", owner: "user-1", base: "key", baseDocument: "[\"caf\u{E9} \u{1F600}\"]", document: "[]",
+        singleDeleteIds: ["a"],
+        sent: .init(
+          operationId: "op-1", document: "[\"sent\"]", action: #"{"document":"[\"sent\"]","at":"caf\#u{E9}"}"#),
+        changedAt: Date(timeIntervalSince1970: 1_798_194_615.125))
+      do {
+        let first = try SwiftDataWorkspaceStore.open(at: url)
+        try await first.put(draft)
+      }
+      let second = try SwiftDataWorkspaceStore.open(at: url)
+      #expect(try await second.drafts() == [draft])
+    }
+  }
+
+  @Test func a_store_written_by_the_first_schema_opens_with_everything_in_it() async throws {
+    try await withTemporaryDirectory { directory in
+      let url = directory.appending(path: "store.sqlite")
+      let text = """
+        {"revision":4,"timezone":"UTC","pages":[{"id":"p1","type":"document","date":null,"title":"One",\
+        "document":"[]"},{"id":"p2","type":"document","date":null,"title":"Two","document":"[1]"}],\
+        "tasks":[{"id":"t1","title":"a","status":"open","paused":false}]}
+        """
+      let workspace = try required(Workspace(try JSON.parse(text)))
+      let entryTime = Date(timeIntervalSince1970: 1_798_194_615.125)
+      do {
+        let schema = Schema(versionedSchema: SchemaV1.self)
+        let container = try ModelContainer(
+          for: schema, configurations: [ModelConfiguration(schema: schema, url: url)])
+        let context = ModelContext(container)
+        var rest = try required(workspace.json().objectValue)
+        rest["pages"] = .array([])
+        rest["tasks"] = .array([])
+        for (position, page) in workspace.pages.enumerated() {
+          context.insert(SchemaV1.PageRow(id: page.id, position: position, json: JSON.write(.object(page.raw))))
+        }
+        for (position, task) in workspace.tasks.enumerated() {
+          context.insert(SchemaV1.TaskRow(id: task.id, position: position, json: JSON.write(.object(task.raw))))
+        }
+        context.insert(
+          SchemaV1.MetaRow(owner: "user-1", revision: 4, restJSON: JSON.write(.object(rest)), nextSeq: 3))
+        for seq in 1...2 {
+          context.insert(
+            SchemaV1.OutboxRow(
+              seq: seq, kind: "command", owner: "user-1", operationId: "op-\(seq)",
+              actionJSON: #"{"type":"tickTask","taskId":"t1"}"#, baseRevision: 4, ownRevisionsJSON: "[3]",
+              label: "Tick \(seq)", createdAt: entryTime, state: "pending", reason: nil))
+        }
+        try context.save()
+      }
+
+      let store = try SwiftDataWorkspaceStore.open(at: url)
+      let loaded = try required(try await store.load())
+      #expect(loaded.owner == "user-1")
+      #expect(loaded.workspace.json() == workspace.json())
+      #expect(loaded.workspace.pages.map(\.id) == ["p1", "p2"])
+      let entries = try await store.entries()
+      #expect(entries.map(\.operationId) == ["op-1", "op-2"])
+      #expect(entries.map(\.ownRevisions) == [[3], [3]])
+      #expect(entries.map(\.createdAt) == [entryTime, entryTime])
+      #expect(try await store.append(newEntry(operationId: "op-3")).seq == 3)
+
+      let draft = PageDraft(
+        pageId: "p1", owner: "user-1", base: "k", baseDocument: "[]", document: "[1]", singleDeleteIds: [],
+        sent: nil, changedAt: entryTime)
+      try await store.put(draft)
+      #expect(try await store.drafts() == [draft])
+    }
+  }
+
   @Test func storesInMemoryAreIndependent() async throws {
     let one = try SwiftDataWorkspaceStore.open(at: nil)
     let other = try SwiftDataWorkspaceStore.open(at: nil)
@@ -111,6 +184,23 @@ import Testing
     try await store.corruptAPage()
     await #expect(throws: StoreError.unreadable) { try await store.load() }
   }
+
+  @Test func a_draft_row_that_cannot_be_read_leaves_the_others_read() async throws {
+    let store = try SwiftDataWorkspaceStore.open(at: nil)
+    let time = Date(timeIntervalSince1970: 1_798_194_615)
+    let good = PageDraft(
+      pageId: "p1", owner: "user-1", base: "k", baseDocument: "[]", document: "[1]", singleDeleteIds: ["a"],
+      sent: nil, changedAt: time)
+    try await store.put(good)
+    try await store.put(
+      PageDraft(
+        pageId: "p2", owner: "user-1", base: "k", baseDocument: "[]", document: "[2]", singleDeleteIds: [],
+        sent: nil, changedAt: time.addingTimeInterval(1)))
+    try await store.corruptTheRowsRemoved(ofDraft: "p2")
+
+    #expect(try await store.drafts() == [good])
+    #expect(try await store.drafts() == [good], "read the same way again")
+  }
 }
 
 extension SwiftDataWorkspaceStore {
@@ -120,6 +210,14 @@ extension SwiftDataWorkspaceStore {
     descriptor.fetchLimit = 1
     let row = try required(try modelContext.fetch(descriptor).first)
     row.json = "{not json"
+    try modelContext.save()
+  }
+
+  /// Replaces the stored ids of the rows a page's draft removed with text that is not JSON.
+  fileprivate func corruptTheRowsRemoved(ofDraft pageId: String) throws {
+    let rows = try modelContext.fetch(FetchDescriptor<DraftRow>(predicate: #Predicate { $0.pageId == pageId }))
+    let row = try required(rows.first)
+    row.singleDeleteIdsJSON = "{not json"
     try modelContext.save()
   }
 }

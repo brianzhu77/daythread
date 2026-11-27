@@ -24,6 +24,9 @@ private actor RefusingServer: ServerTransport {
   func send(
     token: String?, operationId: String, action: JSONValue, expectedOwner: String, basis: OutboxBasis
   ) async throws -> CommandOutcome { throw TransportError.offline }
+  func save(
+    token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
+  ) async throws -> SaveOutcome { throw TransportError.offline }
 }
 
 @MainActor

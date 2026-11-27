@@ -84,15 +84,127 @@ enum SchemaV1: VersionedSchema {
   }
 }
 
-typealias PageRow = SchemaV1.PageRow
-typealias TaskRow = SchemaV1.TaskRow
-typealias MetaRow = SchemaV1.MetaRow
-typealias OutboxRow = SchemaV1.OutboxRow
+/// V1 plus the drafts. Each version lists its own copy of the models, so the V1 classes stay as they were written;
+/// the aliases below name the ones the store uses.
+enum SchemaV2: VersionedSchema {
+  static let versionIdentifier = Schema.Version(2, 0, 0)
+  static var models: [any PersistentModel.Type] {
+    [PageRow.self, TaskRow.self, MetaRow.self, OutboxRow.self, DraftRow.self]
+  }
 
-/// No stages yet; a later schema version adds them.
+  @Model final class PageRow {
+    @Attribute(.unique) var id: String
+    var position: Int
+    var json: String
+    init(id: String, position: Int, json: String) {
+      self.id = id
+      self.position = position
+      self.json = json
+    }
+  }
+
+  @Model final class TaskRow {
+    @Attribute(.unique) var id: String
+    var position: Int
+    var json: String
+    init(id: String, position: Int, json: String) {
+      self.id = id
+      self.position = position
+      self.json = json
+    }
+  }
+
+  @Model final class MetaRow {
+    @Attribute(.unique) var key: Int
+    var owner: String
+    var revision: Int
+    var restJSON: String
+    var nextSeq: Int
+    init(owner: String, revision: Int, restJSON: String, nextSeq: Int) {
+      key = 0
+      self.owner = owner
+      self.revision = revision
+      self.restJSON = restJSON
+      self.nextSeq = nextSeq
+    }
+  }
+
+  @Model final class OutboxRow {
+    @Attribute(.unique) var seq: Int
+    var kind: String
+    var owner: String
+    var operationId: String
+    var actionJSON: String
+    var baseRevision: Int
+    var ownRevisionsJSON: String
+    var label: String
+    var createdAt: Date
+    var state: String
+    var reason: String?
+    init(
+      seq: Int, kind: String, owner: String, operationId: String, actionJSON: String,
+      baseRevision: Int, ownRevisionsJSON: String, label: String, createdAt: Date, state: String,
+      reason: String?
+    ) {
+      self.seq = seq
+      self.kind = kind
+      self.owner = owner
+      self.operationId = operationId
+      self.actionJSON = actionJSON
+      self.baseRevision = baseRevision
+      self.ownRevisionsJSON = ownRevisionsJSON
+      self.label = label
+      self.createdAt = createdAt
+      self.state = state
+      self.reason = reason
+    }
+  }
+
+  /// A page's unsaved draft, one per owner and page. `key` joins the two unambiguously, so one unique attribute
+  /// makes a second `put` replace the row rather than add one.
+  @Model final class DraftRow {
+    @Attribute(.unique) var key: String
+    var pageId: String
+    var owner: String
+    var base: String
+    var baseDocument: String
+    var document: String
+    var singleDeleteIdsJSON: String
+    var sentOperationId: String?
+    var sentDocument: String?
+    /// The action as first sent, as written text: a retry sends it again unchanged.
+    var sentAction: String?
+    var changedAt: Date
+    init(
+      key: String, pageId: String, owner: String, base: String, baseDocument: String, document: String,
+      singleDeleteIdsJSON: String, sentOperationId: String?, sentDocument: String?, sentAction: String?,
+      changedAt: Date
+    ) {
+      self.key = key
+      self.pageId = pageId
+      self.owner = owner
+      self.base = base
+      self.baseDocument = baseDocument
+      self.document = document
+      self.singleDeleteIdsJSON = singleDeleteIdsJSON
+      self.sentOperationId = sentOperationId
+      self.sentDocument = sentDocument
+      self.sentAction = sentAction
+      self.changedAt = changedAt
+    }
+  }
+}
+
+typealias PageRow = SchemaV2.PageRow
+typealias TaskRow = SchemaV2.TaskRow
+typealias MetaRow = SchemaV2.MetaRow
+typealias OutboxRow = SchemaV2.OutboxRow
+typealias DraftRow = SchemaV2.DraftRow
+
+/// V1 to V2 only adds a model, which a lightweight stage covers; the workspace and the outbox are not touched.
 enum StoreMigrationPlan: SchemaMigrationPlan {
-  static var schemas: [any VersionedSchema.Type] { [SchemaV1.self] }
-  static var stages: [MigrationStage] { [] }
+  static var schemas: [any VersionedSchema.Type] { [SchemaV1.self, SchemaV2.self] }
+  static var stages: [MigrationStage] { [.lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self)] }
 }
 
 /// A page or task row: what `reposition` and `rows` need of both.
@@ -126,10 +238,12 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
   private(set) var rowWrites = 0
   /// Saves since the store was opened; tests read it to see that a call is one transaction.
   private(set) var saves = 0
+  /// The draft rows found unreadable, by key, so each is logged once.
+  private var unreadableDrafts: Set<String> = []
 
   /// Opens the store at `url`, creating its folder if needed; nil keeps it in memory only.
   public static func open(at url: URL?) throws -> SwiftDataWorkspaceStore {
-    let schema = Schema(versionedSchema: SchemaV1.self)
+    let schema = Schema(versionedSchema: SchemaV2.self)
     let configuration: ModelConfiguration
     if let url {
       try FileManager.default.createDirectory(
@@ -322,8 +436,66 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
     }
   }
 
-  public func erase() async throws {
+  // MARK: Drafts
+
+  /// A row that cannot be read is left out: one damaged row must not hide every other draft. It stays in the store
+  /// until a `put` of its page replaces it.
+  public func drafts() async throws -> [PageDraft] {
+    try modelContext.fetch(FetchDescriptor<DraftRow>()).compactMap { row in
+      do {
+        return try Self.draft(row)
+      } catch {
+        if unreadableDrafts.insert(row.key).inserted {
+          SyncLog.logger.error("A draft could not be read; left out")
+        }
+        return nil
+      }
+    }.sorted(by: PageDraft.inStoreOrder)
+  }
+
+  public func put(_ draft: PageDraft) async throws {
+    let key = Self.draftKey(owner: draft.owner, pageId: draft.pageId)
     try commit {
+      var descriptor = FetchDescriptor<DraftRow>(predicate: #Predicate { $0.key == key })
+      descriptor.fetchLimit = 1
+      let ids = JSON.write(.array(draft.singleDeleteIds.map { .string($0) }))
+      if let row = try modelContext.fetch(descriptor).first {
+        row.base = draft.base
+        row.baseDocument = draft.baseDocument
+        row.document = draft.document
+        row.singleDeleteIdsJSON = ids
+        row.sentOperationId = draft.sent?.operationId
+        row.sentDocument = draft.sent?.document
+        row.sentAction = draft.sent?.action
+        row.changedAt = draft.changedAt
+      } else {
+        modelContext.insert(
+          DraftRow(
+            key: key, pageId: draft.pageId, owner: draft.owner, base: draft.base,
+            baseDocument: draft.baseDocument, document: draft.document, singleDeleteIdsJSON: ids,
+            sentOperationId: draft.sent?.operationId, sentDocument: draft.sent?.document,
+            sentAction: draft.sent?.action,
+            changedAt: draft.changedAt))
+      }
+    }
+  }
+
+  public func removeDraft(pageId: String, owner: String) async throws {
+    let key = Self.draftKey(owner: owner, pageId: pageId)
+    try commit {
+      for row in try modelContext.fetch(FetchDescriptor<DraftRow>(predicate: #Predicate { $0.key == key })) {
+        modelContext.delete(row)
+      }
+    }
+  }
+
+  public func eraseKeepingDrafts(except owner: String?) async throws {
+    try commit {
+      if let owner {
+        let theirs = FetchDescriptor<DraftRow>(predicate: #Predicate { $0.owner == owner })
+        for row in try modelContext.fetch(theirs) { modelContext.delete(row) }
+      }
+      // The meta row goes too, and `seq` with it.
       for row in try modelContext.fetch(FetchDescriptor<PageRow>()) { modelContext.delete(row) }
       for row in try modelContext.fetch(FetchDescriptor<TaskRow>()) { modelContext.delete(row) }
       for row in try modelContext.fetch(FetchDescriptor<OutboxRow>()) { modelContext.delete(row) }
@@ -385,6 +557,31 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
       revisions.append(revision)
     }
     return revisions
+  }
+
+  /// The owner's length first, so no two (owner, page id) pairs join to the same text.
+  private static func draftKey(owner: String, pageId: String) -> String {
+    "\(owner.utf8.count):\(owner)\(pageId)"
+  }
+
+  private static func draft(_ row: DraftRow) throws -> PageDraft {
+    guard let values = try record(row.singleDeleteIdsJSON).arrayValue else { throw StoreError.unreadable }
+    var ids: [String] = []
+    for value in values {
+      guard let id = value.stringValue else { throw StoreError.unreadable }
+      ids.append(id)
+    }
+    var sent: PageDraft.Sent?
+    if let operationId = row.sentOperationId, let document = row.sentDocument, let action = row.sentAction {
+      sent = PageDraft.Sent(operationId: operationId, document: document, action: action)
+    } else if row.sentOperationId != nil || row.sentDocument != nil || row.sentAction != nil {
+      // `put` writes the three together, so only a damaged row holds some of them. It reads as never sent, which
+      // cannot apply anything twice: the next save carries the old `expectedContent`, refused if the first landed.
+      SyncLog.logger.error("A draft's record of its save is incomplete; read as not sent")
+    }
+    return PageDraft(
+      pageId: row.pageId, owner: row.owner, base: row.base, baseDocument: row.baseDocument,
+      document: row.document, singleDeleteIds: ids, sent: sent, changedAt: row.changedAt)
   }
 
   private static func entry(_ row: OutboxRow) throws -> OutboxEntry {

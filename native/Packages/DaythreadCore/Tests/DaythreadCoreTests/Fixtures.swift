@@ -129,6 +129,38 @@ extension Fixtures {
   }
 }
 
+/// A shared case of `saves/`: one `save-editor` action and what the server did with it.
+struct SaveCase {
+  var name: String
+  var before: Workspace
+  var action: JSONObject
+  var after: Workspace?
+  var refused: String?
+
+  var pageId: String { action["pageId"]?.stringValue ?? "" }
+  var document: String { action["document"]?.stringValue ?? "" }
+  var beforePage: Page? { before.page(pageId) }
+}
+
+extension Fixtures {
+  static func saveNames() throws -> [String] {
+    try FileManager.default.contentsOfDirectory(atPath: core.appending(path: "saves").path)
+      .filter { $0.hasSuffix(".json") }
+      .map { String($0.dropLast(".json".count)) }
+      .sorted()
+  }
+
+  static func saveCase(_ name: String) throws -> SaveCase {
+    let object = try #require(try json("saves/\(name).json").objectValue)
+    return SaveCase(
+      name: name,
+      before: try #require(object["before"].flatMap(Workspace.init)),
+      action: try #require(object["action"]?.objectValue),
+      after: object["after"].flatMap(Workspace.init),
+      refused: object["refused"]?.stringValue)
+  }
+}
+
 extension Fixtures {
   /// The entries of a shared case file whose cases are an array of objects.
   static func cases(_ path: String) throws -> [JSONObject] {

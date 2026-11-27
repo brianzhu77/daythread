@@ -7,8 +7,9 @@ third-party packages, no web view.
   (`Tests/`) and its UI tests (`UITests/`). The `App/`, `Tests/` and `UITests/` folders are synchronised groups: a file
   added there is in the target without a project edit.
 - `Packages/`: `DaythreadCore` (records, lossless JSON), `DaythreadSync` (server client, Keychain, store on the device,
-  `SyncEngine`), `DaythreadEditor` (a page's rows; a to-do's circle ticks, nothing else edits), `DaythreadUI` (the
-  screens and `AppModel`). Each package's own tests run with `swift test` in its folder.
+  `SyncEngine`), `DaythreadEditor` (a page's rows; a line's words are typed into, one row at a time, and a to-do's
+  circle ticks), `DaythreadUI` (the screens and `AppModel`). Each package's own tests run with `swift test` in its
+  folder.
 
 ## Build
 
@@ -51,13 +52,39 @@ directory: 3741 with sign-in off, seeded with today's page and its to-dos, and 3
 plants" is only read by the tests; each test that ticks has a to-do of its own ("Tick me offline", "Tick me twice";
 "Tick me" is left for looking by hand), since the seed is shared by every test and never reset. It passes the
 addresses and the seeded day to the UI tests (`TEST_RUNNER_DAYTHREAD_SERVER_URL`,
-`TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_TODAY`, `TEST_RUNNER_DAYTHREAD_TODAY_TITLE`), runs
+`TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_TODAY`), runs
 `xcodebuild test`, and on exit stops both servers, removes their directories and removes the stores the tests made in
 the app's container. Run any other way, the UI tests skip. The app hosting the unit tests is pointed at `127.0.0.1:9`,
 where nothing listens. A full run takes a few minutes; `-only-testing:` runs one class or one test.
 
 The UI tests read the server the way any client does (`GET /api/v1/workspace` on 3741, where sign-in is off). Offline
 is a launch with `-DaythreadServerURL http://127.0.0.1:9` and the same `-DaythreadStoreName` as the launch before it.
+
+The writing tests (`UITests/WritingUITests.swift`) type into today's page and read the page back from the server:
+each types words of its own, at the end of the page under Notes or in the template's empty to-do, since the seed is
+shared and never reset. They are written for one run per seeded server, as the wrapper starts one: run again against
+the same server (one kept by `--serve`), they meet the words and to-dos the run before left. The one that changes the page "on another device" saves it through `POST /api/v1/saves`
+with the page's revision and content key read first (`SeededServer.save` in `UITests/Launch.swift`, which holds its
+own copy of the web's `textKey`). The simulator keeps the keyboard last used: the tests turn it to English with the
+globe key before typing, and the Chinese test turns it to Pinyin and taps the keys one by one (`typeText` would put
+the letters in past the input method), then back. They need the simulator's keyboard list to hold
+`zh_Hans-Pinyin@sw=Pinyin` after English (Settings, General, Keyboard, Keyboards); the test changes nothing there.
+
+## How typing feels
+
+`Tests/TypingFeelTests.swift` times a keystroke to the list laid out again, 50 characters into the 150th line of a
+page of 300 lines and, for comparison, the 5th of 10, five runs each, with the engine and a store on disk real and a
+server that never answers. It prints each run and the median (search the output for `TypingFeel:`). It only measures
+unless asked to hold the budget, one and a half times the medians measured on the machine that set it (written in
+the test):
+
+```sh
+TEST_RUNNER_DAYTHREAD_FEEL_BUDGET=1 xcodebuild test -project native/Daythread.xcodeproj -scheme Daythread \
+  -only-testing:DaythreadTests/TypingFeelTests \
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath native/DerivedData
+```
+
+Leave it off in CI and on other machines: their times differ, and a budget from this Mac would only be noise there.
 
 `--serve` seeds the same two servers and keeps them until Ctrl-C, for looking at the app by hand: launch it with
 `xcrun simctl launch <simulator> app.daythread.Daythread -DaythreadServerURL http://127.0.0.1:3741

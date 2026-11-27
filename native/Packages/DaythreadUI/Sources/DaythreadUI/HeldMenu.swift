@@ -1,7 +1,9 @@
+import DaythreadCore
 import DaythreadSync
 
-/// What the held button's menu says: one section per held change, titled with the web's sentence for why it was not
-/// saved (`HeldBanner` in `src/components/app-shell.tsx`), and a last line for the changes waiting behind them.
+/// What the held button's menu says: one section per draft kept and not sent, one per held change, titled with the
+/// web's sentence for why it was not saved (`HeldBanner` in `src/components/app-shell.tsx`), and a last line for the
+/// changes waiting behind them.
 enum HeldMenu {
   struct Section: Equatable {
     let id: Int
@@ -9,8 +11,25 @@ enum HeldMenu {
     let canKeep: Bool
   }
 
+  /// A draft the engine keeps and does not send until he acts (`native-phase-1.md` §10.6): its page is gone or in
+  /// Trash, or the server would not take it. Its section holds "Copy draft" and "Discard draft".
+  struct DraftSection: Equatable {
+    let pageId: String
+    let title: String
+  }
+
   static func sections(_ held: [HeldChange]) -> [Section] {
     held.map { Section(id: $0.id, title: title(for: $0), canKeep: $0.canKeep) }
+  }
+
+  /// One section per stuck draft, titled with its page's day and why it is not sent; the reason alone when the copy
+  /// no longer has the page.
+  static func draftSections(_ drafts: [DraftStatus], in workspace: Workspace?) -> [DraftSection] {
+    drafts.compactMap { draft in
+      guard case .stuck(let reason) = draft.state else { return nil }
+      let day = workspace?.page(draft.id)?.date.map { DayTitle.short(for: $0) }
+      return DraftSection(pageId: draft.id, title: [day, reason].compactMap(\.self).joined(separator: " · "))
+    }
   }
 
   static func waitingLine(_ waiting: Int) -> String? {

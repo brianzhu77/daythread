@@ -12,15 +12,19 @@ actor TestServer: ServerTransport {
     case account(Account)
     case workspace(WorkspaceReply)
     case outcome(CommandOutcome)
+    case saved(SaveOutcome)
   }
 
   private var script: [Reply]
   private var holding = false
+  private var holdingSaves = false
   private var held: [CheckedContinuation<Void, Never>] = []
   private var arrivals: [CheckedContinuation<Void, Never>] = []
   /// The actions sent, in the order they were sent.
   private(set) var sent: [JSONValue] = []
   private(set) var unscripted = 0
+  /// Workspace loads answered, with a reply or a failure.
+  private(set) var loadsAnswered = 0
 
   init(_ script: [Reply] = []) {
     self.script = script
@@ -35,9 +39,18 @@ actor TestServer: ServerTransport {
     holding = true
   }
 
+  /// Every page save from now on waits for `release`; other calls are answered.
+  func holdSaves() {
+    holdingSaves = true
+  }
+
+  /// The calls waiting to be released.
+  var waitingCalls: Int { held.count }
+
   /// Lets every waiting call through, and stops holding.
   func release() {
     holding = false
+    holdingSaves = false
     let waiting = held
     held = []
     for call in waiting { call.resume() }
@@ -66,6 +79,7 @@ actor TestServer: ServerTransport {
   }
 
   func workspace(token: String?, have: Int?) async throws -> WorkspaceReply {
+    defer { loadsAnswered += 1 }
     guard case .workspace(let reply) = try await answer() else { throw TransportError.unreadable }
     return reply
   }
@@ -78,8 +92,16 @@ actor TestServer: ServerTransport {
     return outcome
   }
 
-  private func answer() async throws -> Reply {
-    if holding {
+  func save(
+    token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
+  ) async throws -> SaveOutcome {
+    sent.append(action)
+    guard case .saved(let outcome) = try await answer(isSave: true) else { throw TransportError.unreadable }
+    return outcome
+  }
+
+  private func answer(isSave: Bool = false) async throws -> Reply {
+    if holding || (isSave && holdingSaves) {
       await withCheckedContinuation { call in
         held.append(call)
         let waiting = arrivals
@@ -95,13 +117,18 @@ actor TestServer: ServerTransport {
   }
 }
 
-/// The memory store, except that `append` can be made to fail and `replace` to wait for the test.
+/// The memory store, except that `append` can be made to fail, and `replace` and `put` to wait for the test.
 actor TestStore: WorkspaceStore {
   private let memory = MemoryWorkspaceStore()
   private var refusesAppend = false
   private var holdsReplace = false
   private var heldReplace: CheckedContinuation<Void, Never>?
   private var arrivals: [CheckedContinuation<Void, Never>] = []
+  private var holdsPut = false
+  private var heldPuts: [CheckedContinuation<Void, Never>] = []
+  private var putArrivals: [CheckedContinuation<Void, Never>] = []
+  /// The drafts stored, in the order stored.
+  private(set) var puts: [PageDraft] = []
 
   struct Refused: Error {}
 
@@ -114,6 +141,29 @@ actor TestStore: WorkspaceStore {
     holdsReplace = false
     heldReplace?.resume()
     heldReplace = nil
+  }
+
+  /// Every `put` from now on waits for `releasePut`.
+  func holdPut() { holdsPut = true }
+
+  /// Lets every waiting `put` through, and stops holding.
+  func releasePut() {
+    holdsPut = false
+    let waiting = heldPuts
+    heldPuts = []
+    for call in waiting { call.resume() }
+  }
+
+  /// Lets the first waiting `put` through, and goes on holding the next.
+  func releaseOnePut() {
+    guard !heldPuts.isEmpty else { return }
+    heldPuts.removeFirst().resume()
+  }
+
+  /// Returns once a `put` is waiting.
+  func putHeld() async {
+    if !heldPuts.isEmpty { return }
+    await withCheckedContinuation { putArrivals.append($0) }
   }
 
   /// Returns once a `replace` is waiting.
@@ -150,5 +200,23 @@ actor TestStore: WorkspaceStore {
   func update(_ entry: OutboxEntry) async throws { try await memory.update(entry) }
   func remove(seq: Int) async throws { try await memory.remove(seq: seq) }
   func acknowledge(seq: Int, revision: Int?) async throws { try await memory.acknowledge(seq: seq, revision: revision) }
-  func erase() async throws { try await memory.erase() }
+  func drafts() async throws -> [PageDraft] { try await memory.drafts() }
+  func put(_ draft: PageDraft) async throws {
+    if holdsPut {
+      await withCheckedContinuation { call in
+        heldPuts.append(call)
+        let waiting = putArrivals
+        putArrivals = []
+        for arrival in waiting { arrival.resume() }
+      }
+    }
+    puts.append(draft)
+    try await memory.put(draft)
+  }
+  func removeDraft(pageId: String, owner: String) async throws {
+    try await memory.removeDraft(pageId: pageId, owner: owner)
+  }
+  func eraseKeepingDrafts(except owner: String?) async throws {
+    try await memory.eraseKeepingDrafts(except: owner)
+  }
 }
