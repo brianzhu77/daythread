@@ -84,7 +84,9 @@ final class RowUITests: XCTestCase {
     XCUIDevice.shared.appearance = .dark
     let dark = try open()
     XCTAssertEqual(try marks(of: "Pay the rent", in: dark), "Due tomorrow")
+    // Scrolled so the repeat mark under "Water the fern" is clear of the tab bar.
     dark.scrollToTheTop()
+    try reveal("Water the fern", in: dark)
     keepScreenshot("marks, dark", of: dark)
     dark.terminate()
     XCUIDevice.shared.appearance = appearance
@@ -198,21 +200,40 @@ final class RowUITests: XCTestCase {
     let tomorrow = app.buttons["Tomorrow"]
     XCTAssertTrue(tomorrow.waitForExistence(timeout: 10))
     tomorrow.tap()
-    XCTAssertTrue(
-      app.showsNotice("Moved to \(Words.longLabel(today, adding: 1))", timeout: 30), "the notice")
-    try await server.waitForPlannedDay(of: title, Words.iso(today, adding: 1))
+    // The notice lives 8 seconds: Undo is tapped as soon as it is there, and the server is read afterwards.
     let undo = app.buttons["Undo"]
-    XCTAssertTrue(undo.waitForExistence(timeout: 10), "offered while the server's slot is this move's")
-    // The notice floats over the page's first row while it shows; seen with the page at its top. Dragging the page
-    // is not typing or ticking, so the Undo stays.
-    app.scrollToTheTop()
-    keepScreenshot("notice with Undo", of: app)
-    XCTAssertTrue(undo.exists, "still offered")
+    XCTAssertTrue(undo.waitForExistence(timeout: 30), "offered while the server's slot is this move's")
+    XCTAssertTrue(app.showsNotice("Moved to \(Words.longLabel(today, adding: 1))", timeout: 1), "the notice")
     undo.tap()
 
     XCTAssertTrue(app.showsNotice("Undone", timeout: 30), "the notice")
     XCTAssertTrue(app.waitForLine(title), "back on today's page")
     try await server.waitForPlannedDay(of: title, Words.iso(today))
+    app.terminate()
+  }
+
+  /// On a phone the notice sits under the status bar: with the page at its top, the day's title is not under it.
+  /// The row acted on is on the screen with the page unscrolled, so nothing stands between the notice and the look.
+  @MainActor
+  func test_the_notice_leaves_the_days_title_uncovered() throws {
+    let today = try Wrapper.today()
+    let title = "Show the notice"
+    let app = try open()
+    let line = app.line(title)
+    XCTAssertTrue(line.isHittable, "on the screen with the page at its top")
+
+    line.swipeLeft()
+    let off = app.buttons["Not today"]
+    XCTAssertTrue(off.waitForExistence(timeout: 10))
+    off.tap()
+    XCTAssertTrue(app.buttons["Undo"].waitForExistence(timeout: 30), "the notice, with Undo")
+    // Read while the notice shows (8 seconds), then the look kept.
+    let words = app.staticTexts["Not today — won’t carry over"]
+    let header = app.buttons[dayHeader(today)]
+    XCTAssertTrue(words.exists && header.exists)
+    XCTAssertLessThan(words.frame.maxY, header.frame.minY, "the title is not under the notice")
+    XCTAssertGreaterThan(words.frame.minY, app.windows.firstMatch.frame.minY + 44, "under the status bar")
+    keepScreenshot("notice with Undo", of: app)
     app.terminate()
   }
 

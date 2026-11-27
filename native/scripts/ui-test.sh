@@ -151,6 +151,8 @@ for (const [index, title] of ['Water the plants', 'Tick me', 'Tick me offline', 
 // Slice 1c: rows with marks, each planned today on today's page, and one to-do for each test that acts on a row.
 // Nothing here plans a to-do for today with `plan-task`: that is a choice, and it would restart Since.
 const planned = (title, dates = {}) => ({ type: 'add-task', pageId: todayPage, title, plannedOn: today, ...dates })
+// First, so its row is on the screen with the page at its top: the notice is seen there over an unscrolled page.
+await send('ui-test-notice', planned('Show the notice'))
 await send('ui-test-due', planned('Pay the rent', { deadlineOn: addDays(today, 1) }))
 await send('ui-test-was-due', planned('File the return', { deadlineOn: addDays(today, -3) }))
 await send('ui-test-start-due', planned('Book the venue', {
