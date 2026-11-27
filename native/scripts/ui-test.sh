@@ -2,7 +2,8 @@
 # Runs the app's tests (unit and UI) on the one simulator this machine gives to this work, against two throwaway
 # servers started from this checkout:
 #   3741  sign-in off, seeded with today's page and its to-dos: "Water the plants", which tests only read, and one for
-#         each test that ticks ("Tick me", "Tick me offline", "Tick me twice")
+#         each test that ticks ("Tick me", "Tick me offline", "Tick me twice"); for the to-do row, rows with each
+#         kind of mark and one to-do for each test that acts on a row ("Move me", "Set me aside", …)
 #   3742  sign-in on (no Supabase behind it: only "who is this?" is asked, and it answers 401)
 # Each server keeps its SQLite file in a directory under the system temp directory; both are stopped and their
 # directories removed on exit, however the run ends, and so are the stores the UI tests made in the app's container.
