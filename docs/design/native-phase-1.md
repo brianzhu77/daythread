@@ -689,7 +689,7 @@ In this order, separated by ` · `, each only when it applies, and only on an **
 - **Blocked by** is a line of its own under that one, as on the web: `Blocked by Buy paint`, or `Blocked by 2`
   for several. It is words only in this slice.
 - **A done row** shows none of these (the web drops them the moment it is ticked), a cancelled row only
-  `Cancelled`. A to-do typed and not saved yet has no dates, repeat or blocker, so it shows none.
+  `Cancelled`; except `Reference`, which the web keeps on a reference row whatever its status. A to-do typed and not saved yet has no dates, repeat or blocker, so it shows none.
 - **A reference row of an open to-do** has the web's quiet `Plan for today` button at its trailing end (a plain
   button, caption size, the secondary colour), not shown when the to-do is already planned today. It is the only
   control a row gains, and it is on the web's phone row too.
@@ -737,7 +737,8 @@ gives a list's row:
 - **The context menu of the row** (a secondary click on the Mac and with a pointer; a touch and hold on the row
   outside its words, where the system's text selection does not take it): all of the row's actions as one
   system menu, in the web's `⋯` order, with **Another day** as a titled group.
-- **⌘/** with a hardware keyboard opens the same list for the caret's row, as on the web.
+- **⌘/** with a hardware keyboard opens the row's actions for the caret's row, as on the web (as the action
+  sheet, anchored to the row: the system has no way to open a context menu from a key).
 - **VoiceOver**: the same actions are custom actions of the line.
 - `Pick date…` opens the system's calendar (`UICalendarView`, as the day picker of 1a: a popover on a wide
   screen, a sheet on the phone), days before today not selectable; choosing a day moves the to-do there and
