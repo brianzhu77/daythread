@@ -193,6 +193,7 @@ extension SyncEngine {
       // receipt the server kept and acknowledged then.
       try await store.write(updated, changed: changes)
       self.copy = (updated, copy.owner)
+      forgetOverwrittenSaves()
       try await store.acknowledge(seq: entry.seq, revision: changes.revision)
     case .alreadyApplied:
       publish()
@@ -459,6 +460,7 @@ extension SyncEngine {
       }
       try await store.write(next, changed: changes)
       self.copy = (next, copy.owner)
+      forgetOverwrittenSaves()
       await readOutbox()
       publish()
       return .answer(.applied)

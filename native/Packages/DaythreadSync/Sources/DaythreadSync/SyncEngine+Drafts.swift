@@ -70,18 +70,34 @@ extension SyncEngine {
         pageId: page.id, owner: copy.owner, base: kept?.base ?? ContentKey.of(baseDocument),
         baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds, sent: kept?.sent,
         changedAt: now()))
+    if kept == nil { draftOrigins[page.id] = DraftOrigin(owner: copy.owner, keys: [ContentKey.of(startedFrom)]) }
     refusedDrafts[page.id] = nil
     publishDrafts()
     waitThenSave(page.id)
   }
 
   /// Where a page's first draft starts: `startedFrom`, or what the page's last landed save sent when `startedFrom` is
-  /// the page that save was made on (see `keepDraft`). Runs inside a store section.
+  /// the page that save was made on, or a page the screen typed that save's draft onto (see `keepDraft`): the screen
+  /// moves its `startedFrom` on only while the page has no draft, so a draft that lived through several saves still
+  /// carries the page it was created on. Runs inside a store section.
   private func firstBase(of pageId: String, owner: String, startedFrom: String) -> String {
-    guard let landed = landedSaves[pageId], landed.owner == owner,
+    guard let landed = landedSaves[pageId], landed.owner == owner else { return startedFrom }
+    guard
       Self.document(startedFrom, hasKey: landed.base, keyOf: landed.baseDocument)
+        || landed.origins.contains(ContentKey.of(startedFrom))
     else { return startedFrom }
     return landed.sentDocument
+  }
+
+  /// Forgets each landed save whose page the copy no longer has as that save left it (a load or another change
+  /// brought other words): a keystroke typed on the page now is typed on what the copy shows, not on what was sent
+  /// long ago. Runs inside a store section, after every change of the copy.
+  func forgetOverwrittenSaves() {
+    guard !landedSaves.isEmpty else { return }
+    landedSaves = landedSaves.filter { pageId, landed in
+      copy?.workspace.page(pageId).map { ContentKey.storedDocument($0.document).utf8.elementsEqual(landed.pageAfter.utf8) }
+        ?? false
+    }
   }
 
   /// After the screen merged: the draft now starts from `baseDocument` (the server's page it was merged with),
@@ -118,6 +134,11 @@ extension SyncEngine {
         PageDraft(
           pageId: page.id, owner: copy.owner, base: ContentKey.of(baseDocument), baseDocument: baseDocument,
           document: document, singleDeleteIds: named.singleDeleteIds, sent: nil, changedAt: now()))
+      // The screen goes on typing onto the merged page.
+      var origin = draftOrigins[page.id].flatMap { $0.owner == copy.owner ? $0 : nil }
+        ?? DraftOrigin(owner: copy.owner, keys: [])
+      origin.keys.append(ContentKey.of(document))
+      draftOrigins[page.id] = origin
     }
     stopDraftWait(page.id)
     refusedDrafts[page.id] = nil
@@ -327,6 +348,7 @@ extension SyncEngine {
 
   private func forgetDraft(pageId: String, owner: String) {
     drafts.removeAll { $0.owner == owner && $0.pageId.utf8.elementsEqual(pageId.utf8) }
+    if draftOrigins[pageId]?.owner == owner { draftOrigins[pageId] = nil }
   }
 
   // MARK: The wait after a change
@@ -363,6 +385,7 @@ extension SyncEngine {
     savesInFlight = []
     refusedDrafts = [:]
     landedSaves = [:]
+    draftOrigins = [:]
   }
 
   // MARK: Saving
@@ -550,6 +573,7 @@ extension SyncEngine {
       // receipt the server kept.
       try await store.write(updated, changed: changes)
       self.copy = (updated, copy.owner)
+      forgetOverwrittenSaves()
       // Not `changes.revision`: a replay's changes end at the workspace as it is now, others' writes included.
       try await learn(Self.revision(of: receipt))
       try await settleDraft(save)
@@ -601,10 +625,14 @@ extension SyncEngine {
     guard var draft = recordedDraft(of: save), let sent = draft.sent, sent.operationId == save.operationId
     else { return }
     if draft.document.utf8.elementsEqual(sent.document.utf8) {
+      let origins = draftOrigins[draft.pageId].flatMap { $0.owner == draft.owner ? $0.keys : nil } ?? []
       try await store.removeDraft(pageId: draft.pageId, owner: draft.owner)
       forgetDraft(pageId: draft.pageId, owner: draft.owner)
-      landedSaves[draft.pageId] = LandedSave(
-        owner: draft.owner, base: draft.base, baseDocument: draft.baseDocument, sentDocument: sent.document)
+      landedSaves[draft.pageId] = copy?.workspace.page(draft.pageId).map { page in
+        LandedSave(
+          owner: draft.owner, base: draft.base, baseDocument: draft.baseDocument, origins: origins,
+          sentDocument: sent.document, pageAfter: ContentKey.storedDocument(page.document))
+      }
     } else {
       // His newer words go on from this draft: no keystroke starts from an older landed save's page any more.
       landedSaves[draft.pageId] = nil
@@ -680,13 +708,24 @@ extension SyncEngine {
   }
 }
 
-/// A save that landed and removed its draft: the page it was made on, and what it sent.
+/// A save that landed and removed its draft: the page it was made on, the pages the screen typed its draft onto,
+/// what it sent, and the page as the save left it in the copy.
 struct LandedSave: Sendable {
   let owner: String
   /// The content key of `baseDocument`.
   let base: String
   let baseDocument: String
+  /// Content keys (`DraftOrigin`).
+  let origins: [String]
   let sentDocument: String
+  /// In its stored form (`ContentKey.storedDocument`).
+  let pageAfter: String
+}
+
+/// The content keys of the pages the screen typed a draft's words onto, and whose draft it is.
+struct DraftOrigin: Sendable {
+  let owner: String
+  var keys: [String]
 }
 
 /// The wait in progress after his last change to a page; `number` tells a wait that ended after it was replaced.

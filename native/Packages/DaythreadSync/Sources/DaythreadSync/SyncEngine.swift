@@ -82,6 +82,10 @@ public actor SyncEngine {
   /// it was answered starts from what it sent (`keepDraft`). Kept in memory only: after a relaunch no keystroke is on
   /// its way.
   var landedSaves: [String: LandedSave] = [:]
+  /// By page, the content keys of the pages the screen typed the draft's words onto: the one it was created on, and
+  /// each merge it was handed. A keystroke on its way still carries one of them after the draft's last save (see
+  /// `landedSaves`). Kept in memory only, beside the draft, and dropped with it.
+  var draftOrigins: [String: DraftOrigin] = [:]
   /// The calls about a page's words (`keepDraft`, `rebaseDraft`, `discardDraft`) that changed what is drawn, in this
   /// engine's lifetime. Each publishes a state with its number before it returns, so a caller that reads this after
   /// its call knows which state draws what it did, whichever reaches it first.
@@ -557,8 +561,12 @@ public actor SyncEngine {
     case .full(let workspace, let owner):
       try await store.replace(with: workspace, owner: owner)
       // What one account's saves sent says nothing about another's pages, which have the same ids.
-      if copy?.owner != owner { landedSaves = [:] }
+      if copy?.owner != owner {
+        landedSaves = [:]
+        draftOrigins = [:]
+      }
       copy = (workspace, owner)
+      forgetOverwrittenSaves()
     }
     try await settleHeldTicks()
     copyShown = true
