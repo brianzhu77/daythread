@@ -645,6 +645,152 @@
         #expect(screen.controller.redrawnRows == ["a"])
       }
 
+      // MARK: the caret's row leaves the page
+
+      private func todo(_ id: String, _ text: String, children: [Block] = []) -> Block {
+        block(id, "task", ["taskId": .string("k-\(id)")], text: text, children: children)
+      }
+
+      private func tasks(_ ids: String...) -> [JSONValue] {
+        ids.map { taskJSON("k-\($0)", status: "open") }
+      }
+
+      /// The server moved the to-do he was typing in to another day: the caret goes to the end of the nearest line
+      /// above that takes one, past the divider between them.
+      @Test func when_the_caret_row_leaves_the_caret_goes_to_the_end_of_the_line_above() throws {
+        let screen = try editing(
+          [
+            block("a", "paragraph", text: "one"), block("d", "divider"), todo("t", "Call mum"),
+            block("c", "paragraph", text: "three"),
+          ], tasks: tasks("t"))
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        _ = try focus(screen, 2, at: 4)
+
+        let moved = Document.write([block("a", "paragraph", text: "one"), block("d", "divider"), block("c", "paragraph", text: "three")])
+        screen.controller.replace(document: moved, in: try makeWorkspace(tasks: tasks("t")))
+        _ = screen.list
+
+        #expect(screen.controller.itemCount == 3)
+        let above = try screen.line(0)
+        #expect(above.isFirstResponder, "the line above has not the caret")
+        #expect(above.selectedRange == NSRange(location: 3, length: 0))
+        #expect(screen.controller.focusedLine === above)
+        #expect(screen.controller.document == moved)
+        #expect(reports == 0, "a change from outside is not his")
+      }
+
+      /// The keyboard does not go down and come up again as the row leaves: the line above takes it before the row
+      /// goes, whether the list shows that line or has to scroll to it.
+      @Test(arguments: ["shown", "scrolled off"])
+      func the_keyboard_stays_up_when_the_caret_row_leaves(lineAbove: String) throws {
+        let between = lineAbove == "shown" ? [] : (0..<40).map { block("d\($0)", "divider") }
+        let rows = [block("a", "paragraph", text: "one")] + between + [todo("t", "Call"), block("c", "paragraph", text: "three")]
+        let screen = try editing(rows, tasks: tasks("t"))
+        let item = between.count + 1
+        screen.list.scrollToItem(at: IndexPath(item: item, section: 0), at: .centeredVertically, animated: false)
+        _ = try focus(screen, item)
+        _ = screen.wait(0.5) { false }
+        if lineAbove == "scrolled off" {
+          #expect(screen.list.cellForItem(at: IndexPath(item: 0, section: 0)) == nil, "the line above is still shown")
+        }
+        let watch = KeyboardWatch(screen)
+
+        let moved = rows.filter { $0.id != "t" }
+        screen.controller.replace(document: Document.write(moved), in: try makeWorkspace(tasks: tasks("t")))
+        _ = screen.list
+
+        let line = try #require(screen.controller.focusedLine, "no line has the keyboard")
+        #expect(line.rowID == "a")
+        #expect(line.selectedRange == NSRange(location: 3, length: 0))
+        _ = screen.wait(0.5) { false }
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
+        #expect(screen.controller.focusedLine === line)
+      }
+
+      /// The rows nested under the to-do that left are where the server's page puts them, promoted; the caret is in
+      /// the line above them.
+      @Test func rows_nested_under_a_row_that_left_stay() throws {
+        let screen = try editing(
+          [
+            block("a", "paragraph", text: "one"),
+            todo("t", "Call", children: [block("s1", "paragraph", text: "sub one"), block("s2", "bulletListItem", text: "sub two")]),
+            block("c", "paragraph", text: "three"),
+          ], tasks: tasks("t"))
+        _ = try focus(screen, 1, at: 2)
+        let watch = KeyboardWatch(screen)
+
+        let moved = Document.write([
+          block("a", "paragraph", text: "one"), block("s1", "paragraph", text: "sub one"),
+          block("s2", "bulletListItem", text: "sub two"), block("c", "paragraph", text: "three"),
+        ])
+        screen.controller.replace(document: moved, in: try makeWorkspace(tasks: tasks("t")))
+        _ = screen.list
+
+        #expect(try screen.words() == ["one", "sub one", "sub two", "three"])
+        #expect(screen.controller.itemCount == 4)
+        #expect(try screen.line(1).text == "sub one" && screen.line(2).text == "sub two")
+        for item in 1...2 { #expect((try screen.cell(item) as? BlockCell)?.indentationLevel == 0) }
+        let above = try screen.line(0)
+        #expect(above.isFirstResponder)
+        #expect(above.selectedRange == NSRange(location: 3, length: 0))
+        _ = screen.wait(0.5) { false }
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
+      }
+
+      /// The row that left was the page's first line that takes a caret: the caret goes to the start of the first line
+      /// that takes one, past a divider.
+      @Test func when_the_first_rows_caret_row_leaves_the_caret_goes_to_the_first_line() throws {
+        let screen = try editing(
+          [todo("t", "Call"), block("d", "divider"), block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")],
+          tasks: tasks("t"))
+        _ = try focus(screen, 0, at: 2)
+        let watch = KeyboardWatch(screen)
+
+        let moved = Document.write([block("d", "divider"), block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        screen.controller.replace(document: moved, in: try makeWorkspace(tasks: tasks("t")))
+        _ = screen.list
+
+        let first = try screen.line(1)
+        #expect(first.rowID == "a")
+        #expect(first.isFirstResponder)
+        #expect(first.selectedRange == NSRange(location: 0, length: 0))
+        _ = screen.wait(0.5) { false }
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
+      }
+
+      /// A page left with no line that takes a caret: the keyboard is given up, not left in the row that goes.
+      @Test func when_no_line_is_left_the_keyboard_is_given_up() throws {
+        let screen = try editing([todo("t", "Call"), block("d", "divider")], tasks: tasks("t"))
+        _ = try focus(screen, 0)
+
+        screen.controller.replace(document: Document.write([block("d", "divider")]), in: try makeWorkspace(tasks: tasks("t")))
+        _ = screen.wait(0.3) { false }
+
+        #expect(screen.controller.itemCount == 1)
+        #expect(screen.controller.focusedLine == nil)
+        #expect(!screen.holdsKeyboard)
+      }
+
+      /// Another row leaves: the line he types in keeps its caret, its selection and its cell.
+      @Test func a_row_that_leaves_without_the_caret_moves_no_caret() throws {
+        let screen = try editing(
+          [block("a", "paragraph", text: "one"), todo("t", "Call"), block("c", "paragraph", text: "three words")],
+          tasks: tasks("t"))
+        let cell = try screen.cell(2)
+        let line = try focus(screen, 2)
+        line.selectedRange = NSRange(location: 2, length: 4)
+
+        let moved = Document.write([block("a", "paragraph", text: "one"), block("c", "paragraph", text: "three words")])
+        screen.controller.replace(document: moved, in: try makeWorkspace(tasks: tasks("t")))
+        _ = screen.list
+
+        #expect(try screen.cell(1) === cell)
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == NSRange(location: 2, length: 4))
+        #expect(try !screen.line(0).isFirstResponder)
+      }
+
       // MARK: chips
 
       /// A page that is only shown draws its words as 1a did: a chip is words among words, not an attachment.

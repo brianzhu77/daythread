@@ -151,6 +151,39 @@
         #expect(!screen.controller.isComposing)
       }
 
+      /// The host commits what is being composed before it sends a row action: the words go in where they are, once,
+      /// as a commit by the keyboard; the caret and the keyboard stay. With nothing composing it does nothing.
+      @Test func commit_composition_commits_in_place_and_reports_once() throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        var events: [String] = []
+        var reports: [String] = []
+        screen.controller.onChange = { document, _ in
+          events.append("change")
+          reports.append(document)
+        }
+        screen.controller.onComposingChange = { events.append($0 ? "composing" : "done") }
+        let line = try screen.focus(1)
+        let watch = KeyboardWatch(screen)
+        for step in ["j", "jin", "今", "今天"] { compose(step, in: line) }
+
+        screen.controller.commitComposition()
+
+        #expect(events == ["composing", "change", "done"])
+        #expect(Document.blocks(try #require(reports.last)).map { InlineContent($0.content).plain } == ["one", "two今天"])
+        #expect(reports.last == screen.controller.document)
+        #expect(!screen.controller.isComposing)
+        #expect(line.markedTextRange == nil)
+        #expect(line.text == "two今天")
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == NSRange(location: 5, length: 0))
+
+        screen.controller.commitComposition()
+        _ = screen.wait(0.5) { false }
+        #expect(events == ["composing", "change", "done"], "a commit with nothing composing did something")
+        #expect(line.isFirstResponder)
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
+      }
+
       @Test func an_outside_change_to_the_composing_row_waits_until_composition_ends() throws {
         let workspace = try makeWorkspace()
         let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
@@ -360,9 +393,9 @@
         #expect(!screen.holdsKeyboard, "the keyboard was taken for the old page")
       }
 
-      /// A merge that leaves no row holding his words, while his row is gone: the keyboard is given up before the row
-      /// leaves the list, rather than taken away with it.
-      @Test func a_merge_that_leaves_no_row_for_his_words_gives_the_keyboard_up_first() throws {
+      /// A merge that leaves no row holding his words, while his row is gone: his row leaves as any row holding the
+      /// caret does, the caret going to the end of the line above and the keyboard staying.
+      @Test func a_merge_that_leaves_no_row_for_his_words_puts_the_caret_above() throws {
         let screen = try Screen.editing([
           block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two"),
           block("c", "paragraph", text: "three"),
@@ -373,15 +406,62 @@
         let without = Document.write([block("a", "paragraph", text: "one"), block("c", "paragraph", text: "three")])
         screen.controller.mergeAfterComposing = { _, _, _ in without }
         let line = try screen.focus(1)
+        let watch = KeyboardWatch(screen)
         compose("今天", in: line)
         screen.controller.replace(document: without, in: try makeWorkspace())
         line.unmarkText()
-        _ = screen.wait(0.3) { false }
+        _ = screen.wait(0.5) { false }
 
         #expect(try screen.words() == ["one", "three"])
         #expect(screen.controller.itemCount == 2)
-        #expect(!screen.holdsKeyboard)
+        let above = try screen.line(0)
+        #expect(above.isFirstResponder)
+        #expect(above.selectedRange == NSRange(location: 3, length: 0))
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
         #expect(reports == 1)
+      }
+
+      /// The server's page leaves out the to-do he is composing in (it was moved to another day): the row waits while
+      /// he composes (§10.4), his words are reported when the composition ends, and when the row is then removed the
+      /// caret goes to the end of the line above with the keyboard up.
+      @Test func a_composing_row_that_leaves_keeps_his_words() throws {
+        let rows = [
+          block("a", "paragraph", text: "one"), block("t", "task", ["taskId": .string("k")], text: "Call"),
+          block("c", "paragraph", text: "three"),
+        ]
+        let workspace = try makeWorkspace(tasks: [taskJSON("k", status: "open")])
+        let screen = try Screen.editing(rows, tasks: [taskJSON("k", status: "open")])
+        var reports: [String] = []
+        screen.controller.onChange = { document, _ in reports.append(document) }
+        let line = try screen.focus(1)
+        let watch = KeyboardWatch(screen)
+        compose("今天", in: line)
+        let moved = Document.write([block("a", "paragraph", text: "one"), block("c", "paragraph", text: "three")])
+
+        screen.controller.replace(document: moved, in: workspace)
+        _ = screen.list
+        #expect(screen.controller.itemCount == 3, "the composing row was taken away")
+        #expect(try screen.line(1) === line)
+        #expect(line.isFirstResponder && line.markedTextRange != nil)
+        #expect(try screen.line(0).text == "one" && screen.line(2).text == "three")
+        #expect(reports.isEmpty)
+
+        line.unmarkText()
+        _ = screen.list
+        #expect(reports.count == 1)
+        let reported = Document.blocks(try #require(reports.last)).map { InlineContent($0.content).plain }
+        #expect(reported.contains("Call今天"), "his words were lost: \(reported)")
+
+        // The host gives the page as the server has it once more.
+        screen.controller.replace(document: moved, in: workspace)
+        _ = screen.list
+        #expect(try screen.words() == ["one", "three"])
+        let above = try screen.line(0)
+        #expect(above.isFirstResponder)
+        #expect(above.selectedRange == NSRange(location: 3, length: 0))
+        _ = screen.wait(0.5) { false }
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
+        #expect(reports.count == 1)
       }
 
       /// Two changes from outside in one composition: the merge starts from the page before the first, and keeps both.
