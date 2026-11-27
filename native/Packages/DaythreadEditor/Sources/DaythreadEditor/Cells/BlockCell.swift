@@ -148,6 +148,13 @@
       return attributes
     }
 
+    /// How far below the text view's top the middle of its first line lies: half the line's font's height, as the
+    /// text view lays a line out without the font's leading (`LineTextView`).
+    final func firstLineMidline(traits: UITraitCollection) -> CGFloat {
+      guard let font = baseAttributes(traits: traits)[.font] as? UIFont else { return 0 }
+      return (font.ascender - font.descender) / 2
+    }
+
     /// For a subclass: the circle's name, say, which is made from the words.
     func wordsDidChange() {}
 

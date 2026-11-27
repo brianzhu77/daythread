@@ -74,6 +74,8 @@
     private var shownPageID: String?
     /// The row whose text view holds marked text. What is being composed is not the document yet.
     private var composingRow: String?
+    /// Today changed while he composed: the row composed in still shows the facts it had (`drawStaleFacts`).
+    private var composingRowFactsAreStale = false
     /// The last change from outside that arrived while he composed, with the page as it was when the first did. The
     /// rest of it is on screen already; the composing row's part waits for the composition to end.
     private var heldReplace: (base: String, document: String, workspace: Workspace)?
@@ -238,6 +240,8 @@
       if editedPage != nil {
         // A line's resign is under way: its draw, once the line has let the keyboard go, reads the new today.
         guard redrawAfterResign == nil else { return }
+        // The row being composed in is pinned with the facts it had: they are drawn when the composition ends.
+        if isComposing { composingRowFactsAreStale = true }
         redraw(pageID: pageID, pageDate: pageDate, in: workspace)
       } else if let shownPage {
         show(page: shownPage, in: workspace)
@@ -272,6 +276,8 @@
       redrawAfterResign = nil
       collectionView.endEditing(true)
       redrawAfterResign = nil
+      // The next page is drawn afresh, with every row's facts.
+      composingRowFactsAreStale = false
       // Its line was not found to commit (its cell had gone): the composition ends with nothing read.
       if composingRow != nil {
         composingRow = nil
@@ -298,6 +304,8 @@
         if let held = heldReplace, let pageID = shownPageID {
           heldReplace = nil
           redraw(pageID: pageID, pageDate: pageDate, in: held.workspace)
+        } else {
+          drawStaleFactsNow()
         }
         onComposingChange?(false)
       }
@@ -350,6 +358,8 @@
         }
         editable.insert(pinned.id)
       }
+      // Every row, the one composed in included, is drawn from this page and today.
+      if pinned == nil { composingRowFactsAreStale = false }
       draw(rows, pageID: pageID, pageDate: pageDate, in: workspace, editable: editable, pinned: pinned?.id)
     }
 
@@ -768,10 +778,29 @@
       if let held = heldReplace {
         heldReplace = nil
         commitHeld(line, in: id, held: held)
-      } else if absorb(line) != nil {
-        report()
+      } else {
+        if absorb(line) != nil { report() }
+        drawStaleFacts(after: line)
       }
       onComposingChange?(false)
+    }
+
+    /// Today changed while he composed, and the row he composed in kept the facts it had (`redraw`): now that the
+    /// composition has ended, the page is drawn again, which reconfigures that row in place. A line its cell is giving
+    /// up, or that is giving up the keyboard, is inside the list's own work: the draw waits for the next turn.
+    private func drawStaleFacts(after line: LineTextView) {
+      guard composingRowFactsAreStale, !leavingPage else { return }
+      if line.isBeingReleased || line.isGivingUpKeyboard {
+        perform(#selector(drawStaleFactsNow), with: nil, afterDelay: 0, inModes: [.common])
+      } else {
+        drawStaleFactsNow()
+      }
+    }
+
+    @objc private func drawStaleFactsNow() {
+      guard composingRowFactsAreStale, !isComposing, redrawAfterResign == nil, let workspace, let pageID = shownPageID
+      else { return }
+      redraw(pageID: pageID, pageDate: pageDate, in: workspace)
     }
 
     /// The line on screen is compared with what it was last synced with, around the caret, and the difference is the

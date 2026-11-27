@@ -93,7 +93,8 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
   row's label, with the system's caret, selection, autocorrection, dictation and input methods; the keyboard is the
   system's default. The line being typed stays above the keyboard, also when the text size changes while it is up.
 - **To-do:** a system button holding an SF Symbol (`circle`, `checkmark.circle.fill`, `xmark.circle`, changed with the
-  symbol replace transition), at least 44 points square, and the text; a finished one in secondary colour, struck
+  symbol replace transition), at least 44 points square, level with the middle of the words' first line at every size
+  (as on the web, whether the words wrap or marks lie under them), and the text; a finished one in secondary colour, struck
   through. It keeps the system's pressed look; one that cannot be ticked keeps its status's colour, not the system's
   disabled grey, since a cancelled to-do's `xmark.circle` is its status, not a control turned off.
   - **The marks line** (slice 1c) is not a view of ours: it is the list content configuration's secondary text, so

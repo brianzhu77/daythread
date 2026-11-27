@@ -18,7 +18,7 @@
 
     private lazy var circleWidth = circle.widthAnchor.constraint(equalToConstant: Self.minimumTouchTarget)
     private lazy var circleHeight = circle.heightAnchor.constraint(equalToConstant: Self.minimumTouchTarget)
-    /// The circle is centred on the slot the list content view lays out for its (hidden) image, so the system places
+    /// The circle is placed by the slot the list content view lays out for its (hidden) image, so the system places
     /// it with the words: margins, indent and safe area included. Remade when the content view gives a new guide.
     private var slotConstraints: [NSLayoutConstraint] = []
     private weak var slot: UILayoutGuide?
@@ -44,9 +44,6 @@
       // The list cell's content view covers the whole cell and is kept above the circle, and so are the words; the
       // circle must be on top to get the touch.
       bringSubviewToFront(circle)
-      if let content = contentView as? UIListContentView, let guide = content.secondaryTextLayoutGuide {
-        marksElement.accessibilityFrameInContainerSpace = content.convert(guide.layoutFrame, to: self)
-      }
     }
 
     // MARK: the marks
@@ -54,7 +51,22 @@
     /// What the row draws under its words: its to-do's marks and `Blocked by`, read by VoiceOver as one element after
     /// the words.
     private var facts: RowFacts?
-    private lazy var marksElement = UIAccessibilityElement(accessibilityContainer: self)
+    private lazy var marksElement = MarksElement(accessibilityContainer: self)
+
+    /// The marks for VoiceOver. Its frame is the marks line's as laid out when asked: other marks of the same height
+    /// lay the content view out again without the cell, so a frame kept from the cell's layout would be stale.
+    private final class MarksElement: UIAccessibilityElement {
+      override var accessibilityFrameInContainerSpace: CGRect {
+        get {
+          guard let cell = accessibilityContainer as? UIView,
+            let content = (cell as? UICollectionViewListCell)?.contentView as? UIListContentView,
+            let guide = content.secondaryTextLayoutGuide
+          else { return .zero }
+          return content.convert(guide.layoutFrame, to: cell)
+        }
+        set {}
+      }
+    }
 
     /// The marks line as last made, and what it was made from: `updateConfiguration` runs on every keystroke in the
     /// row, and the same marks are handed back then rather than made again.
@@ -172,16 +184,20 @@
       let glyph = symbol?.withConfiguration(symbolConfiguration.withTraitCollection(state.traitCollection)).size ?? .zero
       circleWidth.constant = max(Self.minimumTouchTarget, glyph.width)
       circleHeight.constant = max(Self.minimumTouchTarget, glyph.height)
+      let midline = firstLineMidline(traits: state.traitCollection)
+      if abs(circleOnFirstLine.constant - midline) > 0.01 { circleOnFirstLine.constant = midline }
       centreOnImageSlot()
     }
+
+    /// Across, the circle is centred on the image's slot, which keeps the words' leading edge and the indent; down, it
+    /// is level with the middle of the words' first line, as on the web, whatever lies under the words (the marks, the
+    /// words' further lines). The slot alone centres it on the whole text at the smaller sizes.
+    private lazy var circleOnFirstLine = circle.centerYAnchor.constraint(equalTo: line.topAnchor)
 
     private func centreOnImageSlot() {
       guard let guide = (contentView as? UIListContentView)?.imageLayoutGuide, guide !== slot else { return }
       NSLayoutConstraint.deactivate(slotConstraints)
-      slotConstraints = [
-        circle.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
-        circle.centerYAnchor.constraint(equalTo: guide.centerYAnchor),
-      ]
+      slotConstraints = [circle.centerXAnchor.constraint(equalTo: guide.centerXAnchor), circleOnFirstLine]
       NSLayoutConstraint.activate(slotConstraints)
       slot = guide
     }
