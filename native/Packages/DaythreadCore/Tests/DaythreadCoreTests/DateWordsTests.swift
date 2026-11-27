@@ -23,6 +23,17 @@ import Testing
     }
   }
 
+  @Test func all_twelve_month_words_read_in_a_year_other_than_todays() throws {
+    // The shared cases only reach November to February.
+    let words = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    let today = try Self.day("2026-11-26")
+    for (index, word) in words.enumerated() {
+      let month = index + 1
+      let date = try Self.day("2025-\(month < 10 ? "0" : "")\(month)-17")
+      #expect(DayWords.sinceLabel(date, today: today) == "\(word) 17, 2025", "month \(month)")
+    }
+  }
+
   @Test func the_weekday_of_known_days() throws {
     #expect(try Self.day("2026-11-22").weekday == 0)
     #expect(try Self.day("2026-11-26").weekday == 4)
