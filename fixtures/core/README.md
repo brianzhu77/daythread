@@ -25,6 +25,7 @@ The to-do row. The script runs in a fixed time zone and never reads the clock; e
 - `repeats/words.json`: `{ rule, words, markName }`, a repeat rule in words and as the mark's name.
 - `blockers/cases.json`: `{ name, workspace, blocked, words }`, each blocked to-do's blockers in link order and the words drawn.
 - `notices/cases.json`: `{ name, intent, task, day, today, receipt, plannedAfter, text }`, the notice `rowNoticeText` gives a row action.
+- `notices/fixed.json`: `{ plannedForToday, notDone, undone, cantUndo, couldntUndo }`, the row's five fixed notices (`rowNotices`).
 - `actions/`: one file per row command. `{ before, intent, taskId, day, today, action, receipt, after, plannedAfter, notice }` for one the server takes (`action` is the web's `rowAction`, `after` holds the Undo marker `{ operationId: "cmd-<name>", revision }`; `undo` has no intent and `plan-for-today-from-a-reference-row` the button's own notice), `{ before, operationId, today, action, refused, notice }` for one it refuses.
 
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:

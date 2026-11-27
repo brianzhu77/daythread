@@ -27,7 +27,7 @@ import { nextDayLabel, repeatMarkName } from '../src/components/todo-repeat-view
 import type { Action, Command, Page, Task, Workspace } from '../src/domain/types.ts'
 
 // dates.ts words a date in the device's zone; the cases are the same wherever the script runs only if it is fixed.
-if (new Date(2026, 10, 26).getTimezoneOffset() !== 0) throw new Error('the time zone is not fixed: scripts/fixed-time-zone.ts must be the first import')
+if (Intl.DateTimeFormat().resolvedOptions().timeZone !== 'UTC') throw new Error('the time zone is not fixed: scripts/fixed-time-zone.ts must be the first import')
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dir = join(root, 'fixtures', 'core')
@@ -840,6 +840,9 @@ const carryIn = (h: World, date: string, taskId: string) => {
   noticeCase('cancel with two next to-dos', { kind: 'cancel' }, plain, TODAY, TODAY, { message: 'Task cancelled', nextTodos: [made('2026-12-07'), made('2026-12-14')] }, TODAY, 'Cancelled')
   noticeCase('restore', { kind: 'restore' }, plain, TODAY, TODAY, { message: 'Task reopened' }, TODAY, 'Restored')
   put('notices/cases.json', cases)
+  // The row's fixed words, which no case above reaches (a refused action, Undo's own notices).
+  for (const [key, words] of Object.entries(rowNotices)) if (!words.trim()) throw new Error(`notices/fixed: ${key} is empty`)
+  put('notices/fixed.json', rowNotices)
 }
 
 // actions/<name>.json: a row's command as the server takes or refuses it.
@@ -980,6 +983,7 @@ The to-do row. The script runs in a fixed time zone and never reads the clock; e
 - \`repeats/words.json\`: \`{ rule, words, markName }\`, a repeat rule in words and as the mark's name.
 - \`blockers/cases.json\`: \`{ name, workspace, blocked, words }\`, each blocked to-do's blockers in link order and the words drawn.
 - \`notices/cases.json\`: \`{ name, intent, task, day, today, receipt, plannedAfter, text }\`, the notice \`rowNoticeText\` gives a row action.
+- \`notices/fixed.json\`: \`{ plannedForToday, notDone, undone, cantUndo, couldntUndo }\`, the row's five fixed notices (\`rowNotices\`).
 - \`actions/\`: one file per row command. \`{ before, intent, taskId, day, today, action, receipt, after, plannedAfter, notice }\` for one the server takes (\`action\` is the web's \`rowAction\`, \`after\` holds the Undo marker \`{ operationId: "cmd-<name>", revision }\`; \`undo\` has no intent and \`plan-for-today-from-a-reference-row\` the button's own notice), \`{ before, operationId, today, action, refused, notice }\` for one it refuses.
 
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:
