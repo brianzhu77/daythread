@@ -88,11 +88,13 @@ public final class AppModel {
   /// The ticks whose hand-over to the engine (`enqueue`) has not returned yet, by record: a row action waits for
   /// them, so a tick made before it is in the outbox before the command is queued.
   @ObservationIgnored private var tickHandovers: [Int: Task<Void, Never>] = [:]
-  /// Callers waiting for a state numbered at least `published`, made under `owner` (`stateHolding`).
+  /// Callers waiting for a state that `isDue`, made under `owner` (`stateWhere`).
   @ObservationIgnored private var stateWaits: [StateWait] = []
+  /// The engine's states have stopped (its stream finished): no wait can be answered by one any more.
+  @ObservationIgnored private var statesEnded = false
 
   private struct StateWait {
-    let published: Int
+    let isDue: (SyncState) -> Bool
     let owner: String
     let arrived: CheckedContinuation<Bool, Never>
   }
@@ -123,6 +125,7 @@ public final class AppModel {
 
   isolated deinit {
     following?.cancel()
+    endStateWaits()
   }
 
   /// What screens draw: the engine's workspace with this model's not-yet-accepted actions replayed over it. Replaying
@@ -163,6 +166,8 @@ public final class AppModel {
         guard let self else { return }
         self.receive(state)
       }
+      // No state will come to answer what waits for one.
+      self?.endStateWaits()
     }
     let engine = engine
     Task { await engine.start() }
@@ -309,9 +314,9 @@ public final class AppModel {
       mergeDraftsNotOpen()
     }
     // A wait is for a number, never for the order in which this state and the answer that named it arrive.
-    if stateWaits.contains(where: { $0.published <= state.published }) {
-      let due = stateWaits.filter { $0.published <= state.published }
-      stateWaits.removeAll { $0.published <= state.published }
+    if stateWaits.contains(where: { $0.isDue(state) }) {
+      let due = stateWaits.filter { $0.isDue(state) }
+      stateWaits.removeAll { $0.isDue(state) }
       for wait in due { wait.arrived.resume(returning: state.owner == wait.owner) }
     }
     #if DEBUG
@@ -636,12 +641,14 @@ extension AppModel {
   public func act(
     _ action: RowAction, taskId: String, pageId: String, pageDate: LocalDate, owner: String
   ) async -> RowActed {
-    // The to-do as he saw it before the action: a notice words its Due date from it.
     let today = today
-    guard state.owner == owner, let task = workspace?.task(taskId),
-      let command = Command.forRow(action, taskId: taskId, pageDate: pageDate, today: today)
+    guard let command = Command.forRow(action, taskId: taskId, pageDate: pageDate, today: today),
+      await handOverHisWords(owner: owner),
+      // The to-do as it is drawn once his words are, before the action: a to-do typed a moment ago is in it now,
+      // and a notice words its Due date from it.
+      let task = workspace?.task(taskId)
     else { return .notDone }
-    guard case .applied(let answer) = await performAfterHisWords(command, pageId: pageId, owner: owner),
+    guard case .applied(let answer) = await engine.perform(action: command, notOvertaking: pageId),
       await stateHolding(answer.published, madeUnder: owner)
     else { return .notDone }
     // Only the off item's words read where the to-do is planned after the answer; no other action pays for it.
@@ -656,8 +663,8 @@ extension AppModel {
   /// "Cannot undo after later changes"), or `Couldn't undo · your text is kept`.
   func undo(_ operationId: String, pageId: String, owner: String) async -> Notice {
     let couldNot = Notice(text: RowNotice.couldntUndo, kind: .failed, undoing: nil)
-    guard state.owner == owner else { return couldNot }
-    switch await performAfterHisWords(Command.undo(targetOperationId: operationId), pageId: pageId, owner: owner) {
+    guard await handOverHisWords(owner: owner) else { return couldNot }
+    switch await engine.perform(action: Command.undo(targetOperationId: operationId), notOvertaking: pageId) {
     case .applied(let answer):
       guard await stateHolding(answer.published, madeUnder: owner) else { return couldNot }
       return Notice(text: RowNotice.undone, kind: .undone, undoing: nil)
@@ -678,22 +685,39 @@ extension AppModel {
   /// A receipt that says nothing: the reply had none (`already-applied`), so the notice is worded without it.
   private static let noReceipt = Receipt(.object(["message": .string("")]))!
 
-  /// §11.4 steps 1 and 2 from the model's side: the ticks made before it are in the outbox, every writing call made
-  /// before it has reached the engine, and only then is the command queued, told not to overtake `pageId`.
-  private func performAfterHisWords(_ command: JSONValue, pageId: String, owner: String) async -> Performed {
+  /// §11.4 steps 1 and 2 from the model's side, before a command is queued: the ticks made before it are in the
+  /// outbox, every writing call made before it has reached the engine, and a state that draws them has arrived here
+  /// (counted by `draftsWritten`), so the workspace read next holds what he typed. False when the account is not
+  /// `owner`'s, or no state will come.
+  private func handOverHisWords(owner: String) async -> Bool {
     for handover in Array(tickHandovers.values) { await handover.value }
     _ = await Self.answer(enqueue(.flush, owner: nil))
-    guard state.owner == owner else { return .signedOut }
-    return await engine.perform(action: command, notOvertaking: pageId)
+    let written = await engine.draftsWritten
+    return await stateWhere({ $0.draftsWritten >= written }, madeUnder: owner)
   }
 
   /// Returns once a state numbered `published` or more has arrived here, whichever came first, it or the answer
   /// that named it; true when that state is still `owner`'s.
   private func stateHolding(_ published: Int, madeUnder owner: String) async -> Bool {
-    if state.published >= published { return state.owner == owner }
+    await stateWhere({ $0.published >= published }, madeUnder: owner)
+  }
+
+  /// Returns once a state for which `isDue` holds has arrived here (the one here now, if it does); true when it is
+  /// `owner`'s. False at once when the states have stopped.
+  private func stateWhere(_ isDue: @escaping (SyncState) -> Bool, madeUnder owner: String) async -> Bool {
+    if isDue(state) { return state.owner == owner }
+    guard !statesEnded else { return false }
     return await withCheckedContinuation { arrived in
-      stateWaits.append(StateWait(published: published, owner: owner, arrived: arrived))
+      stateWaits.append(StateWait(isDue: isDue, owner: owner, arrived: arrived))
     }
+  }
+
+  /// The states stopped, or the model is going: every wait is answered false, and so is every later one.
+  fileprivate func endStateWaits() {
+    statesEnded = true
+    let waiting = stateWaits
+    stateWaits = []
+    for wait in waiting { wait.arrived.resume(returning: false) }
   }
 
   /// Sets `wordsOnTheirWay` from the queue, the call in flight, and the pages ahead of the state.

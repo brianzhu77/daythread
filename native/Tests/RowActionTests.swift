@@ -802,7 +802,8 @@ private struct RowScreen {
 
     #expect(await h.server.sent.isEmpty)
     #expect(day.notice == nil)
-    #expect(day.screen.presentedViewController == nil)
+    // The sheet goes, and nothing takes its place (its dismissal may finish after its own presentation does).
+    try await soon { day.screen.presentedViewController == nil }
     day.close()
   }
 
