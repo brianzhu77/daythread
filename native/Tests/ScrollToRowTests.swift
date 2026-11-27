@@ -44,7 +44,6 @@ final class ScrollToRowTests: XCTestCase {
 
     let row = try XCTUnwrap(list.layoutAttributesForItem(at: IndexPath(item: 39, section: 0))).frame
     let off = row.minY - (list.contentOffset.y + list.adjustedContentInset.top)
-    print("ScrollToRow: animated, off by \(off), row height \(row.height)")
     XCTAssertLessThanOrEqual(abs(off), 0.5)
   }
 

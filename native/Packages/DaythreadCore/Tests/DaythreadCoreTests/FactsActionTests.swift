@@ -15,7 +15,9 @@ import Testing
   }
 
   @Test func the_answer_takes_the_to_do_out_of_not_today() throws {
-    for name in try Fixtures.factsActionNames() {
+    let names = try Fixtures.factsActionNames()
+    #expect(names.count == 4)
+    for name in names {
       let entry = try Fixtures.factsActionCase(name)
       let before = DayFacts.of(
         day: entry.today, in: entry.before, index: TodoIndex(entry.before), today: entry.today)

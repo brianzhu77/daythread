@@ -429,6 +429,28 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     day.close()
   }
 
+  @Test func undo_with_todays_page_in_trash_is_sent_once_and_said() async throws {
+    let h = try await harness(pages: [trashed(todayPage)])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    await h.server.hold()
+    day.factsModel.bringBack("t-aside")
+    let operationId = try await answerHeld(h) {
+      applied(try changes(from: 1, to: 2, tasks: [task("t-aside", "Fix the bike", version: 2)], undo: $0))
+    }
+    try await soon { day.notice != nil }
+    #expect(day.notice == Notice(text: "On today", kind: .done, undoing: operationId))
+
+    // No page to wait for: the Undo goes at once.
+    await h.server.hold()
+    try day.undo()
+    try await answerHeld(h) { _ in applied(try changes(from: 2, to: 3, tasks: [bike])) }
+    try await soon { day.notice?.kind == .undone }
+    #expect(day.notice == Notice(text: "Undone", kind: .undone, undoing: nil))
+    #expect(await h.server.sent.filter { $0 == Command.undo(targetOperationId: operationId) }.count == 1)
+    day.close()
+  }
+
   @Test func undo_leaves_the_notice_when_he_types() async throws {
     let h = try await harness()
     let day = try RowScreen(h.model)
@@ -603,6 +625,63 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     try await turns()
     #expect(day.notice == nil, "nothing is said on this day for today")
     try await soon { day.factsModel.enabled }
+    day.close()
+  }
+
+  @Test func leaving_today_while_a_strip_actions_undo_is_out_says_nothing_there() async throws {
+    let h = try await harness(pages: [todayPage, page(yesterday, [line("y", "Before")])])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let operationId = try await bringBackWithUndo(h, day)
+    try await soon { listed(day).isEmpty }
+
+    await h.server.hold()
+    try day.undo()
+    try await held(h)
+    day.screen.open(yesterday)
+    try await settled(day)
+    #expect(day.words == ["Before"])
+
+    try await answerHeld(h) { _ in applied(try changes(from: 2, to: 3, pages: [todayPage], tasks: [bike])) }
+    await h.engine.settled()
+    try await turns()
+    #expect(day.notice == nil, "the Undo's answer is said only on today")
+    #expect(await h.server.sent.last == Command.undo(targetOperationId: operationId))
+    try await soon { day.factsModel.enabled }
+    day.close()
+  }
+
+  @Test func the_typed_line_stays_when_bring_back_takes_the_fold_away() async throws {
+    let lines = todayLines() + (1...30).map { line("f\($0)", "Line \($0)") }
+    let h = try await harness(pages: [page(today, lines)])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    day.factsModel.notTodayOpen = true
+    try await settled(day)
+    // Scrolled so his line is at the top under the bar: the header is off screen above, so the list can move by
+    // whatever the strip loses (at the list's top a shorter header can only pull the rows up).
+    #expect(day.editor.scroll(toRow: "b", animated: false))
+    try await settled(day)
+    let walk = try day.line("Walk")
+    #expect(walk.becomeFirstResponder())
+    try await settled(day)
+    let before = walk.convert(walk.bounds, to: nil)
+
+    // The only row of Not today: once it is brought back the strip has nothing, and takes no room.
+    await h.server.hold()
+    day.factsModel.bringBack("t-aside")
+    try await answerHeld(h) { _ in
+      applied(
+        try changes(
+          from: 1, to: 2, pages: [page(today, lines + [row("r9", "t-aside", "Fix the bike")])],
+          tasks: [task("t-aside", "Fix the bike", version: 2)]))
+    }
+    try await soon { day.facts.notToday == nil }
+    try await settled(day)
+    #expect(day.factsView.isHidden, "the strip went with its fold")
+    #expect(walk.isFirstResponder, "the keyboard stays up")
+    let after = walk.convert(walk.bounds, to: nil)
+    #expect(abs(after.minY - before.minY) <= 0.5, "the line was at \(before.minY), now \(after.minY)")
     day.close()
   }
 
