@@ -108,7 +108,6 @@ final class NoticeView: UIView {
     timer = nil
     generation += 1
     shown = nil
-    surface.isAccessibilityElement = false
     UIView.animate(
       withDuration: 0.2,
       animations: { self.surface.alpha = 0 },
@@ -141,6 +140,7 @@ final class NoticeView: UIView {
     if content.axis != axis {
       content.axis = axis
       content.alignment = axis == .vertical ? .fill : .center
+      fitContent()
       setNeedsLayout()
     }
   }
@@ -198,36 +198,58 @@ final class NoticeView: UIView {
       let mine = generation
       var configuration = UIButton.Configuration.plain()
       configuration.title = Self.undoTitle
-      configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
-        var attributes = $0
-        attributes.font = .preferredFont(forTextStyle: .footnote)
-        return attributes
-      }
       let undo = UIButton(
         configuration: configuration,
         primaryAction: UIAction { [weak self] _ in self?.undo(operation, of: mine) })
-      undo.setContentHuggingPriority(UILayoutPriority(751), for: .horizontal)
+      // The plain style's title is body text; footnote like the words, in the size this button's own traits give.
+      undo.configurationUpdateHandler = { button in
+        let font = UIFont.preferredFont(forTextStyle: .footnote, compatibleWith: button.traitCollection)
+        button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+          var attributes = $0
+          attributes.font = font
+          return attributes
+        }
+      }
+      undo.isAccessibilityElement = true
       undo.setContentCompressionResistancePriority(.required, for: .horizontal)
       undo.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
       content.addArrangedSubview(undo)
       button = undo
     }
-    content.directionalLayoutMargins = NSDirectionalEdgeInsets(
-      top: notice.undoing == nil ? 12 : 0, leading: 16, bottom: notice.undoing == nil ? 12 : 0, trailing: 8)
+    fitContent()
 
-    surface.isAccessibilityElement = true
-    surface.accessibilityLabel = notice.text
-    surface.accessibilityTraits = .staticText
+    // The words are the element VoiceOver reads and the one that carries the action; the button stays an element of
+    // its own so Voice Control and Full Keyboard Access reach it.
+    surface.isAccessibilityElement = false
+    surface.accessibilityElements = [label] + (button.map { [$0] } ?? [])
+    label.isAccessibilityElement = true
+    label.accessibilityLabel = notice.text
     if let operation = notice.undoing {
       let mine = generation
-      surface.accessibilityCustomActions = [
+      label.accessibilityCustomActions = [
         UIAccessibilityCustomAction(name: Self.undoTitle) { [weak self] _ in
           self?.undo(operation, of: mine) ?? false
         }
       ]
     } else {
-      surface.accessibilityCustomActions = nil
+      label.accessibilityCustomActions = nil
     }
+  }
+
+  /// The margins and the button's room for the notice showing and the axis in use. The title inside the button's
+  /// own 12-point inset ends 16 points from the surface's edge, as the words start 16 points from the other.
+  private func fitContent() {
+    let hasButton = button != nil
+    if content.axis == .vertical {
+      content.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 16, bottom: 4, trailing: 16)
+    } else {
+      let side: CGFloat = hasButton ? 0 : 12
+      content.directionalLayoutMargins = NSDirectionalEdgeInsets(
+        top: side, leading: 16, bottom: side, trailing: hasButton ? 4 : 16)
+    }
+    // Beside the words it keeps its own width; under them it takes the surface's, which the words' hugging would
+    // otherwise pull narrow.
+    button?.setContentHuggingPriority(content.axis == .vertical ? .defaultLow : .required, for: .horizontal)
   }
 
   /// Reports `operation` once, and only while it is the notice showing and its button still stands.
