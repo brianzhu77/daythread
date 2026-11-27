@@ -232,8 +232,20 @@
       }
     }
 
-    /// Replaces the page from outside (a merge, a load) keeping the caret where its line still exists. While he
-    /// composes, every row but the composing one is drawn from it at once; that row's part waits until the
+    /// Commits the marked text of the line that holds it, in place: the caret and the keyboard stay, the committed
+    /// words are reported through `onChange` once. Nothing when no line composes.
+    ///
+    /// The host calls it before it sends a change the page must not be under while words are only composed (a row
+    /// action, §11.4 step 1). The commit takes the keyboard's own path (`unmarkText`), so a change held meanwhile is
+    /// merged as it would be then.
+    public func commitComposition() {
+      guard isComposing else { return }
+      for line in lines where line.markedTextRange != nil { line.unmarkText() }
+    }
+
+    /// Replaces the page from outside (a merge, a load) keeping the caret where its line still exists. When its row is
+    /// not in the new page, the caret goes to the end of the nearest line above that is (or to the start of the first
+    /// line), and the keyboard stays up (`draw`). While he composes, every row but the composing one is drawn from it at once; that row's part waits until the
     /// composition ends, when his composed words and this page are merged (`commitHeld`).
     public func replace(document: String, in workspace: Workspace) {
       guard let editedPage, let pageID = shownPageID else { return }
@@ -313,6 +325,11 @@
       if pageID == shownPageID, changed.isEmpty, ids == orderedIDs { return }
 
       let focus = focusedLine.flatMap { line in line.rowID.map { (id: $0, selection: line.selectedRange) } }
+      // The row holding the caret is not in the new page (the server moved its to-do to another day): where the
+      // caret goes instead, and that line's text view while the list still shows the rows as they were.
+      let leaving = focus.flatMap { newRows[$0.id] == nil ? $0.id : nil }
+      let successor = leaving.flatMap { Self.caret(afterLeaving: $0, from: orderedIDs, to: ids, editable: editable) }
+      let successorLine = successor.flatMap { lineView(for: $0.row) }
       let oldRows = rowsByID
       rowsByID = newRows
       drawn = newDrawn
@@ -337,11 +354,39 @@
       // and the keyboard is held meanwhile.
       let rebuilt = focus.map { reloaded.contains($0.id) } == true
       if rebuilt, let line = focusedLine { holdKeyboard(from: line) }
+      // The list resigns a first responder in a cell it takes away, and with no other the keyboard goes down: the
+      // keyboard leaves the row before the row leaves the list. Straight to the caret's line when the list shows it
+      // and keeps its cell, else held until that line is in the list; with no line left, given up first.
+      if leaving != nil, let line = focusedLine {
+        if let successor {
+          let handed =
+            !reloaded.contains(successor.row) && successorLine.map { $0.isEditable && $0.becomeFirstResponder() } == true
+          if !handed { holdKeyboard(from: line) }
+        } else {
+          line.resignFirstResponder()
+        }
+      }
       dataSource.apply(snapshot, animatingDifferences: animated)
       if let focus, rebuilt {
         place(caretIn: focus.id, selection: focus.selection)
         releaseKeyboardHold()
       }
+      if let successor {
+        place(caretIn: successor.row, selection: successor.selection)
+        releaseKeyboardHold()
+      }
+    }
+
+    /// Where the caret goes when its row `id` leaves the page: the end of the nearest line above it (on screen before)
+    /// that is still on the page and takes a caret, the last of them in the new page's order; with none, the start of
+    /// the page's first line that takes one; nil when no line takes a caret.
+    private static func caret(
+      afterLeaving id: String, from before: [String], to after: [String], editable: Set<String>
+    ) -> (row: String, selection: NSRange)? {
+      let above = Set(before.prefix { $0 != id })
+      let lines = after.filter(editable.contains)
+      if let line = lines.last(where: above.contains) { return (line, NSRange(location: Int.max, length: 0)) }
+      return lines.first.map { ($0, NSRange(location: 0, length: 0)) }
     }
 
     /// A text view of the screen's own, out of sight, that holds the keyboard while the row that had it is rebuilt or
@@ -737,17 +782,9 @@
         restructure(from: line, caret: caret, selectionLength: 0, pageID: pageID, workspace: workspace)
         return
       }
-      // No row holds his words for the caret to go to, and his row leaves the list: the keyboard is given up first,
-      // so it is not taken away with the row.
-      if line.isFirstResponder, !rowsOfThePage(in: workspace).contains(id) {
-        line.resignFirstResponder()
-      }
+      // No row holds his words for the caret to go to and his row leaves the list: the caret goes as for any row that
+      // leaves while it holds it (`draw`).
       redraw(pageID: pageID, pageDate: pageDate, in: workspace)
-    }
-
-    /// The ids of the rows the page being edited is drawn with.
-    private func rowsOfThePage(in workspace: Workspace) -> Set<String> {
-      Set((editedPage.map { BlockRows.rows(for: $0.blocks, in: workspace) } ?? []).map(\.id))
     }
 
     /// A line's resign is over: what a commit during it left to draw is drawn now that no line holds the keyboard.
