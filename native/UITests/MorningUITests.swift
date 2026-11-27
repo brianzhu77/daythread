@@ -284,9 +284,11 @@ final class MorningUITests: XCTestCase {
         try await server.send(["type": "task-status", "taskId": task["id"] as? String ?? "", "status": "cancelled"])
       }
     }
+    // On a page of their own, three days back, so their rows (cancelled at the end) are on no page another test looks at.
+    try await server.send(["type": "ensure-day", "date": Words.iso(today, adding: -3)])
     for title in titles {
       try await server.send([
-        "type": "add-task", "pageId": "day:\(Words.iso(today, adding: -1))", "title": title,
+        "type": "add-task", "pageId": "day:\(Words.iso(today, adding: -3))", "title": title,
         "deadlineOn": Words.iso(today),
       ])
     }
