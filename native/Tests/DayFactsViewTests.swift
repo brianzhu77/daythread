@@ -786,6 +786,38 @@ private func settled(_ day: RowScreen) async throws {
     day.close()
   }
 
+  /// At the largest text size a `Not today` row's tag goes under its words, and `Bring back` under the tag: the
+  /// button's box starts clear of the tag. Read from the pixels: the tag's lowest ink, and the first line of the
+  /// bordered button's grey fill (a run of light grey wider than any glyph). Ink lies inside a text's frame, so the
+  /// gap asked of the ink is the frames' 6 points with room for the tag's descent.
+  @Test func at_the_largest_size_bring_back_stands_clear_of_the_tag() throws {
+    let workspace = try copy(
+      pages: [page(today, [line("a", "Morning")])], tasks: [task("bike", "Fix the bike", due: monday, paused: true)])
+    let facts = DayFacts.of(day: today, in: workspace, index: TodoIndex(workspace), today: today)
+    try #require(facts.dueSoon.isEmpty && facts.notToday?.rows.first?.tag == "Due Mon", "\(facts)")
+    let (host, window) = try drawnStrip(facts, width: 402, size: .accessibilityExtraExtraExtraLarge, open: true)
+    let (bytes, width, height) = try pixels(of: host.view)
+    func luminance(_ x: Int, _ y: Int) -> Double {
+      let i = (y * width + x) * 4
+      return (0.2126 * Double(bytes[i]) + 0.7152 * Double(bytes[i + 1]) + 0.0722 * Double(bytes[i + 2])) / 255
+    }
+    func longestGreyRun(_ y: Int) -> Int {
+      var run = 0
+      var longest = 0
+      for x in 0..<width {
+        let value = luminance(x, y)
+        run = value > 0.75 && value < 0.98 ? run + 1 : 0
+        longest = max(longest, run)
+      }
+      return longest
+    }
+    let buttonTop = try #require((0..<height).first { longestGreyRun($0) >= 100 }, "no button drawn")
+    let tagBottom = try #require((0..<buttonTop).last { y in (0..<width).contains { luminance($0, y) < 0.75 } })
+    let gap = buttonTop - tagBottom - 1
+    #expect(gap >= 8, "the tag's ink ends at \(tagBottom), the button starts at \(buttonTop)")
+    window.isHidden = true
+  }
+
   /// The labels are read from the rows the strip draws: SwiftUI builds no accessibility tree for a unit test to read
   /// (the hosting view reports no elements unless an assistive technology asks), so the view's use of them is seen
   /// by VoiceOver and Voice Control only.
