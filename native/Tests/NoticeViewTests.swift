@@ -334,23 +334,84 @@ private let moved = Notice(text: "Moved to Fri, Nov 27", kind: .done, undoing: "
   @Test func undo_is_an_accessibility_action() throws {
     let fixture = try NoticeFixture()
     fixture.show(moved)
-    let surface = try #require(fixture.surface)
+    let words = try #require(fixture.label)
 
-    #expect(surface.isAccessibilityElement)
-    #expect(surface.accessibilityLabel == "Moved to Fri, Nov 27")
-    let action = try #require(surface.accessibilityCustomActions?.first)
-    #expect(surface.accessibilityCustomActions?.count == 1)
+    #expect(words.isAccessibilityElement)
+    #expect(words.accessibilityLabel == "Moved to Fri, Nov 27")
+    let action = try #require(words.accessibilityCustomActions?.first)
+    #expect(words.accessibilityCustomActions?.count == 1)
     #expect(action.name == "Undo")
     #expect(action.actionHandler?(action) == true)
     #expect(fixture.switches.undone == ["op-1"])
     // Spent, as the button is.
-    #expect(surface.accessibilityCustomActions?.isEmpty ?? true)
+    #expect(words.accessibilityCustomActions?.isEmpty ?? true)
   }
 
   @Test func a_notice_without_undo_has_no_accessibility_action() throws {
     let fixture = try NoticeFixture()
     fixture.show(Notice(text: "Restored", kind: .done, undoing: nil))
-    #expect(fixture.surface?.accessibilityCustomActions?.isEmpty ?? true)
+    #expect(fixture.label?.accessibilityCustomActions?.isEmpty ?? true)
+  }
+
+  @Test func the_button_is_an_accessibility_element_while_it_stands() throws {
+    let fixture = try NoticeFixture()
+    fixture.show(moved)
+    let surface = try #require(fixture.surface)
+    let button = try #require(fixture.buttons.first)
+    let words = try #require(fixture.label)
+
+    let elements = (surface.accessibilityElements ?? []).compactMap { $0 as? UIView }
+    #expect(elements == [words, button])
+    #expect(button.isAccessibilityElement)
+
+    fixture.notice.withdrawUndo()
+    fixture.layout()
+    #expect((surface.accessibilityElements ?? []).compactMap { $0 as? UIView } == [words])
+  }
+
+  @Test func the_button_leaves_the_accessibility_elements_once_undo_is_spent() throws {
+    let fixture = try NoticeFixture()
+    fixture.show(moved)
+    let surface = try #require(fixture.surface)
+    fixture.press(try #require(fixture.buttons.first))
+    #expect((surface.accessibilityElements ?? []).count == 1)
+  }
+
+  @Test func undo_ends_as_far_from_the_trailing_edge_as_the_words_start_from_the_leading_edge() throws {
+    let fixture = try NoticeFixture()
+    fixture.show(moved)
+    let surface = try #require(fixture.surface)
+    let label = try #require(fixture.label)
+    let button = try #require(fixture.buttons.first)
+    let title = try #require(descendants(of: button).compactMap { $0 as? UILabel }.first)
+
+    let wordsInset = label.convert(label.bounds, to: surface).minX
+    let titleFrame = title.convert(title.bounds, to: surface)
+    let titleInset = surface.bounds.width - titleFrame.maxX
+
+    #expect(abs(titleInset - wordsInset) <= 1.5, "words start \(wordsInset) in, the title ends \(titleInset) in")
+  }
+
+  @Test func the_button_follows_the_text_size_as_the_words_do() throws {
+    let fixture = try NoticeFixture()
+    fixture.host.view.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+    fixture.show(moved)
+    let label = try #require(fixture.label)
+    let button = try #require(fixture.buttons.first)
+    let title = try #require(descendants(of: button).compactMap { $0 as? UILabel }.first)
+
+    #expect(title.font.pointSize == label.font.pointSize)
+  }
+
+  @Test func wrapped_words_keep_the_sides_inset_from_the_top() throws {
+    let fixture = try NoticeFixture()
+    fixture.host.view.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+    fixture.show(Notice(text: "Not today — won’t carry over · due Fri still tracked", kind: .done, undoing: "op-1"))
+    let surface = try #require(fixture.surface)
+    let label = try #require(fixture.label)
+
+    let side = label.convert(label.bounds, to: surface).minX
+    #expect(label.convert(label.bounds, to: surface).minY >= side)
   }
 
   @Test func it_sits_under_the_navigation_bar_and_never_over_the_keyboard() throws {
