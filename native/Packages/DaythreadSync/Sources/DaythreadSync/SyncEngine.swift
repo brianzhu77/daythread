@@ -560,10 +560,12 @@ public actor SyncEngine {
       }
     case .full(let workspace, let owner):
       try await store.replace(with: workspace, owner: owner)
-      // What one account's saves sent says nothing about another's pages, which have the same ids.
+      // What one account's saves sent, and what the server refused of them, says nothing about another's pages,
+      // which have the same ids.
       if copy?.owner != owner {
         landedSaves = [:]
         draftOrigins = [:]
+        refusedDrafts = [:]
       }
       copy = (workspace, owner)
       forgetOverwrittenSaves()
