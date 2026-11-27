@@ -272,7 +272,10 @@
               }
             }
           } label: {
+            // The symbol alone is 18 by 5 points: a tap that missed it by a few points went to `Bring back` beside it.
             Image(systemName: "ellipsis")
+              .frame(minWidth: 44, minHeight: 44)
+              .contentShape(Rectangle())
           }
           .tint(Color(uiColor: .secondaryLabel))
           .accessibilityLabel(row.menuLabel)

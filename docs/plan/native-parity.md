@@ -1,10 +1,11 @@
 # Native app: what it holds against the web app
 
-- Author: Claude · 2026-11-25 · status: **phase 1c built and seen on the simulator** (`docs/plan/native-phase-1c.md`),
-  its check on his own data to come (task 12); phases 1b, 1a and 0 before it (`docs/plan/native-phase-1b.md`,
-  `native-phase-1a.md`, `native-phase-0.md`).
-- The app ticks a to-do, starts or restores a day's page, types into a day page's lines, and moves, sets aside,
-  cancels and restores a to-do from its row, with Undo; nothing else is changed from it. This list is checked
+- Author: Claude · 2026-11-27 · status: **phase 1d.1 built and seen on the simulator** (`docs/plan/native-phase-1d.md`),
+  its check on his own data to come (task 9); phases 1c, 1b, 1a and 0 before it (`docs/plan/native-phase-1c.md`,
+  `native-phase-1b.md`, `native-phase-1a.md`, `native-phase-0.md`).
+- The app ticks a to-do, starts or restores a day's page, types into a day page's lines, moves, sets aside, cancels
+  and restores a to-do from its row, and brings back or plans for another day a to-do set aside, from the strip above
+  today's page, each with Undo; nothing else is changed from it. This list is checked
   against the Swift code, not the plan; where it says "draws", the code draws it today. Update it in the same change
   as any screen or block kind it names.
 - Marks: **built** (the app has it, and the note says how much), **placeholder** (the app shows a named stand-in and
@@ -16,6 +17,7 @@
 | --- | --- | --- |
 | Today (`/`) | built | The first tab of the system's tab bar (its symbol the day of the month). The account's day page from the copy on the device, offline too. The page's first row is the day's header, as on the web: "Today" above the title "Thu, Oct 22" with a chevron that opens the day picker, and the status line under it. Tapping the Today tab goes back to today from another day, and to the top on today. Moves at the account's midnight, not the device's. Pull to refresh; refreshes when the app becomes active and when the day changes. Asks the server for today's page when the copy has none and none is in Trash. A to-do can be ticked (see the to-do row), and the page's lines typed into (see Editing) |
 | A past or future day (`/day/$date`) | built | The same screen, in place (no Back). Previous day and Next day are two quiet chevrons at the top right (Next stops at today, as on the web), then "Not saved" while a change is held and More; the header says "Yesterday" or "Tomorrow" when it applies. "Today" before the chevrons only at regular width (iPad, Mac), as the web shows it from 600 px up; on the phone the Today tab does it. Any day, future ones too, from the title's picker, the system's calendar with a dot on each day with something written. A day without a page says so instead of making one: "No page for …" with "Add page", "… hasn't happened yet" with "Create page", and a page in Trash with "Restore" and "Add a new page" (the web says "No page for … yet", "Start this page" and "Start a new page"). The web's lists of what is planned or due on a future day are absent |
+| Above the page: events, `Due soon`, `Not today` (the web's phone layout under the title) | built | Under the title and the status line, in the page's header, so it scrolls away with the title; each part absent when it has nothing, as on the web, and shown whenever the day is not a later day without a page (so also above "No page for …" and today's page in Trash). **The events line**, on today: the first two events (`10:30 AM Standup with Lu`, `Untitled event`, `· All day` for one event with no time) joined by ` · `, then `+N more`; a tap scrolls the page to its top-level `Events` heading. **`Due soon`**, on today, any past day and a later day with a page: every open to-do due or started by that day with no row on its page, each with its date tag (`Not today · <tag>` for one set aside). **`Not today · N`**, on today, folded when the page opens: every to-do set aside, each with its tag, `Bring back` and a menu `Another day` (the web's options for the weekday, then `Pick date…`, the system's calendar); each says what it did in a notice (`On today`, `Moved to Sat 11/28`) with `Undo` under the web's rule. Every word and rule is the web's, held by shared cases. **Differs:** the events rows the web draws under the `Events` heading for events written on other pages are absent (1d.2), and with no `Events` heading the events line is words that do nothing (the web's always scrolls); the web's screen for a later day without a page (its planned and due to-dos) is absent; `Bring back` and `Another day` are not drawn ahead, so they need a connection (offline: `Not done · your text is kept`), and while one is out every control of the strip is disabled; "today" is the account's day, where the web's is the device's; a tap on a `Due soon` row does nothing, as on the web |
 | Tasks (`/tasks`) | absent | The tab is there and says `Not in the app yet` |
 | Upcoming | absent | Part of Tasks on the web |
 | Calendar (`/calendar`) | absent | The tab is there and says `Not in the app yet` |
@@ -131,5 +133,11 @@ shown.
   `onlyThisDay: true`) for the off item; `task-status` `cancelled` or `open` (with `today`) for `Cancel task` and
   `Restore`; `undo` (`targetOperationId`) for the notice's `Undo`. `today` is the account's day, where the web sends
   the device's.
+- The strip's actions (slice 1d.1), sent the same way (waited for, `readsBeyond: true`, after his words on today's
+  page are saved; never while today's page has a draft; with no page to wait for when today's page is in Trash, and
+  not at all while it is being made): `plan-task` (`taskId`, `date`, `today`, no `from`) for `Bring back` (`date`
+  today), a day of `Another day` and a day picked in its calendar (today picked is `Bring back`); `undo` for the
+  notice's `Undo`. A choice made after the to-do left the list (brought back elsewhere, ticked, deleted) sends
+  nothing.
 
 Nothing else is sent: no delete of a page, no repeat or blocker change, no date set.

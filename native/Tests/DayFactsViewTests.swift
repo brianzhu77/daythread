@@ -608,6 +608,21 @@ private func settled(_ day: RowScreen) async throws {
     window.isHidden = true
   }
 
+  /// Each `Not today` row's menu is a target of at least 44 by 44 points, as every control of the page is. Its symbol
+  /// alone is 18 by 5: on the simulator a tap 12 points above or below it brought the to-do back, `Bring back` beside
+  /// it taking the touch.
+  @Test func each_not_today_menu_is_a_44_point_target() throws {
+    let workspace = try copy(pages: AllThree.pages(), tasks: AllThree.tasks())
+    let facts = DayFacts.of(day: today, in: workspace, index: TodoIndex(workspace), today: today)
+    let (host, window) = try drawnStrip(facts, width: 402, size: .large, open: true)
+    let frames = host.rootView.model.menuFrames
+    try #require(frames.count == 3, "the menus drawn: \(frames)")
+    for (taskId, frame) in frames.sorted(by: { $0.key < $1.key }) {
+      #expect(frame.width >= 43.99 && frame.height >= 43.99, "\(taskId)'s menu: \(frame.size)")
+    }
+    window.isHidden = true
+  }
+
   @Test func at_the_accessibility_sizes_the_events_line_takes_more_than_one_line() throws {
     // Two events and nothing else: today's page holds one, yesterday's the other.
     let workspace = try copy(
