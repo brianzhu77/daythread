@@ -1,0 +1,657 @@
+[
+  {
+    "name": "one chip in a line",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"l1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Standup with Lu \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"10:30\"}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-2",
+        "revision": 2
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Standup with Lu",
+        "date": "2026-11-26",
+        "time": "10:30",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      }
+    ]
+  },
+  {
+    "name": "a chip on the day template",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "My day",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"t1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Standup \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"10:30\"}}],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "make-template",
+        "revision": 2
+      }
+    },
+    "day": "2026-11-26",
+    "events": []
+  },
+  {
+    "name": "a chip on a page in Trash",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-t",
+          "type": "document",
+          "date": null,
+          "title": "Old notes",
+          "document": "[{\"id\":\"2828e83c-ef21-4f6c-82fa-c06f1a64cdee\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"t1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Standup \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"10:30\"}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:03:00.000Z",
+          "trashedAt": "2026-11-26T09:04:00.000Z",
+          "trashId": "trash-doc-t"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "trash-doc-t",
+        "revision": 4
+      }
+    },
+    "day": "2026-11-26",
+    "events": []
+  },
+  {
+    "name": "a chip on a day's draft page",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 3,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "draft:day:2026-11-26",
+          "type": "draft",
+          "date": null,
+          "title": "",
+          "parentId": "day:2026-11-26",
+          "document": "[{\"id\":\"t1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Standup \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"10:30\"}}],\"children\":[]}]"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:r1",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-3",
+        "revision": 3
+      }
+    },
+    "day": "2026-11-26",
+    "events": []
+  },
+  {
+    "name": "one eventId in two lines on two day pages",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"t1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Today’s words \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"same\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "day:2026-11-25",
+          "type": "daily",
+          "date": "2026-11-25",
+          "title": "2026-11-25",
+          "document": "[{\"id\":\"day:2026-11-25:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-25:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"y1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Yesterday’s words \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"same\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"day:2026-11-25:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-4",
+        "revision": 4
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "same",
+        "title": "Today’s words",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "t1"
+        }
+      }
+    ]
+  },
+  {
+    "name": "one eventId on a day page and a document page",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"t1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"From the day \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"same\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "Trip notes",
+          "document": "[{\"id\":\"40cacd3f-4376-4403-ad84-70d36c605223\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"From the document \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"same\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:03:00.000Z"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-3",
+        "revision": 4
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "same",
+        "title": "From the day",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "t1"
+        }
+      }
+    ]
+  },
+  {
+    "name": "one eventId on two document pages",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"40cacd3f-4376-4403-ad84-70d36c605223\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"From the first \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"same\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:03:00.000Z"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"8bfb20f5-b800-42e7-82ee-dd83fbc743d5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"From the second \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"same\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:03:00.000Z"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-3",
+        "revision": 5
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "same",
+        "title": "From the first",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "doc-a",
+          "lineId": "a1"
+        }
+      }
+    ]
+  },
+  {
+    "name": "three on one day",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"l1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Dentist \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"15:00\"}}],\"children\":[]},{\"id\":\"l2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Lunch with Kathy \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e2\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"l3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Standup with Lu \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e3\",\"date\":\"2026-11-26\",\"time\":\"10:30\"}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-2",
+        "revision": 2
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "e2",
+        "title": "Lunch with Kathy",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l2"
+        }
+      },
+      {
+        "id": "e3",
+        "title": "Standup with Lu",
+        "date": "2026-11-26",
+        "time": "10:30",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l3"
+        }
+      },
+      {
+        "id": "e1",
+        "title": "Dentist",
+        "date": "2026-11-26",
+        "time": "15:00",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      }
+    ]
+  },
+  {
+    "name": "two at the same time on two pages",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-a",
+          "type": "document",
+          "date": null,
+          "title": "First",
+          "document": "[{\"id\":\"40cacd3f-4376-4403-ad84-70d36c605223\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Met first \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"09:00\"}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:03:00.000Z"
+        },
+        {
+          "id": "doc-b",
+          "type": "document",
+          "date": null,
+          "title": "Second",
+          "document": "[{\"id\":\"8bfb20f5-b800-42e7-82ee-dd83fbc743d5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Met second \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e2\",\"date\":\"2026-11-26\",\"time\":\"09:00\"}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:03:00.000Z"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-3",
+        "revision": 5
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Met first",
+        "date": "2026-11-26",
+        "time": "09:00",
+        "line": {
+          "pageId": "doc-a",
+          "lineId": "a1"
+        }
+      },
+      {
+        "id": "e2",
+        "title": "Met second",
+        "date": "2026-11-26",
+        "time": "09:00",
+        "line": {
+          "pageId": "doc-b",
+          "lineId": "b1"
+        }
+      }
+    ]
+  },
+  {
+    "name": "titles",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"w1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Meet \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"\"}},{\"type\":\"text\",\"text\":\" Sam\",\"styles\":{}}],\"children\":[]},{\"id\":\"w2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Read \",\"styles\":{}},{\"type\":\"pageRef\",\"props\":{\"pageId\":\"doc-live\",\"refId\":\"ref-1\",\"at\":5}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e2\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"w3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Look at \",\"styles\":{}},{\"type\":\"pageRef\",\"props\":{\"pageId\":\"doc-trashed\",\"refId\":\"ref-2\",\"at\":5}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e3\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"w4\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"See \",\"styles\":{}},{\"type\":\"pageRef\",\"props\":{\"pageId\":\"doc-gone\",\"refId\":\"ref-3\",\"at\":5}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e4\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"w5\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Read \",\"styles\":{}},{\"type\":\"link\",\"href\":\"https://example.com/plan\",\"content\":[{\"type\":\"text\",\"text\":\"the plan\",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"nested\",\"date\":\"2026-11-26\",\"time\":\"08:00\"}}]},{\"type\":\"text\",\"text\":\" today\",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e5\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"w6\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"  a\\t　b﻿\u2028c \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e6\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"w7\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"ab​c\",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e7\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "doc-live",
+          "type": "document",
+          "date": null,
+          "title": "Reading list",
+          "document": "[{\"id\":\"20432872-c55c-4f36-a4be-60b3855f89f2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-trashed",
+          "type": "document",
+          "date": null,
+          "title": "Old plans",
+          "document": "[{\"id\":\"3081c977-5f1f-48d1-9d54-bac3042578a1\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "trashedAt": "2026-11-26T09:04:00.000Z",
+          "trashId": "trash-old-plans"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-2",
+        "revision": 5
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Meet Sam",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "w1"
+        }
+      },
+      {
+        "id": "e2",
+        "title": "Read Reading list",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "w2"
+        }
+      },
+      {
+        "id": "e3",
+        "title": "Look at Old plans",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "w3"
+        }
+      },
+      {
+        "id": "e4",
+        "title": "See",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "w4"
+        }
+      },
+      {
+        "id": "e5",
+        "title": "Read the plan today",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "w5"
+        }
+      },
+      {
+        "id": "e6",
+        "title": "a b c",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "w6"
+        }
+      },
+      {
+        "id": "e7",
+        "title": "ab​c",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "w7"
+        }
+      }
+    ]
+  },
+  {
+    "name": "a chip with no eventId beside a good one",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"l1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Swim\",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"\",\"date\":\"2026-11-26\",\"time\":\"\"}},{\"type\":\"text\",\"text\":\"lesson\",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-2",
+        "revision": 2
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Swim lesson",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      }
+    ]
+  },
+  {
+    "name": "a chip on a nested line",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"l1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Trip\",\"styles\":{}}],\"children\":[{\"id\":\"l2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Flight \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"07:45\"}}],\"children\":[]}]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-2",
+        "revision": 2
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Flight",
+        "date": "2026-11-26",
+        "time": "07:45",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l2"
+        }
+      }
+    ]
+  },
+  {
+    "name": "a page with a node the app cannot read",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "doc-odd",
+          "type": "document",
+          "date": null,
+          "title": "Odd page",
+          "document": "[{\"id\":\"odd\",\"type\":\"paragraph\",\"props\":5,\"content\":[{\"type\":\"text\",\"text\":\"Odd\",\"styles\":{}}],\"children\":[]},{\"id\":\"l1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Call Mum \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "make-doc-odd",
+        "revision": 2
+      }
+    },
+    "day": "2026-11-26",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Call Mum",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "doc-odd",
+          "lineId": "l1"
+        }
+      }
+    ],
+    "unreadablePageId": "doc-odd"
+  }
+]

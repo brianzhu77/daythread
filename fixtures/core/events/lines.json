@@ -1,0 +1,220 @@
+[
+  {
+    "name": "none",
+    "events": [],
+    "line": null
+  },
+  {
+    "name": "one with no time",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Lunch with Kathy",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      }
+    ],
+    "line": {
+      "text": "Lunch with Kathy · All day",
+      "more": null
+    }
+  },
+  {
+    "name": "one at 10:30",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Standup with Lu",
+        "date": "2026-11-26",
+        "time": "10:30",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      }
+    ],
+    "line": {
+      "text": "10:30 AM Standup with Lu",
+      "more": null
+    }
+  },
+  {
+    "name": "one untitled with no time",
+    "events": [
+      {
+        "id": "e1",
+        "title": "",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      }
+    ],
+    "line": {
+      "text": "Untitled event · All day",
+      "more": null
+    }
+  },
+  {
+    "name": "two with no time",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Lunch with Kathy",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      },
+      {
+        "id": "e2",
+        "title": "Pick up the kids",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l2"
+        }
+      }
+    ],
+    "line": {
+      "text": "Lunch with Kathy · Pick up the kids",
+      "more": null
+    }
+  },
+  {
+    "name": "two timed",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Standup with Lu",
+        "date": "2026-11-26",
+        "time": "10:30",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      },
+      {
+        "id": "e2",
+        "title": "Dentist",
+        "date": "2026-11-26",
+        "time": "15:00",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l2"
+        }
+      }
+    ],
+    "line": {
+      "text": "10:30 AM Standup with Lu · 3 PM Dentist",
+      "more": null
+    }
+  },
+  {
+    "name": "three",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Lunch with Kathy",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      },
+      {
+        "id": "e2",
+        "title": "Standup with Lu",
+        "date": "2026-11-26",
+        "time": "10:30",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l2"
+        }
+      },
+      {
+        "id": "e3",
+        "title": "Dentist",
+        "date": "2026-11-26",
+        "time": "15:00",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l3"
+        }
+      }
+    ],
+    "line": {
+      "text": "Lunch with Kathy · 10:30 AM Standup with Lu",
+      "more": "+1 more"
+    }
+  },
+  {
+    "name": "five",
+    "events": [
+      {
+        "id": "e1",
+        "title": "Lunch with Kathy",
+        "date": "2026-11-26",
+        "time": null,
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l1"
+        }
+      },
+      {
+        "id": "e2",
+        "title": "Standup with Lu",
+        "date": "2026-11-26",
+        "time": "10:30",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l2"
+        }
+      },
+      {
+        "id": "e3",
+        "title": "Dentist",
+        "date": "2026-11-26",
+        "time": "15:00",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l3"
+        }
+      },
+      {
+        "id": "e4",
+        "title": "Gym",
+        "date": "2026-11-26",
+        "time": "18:00",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l4"
+        }
+      },
+      {
+        "id": "e5",
+        "title": "Call Mum",
+        "date": "2026-11-26",
+        "time": "20:30",
+        "line": {
+          "pageId": "day:2026-11-26",
+          "lineId": "l5"
+        }
+      }
+    ],
+    "line": {
+      "text": "Lunch with Kathy · 10:30 AM Standup with Lu",
+      "more": "+3 more"
+    }
+  }
+]

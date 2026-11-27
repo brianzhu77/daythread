@@ -1,0 +1,802 @@
+[
+  {
+    "name": "today with all three parts",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 23,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"144eb67d-882d-4cd8-9a37-5a7defd0bab8\",\"type\":\"task\",\"props\":{\"taskId\":\"10a6719b-1830-4cfe-a6ef-bf95cf95bb67\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Pay the rent\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"ev1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Standup with Lu \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e-standup\",\"date\":\"2026-11-26\",\"time\":\"10:30\"}}],\"children\":[]},{\"id\":\"ev2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Dentist \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e-dentist\",\"date\":\"2026-11-26\",\"time\":\"15:00\"}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "day:2026-11-25",
+          "type": "daily",
+          "date": "2026-11-25",
+          "title": "2026-11-25",
+          "document": "[{\"id\":\"day:2026-11-25:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"15294c4e-c3f9-4dd9-ae77-da5f9634107d\",\"type\":\"task\",\"props\":{\"taskId\":\"9f6cefb1-1747-4cdc-b330-479b404b1e48\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"　 \",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-25:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"ev3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Lunch with Kathy \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e-lunch\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"day:2026-11-25:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "errands",
+          "type": "document",
+          "date": null,
+          "title": "Errands",
+          "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"taxes\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:taxes\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"File the taxes\",\"styles\":{}}],\"children\":[]},{\"id\":\"invoice\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:invoice\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Send the invoice\",\"styles\":{}}],\"children\":[]},{\"id\":\"report\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:report\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Start the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"bike\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:bike\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Fix the bike\",\"styles\":{}}],\"children\":[]},{\"id\":\"tomorrow\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:tomorrow\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Order the paint\",\"styles\":{}}],\"children\":[]},{\"id\":\"done\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:done\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the flights\",\"styles\":{}}],\"children\":[]},{\"id\":\"cancelled\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:cancelled\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Renew the lease\",\"styles\":{}}],\"children\":[]},{\"id\":\"fence\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:fence\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Mend the fence\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:02:00.000Z"
+        },
+        {
+          "id": "day:2026-11-20",
+          "type": "daily",
+          "date": "2026-11-20",
+          "title": "2026-11-20",
+          "document": "[{\"id\":\"day:2026-11-20:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"653018ec-b481-4655-b8cc-2065ff8e276f\",\"type\":\"task\",\"props\":{\"taskId\":\"0bdefeb3-1530-46e9-b8c6-7c2f97fd82a8\",\"role\":\"plan\",\"planDate\":\"2026-11-20\"},\"content\":[{\"type\":\"text\",\"text\":\"Sort the shed\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-20:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-20:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-20\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-20:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-20:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-20:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-20:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-20:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-20:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:taxes",
+          "title": "File the taxes",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:invoice",
+          "title": "Send the invoice",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-23",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:report",
+          "title": "Start the report",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": "2026-11-26",
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:bike",
+          "title": "Fix the bike",
+          "status": "open",
+          "version": 3,
+          "paused": true,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:tomorrow",
+          "title": "Order the paint",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-27",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:done",
+          "title": "Book the flights",
+          "status": "done",
+          "version": 3,
+          "paused": false,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands",
+          "doneOn": "2026-11-26"
+        },
+        {
+          "id": "editor-task:cancelled",
+          "title": "Renew the lease",
+          "status": "cancelled",
+          "version": 3,
+          "paused": false,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands",
+          "doneOn": null
+        },
+        {
+          "id": "0bdefeb3-1530-46e9-b8c6-7c2f97fd82a8",
+          "title": "Sort the shed",
+          "status": "open",
+          "version": 2,
+          "paused": true,
+          "deadlineOn": null,
+          "attentionOn": "2026-11-20",
+          "createdOn": "2026-11-20",
+          "sourcePageId": "day:2026-11-20"
+        },
+        {
+          "id": "editor-task:fence",
+          "title": "Mend the fence",
+          "status": "open",
+          "version": 2,
+          "paused": true,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "10a6719b-1830-4cfe-a6ef-bf95cf95bb67",
+          "title": "Pay the rent",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "9f6cefb1-1747-4cdc-b330-479b404b1e48",
+          "title": "　 ",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-25",
+          "sourcePageId": "day:2026-11-25"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "add-blank",
+        "revision": 23
+      }
+    },
+    "date": "2026-11-26",
+    "today": "2026-11-26",
+    "facts": {
+      "events": {
+        "text": "Lunch with Kathy · 10:30 AM Standup with Lu",
+        "more": "+1 more",
+        "headingId": "day:2026-11-26:h1"
+      },
+      "dueSoon": [
+        {
+          "taskId": "editor-task:taxes",
+          "words": "File the taxes",
+          "tag": "Due today",
+          "setAside": false
+        },
+        {
+          "taskId": "editor-task:invoice",
+          "words": "Send the invoice",
+          "tag": "Was due Mon",
+          "setAside": false
+        },
+        {
+          "taskId": "editor-task:report",
+          "words": "Start the report",
+          "tag": "Start today",
+          "setAside": false
+        },
+        {
+          "taskId": "editor-task:bike",
+          "words": "Fix the bike",
+          "tag": "Not today · Due today",
+          "setAside": true
+        },
+        {
+          "taskId": "0bdefeb3-1530-46e9-b8c6-7c2f97fd82a8",
+          "words": "Sort the shed",
+          "tag": "Not today",
+          "setAside": true
+        }
+      ],
+      "notToday": {
+        "title": "Not today · 3",
+        "rows": [
+          {
+            "taskId": "editor-task:bike",
+            "words": "Fix the bike",
+            "tag": "Due today",
+            "setAside": true
+          },
+          {
+            "taskId": "0bdefeb3-1530-46e9-b8c6-7c2f97fd82a8",
+            "words": "Sort the shed",
+            "tag": "",
+            "setAside": true
+          },
+          {
+            "taskId": "editor-task:fence",
+            "words": "Mend the fence",
+            "tag": "Unscheduled",
+            "setAside": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "the order is the workspace's",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "errands",
+          "type": "document",
+          "date": null,
+          "title": "Errands",
+          "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"bank\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:bank\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the bank\",\"styles\":{}}],\"children\":[]},{\"id\":\"books\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:books\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Return the books\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:bank",
+          "title": "Call the bank",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:books",
+          "title": "Return the books",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-24",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-4",
+        "revision": 5
+      }
+    },
+    "date": "2026-11-26",
+    "today": "2026-11-26",
+    "facts": {
+      "events": null,
+      "dueSoon": [
+        {
+          "taskId": "editor-task:bank",
+          "words": "Call the bank",
+          "tag": "Due today",
+          "setAside": false
+        },
+        {
+          "taskId": "editor-task:books",
+          "words": "Return the books",
+          "tag": "Was due Tue",
+          "setAside": false
+        }
+      ],
+      "notToday": null
+    }
+  },
+  {
+    "name": "a past day's page",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 9,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-11-20",
+          "type": "daily",
+          "date": "2026-11-20",
+          "title": "2026-11-20",
+          "document": "[{\"id\":\"day:2026-11-20:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-20:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-20:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-20\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-20:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"ev1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Standup \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-20\",\"time\":\"10:30\"}}],\"children\":[]},{\"id\":\"day:2026-11-20:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-20:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-20:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-20:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-20:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "errands",
+          "type": "document",
+          "date": null,
+          "title": "Errands",
+          "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"before\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:before\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Send the forms\",\"styles\":{}}],\"children\":[]},{\"id\":\"that-day\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:that-day\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Pay the plumber\",\"styles\":{}}],\"children\":[]},{\"id\":\"started\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:started\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Clean the gutters\",\"styles\":{}}],\"children\":[]},{\"id\":\"aside\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:aside\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Fix the bike\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:before",
+          "title": "Send the forms",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-19",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:that-day",
+          "title": "Pay the plumber",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-20",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:started",
+          "title": "Clean the gutters",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": "2026-11-20",
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:aside",
+          "title": "Fix the bike",
+          "status": "open",
+          "version": 2,
+          "paused": true,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-8",
+        "revision": 9
+      }
+    },
+    "date": "2026-11-20",
+    "today": "2026-11-26",
+    "facts": {
+      "events": null,
+      "dueSoon": [
+        {
+          "taskId": "editor-task:before",
+          "words": "Send the forms",
+          "tag": "Was due Thu",
+          "setAside": false
+        },
+        {
+          "taskId": "editor-task:that-day",
+          "words": "Pay the plumber",
+          "tag": "Due that day",
+          "setAside": false
+        },
+        {
+          "taskId": "editor-task:started",
+          "words": "Clean the gutters",
+          "tag": "Unscheduled",
+          "setAside": false
+        }
+      ],
+      "notToday": null
+    }
+  },
+  {
+    "name": "a later day's page",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "day:2026-12-03",
+          "type": "daily",
+          "date": "2026-12-03",
+          "title": "2026-12-03",
+          "document": "[{\"id\":\"day:2026-12-03:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-12-03:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-12-03:r0\",\"role\":\"plan\",\"planDate\":\"2026-12-03\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-12-03:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-12-03:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-12-03:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-12-03:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-12-03:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-12-03:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "errands",
+          "type": "document",
+          "date": null,
+          "title": "Errands",
+          "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"that-day\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:that-day\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Pay the plumber\",\"styles\":{}}],\"children\":[]},{\"id\":\"today\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:today\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"File the taxes\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:that-day",
+          "title": "Pay the plumber",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-12-03",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:today",
+          "title": "File the taxes",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-5",
+        "revision": 6
+      }
+    },
+    "date": "2026-12-03",
+    "today": "2026-11-26",
+    "facts": {
+      "events": null,
+      "dueSoon": [
+        {
+          "taskId": "editor-task:that-day",
+          "words": "Pay the plumber",
+          "tag": "Due that day",
+          "setAside": false
+        },
+        {
+          "taskId": "editor-task:today",
+          "words": "File the taxes",
+          "tag": "Due today",
+          "setAside": false
+        }
+      ],
+      "notToday": null
+    }
+  },
+  {
+    "name": "a past day without a page",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "errands",
+          "type": "document",
+          "date": null,
+          "title": "Errands",
+          "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"that-day\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:that-day\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Pay the plumber\",\"styles\":{}}],\"children\":[]},{\"id\":\"before\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:before\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Send the forms\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:that-day",
+          "title": "Pay the plumber",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-24",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:before",
+          "title": "Send the forms",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-23",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-4",
+        "revision": 5
+      }
+    },
+    "date": "2026-11-24",
+    "today": "2026-11-26",
+    "facts": {
+      "events": null,
+      "dueSoon": [
+        {
+          "taskId": "editor-task:that-day",
+          "words": "Pay the plumber",
+          "tag": "Due that day",
+          "setAside": false
+        },
+        {
+          "taskId": "editor-task:before",
+          "words": "Send the forms",
+          "tag": "Was due Mon",
+          "setAside": false
+        }
+      ],
+      "notToday": null
+    }
+  },
+  {
+    "name": "a later day without a page",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "errands",
+          "type": "document",
+          "date": null,
+          "title": "Errands",
+          "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"later\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:later\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Pay the plumber\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:later",
+          "title": "Pay the plumber",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-12-04",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-3",
+        "revision": 4
+      }
+    },
+    "date": "2026-12-04",
+    "today": "2026-11-26",
+    "facts": null
+  },
+  {
+    "name": "today in Trash",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 10,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"144eb67d-882d-4cd8-9a37-5a7defd0bab8\",\"type\":\"task\",\"props\":{\"taskId\":\"10a6719b-1830-4cfe-a6ef-bf95cf95bb67\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Pay the rent\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"ev2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Standup with Lu \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e-standup\",\"date\":\"2026-11-26\",\"time\":\"10:30\"}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z",
+          "trashedAt": "2026-11-26T09:05:00.000Z",
+          "trashId": "trash-today"
+        },
+        {
+          "id": "day:2026-11-25",
+          "type": "daily",
+          "date": "2026-11-25",
+          "title": "2026-11-25",
+          "document": "[{\"id\":\"day:2026-11-25:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-25:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"ev1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Lunch with Kathy \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e-lunch\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]},{\"id\":\"day:2026-11-25:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "errands",
+          "type": "document",
+          "date": null,
+          "title": "Errands",
+          "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"taxes\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:taxes\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"File the taxes\",\"styles\":{}}],\"children\":[]},{\"id\":\"aside\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:aside\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Fix the bike\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:taxes",
+          "title": "File the taxes",
+          "status": "open",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "editor-task:aside",
+          "title": "Fix the bike",
+          "status": "open",
+          "version": 2,
+          "paused": true,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "errands"
+        },
+        {
+          "id": "10a6719b-1830-4cfe-a6ef-bf95cf95bb67",
+          "title": "Pay the rent",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": "2026-11-26",
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "trash-today",
+        "revision": 10
+      }
+    },
+    "date": "2026-11-26",
+    "today": "2026-11-26",
+    "facts": {
+      "events": {
+        "text": "Lunch with Kathy · All day",
+        "more": null,
+        "headingId": null
+      },
+      "dueSoon": [
+        {
+          "taskId": "editor-task:taxes",
+          "words": "File the taxes",
+          "tag": "Due today",
+          "setAside": false
+        },
+        {
+          "taskId": "10a6719b-1830-4cfe-a6ef-bf95cf95bb67",
+          "words": "Pay the rent",
+          "tag": "Due today",
+          "setAside": false
+        }
+      ],
+      "notToday": {
+        "title": "Not today · 1",
+        "rows": [
+          {
+            "taskId": "editor-task:aside",
+            "words": "Fix the bike",
+            "tag": "Unscheduled",
+            "setAside": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "today with events and no Events heading",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 2,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"ev1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Standup with Lu \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"10:30\"}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-2",
+        "revision": 2
+      }
+    },
+    "date": "2026-11-26",
+    "today": "2026-11-26",
+    "facts": {
+      "events": {
+        "text": "10:30 AM Standup with Lu",
+        "more": null,
+        "headingId": null
+      },
+      "dueSoon": [],
+      "notToday": null
+    }
+  },
+  {
+    "name": "nothing to show",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 1,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        }
+      ],
+      "tasks": [],
+      "deletedTasks": [],
+      "receipts": {}
+    },
+    "date": "2026-11-26",
+    "today": "2026-11-26",
+    "facts": {
+      "events": null,
+      "dueSoon": [],
+      "notToday": null
+    }
+  }
+]

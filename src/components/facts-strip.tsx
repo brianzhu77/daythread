@@ -1,11 +1,7 @@
-import type { DayEvent, DayView, LocalDate, Task, Workspace } from '../domain/types'
-import { flatNodes, pageNodes, rowTaskId } from '../domain/editor-document'
-import { plannedOn } from '../domain/workspace'
-import { shortLabel, taskDateTag } from './dates'
+import type { DayView, LocalDate, Task, Workspace } from '../domain/types'
+import { dayFacts, type FactRow } from './day-facts'
 import { Disclosure, RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
-import { useWorkspace } from './use-day'
-import { eventsHeading, shortTime } from './event-rows'
 import { CalendarIcon } from './icons'
 import { jumpToBlock } from './line-jump'
 
@@ -18,21 +14,21 @@ interface Props {
 
 /** Computed facts above the page, never page text. No counts to clear. */
 export function FactsStrip({ view, workspace, date, today }: Props) {
-  const isToday = date === today
-  const pageTaskIds = new Set(view.page ? flatNodes(pageNodes(view.page)).map(rowTaskId).filter(Boolean) : [])
-  const dueSoon = view.attention.filter(t => !pageTaskIds.has(t.id))
+  const facts = dayFacts(view, workspace, date, today)
+  if (!facts) return null
+  const paused = new Map(view.paused.map(t => [t.id, t]))
 
   return (
     <div className="facts" aria-label="Facts for this day">
-      {isToday && view.events.length > 0 && <TodayEvents events={view.events} headingId={view.page ? eventsHeading(pageNodes(view.page))?.id : undefined} />}
+      {facts.events && <TodayEvents text={facts.events.text} more={facts.events.more} headingId={facts.events.headingId} />}
 
-      {dueSoon.length > 0 && (
+      {facts.dueSoon.length > 0 && (
         <div className="fact-block">
           <p className="fact-label">Due soon</p>
-          {dueSoon.map(t => (
-            <div key={t.id} className="fact-row">
-              <span className="grow">{t.title}</span>
-              <span className={`app-tag ${t.paused ? 'quiet' : ''}`}>{t.paused ? `Not today · ${taskDateTag(t, today, date, plannedOn(workspace, t.id))}` : taskDateTag(t, today, date, plannedOn(workspace, t.id))}</span>
+          {facts.dueSoon.map(row => (
+            <div key={row.taskId} className="fact-row">
+              <span className="grow">{row.words}</span>
+              <span className={`app-tag ${row.setAside ? 'quiet' : ''}`}>{row.tag}</span>
             </div>
           ))}
         </div>
@@ -40,11 +36,11 @@ export function FactsStrip({ view, workspace, date, today }: Props) {
 
       {/* B76 (Lead e1158869, Bumblebee efb90b83): no "N other open tasks" line. This morning's open to-dos are in the
           day's draft (bands or "N more open"); the rest is the Tasks tab. Shown only when there is something to open. */}
-      {isToday && view.paused.length > 0 && (
+      {facts.notToday && (
         <div className="fact-pair">
-          <Disclosure summary={`Not today · ${view.paused.length}`}>
-            {view.paused.map(t => (
-              <PoolRow key={t.id} task={t} today={today} paused />
+          <Disclosure summary={facts.notToday.title}>
+            {facts.notToday.rows.map(row => (
+              <PoolRow key={row.taskId} task={paused.get(row.taskId)!} row={row} today={today} />
             ))}
           </Disclosure>
         </div>
@@ -53,13 +49,13 @@ export function FactsStrip({ view, workspace, date, today }: Props) {
   )
 }
 
-function PoolRow({ task, today, paused = false }: { task: Task; today: LocalDate; paused?: boolean }) {
+function PoolRow({ task, row, today }: { task: Task; row: FactRow; today: LocalDate }) {
   const { planOn, notToday } = useTaskActions(today)
-  const { workspace } = useWorkspace()
+  const paused = row.setAside
   return (
     <div className="fact-row">
-      <span className="grow">{task.title}</span>
-      <span className="app-tag">{taskDateTag(task, today, today, workspace ? plannedOn(workspace, task.id) : null)}</span>
+      <span className="grow">{row.words}</span>
+      <span className="app-tag">{row.tag}</span>
       <span className="actions">
         <button type="button" className="secondary" onClick={() => planOn(task, today)}>
           {paused ? 'Bring back' : 'Today'}
@@ -79,15 +75,12 @@ function PoolRow({ task, today, paused = false }: { task: Task; today: LocalDate
  * Today's events as one fact line, first in the strip, so he sees them above the fold on the phone. The same list as
  * the rows under Events; a tap jumps to those rows.
  */
-function TodayEvents({ events, headingId }: { events: DayEvent[]; headingId?: string }) {
-  const named = events.slice(0, 2).map(e => `${e.time ? `${shortTime(e.time)} ` : ''}${e.title || 'Untitled event'}`)
-  const parts = [...named, ...(events.length === 1 && !events[0]!.time ? ['All day'] : [])]
-  const more = events.length > 2 ? `+${events.length - 2} more` : ''
+function TodayEvents({ text, more, headingId }: { text: string; more: string | null; headingId: string | null }) {
   const jump = () => { const at = document.querySelector<HTMLElement>('.event-rows') ?? (headingId ? document.querySelector<HTMLElement>(`.bn-block-outer[data-id="${CSS.escape(headingId)}"]`) : null); if (at) jumpToBlock(at) }
   return (
     <button type="button" className="fact-line link-line today-events" onClick={jump}>
       <span className="page-ref-icon" aria-hidden="true"><CalendarIcon /></span>
-      <span className="today-events-text">{parts.join(' · ')}</span>
+      <span className="today-events-text">{text}</span>
       {more && <span className="today-events-more">{more}</span>}
       <span className="today-events-go">▸</span>
     </button>

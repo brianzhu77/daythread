@@ -5,6 +5,7 @@ import { DateTag } from './date-tag'
 import { RowMenu, type MenuItem } from './row-menu'
 import { pickDate } from './row-actions'
 import { notTodayText } from './row-notices'
+import { planOnAction, planOnNotice } from './plan-on'
 import { useTaskTick, useWorkspace } from './use-day'
 import { TagText } from './tag-text'
 
@@ -18,8 +19,8 @@ export function useTaskActions(today: LocalDate) {
 
   /** `from`: the day page the move is made from; its row leaves it unless that day is past. */
   const planOn = (task: Task, date: LocalDate, from?: LocalDate) =>
-    run({ type: 'plan-task', taskId: task.id, date, today, ...(from ? { from } : {}) }, r => ({
-      text: date === today ? 'On today' : `Moved to ${shortLabel(date)}`,
+    run(planOnAction(task.id, date, today, from), r => ({
+      text: planOnNotice(date, today),
       undoOperationId: r.operationId,
     }))
 

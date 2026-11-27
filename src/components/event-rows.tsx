@@ -16,6 +16,9 @@ import { addDays, fromIso, todayIso } from './dates'
 import { RemindersStopped } from './reminders'
 import { CalendarIcon } from './icons'
 import { LineRefChip } from './line-ref-chip'
+import { eventsHeading, shortTime } from './event-words'
+
+export { eventsHeading, shortTime }
 
 const key = new PluginKey<DecorationSet>('daythread-event-rows')
 /**
@@ -111,10 +114,6 @@ export function eventsAnchor(doc: readonly EditorNode[], tasks: ReadonlySet<stri
   const at = broughtInsertIndex(doc, tasks)
   return { afterId: at > 0 ? doc[at - 1]!.id : null, labelled: true }
 }
-/** The heading titled "Events" on a page, by its text: a display anchor, never a stored role. */
-export function eventsHeading(doc: readonly EditorNode[]): EditorNode | undefined {
-  return doc.find(n => n.type === 'heading' && inlineText(n.content).trim().toLowerCase() === 'events')
-}
 function eventsSection(doc: readonly EditorNode[]): EditorNode[] {
   const h = eventsHeading(doc)
   return h ? flatNodes(sectionRange(doc, h.id).slice(1)) : []
@@ -129,11 +128,6 @@ function sectionTitleOf(page: Page, lineId: string): string {
   return ''
 }
 
-/** "3 PM", "3:30 PM": the chip's and the strip's time. */
-export const shortTime = (time: string) => {
-  const [h, m] = time.split(':').map(Number) as [number, number]
-  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'AM' : 'PM'}`
-}
 export const rowTime = (time: string | null) => {
   if (!time) return 'All day'
   const [h, m] = time.split(':').map(Number) as [number, number]
