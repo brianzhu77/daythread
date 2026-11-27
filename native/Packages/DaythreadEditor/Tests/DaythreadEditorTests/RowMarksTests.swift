@@ -357,6 +357,50 @@
         #expect(try cell(screen, 0).circle.bounds.width >= 44, "the touch target is kept")
       }
 
+      /// Within a pixel of the middle of the first line as laid out, for words in a fallback font (Chinese, emoji),
+      /// drawn or typed. Plain Chinese is laid out at the body line's height; a chip whose words fall back (a page
+      /// titled in Chinese) makes the line taller, and the circle follows it.
+      @Test(arguments: [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge])
+      func the_circle_is_level_with_a_first_line_in_a_fallback_font(category: UIContentSizeCategory) throws {
+        let list = try #require(
+          Page(.object([
+            "id": .string("shop"), "type": .string("document"), "date": .null, "title": .string("购物清单"),
+            "document": .string("[]"),
+          ])))
+        let reference: JSONValue = .object([
+          "type": .string("pageRef"), "props": .object(["pageId": .string("shop"), "refId": .string("r")]),
+        ])
+        var chip = row("chip", "k-chip", "")
+        chip.content = .array([reference, run(" for the weekend")])
+        let screen = try Screen.editing(
+          [
+            row("zh", "k-zh", "今天下午去银行办事，顺便买菜和水果，晚上做饭"),
+            row("mixed", "k-mixed", "Buy 牛奶 and bread"),
+            row("emoji", "k-emoji", "🎂 Order the cake"),
+            chip,
+            row("typed", "k-typed", "Call"),
+          ],
+          tasks: [
+            todo("k-zh", deadlineOn: "2026-11-27"), todo("k-mixed"), todo("k-emoji"), todo("k-chip"), todo("k-typed"),
+          ],
+          height: 3000, category: category, today: today, pages: [list])
+        let pixel = 1 / screen.window.screen.scale + 0.01
+        for item in 0..<4 {
+          let cell = try cell(screen, item)
+          let midline = try firstLineMidline(of: cell)
+          #expect(
+            abs(cell.circle.center.y - midline) < pixel,
+            "row \(item): the circle's centre \(cell.circle.center.y) is level with the first line's middle \(midline)")
+        }
+        // Chinese typed at the start of a Latin line.
+        let line = try screen.focus(4, at: 0)
+        line.insertText("打电话 ")
+        screen.window.layoutIfNeeded()
+        let typed = try cell(screen, 4)
+        let midline = try firstLineMidline(of: typed)
+        #expect(abs(typed.circle.center.y - midline) < pixel, "typed: \(typed.circle.center.y) against \(midline)")
+      }
+
       // MARK: facts that change while he composes
 
       @Test func facts_that_change_while_he_composes_are_drawn_when_he_commits() throws {

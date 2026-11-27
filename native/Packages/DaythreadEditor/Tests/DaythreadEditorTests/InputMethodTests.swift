@@ -774,5 +774,7 @@
     func lineTextView(_ line: LineTextView, moveCaret direction: LineTextView.Direction, near point: CGPoint) {
       screen.lineTextView(line, moveCaret: direction, near: point)
     }
+    func lineTextViewHasRowMenu(_ line: LineTextView) -> Bool { screen.lineTextViewHasRowMenu(line) }
+    func lineTextViewShowRowMenu(_ line: LineTextView) { screen.lineTextViewShowRowMenu(line) }
   }
 #endif
