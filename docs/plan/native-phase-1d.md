@@ -109,6 +109,15 @@ wins.
   (`sizingOptions = [.intrinsicContentSize, .preferredContentSize]`, read in
   `preferredContentSizeDidChange(forChildContentContainer:)`), not through `DayHeaderView.onResize`: the header's
   bounds change only after the list has laid it out again, so `onResize` never sees the strip grow first.
+- **The strip's hosting controller is a child of the list's controller, not of the day screen** (Task 5). Its view
+  lies in the list's header, and UIKit refuses a child whose view is inside another controller's view
+  (`UIViewControllerHierarchyInconsistency`: it "should have parent view controller" `DocumentViewController`). The
+  day screen adds it to `document` (`document.addChild`) and keeps the model; so
+  `preferredContentSizeDidChange(forChildContentContainer:)` reaches the list's controller, which the day screen
+  does not override, and the height's changes are read instead from a subclass of the hosting controller
+  (`DayFactsHostingController`) that observes its own `preferredContentSize`. The plan's other choice stands: the
+  hosting controller's height follows the header's width in the list's self-sizing header (measured at 320, 402 and
+  1024 points), so `UIHostingConfiguration` is not needed.
 - A correction found while building is written here with its reason before the code that follows it.
 
 ## Review Focus

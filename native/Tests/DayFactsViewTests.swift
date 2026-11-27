@@ -116,10 +116,10 @@ private func settled(_ day: RowScreen) async throws {
     return clock
   }
 
-  private func harness(pages: [JSONValue] = AllThree.pages(), tasks: [JSONValue] = AllThree.tasks()) async throws
-    -> Harness
-  {
-    try await Harness(copy: try copy(pages: pages, tasks: tasks), clock: thursday, sleep: neverEnding)
+  private func harness(
+    pages: [JSONValue] = AllThree.pages(), tasks: [JSONValue] = AllThree.tasks(), relay: StateRelay? = nil
+  ) async throws -> Harness {
+    try await Harness(copy: try copy(pages: pages, tasks: tasks), clock: thursday, sleep: neverEnding, relay: relay)
   }
 
   /// Loads `workspace` as the server's next copy and waits for the screen to draw it.
@@ -150,9 +150,10 @@ private func settled(_ day: RowScreen) async throws {
     return try #require(list.layoutAttributesForItem(at: IndexPath(item: 0, section: 0))?.frame)
   }
 
-  /// The hosting controller of the strip, for the height its content asks for.
+  /// The hosting controller of the strip, for the height its content asks for. Its view lies in the list's header, so
+  /// it is the list's controller's child.
   private func host(_ day: RowScreen) throws -> UIHostingController<DayFactsView> {
-    try #require(day.screen.children.compactMap { $0 as? UIHostingController<DayFactsView> }.first)
+    try #require(day.editor.children.compactMap { $0 as? UIHostingController<DayFactsView> }.first)
   }
 
   /// The height the strip's content needs at the strip's width.
@@ -271,12 +272,23 @@ private func settled(_ day: RowScreen) async throws {
   }
 
   /// The facts are read from the workspace the screen draws, his unsaved words drawn in, with that workspace's own
-  /// index: an index of the engine's copy would still see the row he removed.
+  /// index. A state that does not have his newest words yet (the engine is still storing them) shows it: the engine's
+  /// copy, and an index of it, still have the row he removed.
   @Test func the_strip_follows_his_unsaved_words() async throws {
-    let h = try await harness()
+    let relay = StateRelay()
+    let h = try await harness(relay: relay)
     let day = try RowScreen(h.model)
     try await settled(day)
     #expect(!tags(day.facts.dueSoon).contains(["Pay the rent", "Due today"]), "its row is on today's page")
+
+    // A state from before his change, held back until the engine is busy storing it.
+    relay.hold()
+    await h.server.add([
+      .workspace(.full(try copy(revision: 2, pages: AllThree.pages(), tasks: AllThree.tasks()), owner: "one"))
+    ])
+    await h.model.refresh()
+    try await soon { !relay.kept.isEmpty }
+    await h.store.holdPut()
 
     let rent = try day.line("Pay the rent")
     #expect(rent.becomeFirstResponder())
@@ -284,11 +296,15 @@ private func settled(_ day: RowScreen) async throws {
     rent.deleteBackward()
     rent.deleteBackward()
     #expect(!day.words.contains("Pay the rent"), "the row is gone from the screen")
-    try await soon { !h.model.state.drafts.isEmpty }
+    await h.store.putHeld()
+    let published = try #require(relay.kept.last?.published)
+    relay.release()
+    try await soon { h.model.state.published == published }
     try await settled(day)
 
-    #expect(h.model.workspace?.dayPage(today)?.document.contains("r-rent") == true, "the server's page keeps the row")
+    #expect(h.model.workspace?.dayPage(today)?.document.contains("r-rent") == true, "the state still has the row")
     #expect(tags(day.facts.dueSoon).contains(["Pay the rent", "Due today"]), "\(tags(day.facts.dueSoon))")
+    await h.store.releasePut()
     day.close()
   }
 
@@ -361,13 +377,13 @@ private func settled(_ day: RowScreen) async throws {
     let h = try await harness()
     let day = try RowScreen(h.model)
     try await settled(day)
-    let strip = strip(day)
+    let before = strip(day)
     let header = try supplementary(day)
     let row = try firstRow(day)
 
     day.factsModel.notTodayOpen = true
     try await settled(day)
-    let grown = strip(day).height - strip.height
+    let grown = strip(day).height - before.height
     #expect(grown > 20, "the fold's rows show: \(grown)")
     #expect(abs((try supplementary(day).height - header.height) - grown) <= 0.5)
     #expect(abs((try firstRow(day).minY - row.minY) - grown) <= 0.5)
@@ -406,6 +422,9 @@ private func settled(_ day: RowScreen) async throws {
       let strip = strip(day)
       measured.append((strip.height, strip.width, header(day).layoutMarginsGuide.layoutFrame.width))
       #expect(abs(strip.height - (try needed(day))) <= 0.5, "at \(size.rawValue) nothing is cut")
+      // A tag wider than the strip would make the content wider than its host, which centres it and cuts both edges.
+      let content = try host(day).sizeThatFits(in: CGSize(width: strip.width, height: .greatestFiniteMagnitude))
+      #expect(content.width <= strip.width + 0.5, "at \(size.rawValue) the content is \(content.width) wide in \(strip.width)")
       day.close()
     }
     #expect(measured[1].height > measured[0].height)
@@ -438,12 +457,15 @@ private func settled(_ day: RowScreen) async throws {
   @Test func the_fold_survives_a_new_host() async throws {
     let h = try await harness()
     let day = try RowScreen(h.model)
+    try await settled(day)
     day.factsModel.notTodayOpen = true
     try await settled(day)
     let width = strip(day).width
     let height = strip(day).height
 
     let second = UIHostingController(rootView: DayFactsView(model: day.factsModel))
+    // As the screen's host: the window's safe area is not the strip's.
+    second.safeAreaRegions = []
     let window = try testWindow(width: 402)
     window.rootViewController = second
     window.makeKeyAndVisible()
