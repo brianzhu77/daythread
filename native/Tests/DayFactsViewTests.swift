@@ -633,6 +633,68 @@ private func settled(_ day: RowScreen) async throws {
     }
   }
 
+  /// The horizontal reach of the ink in `band`: its leftmost and rightmost inked columns.
+  private func inkReach(of view: UIView, in band: ClosedRange<Int>) throws -> ClosedRange<Int> {
+    let (bytes, width, _) = try pixels(of: view)
+    let columns = (0..<width).filter { x in
+      band.contains { y in
+        let i = (y * width + x) * 4
+        let luminance = (0.2126 * Double(bytes[i]) + 0.7152 * Double(bytes[i + 1]) + 0.0722 * Double(bytes[i + 2]))
+        return luminance / 255 < 0.75
+      }
+    }
+    return try #require(columns.first)...(try #require(columns.last))
+  }
+
+  /// At the accessibility sizes `+N more` and the chevron go on a line of their own under the words, so the words
+  /// have the whole width after the symbol: drawn with them, the words' lines are exactly those drawn without them.
+  @Test func at_the_accessibility_sizes_more_goes_under_the_words() throws {
+    func facts(more: Bool) throws -> DayFacts {
+      var todayLines = [event("ev1", "Standup with Lu ", chip("e-standup", on: today, at: "10:30"))]
+      if more {
+        // An `Events` heading makes the line a button, with its chevron; a third event gives `+1 more`.
+        todayLines = [heading("h1", "Events")] + todayLines
+          + [event("ev2", "Dentist ", chip("e-dentist", on: today, at: "15:00"))]
+      }
+      let workspace = try copy(
+        pages: [
+          page(today, todayLines), page(yesterday, [event("ev3", "Lunch with Kathy ", chip("e-lunch", on: today))]),
+        ], tasks: [])
+      return DayFacts.of(day: today, in: workspace, index: TodoIndex(workspace), today: today)
+    }
+    let withMore = try facts(more: true)
+    let without = try facts(more: false)
+    #expect(withMore.events?.text == "Lunch with Kathy · 10:30 AM Standup with Lu")
+    #expect(withMore.events?.more == "+1 more" && withMore.eventsHeadingId == "h1")
+    #expect(without.events?.text == withMore.events?.text && without.events?.more == nil)
+
+    let size = UIContentSizeCategory.accessibilityExtraExtraExtraLarge
+    let (moreHost, moreWindow) = try drawnStrip(withMore, width: 402, size: size)
+    let (plainHost, plainWindow) = try drawnStrip(without, width: 402, size: size)
+    let moreBands = try inkBands(of: moreHost.view)
+    let plainBands = try inkBands(of: plainHost.view)
+    try #require(plainBands.count >= 2, "the words take more than one line: \(plainBands)")
+    #expect(moreBands.count == plainBands.count + 1, "one line more, for `+1 more`: \(moreBands) against \(plainBands)")
+    for (index, band) in plainBands.enumerated() where index < moreBands.count {
+      #expect(moreBands[index] == band, "line \(index) of the words is where it is without `+1 more`")
+      #expect(
+        try inkReach(of: moreHost.view, in: moreBands[index]) == (try inkReach(of: plainHost.view, in: band)),
+        "line \(index) of the words reaches as far as without `+1 more`")
+    }
+    // `Lunch` is whole on the first line: the line reaches past the symbol by at least the word's width.
+    let font = UIFont.preferredFont(
+      forTextStyle: .subheadline, compatibleWith: UITraitCollection(preferredContentSizeCategory: size))
+    let lunch = ("Lunch" as NSString).size(withAttributes: [.font: font]).width
+    let first = try inkReach(of: plainHost.view, in: plainBands[0])
+    #expect(CGFloat(first.count) > lunch + font.pointSize, "the first line reaches \(first.count) points")
+    for host in [moreHost, plainHost] {
+      let fitted = host.sizeThatFits(in: CGSize(width: CGFloat(402), height: CGFloat.greatestFiniteMagnitude))
+      #expect(fitted.width <= 402.5, "nothing wider than the strip: \(fitted.width)")
+    }
+    moreWindow.isHidden = true
+    plainWindow.isHidden = true
+  }
+
   @Test func at_the_largest_text_size_the_strip_grows_and_keeps_its_width() async throws {
     var measured: [(height: CGFloat, width: CGFloat, margins: CGFloat)] = []
     for size in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge] {
