@@ -28,8 +28,15 @@ final class Clock {
   var date = noon
 }
 
+/// A wait that ends only when cancelled: the engine's waits (450 ms after a change, before a retry) never run out, so
+/// only what the test does sends a draft.
+let neverEnding: @Sendable (Duration) async throws -> Void = { _ in
+  try await Task.sleep(nanoseconds: 86_400_000_000_000)
+}
+
 /// A model signed in as `one` over `copy`, its engine past its first pass. The engine's own clock stays at the
-/// start, so it asks for no day page the copy lacks after the test moves the model's.
+/// start, so it asks for no day page the copy lacks after the test moves the model's. `drafts` are in the store before
+/// the engine starts.
 @MainActor
 struct Harness {
   let server: TestServer
@@ -37,17 +44,21 @@ struct Harness {
   let engine: SyncEngine
   let model: AppModel
 
-  init(copy: Workspace, clock: Clock = Clock()) async throws {
+  init(
+    copy: Workspace, clock: Clock = Clock(), drafts: [PageDraft] = [],
+    sleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep
+  ) async throws {
     server = TestServer([
       .account(Account(owner: "one", email: "one@example.com", signIn: true)),
       .workspace(.unchanged(revision: copy.revision, owner: "one")),
     ])
     store = TestStore()
     try await store.replace(with: copy, owner: "one")
+    for draft in drafts { try await store.put(draft) }
     let tokens = MemoryTokenStore()
     try tokens.write(one)
     let start = clock.date
-    engine = SyncEngine(transport: server, tokens: tokens, store: store, now: { start })
+    engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: sleep, now: { start })
     model = AppModel(engine: engine, now: { clock.date })
     model.start()
     try await until { [model] in model.state.phase == .ready && model.state.workspace != nil }
