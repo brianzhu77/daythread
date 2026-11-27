@@ -29,7 +29,7 @@ import Testing
 
   @Test func events_are_the_webs() throws {
     let cases = try Fixtures.cases("events/cases.json")
-    #expect(cases.count == 13)
+    #expect(cases.count == 14)
     for entry in cases where entry["unreadablePageId"]?.stringValue == nil {
       let name = entry["name"]?.stringValue ?? "?"
       let workspace = try #require(entry["workspace"].flatMap(Workspace.init), "workspace: \(name)")
