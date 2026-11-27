@@ -125,7 +125,8 @@
       let operationId: String
     }
 
-    /// The notice, over the page under the navigation bar; it says what the last row action did.
+    /// The notice, over the page (on a phone under the status bar, at regular width under the navigation bar); it says
+    /// what the last row action did.
     let notice: NoticeView
     /// The notice showing is of this action; nil when it offers no Undo.
     private var noticeOf: Acted?
@@ -204,6 +205,22 @@
       // checks the day and refreshes on activation; here only the timer is set again.
       NotificationCenter.default.addObserver(
         self, selector: #selector(rearmDayTimer), name: UIScene.didActivateNotification, object: nil)
+    }
+
+    /// On a phone the notice sits under the status bar, over the navigation bar's band (`NoticeView`), so it is held
+    /// by the navigation controller's view, above its bar; its place under the bar at regular width is still this
+    /// page's safe area.
+    override func viewIsAppearing(_ animated: Bool) {
+      super.viewIsAppearing(animated)
+      let host = navigationController?.view ?? view!
+      if notice.superview !== host {
+        notice.removeFromSuperview()
+        notice.frame = host.bounds
+        host.addSubview(notice)
+        notice.barGuide = host === view ? nil : view.safeAreaLayoutGuide
+      } else {
+        host.bringSubviewToFront(notice)
+      }
     }
 
     /// UIKit calls this again whenever what it reads from `model` changes; a change of day or of an empty state's

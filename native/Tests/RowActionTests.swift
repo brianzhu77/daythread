@@ -707,7 +707,9 @@ private struct RowScreen {
     try await soon { day.notice?.text == "Not today — won’t carry over" }
 
     #expect(day.notice?.undoing == nil, "the server's slot is not this operation's")
-    #expect(day.screen.view.subviews.filter { $0 is NoticeView }.count == 1, "one notice")
+    // Held above the navigation bar, by the navigation controller's view.
+    let host = try #require(day.screen.navigationController?.view)
+    #expect(Self.views(in: host).filter { $0 is NoticeView }.count == 1, "one notice")
     day.close()
   }
 

@@ -21,8 +21,9 @@ extension Notice.Kind {
   }
 }
 
-/// One line of words with at most one button, floating at the top of the screen under the navigation bar, where the
-/// web's phone app shows its notices. iOS has no component for it. The host pins this view to its own edges; only the
+/// One line of words with at most one button, floating at the top of the screen: on a phone directly under the
+/// status bar, where the web's phone app shows its notices; at regular width under the navigation bar. iOS has no
+/// component for it. The host pins this view to its own edges; only the
 /// notice's surface takes touches, the rest of the page is reached through it.
 ///
 /// The surface is the system's material (`UIBlurEffect(style: .systemMaterial)`), not its glass: on the device's
@@ -134,7 +135,52 @@ final class NoticeView: UIView {
     dismiss()
   }
 
+  // MARK: Where it sits
+
+  /// The guide whose top is the navigation bar's bottom. Its own safe area unless the host says otherwise: a host
+  /// that puts the notice above its navigation bar (so it can cover the bar on a phone) gives the page's guide.
+  var barGuide: UILayoutGuide? {
+    didSet {
+      guard barGuide !== oldValue else { return }
+      let active = underNavigationBar.isActive
+      underNavigationBar.isActive = false
+      underNavigationBar = Self.underBar(surface, of: barGuide ?? safeAreaLayoutGuide)
+      underNavigationBar.isActive = active
+      setNeedsLayout()
+    }
+  }
+
+  /// Regular width (iPad, Mac): one system spacing under the bar guide's top, so under the navigation bar.
+  private lazy var underNavigationBar = Self.underBar(surface, of: safeAreaLayoutGuide)
+
+  private static func underBar(_ surface: UIView, of guide: UILayoutGuide) -> NSLayoutConstraint {
+    surface.topAnchor.constraint(equalToSystemSpacingBelow: guide.topAnchor, multiplier: 1)
+  }
+  /// A phone (compact width or compact height): one spacing under the window's own top inset, the status bar or the
+  /// island, as the web's phone notice sits; over the navigation bar's band, so the day's title and the first rows of
+  /// a page at its top stay uncovered.
+  private lazy var underStatusBar = surface.topAnchor.constraint(equalTo: topAnchor)
+  private static let spacing: CGFloat = 8
+
+  private var onAPhone: Bool {
+    traitCollection.horizontalSizeClass == .compact || traitCollection.verticalSizeClass == .compact
+  }
+
+  /// The place for the traits and the window's inset now; changes a constraint only when it moves.
+  private func place() {
+    let phone = onAPhone
+    if phone, let window {
+      let statusBar = convert(CGPoint(x: 0, y: window.safeAreaInsets.top), from: window).y
+      let top = statusBar + Self.spacing
+      if abs(underStatusBar.constant - top) > 0.01 { underStatusBar.constant = top }
+    }
+    guard underStatusBar.isActive != phone else { return }
+    NSLayoutConstraint.deactivate([phone ? underNavigationBar : underStatusBar])
+    NSLayoutConstraint.activate([phone ? underStatusBar : underNavigationBar])
+  }
+
   override func layoutSubviews() {
+    place()
     super.layoutSubviews()
     // At the accessibility sizes the button goes under the words, so neither is squeezed.
     let axis: NSLayoutConstraint.Axis = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? .vertical : .horizontal
@@ -179,7 +225,7 @@ final class NoticeView: UIView {
     let gutterEnd = surface.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16)
     gutterEnd.priority = UILayoutPriority(999)
     NSLayoutConstraint.activate([
-      surface.topAnchor.constraint(equalToSystemSpacingBelow: safeAreaLayoutGuide.topAnchor, multiplier: 1),
+      underNavigationBar,
       surface.centerXAnchor.constraint(equalTo: centerXAnchor),
       surface.widthAnchor.constraint(lessThanOrEqualToConstant: Self.widest),
       surface.leadingAnchor.constraint(greaterThanOrEqualTo: safeAreaLayoutGuide.leadingAnchor, constant: 8),
