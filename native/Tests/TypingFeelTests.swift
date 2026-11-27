@@ -202,7 +202,15 @@ final class TypingFeelTests: XCTestCase {
       condition()
       ? "it arrived late, \(Self.seconds(clock.now - gaveUp)) s after the first wait ended"
       : "it had still not arrived after a further \(Self.seconds(clock.now - gaveUp)) s; the model then held \(held())"
-    XCTFail("\(what): not there after \(Self.seconds(gaveUp - started)) s; the model held \(heldThen); \(outcome)")
+    let message = "\(what): not there after \(Self.seconds(gaveUp - started)) s; the model held \(heldThen); \(outcome)"
+    XCTFail(message)
+    // The test ends here: another wait after a failed one would cost the same again for every keystroke left.
+    throw WaitFailed(message: message)
+  }
+
+  private struct WaitFailed: Error, CustomStringConvertible {
+    let message: String
+    var description: String { message }
   }
 
   private static func seconds(_ duration: Duration) -> String {
