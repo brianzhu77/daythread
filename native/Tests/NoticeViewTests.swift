@@ -377,6 +377,23 @@ private let moved = Notice(text: "Moved to Fri, Nov 27", kind: .done, undoing: "
     #expect((surface.accessibilityElements ?? []).count == 1)
   }
 
+  @Test func while_it_fades_after_a_dismissal_it_offers_voiceover_nothing() throws {
+    let fixture = try NoticeFixture()
+    fixture.show(moved)
+    let surface = try #require(fixture.surface)
+    let words = try #require(fixture.label)
+
+    fixture.notice.dismiss()
+
+    #expect(!surface.isHidden, "still fading")
+    #expect((surface.accessibilityElements ?? []).isEmpty)
+    #expect(words.accessibilityCustomActions?.isEmpty ?? true)
+    // The next notice is read again.
+    fixture.show(moved)
+    #expect((surface.accessibilityElements ?? []).compactMap { $0 as? UIView } == [words, try #require(fixture.buttons.first)])
+    #expect(words.accessibilityCustomActions?.map(\.name) == ["Undo"])
+  }
+
   @Test func undo_ends_as_far_from_the_trailing_edge_as_the_words_start_from_the_leading_edge() throws {
     let fixture = try NoticeFixture()
     fixture.show(moved)
