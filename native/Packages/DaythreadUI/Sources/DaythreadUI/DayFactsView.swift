@@ -265,6 +265,8 @@
           Button("Bring back") { model.bringBack(row.taskId) }
             .buttonStyle(.bordered)
             .tint(.primary)
+            .accessibilityLabel(row.bringBackLabel)
+            .accessibilityInputLabels(row.bringBackInputLabels)
           Menu {
             Section(menu.title ?? "") {
               ForEach(menu.items, id: \.self) { item in
