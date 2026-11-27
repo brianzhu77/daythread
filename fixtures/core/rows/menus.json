@@ -1,0 +1,969 @@
+[
+  {
+    "name": "a page that is not a day",
+    "status": "open",
+    "role": "plan",
+    "planned": "2026-11-26",
+    "pageDate": null,
+    "today": "2026-11-26",
+    "menu": null
+  },
+  {
+    "name": "done",
+    "status": "done",
+    "role": "plan",
+    "planned": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "today": "2026-11-26",
+    "menu": null
+  },
+  {
+    "name": "cancelled on a past day",
+    "status": "cancelled",
+    "role": "plan",
+    "planned": null,
+    "pageDate": "2026-11-20",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [],
+      "anotherDay": null,
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Restore",
+              "intent": {
+                "kind": "restore"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "cancelled today",
+    "status": "cancelled",
+    "role": "plan",
+    "planned": null,
+    "pageDate": "2026-11-26",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [],
+      "anotherDay": null,
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Restore",
+              "intent": {
+                "kind": "restore"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "cancelled on a future day",
+    "status": "cancelled",
+    "role": "plan",
+    "planned": null,
+    "pageDate": "2026-11-30",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [],
+      "anotherDay": null,
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Restore",
+              "intent": {
+                "kind": "restore"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "open plan row on a past day",
+    "status": "open",
+    "role": "plan",
+    "planned": "2026-11-20",
+    "pageDate": "2026-11-20",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [],
+      "anotherDay": null,
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Bring to today",
+              "intent": {
+                "kind": "bring-today"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "open reference row on a past day",
+    "status": "open",
+    "role": "reference",
+    "planned": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [],
+      "anotherDay": null,
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Bring to today",
+              "intent": {
+                "kind": "bring-today"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "reference row today, planned today",
+    "status": "open",
+    "role": "reference",
+    "planned": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [],
+      "anotherDay": [
+        {
+          "label": "Tomorrow · Fri 11/27",
+          "date": "2026-11-27"
+        },
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        },
+        {
+          "label": "Next week · Mon 11/30",
+          "date": "2026-11-30"
+        }
+      ],
+      "groups": [
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "Tomorrow · Fri 11/27",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-27"
+              }
+            },
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Next week · Mon 11/30",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-30"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "reference row today, not planned today",
+    "status": "open",
+    "role": "reference",
+    "planned": "2026-11-30",
+    "pageDate": "2026-11-26",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [
+        {
+          "label": "Plan for today",
+          "intent": {
+            "kind": "bring-today"
+          }
+        }
+      ],
+      "anotherDay": [
+        {
+          "label": "Tomorrow · Fri 11/27",
+          "date": "2026-11-27"
+        },
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        },
+        {
+          "label": "Next week · Mon 11/30",
+          "date": "2026-11-30"
+        }
+      ],
+      "groups": [
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "Tomorrow · Fri 11/27",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-27"
+              }
+            },
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Next week · Mon 11/30",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-30"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "reference row on a future day, planned today",
+    "status": "open",
+    "role": "reference",
+    "planned": "2026-11-26",
+    "pageDate": "2026-11-30",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [],
+      "anotherDay": [
+        {
+          "label": "Tomorrow · Fri 11/27",
+          "date": "2026-11-27"
+        },
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        }
+      ],
+      "groups": [
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "Tomorrow · Fri 11/27",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-27"
+              }
+            },
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "reference row on a future day, not planned today",
+    "status": "open",
+    "role": "reference",
+    "planned": "2026-12-02",
+    "pageDate": "2026-11-30",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [
+        {
+          "label": "Plan for today",
+          "intent": {
+            "kind": "bring-today"
+          }
+        }
+      ],
+      "anotherDay": [
+        {
+          "label": "Tomorrow · Fri 11/27",
+          "date": "2026-11-27"
+        },
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        }
+      ],
+      "groups": [
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "Tomorrow · Fri 11/27",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-27"
+              }
+            },
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "plan row today, planned today",
+    "status": "open",
+    "role": "plan",
+    "planned": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [
+        {
+          "label": "Tomorrow",
+          "intent": {
+            "kind": "move",
+            "date": "2026-11-27"
+          }
+        },
+        {
+          "label": "Not today",
+          "intent": {
+            "kind": "not-today"
+          }
+        }
+      ],
+      "anotherDay": [
+        {
+          "label": "Tomorrow · Fri 11/27",
+          "date": "2026-11-27"
+        },
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        },
+        {
+          "label": "Next week · Mon 11/30",
+          "date": "2026-11-30"
+        }
+      ],
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Tomorrow · Fri, Nov 27",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-27"
+              }
+            },
+            {
+              "label": "Not today",
+              "intent": {
+                "kind": "not-today"
+              }
+            }
+          ]
+        },
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Next week · Mon 11/30",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-30"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "plan row today, planned tomorrow (stale)",
+    "status": "open",
+    "role": "plan",
+    "planned": "2026-11-27",
+    "pageDate": "2026-11-26",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [
+        {
+          "label": "Remove from Thu",
+          "intent": {
+            "kind": "not-today"
+          }
+        }
+      ],
+      "anotherDay": [
+        {
+          "label": "Tomorrow · Fri 11/27",
+          "date": "2026-11-27"
+        },
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        },
+        {
+          "label": "Next week · Mon 11/30",
+          "date": "2026-11-30"
+        }
+      ],
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Remove from Thu",
+              "intent": {
+                "kind": "not-today"
+              }
+            }
+          ]
+        },
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "Tomorrow · Fri 11/27",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-27"
+              }
+            },
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Next week · Mon 11/30",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-30"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "plan row today, planned on a later day (stale)",
+    "status": "open",
+    "role": "plan",
+    "planned": "2026-11-30",
+    "pageDate": "2026-11-26",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [
+        {
+          "label": "Tomorrow",
+          "intent": {
+            "kind": "move",
+            "date": "2026-11-27"
+          }
+        },
+        {
+          "label": "Remove from Thu",
+          "intent": {
+            "kind": "not-today"
+          }
+        }
+      ],
+      "anotherDay": [
+        {
+          "label": "Tomorrow · Fri 11/27",
+          "date": "2026-11-27"
+        },
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        },
+        {
+          "label": "Next week · Mon 11/30",
+          "date": "2026-11-30"
+        }
+      ],
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Tomorrow · Fri, Nov 27",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-27"
+              }
+            },
+            {
+              "label": "Remove from Thu",
+              "intent": {
+                "kind": "not-today"
+              }
+            }
+          ]
+        },
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Next week · Mon 11/30",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-30"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "plan row on tomorrow's page, planned there",
+    "status": "open",
+    "role": "plan",
+    "planned": "2026-11-27",
+    "pageDate": "2026-11-27",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [
+        {
+          "label": "Not on Fri",
+          "intent": {
+            "kind": "not-today"
+          }
+        }
+      ],
+      "anotherDay": [
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        },
+        {
+          "label": "Next week · Mon 11/30",
+          "date": "2026-11-30"
+        }
+      ],
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Not on Fri",
+              "intent": {
+                "kind": "not-today"
+              }
+            }
+          ]
+        },
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Next week · Mon 11/30",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-30"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "plan row on tomorrow's page, planned elsewhere",
+    "status": "open",
+    "role": "plan",
+    "planned": "2026-11-30",
+    "pageDate": "2026-11-27",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [
+        {
+          "label": "Remove from Fri",
+          "intent": {
+            "kind": "not-today"
+          }
+        }
+      ],
+      "anotherDay": [
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        },
+        {
+          "label": "Next week · Mon 11/30",
+          "date": "2026-11-30"
+        }
+      ],
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Remove from Fri",
+              "intent": {
+                "kind": "not-today"
+              }
+            }
+          ]
+        },
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Next week · Mon 11/30",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-30"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "plan row on a later day's page, planned there",
+    "status": "open",
+    "role": "plan",
+    "planned": "2026-11-30",
+    "pageDate": "2026-11-30",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [
+        {
+          "label": "Not on Mon",
+          "intent": {
+            "kind": "not-today"
+          }
+        }
+      ],
+      "anotherDay": [
+        {
+          "label": "Tomorrow · Fri 11/27",
+          "date": "2026-11-27"
+        },
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        }
+      ],
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Not on Mon",
+              "intent": {
+                "kind": "not-today"
+              }
+            }
+          ]
+        },
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "Tomorrow · Fri 11/27",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-27"
+              }
+            },
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "plan row on a later day's page, planned elsewhere",
+    "status": "open",
+    "role": "plan",
+    "planned": "2026-12-02",
+    "pageDate": "2026-11-30",
+    "today": "2026-11-26",
+    "menu": {
+      "primary": [
+        {
+          "label": "Remove from Mon",
+          "intent": {
+            "kind": "not-today"
+          }
+        }
+      ],
+      "anotherDay": [
+        {
+          "label": "Tomorrow · Fri 11/27",
+          "date": "2026-11-27"
+        },
+        {
+          "label": "This weekend · Sat 11/28",
+          "date": "2026-11-28"
+        }
+      ],
+      "groups": [
+        {
+          "items": [
+            {
+              "label": "Remove from Mon",
+              "intent": {
+                "kind": "not-today"
+              }
+            }
+          ]
+        },
+        {
+          "title": "Another day",
+          "items": [
+            {
+              "label": "Tomorrow · Fri 11/27",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-27"
+              }
+            },
+            {
+              "label": "This weekend · Sat 11/28",
+              "intent": {
+                "kind": "move",
+                "date": "2026-11-28"
+              }
+            },
+            {
+              "label": "Pick date…",
+              "intent": "pick-date"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "label": "Cancel task",
+              "intent": {
+                "kind": "cancel"
+              },
+              "danger": true
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

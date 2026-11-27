@@ -3,19 +3,31 @@
 // naming every file that differs, is missing, or exists without the script writing it.
 // Output must be byte-identical on every run: no clock, no random source. Ids come from each command's operation id,
 // and every command is given its own `at` and `today`.
+import './fixed-time-zone.ts'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { harness, dayId, todo, bullet, para, heading, chip, pageRef, card, text } from '../tests/v2-helpers.ts'
-import { inlineText, pageContentKey, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
+import { flatNodes, inlineText, pageContentKey, pageNodes, rowRole, rowTaskId, type EditorNode } from '../src/domain/editor-document.ts'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
 import { forBrowser } from '../src/server/browser-workspace.ts'
 import { strippedWorkspace } from '../src/domain/synced.ts'
-import { applyCommand, DomainError, localDayIn } from '../src/domain/workspace.ts'
+import { applyCommand, DomainError, localDayIn, plannedOn } from '../src/domain/workspace.ts'
 import { writtenDays } from '../src/domain/page-tree.ts'
 import { draftPageId } from '../src/domain/day-draft.ts'
 import { labelFor } from '../src/components/outbox.ts'
-import type { Action, Command, Page, Workspace } from '../src/domain/types.ts'
+import { carriedSince } from '../src/domain/carried.ts'
+import { repeatWords, type TodoRepeatRule } from '../src/domain/todo-repeats.ts'
+import { addDays, anotherDayOptions, daysBetween, deadlinePassed, longLabel, near, shortLabel, taskDateTag, weekday } from '../src/components/dates.ts'
+import { rowAction, rowMenu, type RowIntent } from '../src/components/row-menu-model.ts'
+import { rowNotices, rowNoticeText } from '../src/components/row-notices.ts'
+import { rowMarks, sinceLabel, type RowMarks } from '../src/components/row-marks.ts'
+import { blockedByWords, blockedIn } from '../src/components/blockers-view.ts'
+import { nextDayLabel, repeatMarkName } from '../src/components/todo-repeat-view.ts'
+import type { Action, Command, Page, Task, Workspace } from '../src/domain/types.ts'
+
+// dates.ts words a date in the device's zone; the cases are the same wherever the script runs only if it is fixed.
+if (new Date(2026, 10, 26).getTimezoneOffset() !== 0) throw new Error('the time zone is not fixed: scripts/fixed-time-zone.ts must be the first import')
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dir = join(root, 'fixtures', 'core')
@@ -441,6 +453,505 @@ const plain = (name: string, h: ReturnType<typeof harness>, action: Action, rows
   }
 }
 
+// ---- the to-do row -----------------------------------------------------------------------------------------------------
+// What a to-do's row on a day page says and does (docs/design/native-phase-1.md §11), made by running the web's own functions
+// (src/components) and the server's own commands. Today is Thu 2026-11-26 unless a case says otherwise, and the time zone is
+// fixed (scripts/fixed-time-zone.ts). Each case is held to the words its name gives, so a change to the web that alters one
+// fails here rather than quietly changing what the native app is held to.
+const TODAY = '2026-11-26'
+const expect = (what: string, actual: unknown, wanted: unknown) => {
+  if (JSON.stringify(actual) !== JSON.stringify(wanted)) throw new Error(`${what}: expected ${JSON.stringify(wanted)}, got ${JSON.stringify(actual)}`)
+}
+function aTask(over: Partial<Task> = {}): Task {
+  return { id: 't1', title: 'A to-do', status: 'open', version: 1, paused: false, deadlineOn: null, attentionOn: null, createdOn: '2026-11-01', sourcePageId: 'p', ...over }
+}
+
+// dates/words.json
+{
+  const dates = [...Array.from({ length: 19 }, (_, i) => addDays(TODAY, i - 8)), '2025-11-03', '2026-12-31', '2027-01-01', '2027-11-24', '2028-02-29']
+  const cases = dates.map(date => ({
+    date, today: TODAY, daysBetween: daysBetween(TODAY, date), weekday: weekday(date), shortLabel: shortLabel(date), longLabel: longLabel(date),
+    near: near(date, TODAY), sinceLabel: sinceLabel(date, TODAY), nextDayLabel: nextDayLabel(date, TODAY),
+  }))
+  const at = (date: string) => cases.find(c => c.date === date)!
+  expect('dates/words: six days ahead is a short label', at('2026-12-02').near, 'Wed 12/2')
+  expect('dates/words: five days ahead is a weekday', at('2026-12-01').near, 'Tue')
+  expect('dates/words: Since carries another year', at('2025-11-03').sinceLabel, 'Nov 3, 2025')
+  expect('dates/words: Next carries another year', at('2027-11-24').nextDayLabel, 'Wed, Nov 24, 2027')
+  expect('dates/words: a leap day', [at('2028-02-29').weekday, at('2028-02-29').shortLabel], ['Tue', 'Tue 2/29'])
+  put('dates/words.json', cases)
+}
+
+// dates/tags.json: each shape of a to-do's dates on today's page, a past page and a future page, planned and not.
+{
+  const shapes: [name: string, deadlineOn: string | null, attentionOn: string | null][] = [
+    ['due-today', '2026-11-26', null], ['due-tomorrow', '2026-11-27', null], ['due-sunday', '2026-11-29', null], ['due-tuesday', '2026-12-01', null],
+    ['due-six-days-ahead', '2026-12-02', null], ['due-passed', '2026-11-23', null], ['due-on-a-past-pages-day', '2026-11-20', null], ['due-on-a-future-pages-day', '2026-12-03', null],
+    ['start-today', null, '2026-11-26'], ['start-tomorrow', null, '2026-11-27'], ['start-passed', null, '2026-11-20'],
+    ['start-and-due-the-same-far-day', '2026-12-05', '2026-12-05'], ['start-and-due-tomorrow', '2026-11-27', '2026-11-27'], ['start-monday-due-far-sunday', '2026-12-06', '2026-11-30'],
+    ['start-tomorrow-due-saturday', '2026-11-28', '2026-11-27'], ['start-today-due-sunday', '2026-11-29', '2026-11-26'], ['start-tomorrow-due-passed', '2026-11-23', '2026-11-27'],
+  ]
+  const pages = [['today', TODAY], ['a-past-page', '2026-11-20'], ['a-future-page', '2026-12-03']] as const
+  const cases = shapes.flatMap(([shape, deadlineOn, attentionOn]) => pages.flatMap(([pageName, pageDate]) => [true, false].map(isPlanned => {
+    const planned = isPlanned ? pageDate : null
+    const task = aTask({ deadlineOn, attentionOn })
+    return { name: `${shape}, ${pageName}, ${isPlanned ? 'planned' : 'unplanned'}`, deadlineOn, attentionOn, today: TODAY, pageDate, planned, text: taskDateTag(task, TODAY, pageDate, planned), passed: deadlinePassed(task, TODAY) }
+  })))
+  const text = (name: string) => cases.find(c => c.name === name)!.text
+  const onToday: Record<string, string> = {
+    'due-today': 'Due today', 'due-tomorrow': 'Due tomorrow', 'due-sunday': 'Due Sun', 'due-tuesday': 'Due Tue', 'due-six-days-ahead': 'Due Wed 12/2', 'due-passed': 'Was due Mon',
+    'start-today': 'Start today', 'start-tomorrow': 'Start tomorrow', 'start-passed': '', 'start-and-due-the-same-far-day': 'Start Sat 12/5 · Due Sat 12/5',
+    'start-and-due-tomorrow': 'Due tomorrow · Start tomorrow', 'start-monday-due-far-sunday': 'Start Mon · Due Sun 12/6', 'start-tomorrow-due-saturday': 'Due Sat · Start tomorrow',
+    'start-today-due-sunday': 'Start today · Due Sun', 'start-tomorrow-due-passed': 'Was due Mon',
+  }
+  for (const [shape, words] of Object.entries(onToday)) expect(`dates/tags: ${shape} on today's page`, text(`${shape}, today, planned`), words)
+  expect('dates/tags: nothing planned reads Unscheduled', text('start-passed, today, unplanned'), 'Unscheduled')
+  expect('dates/tags: a Due date seen from a past page', text('due-passed, a-past-page, planned'), 'Due Mon 11/23')
+  expect('dates/tags: Due that day on a past page', text('due-on-a-past-pages-day, a-past-page, planned'), 'Due that day')
+  expect('dates/tags: Due that day on a future page', text('due-on-a-future-pages-day, a-future-page, planned'), 'Due that day')
+  if (cases.length !== 17 * 3 * 2) throw new Error('dates/tags: expected 17 shapes on 3 pages, planned and not')
+  put('dates/tags.json', cases)
+}
+
+// rows/menus.json and rows/another-day.json
+{
+  const menu = (name: string, status: Task['status'], role: string, planned: string | null, pageDate: string | null) =>
+    ({ name, status, role, planned, pageDate, today: TODAY, menu: rowMenu(aTask({ status }), role, planned, pageDate, TODAY) })
+  const past = '2026-11-20', tomorrow = '2026-11-27', later = '2026-11-30', evenLater = '2026-12-02'
+  const cases = [
+    menu('a page that is not a day', 'open', 'plan', TODAY, null),
+    menu('done', 'done', 'plan', TODAY, TODAY),
+    menu('cancelled on a past day', 'cancelled', 'plan', null, past),
+    menu('cancelled today', 'cancelled', 'plan', null, TODAY),
+    menu('cancelled on a future day', 'cancelled', 'plan', null, later),
+    menu('open plan row on a past day', 'open', 'plan', past, past),
+    menu('open reference row on a past day', 'open', 'reference', TODAY, past),
+    menu('reference row today, planned today', 'open', 'reference', TODAY, TODAY),
+    menu('reference row today, not planned today', 'open', 'reference', later, TODAY),
+    menu('reference row on a future day, planned today', 'open', 'reference', TODAY, later),
+    menu('reference row on a future day, not planned today', 'open', 'reference', evenLater, later),
+    menu('plan row today, planned today', 'open', 'plan', TODAY, TODAY),
+    menu('plan row today, planned tomorrow (stale)', 'open', 'plan', tomorrow, TODAY),
+    menu('plan row today, planned on a later day (stale)', 'open', 'plan', later, TODAY),
+    menu("plan row on tomorrow's page, planned there", 'open', 'plan', tomorrow, tomorrow),
+    menu("plan row on tomorrow's page, planned elsewhere", 'open', 'plan', later, tomorrow),
+    menu("plan row on a later day's page, planned there", 'open', 'plan', later, later),
+    menu("plan row on a later day's page, planned elsewhere", 'open', 'plan', evenLater, later),
+  ]
+  const named = (name: string) => cases.find(c => c.name === name)!
+  const items = (name: string) => named(name).menu?.groups.flatMap(g => g.items.map(i => i.label))
+  expect('rows/menus: a page that is not a day offers nothing', named('a page that is not a day').menu, null)
+  expect('rows/menus: done offers nothing', named('done').menu, null)
+  expect('rows/menus: cancelled offers Restore on a past day', items('cancelled on a past day'), ['Restore'])
+  expect('rows/menus: a past day offers Bring to today', items('open plan row on a past day'), ['Bring to today'])
+  expect('rows/menus: planned today needs no Plan for today', named('reference row today, planned today').menu!.primary, [])
+  expect('rows/menus: a stale row says Remove from', items('plan row today, planned tomorrow (stale)')![0], 'Remove from Thu')
+  expect('rows/menus: a row planned for tomorrow has no Tomorrow of its own, but keeps it under Another day', [named('plan row today, planned tomorrow (stale)').menu!.groups[0]!.items.length, items('plan row today, planned tomorrow (stale)')![1]], [1, 'Tomorrow · Fri 11/27'])
+  expect('rows/menus: a later day says Not on', items("plan row on tomorrow's page, planned there")!.includes('Not on Fri'), true)
+  expect('rows/menus: today says Not today and Tomorrow', [items('plan row today, planned today')![0], items('plan row today, planned today')![1]], ['Tomorrow · Fri, Nov 27', 'Not today'])
+  put('rows/menus.json', cases)
+
+  // Sunday 2026-11-22 to Saturday 2026-11-28.
+  const another = Array.from({ length: 7 }, (_, i) => addDays('2026-11-22', i)).map(today => ({ today, options: anotherDayOptions(today) }))
+  expect('rows/another-day: Sunday holds Tomorrow alone', another[0]!.options.map(o => o.label), ['Tomorrow'])
+  expect('rows/another-day: Monday holds all three', another[1]!.options.map(o => o.label), ['Tomorrow', 'This weekend', 'Next week'])
+  expect('rows/another-day: Friday has no This weekend', another[5]!.options.map(o => o.label), ['Tomorrow', 'Next week'])
+  put('rows/another-day.json', another)
+}
+
+// ---- worlds the row's cases are built in
+type World = ReturnType<typeof harness>
+const stamped = (n: number) => `2026-11-26T09:${String(n).padStart(2, '0')}:00.000Z`
+const plan = (id: string, title: string, date = TODAY): EditorNode => todo(id, title, 'plan', date)
+/** A reference row of a to-do that already exists, as a day page holds one: no plan day of its own. */
+const reference = (id: string, taskId: string, title: string): EditorNode => ({ id, type: 'task', props: { taskId, role: 'reference', planDate: '' }, content: [text(title)], children: [] })
+const rowsWorld = () => { const h = harness(); h.day(TODAY); return h }
+const saveRows = (h: World, date: string, ...rows: EditorNode[]) => h.save(dayId(date), d => [...d, ...rows], { today: date, at: stamped(1) })
+const taskOf = (id: string) => `editor-task:${id}`
+/** Rewrites a page's document directly, for what no command makes: a row left on a template, a draft or a page gone. */
+const setDocument = (h: World, pageId: string, edit: (nodes: EditorNode[]) => EditorNode[]) => {
+  h.ws = { ...h.ws, pages: h.ws.pages.map(p => (p.id === pageId ? { ...p, document: JSON.stringify(edit(structuredClone(pageNodes(p)))) } : p)) }
+}
+const rowOf = (ws: Workspace, taskId: string, pageId: string) => {
+  const page = ws.pages.find(p => p.id === pageId)!
+  const node = flatNodes(pageNodes(page)).find(n => rowTaskId(n) === taskId)
+  if (!node) throw new Error(`no row of ${taskId} on ${pageId}`)
+  return node
+}
+/** A to-do carried to each next day by that day's draft (as tests/carried.test.ts does it): its id. */
+const carriedWorld = (start: string, days: number) => {
+  const h = harness()
+  h.day(start)
+  h.run({ type: 'add-task', pageId: dayId(start), title: 'A carried to-do', plannedOn: start })
+  const id = h.ws.tasks[0]!.id
+  for (let n = 1; n <= days; n++) carryIn(h, addDays(start, n), id)
+  return { h, id }
+}
+const carryIn = (h: World, date: string, taskId: string) => {
+  h.day(date)
+  const anchor = pageNodes(h.page(dayId(date)))[0]!.id
+  h.run({ type: 'set-draft', pageId: dayId(date), status: 'ready', moreOpen: [], allowedTaskIds: [taskId], items: [{ id: 'i0', anchor, place: 'after', taskId, source: 'model', state: 'open' }] } as never)
+  h.run({ type: 'apply-draft', pageId: dayId(date), itemIds: ['i0'], today: date } as never)
+}
+
+// rows/marks.json: one row of a day page and what it draws.
+{
+  const cases: unknown[] = []
+  const marksCase = (name: string, h: World, pageId: string, blockId: string, wanted: Partial<RowMarks>) => {
+    const ws = forBrowser(h.ws)
+    const node = flatNodes(pageNodes(ws.pages.find(p => p.id === pageId)!)).find(n => n.id === blockId)
+    if (!node) throw new Error(`rows/marks ${name}: no block ${blockId} on ${pageId}`)
+    const taskId = String(node.props?.taskId), role = rowRole(node), planDate = String(node.props?.planDate ?? '')
+    const planned = Object.fromEntries(ws.tasks.map(t => [t.id, plannedOn(ws, t.id)]))
+    const marks = rowMarks(ws, ws.tasks.find(t => t.id === taskId), { role, planDate, today: TODAY, planned: plannedOn(ws, taskId) })
+    for (const [key, value] of Object.entries(wanted)) expect(`rows/marks ${name}: ${key}`, marks[key as keyof RowMarks], value)
+    cases.push({ name, workspace: ws, pageId, blockId, today: TODAY, planned, marks })
+  }
+  const todayPage = dayId(TODAY)
+
+  // Each shape of the date tag, on rows of today's page.
+  {
+    const shapes: [string, string | null, string | null, string | null][] = [
+      ['due today', '2026-11-26', null, 'Due today'], ['due tomorrow', '2026-11-27', null, 'Due tomorrow'], ['due Sunday', '2026-11-29', null, 'Due Sun'],
+      ['due six days ahead', '2026-12-02', null, 'Due Wed 12/2'], ['start tomorrow', null, '2026-11-27', 'Start tomorrow'], ['start passed', null, '2026-11-20', null],
+      ['start and due the same far day', '2026-12-05', '2026-12-05', 'Start Sat 12/5 · Due Sat 12/5'], ['start and due tomorrow', '2026-11-27', '2026-11-27', 'Due tomorrow · Start tomorrow'],
+      ['start Monday, due far Sunday', '2026-12-06', '2026-11-30', 'Start Mon · Due Sun 12/6'], ['start today, due Sunday', '2026-11-29', '2026-11-26', 'Start today · Due Sun'],
+    ]
+    const h = rowsWorld()
+    saveRows(h, TODAY, ...shapes.map(([name], i) => plan(`d${i}`, name)))
+    shapes.forEach(([, deadlineOn, attentionOn], i) => h.run({ type: 'set-task-dates', taskId: taskOf(`d${i}`), deadlineOn, attentionOn }))
+    shapes.forEach(([name, , , words], i) => marksCase(`date tag: ${name}`, h, todayPage, `d${i}`, { dateTag: words ? { text: words, warn: false } : null }))
+  }
+  {
+    const h = rowsWorld()
+    saveRows(h, TODAY, plan('p1', 'Pay the invoice'))
+    h.run({ type: 'set-task-dates', taskId: taskOf('p1'), deadlineOn: '2026-11-23' })
+    marksCase('a passed Due date', h, todayPage, 'p1', { dateTag: { text: 'Was due Mon', warn: true } })
+  }
+
+  // Carried: Since from seven days, nothing at six.
+  for (const [name, start, since] of [['carried seven days', '2026-11-19', 'Since Nov 19'], ['carried six days', '2026-11-20', null]] as const) {
+    const { h, id } = carriedWorld(start, daysBetween(start, TODAY))
+    marksCase(name, h, todayPage, rowOf(forBrowser(h.ws), id, todayPage).id, { since })
+  }
+
+  // A repeat's current to-do, and the done one.
+  {
+    const h = rowsWorld()
+    saveRows(h, TODAY, plan('w1', 'Water the plants'))
+    h.run({ type: 'set-todo-repeat', taskId: taskOf('w1'), repeat: { every: 'week', interval: 1, from: 'schedule' }, today: TODAY, at: stamped(2) })
+    marksCase("a repeat's current to-do", h, todayPage, 'w1', { repeat: 'Repeats every week' })
+    h.run({ type: 'task-status', taskId: taskOf('w1'), status: 'done', today: TODAY })
+    marksCase('a repeating to-do that is done', h, todayPage, 'w1', { repeat: null, dateTag: null })
+  }
+
+  // Blocked by one and by two.
+  {
+    const h = rowsWorld()
+    saveRows(h, TODAY, plan('a', 'Write the report'), plan('b', 'Get the numbers'), plan('c', 'Book the room'))
+    h.run({ type: 'link-tasks', taskId: taskOf('a'), add: [taskOf('b')], remove: [], at: stamped(2) })
+    marksCase('blocked by one', h, todayPage, 'a', { blockedBy: 'Blocked by Get the numbers' })
+    h.run({ type: 'link-tasks', taskId: taskOf('a'), add: [taskOf('c')], remove: [], at: stamped(3) })
+    marksCase('blocked by two', h, todayPage, 'a', { blockedBy: 'Blocked by 2' })
+  }
+
+  // Cancelled, done, reference rows.
+  {
+    const h = rowsWorld()
+    saveRows(h, TODAY, plan('x1', 'Cancelled one'), plan('x2', 'Done one'), plan('x3', 'Open one'), plan('x4', 'Another done one'), plan('x5', 'Another cancelled one'), plan('x6', 'Due one'))
+    h.run({ type: 'set-task-dates', taskId: taskOf('x6'), deadlineOn: '2026-11-23' })
+    h.run({ type: 'task-status', taskId: taskOf('x1'), status: 'cancelled', today: TODAY })
+    h.run({ type: 'task-status', taskId: taskOf('x2'), status: 'done', today: TODAY })
+    h.run({ type: 'task-status', taskId: taskOf('x4'), status: 'done', today: TODAY })
+    h.run({ type: 'task-status', taskId: taskOf('x5'), status: 'cancelled', today: TODAY })
+    h.run({ type: 'plan-task', taskId: taskOf('x3'), date: '2026-11-27', from: TODAY, today: TODAY })
+    h.run({ type: 'plan-task', taskId: taskOf('x6'), date: '2026-11-27', from: TODAY, today: TODAY })
+    saveRows(h, TODAY, reference('f3', taskOf('x3'), 'Open one'), reference('f4', taskOf('x4'), 'Another done one'), reference('f5', taskOf('x5'), 'Another cancelled one'), reference('f6', taskOf('x6'), 'Due one'))
+    marksCase('a cancelled plan row', h, todayPage, 'x1', { cancelled: 'Cancelled', reference: null, planForToday: null })
+    marksCase('a done plan row', h, todayPage, 'x2', { cancelled: null, reference: null, dateTag: null, since: null, repeat: null, movedTo: null })
+    marksCase('an open reference row', h, todayPage, 'f3', { reference: 'Reference', planForToday: 'active' })
+    marksCase('a done reference row', h, todayPage, 'f4', { reference: 'Reference', planForToday: 'hidden', cancelled: null })
+    marksCase('a cancelled reference row', h, todayPage, 'f5', { reference: 'Reference', planForToday: 'hidden', cancelled: 'Cancelled' })
+    marksCase('a reference row worded against today', h, todayPage, 'f6', { dateTag: { text: 'Was due Mon', warn: true } })
+  }
+  {
+    const h = rowsWorld()
+    saveRows(h, TODAY, plan('y1', 'Planned for today and referenced'))
+    h.day('2026-11-30')
+    saveRows(h, '2026-11-30', reference('g1', taskOf('y1'), 'Planned for today and referenced'))
+    marksCase('a reference row planned today', h, dayId('2026-11-30'), 'g1', { reference: 'Reference', planForToday: 'active' })
+  }
+
+  // A history row: the plan moved on to a later day and the row stays as the record.
+  {
+    const h = rowsWorld()
+    saveRows(h, TODAY, plan('m1', 'Moved on'))
+    h.run({ type: 'plan-task', taskId: taskOf('m1'), date: '2026-11-27', today: TODAY })
+    marksCase('a history row', h, todayPage, 'm1', { movedTo: 'Moved to Fri 11/27' })
+  }
+  // A row whose to-do the workspace does not hold.
+  {
+    const h = rowsWorld()
+    saveRows(h, TODAY, plan('k1', 'Anchor'))
+    setDocument(h, todayPage, d => [...d, plan('k2', 'A to-do that is gone')].map(n => (n.id === 'k2' ? { ...n, props: { ...n.props, taskId: 'editor-task:gone' } } : n)))
+    marksCase("a row whose to-do the workspace doesn't hold", h, todayPage, 'k2', { cancelled: null, reference: null, movedTo: null, dateTag: null, since: null, repeat: null, blockedBy: null, planForToday: null })
+  }
+  put('rows/marks.json', cases)
+}
+
+// carried/cases.json: every scenario of tests/carried.test.ts.
+{
+  const start = '2026-11-03', day = (n: number) => addDays(start, n)
+  const cases: unknown[] = []
+  const carriedCase = (name: string, h: World, taskId: string, today: string, wanted: string | null) => {
+    const ws = forBrowser(h.ws)
+    const since = carriedSince(ws, ws.tasks.find(t => t.id === taskId)!, today)
+    expect(`carried ${name}`, since, wanted)
+    cases.push({ name, workspace: ws, taskId, today, since, label: since ? `Since ${sinceLabel(since, today)}` : null })
+  }
+  { const { h, id } = carriedWorld(start, 7); carriedCase('carried by the draft for 7 days reads since the day it was typed', h, id, day(7), start) }
+  { const { h, id } = carriedWorld(start, 6); carriedCase('carried by the draft for 6 days reads nothing', h, id, day(6), null) }
+  {
+    const { h, id } = carriedWorld(start, 7)
+    h.run({ type: 'plan-task', taskId: id, date: day(8), from: day(7), today: day(7) })
+    for (let n = 9; n <= 14; n++) carryIn(h, day(n), id)
+    carriedCase('a move starts the clock again: six days after it, nothing', h, id, day(14), null)
+    carryIn(h, day(15), id)
+    carriedCase('a move starts the clock again: seven days after it, since the day it moved to', h, id, day(15), day(8))
+  }
+  { const { h, id } = carriedWorld(start, 8); h.run({ type: 'task-status', taskId: id, status: 'done', today: day(8) }); carriedCase('a done to-do reads nothing', h, id, day(8), null) }
+  { const { h, id } = carriedWorld(start, 8); h.run({ type: 'not-today', taskId: id, date: day(8) }); carriedCase('a paused to-do reads nothing', h, id, day(8), null) }
+  { const { h, id } = carriedWorld(start, 8); h.run({ type: 'plan-task', taskId: id, date: day(12), from: day(8), today: day(8) }); carriedCase('a to-do planned for a later day reads nothing', h, id, day(8), null) }
+  { const { h, id } = carriedWorld(start, 8); carriedCase("another day than the to-do's plan reads nothing", h, id, day(9), null) }
+  {
+    const { h, id } = carriedWorld(start, 3)
+    h.run({ type: 'not-today', taskId: id, date: day(3) })
+    h.run({ type: 'plan-task', taskId: id, date: day(5), today: day(5) })
+    for (let n = 6; n <= 12; n++) carryIn(h, day(n), id)
+    carriedCase('resumed after Not today counts from the day it was planned again', h, id, day(12), day(5))
+  }
+  put('carried/cases.json', cases)
+}
+
+// repeats/words.json
+{
+  const rules: TodoRepeatRule[] = [
+    { every: 'day', interval: 1, from: 'schedule' }, { every: 'day', interval: 3, from: 'schedule' }, { every: 'week', interval: 1, from: 'schedule' },
+    { every: 'week', interval: 2, weekdays: [1, 4], from: 'schedule' }, { every: 'month', interval: 1, from: 'schedule' }, { every: 'year', interval: 1, from: 'schedule' },
+    { every: 'day', interval: 5, from: 'done' }, { every: 'week', interval: 1, from: 'schedule', until: '2026-12-31' },
+  ]
+  const cases = rules.map(rule => ({ rule, words: repeatWords(rule), markName: repeatMarkName(rule) }))
+  expect('repeats/words', cases.map(c => c.words), ['every day', 'every 3 days', 'every week', 'every 2 weeks on Mon, Thu', 'every month', 'every year', "every 5 days, from when it's done", 'every week'])
+  expect('repeats/words: the mark names the rule', cases[2]!.markName, 'Repeats every week')
+  put('repeats/words.json', cases)
+}
+
+// blockers/cases.json: `blocked` maps each blocked to-do to its blockers in link order; `words` to what is drawn.
+{
+  const cases: unknown[] = []
+  const blockersCase = (name: string, h: World, wanted: Record<string, string[]>) => {
+    const ws = forBrowser(h.ws)
+    const found = blockedIn(ws)
+    const blocked = Object.fromEntries([...found].map(([id, b]) => [id, b.by.map(t => t.id)]))
+    const words = Object.fromEntries([...found].map(([id, b]) => [id, blockedByWords(b)]))
+    expect(`blockers ${name}`, blocked, wanted)
+    cases.push({ name, workspace: ws, blocked, words })
+  }
+  const a = taskOf('a'), b = taskOf('b'), c = taskOf('c')
+  const linked = () => {
+    const h = rowsWorld()
+    saveRows(h, TODAY, plan('a', 'Write the report'), plan('b', 'Get the numbers'), plan('c', 'Book the room'))
+    h.run({ type: 'link-tasks', taskId: a, add: [b], remove: [], at: stamped(2) })
+    return h
+  }
+  blockersCase('one in force', linked(), { [a]: [b] })
+  { const h = linked(); h.run({ type: 'task-status', taskId: b, status: 'done', today: TODAY }); blockersCase('the blocker done', h, {}) }
+  { const h = linked(); h.run({ type: 'task-status', taskId: b, status: 'cancelled', today: TODAY }); blockersCase('the blocker cancelled', h, {}) }
+  {
+    // Paused still holds. Not today takes the row off the day, so the blocker keeps a line on another page to stay live.
+    const h = linked()
+    h.day('2026-11-30')
+    saveRows(h, '2026-11-30', reference('r', b, 'Get the numbers'))
+    h.run({ type: 'not-today', taskId: b, date: TODAY })
+    if (!h.ws.tasks.find(t => t.id === b)!.paused) throw new Error('blockers: the blocker must be paused')
+    blockersCase('the blocker paused still holds', h, { [a]: [b] })
+  }
+  { const h = linked(); h.run({ type: 'task-status', taskId: a, status: 'done', today: TODAY }); blockersCase('the blocked to-do done', h, {}) }
+  {
+    const h = rowsWorld()
+    h.run({ type: 'create-document', title: 'Notes', body: '', pageId: 'doc-n' }, 'make-notes')
+    saveRows(h, TODAY, plan('a', 'Write the report'))
+    h.save('doc-n', d => [...d, todo('b', 'Get the numbers', 'plan', '')], { today: TODAY, at: stamped(1) })
+    h.run({ type: 'link-tasks', taskId: a, add: [b], remove: [], at: stamped(2) })
+    h.run({ type: 'delete-page', pageId: 'doc-n', at: stamped(3) })
+    blockersCase("an end whose only row is in Trash", h, {})
+  }
+  {
+    const h = linked()
+    h.run({ type: 'create-template', title: 'A template', pageId: 'tpl-1' }, 'make-template')
+    const row = rowOf(h.ws, b, dayId(TODAY))
+    setDocument(h, dayId(TODAY), d => d.filter(n => n.id !== row.id))
+    setDocument(h, 'tpl-1', d => [...d, row])
+    blockersCase('an end whose only row is on a template', h, {})
+  }
+  {
+    const h = linked()
+    const anchor = pageNodes(h.page(dayId(TODAY)))[0]!.id
+    h.run({ type: 'set-draft', pageId: dayId(TODAY), status: 'ready', moreOpen: [], allowedTaskIds: [c], items: [{ id: 'i0', anchor, place: 'after', taskId: c, source: 'model', state: 'open' }] } as never)
+    const row = rowOf(h.ws, b, dayId(TODAY))
+    const draft = h.ws.pages.find(p => p.type === 'draft')
+    if (!draft) throw new Error('blockers: the day must have a draft page')
+    setDocument(h, dayId(TODAY), d => d.filter(n => n.id !== row.id))
+    setDocument(h, draft.id, d => [...d, row])
+    blockersCase("an end whose only row is on a day's draft", h, {})
+  }
+  {
+    const h = linked()
+    h.run({ type: 'link-tasks', taskId: a, add: [c], remove: [], at: stamped(3) })
+    blockersCase('two blockers', h, { [a]: [b, c] })
+    expect('blockers: two blockers read as a count', (cases.at(-1) as { words: Record<string, string> }).words[a], 'Blocked by 2')
+  }
+  expect('blockers: one blocker reads as its title', (cases[0] as { words: Record<string, string> }).words[a], 'Blocked by Get the numbers')
+  put('blockers/cases.json', cases)
+}
+
+// notices/cases.json
+{
+  const cases: unknown[] = []
+  const noticeCase = (name: string, intent: RowIntent, task: Task, day: string, today: string, receipt: { message: string; nextTodos?: { taskId: string; on: string }[] }, plannedAfter: string | null, wanted: string) => {
+    const text = rowNoticeText(intent, { task, day, today, receipt, plannedAfter })
+    expect(`notices ${name}`, text, wanted)
+    cases.push({ name, intent, task, day, today, receipt, plannedAfter, text })
+  }
+  const plain = aTask(), due = aTask({ deadlineOn: '2026-11-27' })
+  const made = (on: string) => ({ taskId: 'next', on })
+  noticeCase('a move to tomorrow', { kind: 'move', date: '2026-11-27' }, plain, TODAY, TODAY, { message: 'Task moved' }, '2026-11-27', 'Moved to Fri, Nov 27')
+  noticeCase('a move to a day next year', { kind: 'move', date: '2027-01-04' }, plain, TODAY, TODAY, { message: 'Task moved' }, '2027-01-04', 'Moved to Mon, Jan 4')
+  noticeCase('a move to today by Pick date', { kind: 'move', date: TODAY }, plain, '2026-11-27', TODAY, { message: 'Task moved' }, TODAY, 'Moved to Thu, Nov 26')
+  noticeCase('bring to today', { kind: 'bring-today' }, plain, '2026-11-20', TODAY, { message: 'Task moved' }, TODAY, 'On today')
+  noticeCase("not today on today's page", { kind: 'not-today' }, plain, TODAY, TODAY, { message: 'Task set aside' }, null, 'Not today — won’t carry over')
+  noticeCase("not today on today's page with a Due date", { kind: 'not-today' }, due, TODAY, TODAY, { message: 'Task set aside' }, null, 'Not today — won’t carry over · due Fri still tracked')
+  noticeCase('not today on another day', { kind: 'not-today' }, plain, '2026-11-27', TODAY, { message: 'Task set aside' }, null, 'Not on Fri 11/27')
+  noticeCase('not today on another day with a Due date', { kind: 'not-today' }, due, '2026-11-27', TODAY, { message: 'Task set aside' }, null, 'Not on Fri 11/27 · due Fri still tracked')
+  noticeCase('a stale row', { kind: 'not-today' }, plain, '2026-11-27', TODAY, { message: 'Removed from the day' }, '2026-11-30', 'Removed from Fri · still planned for Mon')
+  noticeCase('cancel with one next to-do this year', { kind: 'cancel' }, plain, TODAY, TODAY, { message: 'Task cancelled', nextTodos: [made('2026-12-07')] }, TODAY, 'Cancelled · Next Mon, Dec 7')
+  noticeCase('cancel with one next to-do next year', { kind: 'cancel' }, plain, TODAY, TODAY, { message: 'Task cancelled', nextTodos: [made('2027-11-24')] }, TODAY, 'Cancelled · Next Wed, Nov 24, 2027')
+  noticeCase('cancel with no next to-do', { kind: 'cancel' }, plain, TODAY, TODAY, { message: 'Task cancelled' }, TODAY, 'Cancelled')
+  noticeCase('cancel with two next to-dos', { kind: 'cancel' }, plain, TODAY, TODAY, { message: 'Task cancelled', nextTodos: [made('2026-12-07'), made('2026-12-14')] }, TODAY, 'Cancelled')
+  noticeCase('restore', { kind: 'restore' }, plain, TODAY, TODAY, { message: 'Task reopened' }, TODAY, 'Restored')
+  put('notices/cases.json', cases)
+}
+
+// actions/<name>.json: a row's command as the server takes or refuses it.
+// `{ before, intent, taskId, day, today, action, receipt, after, plannedAfter, notice }`: `action` is rowAction's, applied as is;
+// `after` is as the browser gets it, so it holds the Undo marker `{ operationId: "cmd-<name>", revision }`.
+{
+  const undoRefusal = 'Cannot undo after later changes; current values kept'
+  const actionWorld = () => { const h = rowsWorld(); saveRows(h, TODAY, plan('r1', 'Write the report'), plan('r2', 'Call the dentist')); return h }
+  const id1 = taskOf('r1')
+  const takenAction = (name: string, h: World, intent: RowIntent | null, taskId: string, day: string | null, action: Action, noticeOf: (receipt: Parameters<typeof rowNoticeText>[1]['receipt'], plannedAfter: string | null, task: Task) => string) => {
+    const before = forBrowser(h.ws)
+    const task = before.tasks.find(t => t.id === taskId)!
+    const result = applyCommand(h.ws, { operationId: `cmd-${name}`, expectedRevision: h.ws.revision, action })
+    h.ws = result.workspace
+    const after = forBrowser(result.workspace)
+    // An Undo takes the slot's copy back and leaves nothing to undo; every other answer leaves its own.
+    if (action.type === 'undo' ? after.undo !== undefined : after.undo?.operationId !== `cmd-${name}`) throw new Error(`actions ${name}: the Undo marker is not what the command leaves`)
+    const plannedAfter = plannedOn(after, taskId)
+    put(`actions/${name}.json`, { before, intent, taskId, day, today: TODAY, action, receipt: result.receipt, after, plannedAfter, notice: noticeOf(result.receipt, plannedAfter, task) })
+    return { before, after, receipt: result.receipt, task: after.tasks.find(t => t.id === taskId)! }
+  }
+  const rowTaken = (name: string, h: World, intent: RowIntent, taskId: string, day: string) =>
+    takenAction(name, h, intent, taskId, day, rowAction(intent, taskId, day, TODAY), (receipt, plannedAfter, task) => rowNoticeText(intent, { task, day, today: TODAY, receipt, plannedAfter }))
+  const notice = (name: string) => (JSON.parse(files.get(`actions/${name}.json`)!) as { notice: string }).notice
+  const refusedAction = (name: string, h: World, action: Action, message: string) => {
+    const before = forBrowser(h.ws)
+    try { applyCommand(h.ws, { operationId: `cmd-${name}`, expectedRevision: h.ws.revision, action }) } catch (e) {
+      if (!(e instanceof DomainError) || e.message !== message) throw new Error(`actions ${name}: expected the refusal "${message}", got ${e instanceof Error ? e.message : e}`)
+      put(`actions/${name}.json`, { before, operationId: `cmd-${name}`, today: TODAY, action, refused: message, notice: rowNotices.cantUndo })
+      return
+    }
+    throw new Error(`actions ${name}: the command was not refused`)
+  }
+  const rowsOn = (ws: Workspace, date: string) => flatNodes(pageNodes(ws.pages.find(p => p.id === dayId(date))!)).map(n => rowTaskId(n)).filter(Boolean)
+
+  { // move-to-a-day-with-a-page
+    const h = actionWorld(); h.day('2026-11-27')
+    const r = rowTaken('move-to-a-day-with-a-page', h, { kind: 'move', date: '2026-11-27' }, id1, TODAY)
+    expect('actions move-to-a-day-with-a-page', [plannedOn(r.after, id1), notice('move-to-a-day-with-a-page')], ['2026-11-27', 'Moved to Fri, Nov 27'])
+  }
+  { // move-to-a-day-without-a-page
+    const h = actionWorld()
+    if (h.ws.pages.some(p => p.id === dayId('2026-12-02'))) throw new Error('actions move-to-a-day-without-a-page: the day must have no page')
+    const r = rowTaken('move-to-a-day-without-a-page', h, { kind: 'move', date: '2026-12-02' }, id1, TODAY)
+    if (!r.after.pages.some(p => p.id === dayId('2026-12-02'))) throw new Error('actions move-to-a-day-without-a-page: the new day page must be in `after`')
+    expect('actions move-to-a-day-without-a-page', [plannedOn(r.after, id1), notice('move-to-a-day-without-a-page')], ['2026-12-02', 'Moved to Wed, Dec 2'])
+  }
+  { // bring-to-today-from-a-past-day
+    const h = rowsWorld(); h.day('2026-11-20')
+    saveRows(h, '2026-11-20', plan('r1', 'Write the report', '2026-11-20'))
+    const r = rowTaken('bring-to-today-from-a-past-day', h, { kind: 'bring-today' }, id1, '2026-11-20')
+    expect('actions bring-to-today-from-a-past-day', [plannedOn(r.after, id1), rowsOn(r.after, '2026-11-20').includes(id1), notice('bring-to-today-from-a-past-day')], [TODAY, true, 'On today'])
+  }
+  { // plan-for-today-from-a-reference-row: the button's command is bring-to-today's, and its notice is the button's own words.
+    const h = rowsWorld(); h.day('2026-11-30')
+    saveRows(h, '2026-11-30', plan('r1', 'Write the report', '2026-11-30'))
+    saveRows(h, TODAY, reference('f1', id1, 'Write the report'))
+    const action = { type: 'plan-task', taskId: id1, date: TODAY, today: TODAY } as const
+    const intent: RowIntent = { kind: 'bring-today' }
+    expect('actions plan-for-today-from-a-reference-row: the button sends bring-today\'s command', rowAction(intent, id1, TODAY, TODAY), action)
+    const r = takenAction('plan-for-today-from-a-reference-row', h, intent, id1, TODAY, action, () => rowNotices.plannedForToday)
+    expect('actions plan-for-today-from-a-reference-row', [plannedOn(r.after, id1), notice('plan-for-today-from-a-reference-row')], [TODAY, 'Planned for today'])
+  }
+  { // not-today-sets-aside
+    const h = actionWorld()
+    const r = rowTaken('not-today-sets-aside', h, { kind: 'not-today' }, id1, TODAY)
+    expect('actions not-today-sets-aside', [r.task.paused, rowsOn(r.after, TODAY).includes(id1), notice('not-today-sets-aside')], [true, false, 'Not today — won’t carry over'])
+  }
+  { // not-today-on-a-later-day
+    const h = rowsWorld(); h.day('2026-11-27')
+    saveRows(h, '2026-11-27', plan('r1', 'Write the report', '2026-11-27'))
+    const r = rowTaken('not-today-on-a-later-day', h, { kind: 'not-today' }, id1, '2026-11-27')
+    expect('actions not-today-on-a-later-day', [r.task.paused, notice('not-today-on-a-later-day')], [true, 'Not on Fri 11/27'])
+  }
+  { // not-today-on-a-stale-row
+    const h = actionWorld()
+    h.run({ type: 'plan-task', taskId: id1, date: '2026-11-30', today: TODAY })
+    const r = rowTaken('not-today-on-a-stale-row', h, { kind: 'not-today' }, id1, TODAY)
+    expect('actions not-today-on-a-stale-row', [r.receipt.message, r.task.paused, plannedOn(r.after, id1), notice('not-today-on-a-stale-row')], ['Removed from the day', false, '2026-11-30', 'Removed from Thu · still planned for Mon'])
+  }
+  { // cancel-a-repeating-to-do
+    const h = actionWorld()
+    h.run({ type: 'set-todo-repeat', taskId: id1, repeat: { every: 'day', interval: 1, from: 'schedule' }, today: TODAY, at: stamped(2) })
+    const r = rowTaken('cancel-a-repeating-to-do', h, { kind: 'cancel' }, id1, TODAY)
+    expect('actions cancel-a-repeating-to-do', [r.task.status, r.receipt.nextTodos?.length, notice('cancel-a-repeating-to-do')], ['cancelled', 1, 'Cancelled · Next Fri, Nov 27'])
+  }
+  { // restore
+    const h = actionWorld()
+    h.run({ type: 'task-status', taskId: id1, status: 'cancelled', today: TODAY })
+    const r = rowTaken('restore', h, { kind: 'restore' }, id1, TODAY)
+    expect('actions restore', [r.task.status, notice('restore')], ['open', 'Restored'])
+  }
+  { // undo, of cmd-move made in `before`
+    const h = actionWorld()
+    h.run({ type: 'plan-task', taskId: id1, date: '2026-11-27', from: TODAY, today: TODAY }, 'cmd-move')
+    const r = takenAction('undo', h, null, id1, null, { type: 'undo', targetOperationId: 'cmd-move' }, () => rowNotices.undone)
+    expect('actions undo', [plannedOn(r.after, id1), notice('undo')], [TODAY, 'Undone'])
+  }
+  { // undo-after-a-later-change
+    const h = actionWorld()
+    h.run({ type: 'plan-task', taskId: id1, date: '2026-11-27', from: TODAY, today: TODAY }, 'cmd-move')
+    h.run({ type: 'task-status', taskId: taskOf('r2'), status: 'done', today: TODAY })
+    refusedAction('undo-after-a-later-change', h, { type: 'undo', targetOperationId: 'cmd-move' }, undoRefusal)
+  }
+  { // undo-after-ensure-day
+    const h = actionWorld()
+    h.run({ type: 'plan-task', taskId: id1, date: '2026-11-27', from: TODAY, today: TODAY }, 'cmd-move')
+    h.run({ type: 'ensure-day', date: '2026-11-28' })
+    refusedAction('undo-after-ensure-day', h, { type: 'undo', targetOperationId: 'cmd-move' }, undoRefusal)
+  }
+}
+
 // ---- README ------------------------------------------------------------------------------------------------------------
 files.set('README.md', `# Core cases
 
@@ -457,6 +968,19 @@ The cases the native app (\`native/\`) is held to, made from the TypeScript doma
 - \`content-key/cases.json\`: \`{ name, document, key }\`, a page's stored string and its \`pageContentKey\` (a synced block is stored without its lines, and the key is of that form).
 - \`saves/\`: one file per save. \`{ before, operationId, expectedRevision, action, after, message }\` for a \`save-editor\` the server takes, \`{ before, operationId, expectedRevision, action, refused }\` for one it refuses (the domain's message). \`same-operation-twice.json\` also has \`second: { message, after }\`, the answer to the same command sent again.
 - \`today/cases.json\`: \`{ timezone, at, day }\`, the local day of an instant in a time zone.
+
+The to-do row. The script runs in a fixed time zone and never reads the clock; every case states its \`today\`, which is Thu 2026-11-26 unless it says otherwise.
+
+- \`dates/words.json\`: \`{ date, today, daysBetween, weekday, shortLabel, longLabel, near, sinceLabel, nextDayLabel }\`, a date worded the web's ways.
+- \`dates/tags.json\`: \`{ name, deadlineOn, attentionOn, today, pageDate, planned, text, passed }\`, \`taskDateTag\` and \`deadlinePassed\` for each shape of a to-do's dates on today's page, a past page and a future page, planned and not.
+- \`rows/menus.json\`: \`{ name, status, role, planned, pageDate, today, menu }\`, what \`rowMenu\` offers (\`null\` for nothing).
+- \`rows/another-day.json\`: \`{ today, options }\`, \`anotherDayOptions\` for a week of days.
+- \`rows/marks.json\`: \`{ name, workspace, pageId, blockId, today, planned, marks }\`, what \`rowMarks\` says of one row (its role and plan day are the block's props); \`planned\` is the \`plannedOn\` of every to-do of the workspace.
+- \`carried/cases.json\`: \`{ name, workspace, taskId, today, since, label }\`, \`carriedSince\` and its \`Since\` words (\`null\` for none).
+- \`repeats/words.json\`: \`{ rule, words, markName }\`, a repeat rule in words and as the mark's name.
+- \`blockers/cases.json\`: \`{ name, workspace, blocked, words }\`, each blocked to-do's blockers in link order and the words drawn.
+- \`notices/cases.json\`: \`{ name, intent, task, day, today, receipt, plannedAfter, text }\`, the notice \`rowNoticeText\` gives a row action.
+- \`actions/\`: one file per row command. \`{ before, intent, taskId, day, today, action, receipt, after, plannedAfter, notice }\` for one the server takes (\`action\` is the web's \`rowAction\`, \`after\` holds the Undo marker \`{ operationId: "cmd-<name>", revision }\`; \`undo\` has no intent and \`plan-for-today-from-a-reference-row\` the button's own notice), \`{ before, operationId, today, action, refused, notice }\` for one it refuses.
 
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:
 

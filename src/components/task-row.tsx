@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import type { LocalDate, Task } from '../domain/types'
-import { anotherDayOptions, shortLabel, weekday } from './dates'
+import { anotherDayOptions, shortLabel } from './dates'
 import { DateTag } from './date-tag'
 import { RowMenu, type MenuItem } from './row-menu'
 import { pickDate } from './row-actions'
+import { notTodayText } from './row-notices'
 import { useTaskTick, useWorkspace } from './use-day'
 import { TagText } from './tag-text'
 
@@ -34,10 +35,7 @@ export function useTaskActions(today: LocalDate) {
   return { markDone, planOn, notToday, cancel }
 }
 
-export function notTodayText(task: Task, date: LocalDate, today: LocalDate): string {
-  const head = date === today ? 'Not today — won’t carry over' : `Not on ${shortLabel(date)}`
-  return task.deadlineOn ? `${head} · due ${weekday(task.deadlineOn)} still tracked` : head
-}
+export { notTodayText }
 
 export function anotherDayItems(task: Task, today: LocalDate, planOn: (t: Task, d: LocalDate) => unknown): MenuItem[] {
   return [

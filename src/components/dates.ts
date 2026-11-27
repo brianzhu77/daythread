@@ -42,7 +42,7 @@ export function shortLabel(iso: LocalDate): string {
 }
 
 /** Weekday name inside the coming week, otherwise "Fri 10/23". */
-function near(iso: LocalDate, today: LocalDate): string {
+export function near(iso: LocalDate, today: LocalDate): string {
   const diff = daysBetween(today, iso)
   if (diff === 0) return 'today'
   if (diff === 1) return 'tomorrow'

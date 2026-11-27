@@ -1,0 +1,1022 @@
+[
+  {
+    "name": "due-today, today, planned",
+    "deadlineOn": "2026-11-26",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Due today",
+    "passed": false
+  },
+  {
+    "name": "due-today, today, unplanned",
+    "deadlineOn": "2026-11-26",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Due today",
+    "passed": false
+  },
+  {
+    "name": "due-today, a-past-page, planned",
+    "deadlineOn": "2026-11-26",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due today",
+    "passed": false
+  },
+  {
+    "name": "due-today, a-past-page, unplanned",
+    "deadlineOn": "2026-11-26",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due today",
+    "passed": false
+  },
+  {
+    "name": "due-today, a-future-page, planned",
+    "deadlineOn": "2026-11-26",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Due today",
+    "passed": false
+  },
+  {
+    "name": "due-today, a-future-page, unplanned",
+    "deadlineOn": "2026-11-26",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Due today",
+    "passed": false
+  },
+  {
+    "name": "due-tomorrow, today, planned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Due tomorrow",
+    "passed": false
+  },
+  {
+    "name": "due-tomorrow, today, unplanned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Due tomorrow",
+    "passed": false
+  },
+  {
+    "name": "due-tomorrow, a-past-page, planned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due tomorrow",
+    "passed": false
+  },
+  {
+    "name": "due-tomorrow, a-past-page, unplanned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due tomorrow",
+    "passed": false
+  },
+  {
+    "name": "due-tomorrow, a-future-page, planned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Due tomorrow",
+    "passed": false
+  },
+  {
+    "name": "due-tomorrow, a-future-page, unplanned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Due tomorrow",
+    "passed": false
+  },
+  {
+    "name": "due-sunday, today, planned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Due Sun",
+    "passed": false
+  },
+  {
+    "name": "due-sunday, today, unplanned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Due Sun",
+    "passed": false
+  },
+  {
+    "name": "due-sunday, a-past-page, planned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due Sun",
+    "passed": false
+  },
+  {
+    "name": "due-sunday, a-past-page, unplanned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due Sun",
+    "passed": false
+  },
+  {
+    "name": "due-sunday, a-future-page, planned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Due Sun",
+    "passed": false
+  },
+  {
+    "name": "due-sunday, a-future-page, unplanned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Due Sun",
+    "passed": false
+  },
+  {
+    "name": "due-tuesday, today, planned",
+    "deadlineOn": "2026-12-01",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Due Tue",
+    "passed": false
+  },
+  {
+    "name": "due-tuesday, today, unplanned",
+    "deadlineOn": "2026-12-01",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Due Tue",
+    "passed": false
+  },
+  {
+    "name": "due-tuesday, a-past-page, planned",
+    "deadlineOn": "2026-12-01",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due Tue",
+    "passed": false
+  },
+  {
+    "name": "due-tuesday, a-past-page, unplanned",
+    "deadlineOn": "2026-12-01",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due Tue",
+    "passed": false
+  },
+  {
+    "name": "due-tuesday, a-future-page, planned",
+    "deadlineOn": "2026-12-01",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Due Tue",
+    "passed": false
+  },
+  {
+    "name": "due-tuesday, a-future-page, unplanned",
+    "deadlineOn": "2026-12-01",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Due Tue",
+    "passed": false
+  },
+  {
+    "name": "due-six-days-ahead, today, planned",
+    "deadlineOn": "2026-12-02",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Due Wed 12/2",
+    "passed": false
+  },
+  {
+    "name": "due-six-days-ahead, today, unplanned",
+    "deadlineOn": "2026-12-02",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Due Wed 12/2",
+    "passed": false
+  },
+  {
+    "name": "due-six-days-ahead, a-past-page, planned",
+    "deadlineOn": "2026-12-02",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due Wed 12/2",
+    "passed": false
+  },
+  {
+    "name": "due-six-days-ahead, a-past-page, unplanned",
+    "deadlineOn": "2026-12-02",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due Wed 12/2",
+    "passed": false
+  },
+  {
+    "name": "due-six-days-ahead, a-future-page, planned",
+    "deadlineOn": "2026-12-02",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Due Wed 12/2",
+    "passed": false
+  },
+  {
+    "name": "due-six-days-ahead, a-future-page, unplanned",
+    "deadlineOn": "2026-12-02",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Due Wed 12/2",
+    "passed": false
+  },
+  {
+    "name": "due-passed, today, planned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Was due Mon",
+    "passed": true
+  },
+  {
+    "name": "due-passed, today, unplanned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Was due Mon",
+    "passed": true
+  },
+  {
+    "name": "due-passed, a-past-page, planned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due Mon 11/23",
+    "passed": true
+  },
+  {
+    "name": "due-passed, a-past-page, unplanned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due Mon 11/23",
+    "passed": true
+  },
+  {
+    "name": "due-passed, a-future-page, planned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Was due Mon",
+    "passed": true
+  },
+  {
+    "name": "due-passed, a-future-page, unplanned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Was due Mon",
+    "passed": true
+  },
+  {
+    "name": "due-on-a-past-pages-day, today, planned",
+    "deadlineOn": "2026-11-20",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Was due Fri",
+    "passed": true
+  },
+  {
+    "name": "due-on-a-past-pages-day, today, unplanned",
+    "deadlineOn": "2026-11-20",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Was due Fri",
+    "passed": true
+  },
+  {
+    "name": "due-on-a-past-pages-day, a-past-page, planned",
+    "deadlineOn": "2026-11-20",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due that day",
+    "passed": true
+  },
+  {
+    "name": "due-on-a-past-pages-day, a-past-page, unplanned",
+    "deadlineOn": "2026-11-20",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due that day",
+    "passed": true
+  },
+  {
+    "name": "due-on-a-past-pages-day, a-future-page, planned",
+    "deadlineOn": "2026-11-20",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Was due Fri",
+    "passed": true
+  },
+  {
+    "name": "due-on-a-past-pages-day, a-future-page, unplanned",
+    "deadlineOn": "2026-11-20",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Was due Fri",
+    "passed": true
+  },
+  {
+    "name": "due-on-a-future-pages-day, today, planned",
+    "deadlineOn": "2026-12-03",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Due Thu 12/3",
+    "passed": false
+  },
+  {
+    "name": "due-on-a-future-pages-day, today, unplanned",
+    "deadlineOn": "2026-12-03",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Due Thu 12/3",
+    "passed": false
+  },
+  {
+    "name": "due-on-a-future-pages-day, a-past-page, planned",
+    "deadlineOn": "2026-12-03",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due Thu 12/3",
+    "passed": false
+  },
+  {
+    "name": "due-on-a-future-pages-day, a-past-page, unplanned",
+    "deadlineOn": "2026-12-03",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due Thu 12/3",
+    "passed": false
+  },
+  {
+    "name": "due-on-a-future-pages-day, a-future-page, planned",
+    "deadlineOn": "2026-12-03",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Due that day",
+    "passed": false
+  },
+  {
+    "name": "due-on-a-future-pages-day, a-future-page, unplanned",
+    "deadlineOn": "2026-12-03",
+    "attentionOn": null,
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Due that day",
+    "passed": false
+  },
+  {
+    "name": "start-today, today, planned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Start today",
+    "passed": false
+  },
+  {
+    "name": "start-today, today, unplanned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Start today",
+    "passed": false
+  },
+  {
+    "name": "start-today, a-past-page, planned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Start today",
+    "passed": false
+  },
+  {
+    "name": "start-today, a-past-page, unplanned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Start today",
+    "passed": false
+  },
+  {
+    "name": "start-today, a-future-page, planned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Start today",
+    "passed": false
+  },
+  {
+    "name": "start-today, a-future-page, unplanned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Start today",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow, today, planned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow, today, unplanned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow, a-past-page, planned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow, a-past-page, unplanned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow, a-future-page, planned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow, a-future-page, unplanned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-passed, today, planned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-20",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "",
+    "passed": false
+  },
+  {
+    "name": "start-passed, today, unplanned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-20",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Unscheduled",
+    "passed": false
+  },
+  {
+    "name": "start-passed, a-past-page, planned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-20",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "",
+    "passed": false
+  },
+  {
+    "name": "start-passed, a-past-page, unplanned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-20",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Unscheduled",
+    "passed": false
+  },
+  {
+    "name": "start-passed, a-future-page, planned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-20",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "",
+    "passed": false
+  },
+  {
+    "name": "start-passed, a-future-page, unplanned",
+    "deadlineOn": null,
+    "attentionOn": "2026-11-20",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Unscheduled",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-the-same-far-day, today, planned",
+    "deadlineOn": "2026-12-05",
+    "attentionOn": "2026-12-05",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Start Sat 12/5 · Due Sat 12/5",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-the-same-far-day, today, unplanned",
+    "deadlineOn": "2026-12-05",
+    "attentionOn": "2026-12-05",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Start Sat 12/5 · Due Sat 12/5",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-the-same-far-day, a-past-page, planned",
+    "deadlineOn": "2026-12-05",
+    "attentionOn": "2026-12-05",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Start Sat 12/5 · Due Sat 12/5",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-the-same-far-day, a-past-page, unplanned",
+    "deadlineOn": "2026-12-05",
+    "attentionOn": "2026-12-05",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Start Sat 12/5 · Due Sat 12/5",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-the-same-far-day, a-future-page, planned",
+    "deadlineOn": "2026-12-05",
+    "attentionOn": "2026-12-05",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Start Sat 12/5 · Due Sat 12/5",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-the-same-far-day, a-future-page, unplanned",
+    "deadlineOn": "2026-12-05",
+    "attentionOn": "2026-12-05",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Start Sat 12/5 · Due Sat 12/5",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-tomorrow, today, planned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Due tomorrow · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-tomorrow, today, unplanned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Due tomorrow · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-tomorrow, a-past-page, planned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due tomorrow · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-tomorrow, a-past-page, unplanned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due tomorrow · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-tomorrow, a-future-page, planned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Due tomorrow · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-and-due-tomorrow, a-future-page, unplanned",
+    "deadlineOn": "2026-11-27",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Due tomorrow · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-monday-due-far-sunday, today, planned",
+    "deadlineOn": "2026-12-06",
+    "attentionOn": "2026-11-30",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Start Mon · Due Sun 12/6",
+    "passed": false
+  },
+  {
+    "name": "start-monday-due-far-sunday, today, unplanned",
+    "deadlineOn": "2026-12-06",
+    "attentionOn": "2026-11-30",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Start Mon · Due Sun 12/6",
+    "passed": false
+  },
+  {
+    "name": "start-monday-due-far-sunday, a-past-page, planned",
+    "deadlineOn": "2026-12-06",
+    "attentionOn": "2026-11-30",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Start Mon · Due Sun 12/6",
+    "passed": false
+  },
+  {
+    "name": "start-monday-due-far-sunday, a-past-page, unplanned",
+    "deadlineOn": "2026-12-06",
+    "attentionOn": "2026-11-30",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Start Mon · Due Sun 12/6",
+    "passed": false
+  },
+  {
+    "name": "start-monday-due-far-sunday, a-future-page, planned",
+    "deadlineOn": "2026-12-06",
+    "attentionOn": "2026-11-30",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Start Mon · Due Sun 12/6",
+    "passed": false
+  },
+  {
+    "name": "start-monday-due-far-sunday, a-future-page, unplanned",
+    "deadlineOn": "2026-12-06",
+    "attentionOn": "2026-11-30",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Start Mon · Due Sun 12/6",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow-due-saturday, today, planned",
+    "deadlineOn": "2026-11-28",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Due Sat · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow-due-saturday, today, unplanned",
+    "deadlineOn": "2026-11-28",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Due Sat · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow-due-saturday, a-past-page, planned",
+    "deadlineOn": "2026-11-28",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due Sat · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow-due-saturday, a-past-page, unplanned",
+    "deadlineOn": "2026-11-28",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due Sat · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow-due-saturday, a-future-page, planned",
+    "deadlineOn": "2026-11-28",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Due Sat · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow-due-saturday, a-future-page, unplanned",
+    "deadlineOn": "2026-11-28",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Due Sat · Start tomorrow",
+    "passed": false
+  },
+  {
+    "name": "start-today-due-sunday, today, planned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Start today · Due Sun",
+    "passed": false
+  },
+  {
+    "name": "start-today-due-sunday, today, unplanned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Start today · Due Sun",
+    "passed": false
+  },
+  {
+    "name": "start-today-due-sunday, a-past-page, planned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Start today · Due Sun",
+    "passed": false
+  },
+  {
+    "name": "start-today-due-sunday, a-past-page, unplanned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Start today · Due Sun",
+    "passed": false
+  },
+  {
+    "name": "start-today-due-sunday, a-future-page, planned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Start today · Due Sun",
+    "passed": false
+  },
+  {
+    "name": "start-today-due-sunday, a-future-page, unplanned",
+    "deadlineOn": "2026-11-29",
+    "attentionOn": "2026-11-26",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Start today · Due Sun",
+    "passed": false
+  },
+  {
+    "name": "start-tomorrow-due-passed, today, planned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": "2026-11-26",
+    "text": "Was due Mon",
+    "passed": true
+  },
+  {
+    "name": "start-tomorrow-due-passed, today, unplanned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-26",
+    "planned": null,
+    "text": "Was due Mon",
+    "passed": true
+  },
+  {
+    "name": "start-tomorrow-due-passed, a-past-page, planned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": "2026-11-20",
+    "text": "Due Mon 11/23 · Start tomorrow",
+    "passed": true
+  },
+  {
+    "name": "start-tomorrow-due-passed, a-past-page, unplanned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-11-20",
+    "planned": null,
+    "text": "Due Mon 11/23 · Start tomorrow",
+    "passed": true
+  },
+  {
+    "name": "start-tomorrow-due-passed, a-future-page, planned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": "2026-12-03",
+    "text": "Was due Mon",
+    "passed": true
+  },
+  {
+    "name": "start-tomorrow-due-passed, a-future-page, unplanned",
+    "deadlineOn": "2026-11-23",
+    "attentionOn": "2026-11-27",
+    "today": "2026-11-26",
+    "pageDate": "2026-12-03",
+    "planned": null,
+    "text": "Was due Mon",
+    "passed": true
+  }
+]
