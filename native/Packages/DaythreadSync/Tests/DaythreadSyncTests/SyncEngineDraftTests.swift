@@ -1611,6 +1611,59 @@ private struct DraftHarness {
     #expect(await h.saves.count == 1)
   }
 
+  @Test func a_keystroke_on_its_way_after_two_saves_starts_from_what_the_last_one_sent() async throws {
+    let gate = Gate()
+    let h = try await DraftHarness(
+      opening + [.gated(gate), try saved(from: 6, to: 7, document: typed("Walk on"))])
+    await h.engine.start()
+    // He types onto P0; the first save sends P1.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    let saving = Task { await h.engine.saveNow() }
+    await gate.reached()
+    // He goes on typing while it is out; it lands with newer words, so the draft lives on, from P1.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await gate.open(try saved(from: 5, to: 6, document: typed("Walk")))
+    await saving.value
+    #expect(try await h.drafts.first?.baseDocument == typed("Walk"))
+    // The second save sends P2 and removes the draft.
+    await h.engine.saveNow()
+    #expect(try await h.drafts == [])
+
+    // A keystroke still on its way, typed onto P0: the screen moved nothing on since.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on by"), singleDeleteIds: [], startedFrom: baseDocument,
+      expectedOwner: "user-1")
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.baseDocument == typed("Walk on"))
+    #expect(await current(h.engine)?.drafts == waiting())
+  }
+
+  @Test func a_load_that_changes_a_saved_page_forgets_the_save() async throws {
+    let h = try await DraftHarness(
+      opening + [
+        try saved(from: 5, to: 6, document: typed("Walk")),
+        // Hours later he undid it on the web: the page is P0 again.
+        .workspace(.full(served(7, document: baseDocument), owner: "user-1")),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await h.engine.saveNow()
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.workspace?.page(day)?.document == baseDocument)
+
+    // He types on that page as the app now shows it.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Run"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.baseDocument == baseDocument)
+    #expect(await current(h.engine)?.drafts == waiting())
+  }
+
   @Test func a_discarded_draft_forgets_the_save_that_landed_before_it() async throws {
     let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: typed("Walk"))])
     await h.engine.start()

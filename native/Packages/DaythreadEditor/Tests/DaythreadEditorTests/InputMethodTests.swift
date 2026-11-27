@@ -531,9 +531,12 @@
         let line = try screen.focus(1)
         compose("今天", in: line)
         screen.controller.replace(document: serverChangedHisRow, in: try makeWorkspace())
+        let snapshots = screen.controller.appliedSnapshots
 
         rebind(cell, to: "a", showing: "one")
+        #expect(screen.controller.appliedSnapshots == snapshots, "a snapshot was applied inside the cell's reuse")
         _ = screen.wait(0.3) { false }
+        #expect(screen.controller.appliedSnapshots == snapshots + 1, "the page is drawn once, after the reuse")
 
         #expect(!screen.holdsKeyboard, "a line took the keyboard inside the cell's reuse")
         #expect(try screen.words() == ["one", "TWO", "two今天", "three"])

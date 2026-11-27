@@ -473,7 +473,49 @@ private struct DayScreen {
     #expect(puts.allSatisfy { $0.owner == "one" }, "stored as two's: \(puts.map { words(of: $0.document) })")
     #expect(try await h.store.drafts().allSatisfy { $0.owner == "one" })
     #expect(h.model.state.drafts.isEmpty)
-    #expect(!h.model.isWriting(todayId), "the new account's page is not held as unstored")
+    try await until { !h.model.isWriting(todayId) }
+    day.close()
+  }
+
+  /// The engine shows another account's copy while his keep, made under the first, is still on its way: the screen
+  /// shows the new account's page, and nothing of the first account's words is stored or merged under the second.
+  @Test func words_shown_under_one_account_are_never_stored_under_another() async throws {
+    let theirs = document([line("a", "Morning"), line("b", "Run")])
+    let theirDraft = document([line("a", "Morning"), line("b", "Run fast")])
+    let relay = StateRelay()
+    let h = try await Harness(
+      copy: try copy(pages: [page(today, base)]),
+      drafts: [
+        PageDraft(
+          pageId: todayId, owner: "two", base: ContentKey.of(theirs), baseDocument: theirs, document: theirDraft,
+          singleDeleteIds: [], sent: nil, changedAt: noon)
+      ], sleep: neverEnding, relay: relay)
+    let day = try DayScreen(h.model)
+
+    // The load shows the second account's copy; the state saying so is held back, and the save of that account's
+    // own draft then holds the store.
+    relay.hold()
+    await h.store.holdPut()
+    await h.server.add([.workspace(.full(try copy(revision: 1, pages: [page(today, theirs)]), owner: "two"))])
+    let refreshing = Task { [model = h.model] in await model.refresh() }
+    await h.store.putHeld()
+    // His keystroke under the first account waits for the store, on its way.
+    try day.type(" t", atEndOf: "Walk")
+
+    relay.release()
+    try await until { h.model.state.owner == "two" }
+    try await turns()
+    // A keystroke in the line he was typing in, if the screen still shows it.
+    if let stale = day.lines.first(where: { $0.text == "Walk t" }) { stale.insertText("h") }
+    await h.store.releasePut()
+    await refreshing.value
+    try await turns()
+
+    #expect(day.words == ["Morning", "Run fast"], "the second account's page, with none of the first's words")
+    let stored = try await h.store.drafts().filter { $0.owner == "two" }
+    #expect(stored.map { words(of: $0.document) } == [["Morning", "Run fast"]])
+    #expect(await h.store.puts.filter { $0.owner == "two" }.allSatisfy { $0.document == theirDraft })
+    #expect(!day.screen.replacedDocuments.contains { words(of: $0).contains("Walk t") })
     day.close()
   }
 
@@ -641,6 +683,59 @@ private struct DayScreen {
     #expect(day.status == nil)
     #expect(h.model.state.drafts.first { $0.id == todayId }?.state == .waiting, "nothing to merge")
     #expect(await saves(h.server).count == 1, "no merged page was saved")
+    day.close()
+  }
+
+  @Test func a_keystroke_on_its_way_after_two_saves_is_typed_onto_what_the_last_one_sent() async throws {
+    let h = try await harness([page(today, base), page(yesterday, base)])
+    let day = try DayScreen(h.model)
+    try day.type(" the dog", atEndOf: "Walk")
+    try await until { !h.model.state.drafts.isEmpty }
+    let first = document([line("a", "Morning"), line("b", "Walk the dog")])
+    let second = document([line("a", "Morning"), line("b", "Walk the dog!")])
+    await h.server.add([
+      .saved(
+        .applied(
+          receipt: .object(["revision": .number("2")]),
+          changes: try changes(from: 1, to: 2, pages: [page(today, first)]), owner: "one")),
+      .saved(
+        .applied(
+          receipt: .object(["revision": .number("3")]),
+          changes: try changes(from: 2, to: 3, pages: [page(today, second)]), owner: "one")),
+    ])
+
+    // The first save is out while he types on: it lands with newer words, and the draft lives on.
+    await h.server.holdSaves()
+    let saving = h.model.saveNow()
+    try await eventually { await h.server.waitingCalls == 1 }
+    try day.type("!", atEndOf: "Walk the dog")
+    try await eventually { await h.engine.draft(of: todayId).map { words(of: $0.document) } == ["Morning", "Walk the dog!"] }
+    await h.server.release()
+    await saving.value
+
+    // The second save is out; his next keystroke waits in the model behind words for another day.
+    await h.server.holdSaves()
+    let savingAgain = h.model.saveNow()
+    try await eventually { await h.server.waitingCalls == 1 }
+    await h.store.holdPut()
+    h.model.wrote(
+      pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
+      startedFrom: base)
+    await h.store.putHeld()
+    try day.type("?", atEndOf: "Walk the dog!")
+
+    // The second save's answer removes the draft; then the keystroke reaches the engine.
+    await h.server.release()
+    try await turns()
+    await h.store.releasePut()
+    await savingAgain.value
+    try await until { h.model.state.drafts.contains { $0.id == todayId } }
+    try await turns()
+
+    #expect(day.words == ["Morning", "Walk the dog!?"])
+    #expect(day.status == nil)
+    #expect(h.model.state.drafts.first { $0.id == todayId }?.state == .waiting, "nothing to merge")
+    #expect(await saves(h.server).count == 2, "no merged page was saved")
     day.close()
   }
 
