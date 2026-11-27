@@ -876,7 +876,10 @@ rows, 200 chips, 100 set aside, 100 due with no row today), milliseconds, five i
 | `DayFacts.of(day: today, ...)` | 3.617, 3.403, 3.426, 3.382, 3.278 | 3.3 to 3.6 |
 
 The index is built once for each state the day screen draws, and the facts read it once: about 60 ms a state on a
-workspace of this size, nearly all of it the index (it parses every page's document).
+workspace of this size (300 pages), nearly all of it the index, which parses every page's document. That index is not
+the strip's addition: the screen's rows read the same index before the strip existed. What the strip adds is
+`DayFacts.of` itself, about 3.4 ms on this workspace, and the strip's drawing (below). The typing fixture is not this
+workspace: it holds the same 3,000 to-dos on about 30 pages.
 
 Typing with the strip on screen (100 set aside, 100 due, 200 chips on the past pages), milliseconds per keystroke to
 the list laid out, five invocations (the budget's figures, 7.040 and 2.671, were measured before slice 1c made the
@@ -903,5 +906,5 @@ typing tests held their budget (the 300-line median is about 89 percent of its l
 of §12.6 (keeping each page's part of the index between states) was not needed.
 
 A reading for the budget: on this machine the 300-line median is 9.27 to 9.47 ms against a limit of 10.56 ms derived
-from a fixture that was lighter, so the margin is under 12 percent; runs on the same machine while other builds ran
+from a fixture that was lighter, so the margin is about 10 to 12 percent; runs on the same machine while other builds ran
 have read up to 10.3. The limit was not changed.
