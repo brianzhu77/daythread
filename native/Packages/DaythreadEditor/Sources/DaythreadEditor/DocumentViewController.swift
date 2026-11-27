@@ -61,6 +61,32 @@
       cell(for: rowID)?.frame
     }
 
+    /// Scrolls the list so the row's top is at the top of what the list shows (under its top inset), as far as its
+    /// content allows. False, and nothing moves, when the list has no row of that id. `rowID` is a row's id.
+    ///
+    /// It does not reveal or move the caret: a host that scrolls while a line holds the keyboard decides what to do
+    /// about it. The animated form moves once, on the row heights known then, so a far row can land a little off;
+    /// `animated: false` is exact.
+    @discardableResult public func scroll(toRow rowID: String, animated: Bool) -> Bool {
+      guard let item = orderedIDs.firstIndex(of: rowID) else { return false }
+      let list = collectionView
+      let indexPath = IndexPath(item: item, section: 0)
+      list.layoutIfNeeded()
+      guard var row = list.layoutAttributesForItem(at: indexPath)?.frame else { return false }
+      // The rows between are measured only once they are laid out, so a row far off reads where their estimates put
+      // it: after the move it is read again, and the list moved again by what the measuring changed.
+      for _ in 0..<(animated ? 1 : 3) {
+        let before = list.contentOffset.y
+        setContentOffset(clamped: row.minY - list.adjustedContentInset.top, animated: animated)
+        guard !animated else { break }
+        list.layoutIfNeeded()
+        guard abs(list.contentOffset.y - before) > 0.5, let measured = list.layoutAttributesForItem(at: indexPath)
+        else { break }
+        row = measured.frame
+      }
+      return true
+    }
+
     /// Called on the main actor after each change he makes, with the page's document and the rows he removed one at a
     /// time. Never for `edit` or `replace`.
     public var onChange: ((_ document: String, _ singleDeleteIds: [String]) -> Void)?
@@ -188,20 +214,28 @@
     /// Lays the header out again after its host changed what it holds or its height changed. While a line holds the
     /// keyboard, the list's offset moves by as much as that line moved, so it stays where it is on the screen (within
     /// the list's top and bottom); otherwise the rows move with the header. Never animated; never reconfigures a row.
+    ///
+    /// It lays the list out, so it is called outside the list's own layout pass and outside a snapshot's apply (the
+    /// host gathers its calls into one on the run loop's next turn). The offset is set without animation, which ends a
+    /// scroll animation or a deceleration under way.
     public func headerDidChange() {
       guard headerView != nil else { return }
       let list = collectionView
       // The list itself keeps the rows it shows when a header scrolled off above them changes height, but not when the
-      // header is on screen above them: the line is read on the screen, so either way it is moved by what is left.
-      let typed = focusedLine.flatMap { line in
-        line.rowID.flatMap { id in cell(for: id).map { (id: id, onScreen: $0.frame.minY - list.contentOffset.y) } }
+      // header is on screen above them: the line is read on the screen, so either way it is moved by what is left. Its
+      // place is the layout's, which has it wherever the header pushes it, shown or not.
+      func onScreen(_ item: IndexPath) -> CGFloat? {
+        list.layoutAttributesForItem(at: item).map { $0.frame.minY - list.contentOffset.y }
+      }
+      let typed = focusedLine?.rowID.flatMap { orderedIDs.firstIndex(of: $0) }.flatMap { item in
+        let indexPath = IndexPath(item: item, section: 0)
+        return onScreen(indexPath).map { (indexPath: indexPath, onScreen: $0) }
       }
       list.collectionViewLayout.invalidateLayout()
       guard let typed else { return }
       list.layoutIfNeeded()
-      guard let cell = cell(for: typed.id) else { return }
-      let moved = cell.frame.minY - list.contentOffset.y - typed.onScreen
-      setContentOffset(clamped: list.contentOffset.y + moved, animated: false)
+      guard let now = onScreen(typed.indexPath) else { return }
+      setContentOffset(clamped: list.contentOffset.y + now - typed.onScreen, animated: false)
     }
 
     private lazy var dataSource = makeDataSource()
@@ -1239,28 +1273,6 @@
       let offset = min(max(offset, top), bottom)
       guard abs(offset - list.contentOffset.y) > 0.5 else { return }
       list.setContentOffset(CGPoint(x: list.contentOffset.x, y: offset), animated: animated)
-    }
-
-    // MARK: the header
-
-    /// Scrolls the list so the row's top is at the top of what the list shows (under its top inset), as far as its
-    /// content allows. False, and nothing moves, when the list has no row of that id. `rowID` is a row's id.
-    @discardableResult public func scroll(toRow rowID: String, animated: Bool) -> Bool {
-      guard let item = orderedIDs.firstIndex(of: rowID) else { return false }
-      let list = collectionView
-      let indexPath = IndexPath(item: item, section: 0)
-      list.layoutIfNeeded()
-      // The rows between are measured only once they are laid out, so a row far off reads where their estimates put
-      // it: after the move it is read again, and the list moved again by what the measuring changed.
-      for _ in 0..<(animated ? 1 : 3) {
-        guard let row = list.layoutAttributesForItem(at: indexPath) else { return true }
-        let before = list.contentOffset.y
-        setContentOffset(clamped: row.frame.minY - list.adjustedContentInset.top, animated: animated)
-        guard !animated else { break }
-        list.layoutIfNeeded()
-        if abs(list.contentOffset.y - before) <= 0.5 { break }
-      }
-      return true
     }
   }
 
