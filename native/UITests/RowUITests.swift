@@ -203,7 +203,9 @@ final class RowUITests: XCTestCase {
     // The notice lives 8 seconds: Undo is tapped as soon as it is there, and the server is read afterwards.
     let undo = app.buttons["Undo"]
     XCTAssertTrue(undo.waitForExistence(timeout: 30), "offered while the server's slot is this move's")
-    XCTAssertTrue(app.showsNotice("Moved to \(Words.longLabel(today, adding: 1))", timeout: 1), "the notice")
+    // A phone draws no `Moved to` mark, so these words are the notice's.
+    let words = app.staticTexts["Moved to \(Words.longLabel(today, adding: 1))"]
+    XCTAssertTrue(words.exists, "the notice")
     undo.tap()
 
     XCTAssertTrue(app.showsNotice("Undone", timeout: 30), "the notice")
