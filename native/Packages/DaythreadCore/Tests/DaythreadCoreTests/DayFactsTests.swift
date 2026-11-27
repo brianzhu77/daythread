@@ -76,7 +76,10 @@ import Testing
 
   @Test func a_to_do_set_aside_reads_not_today_in_due_soon() throws {
     let workspace = try TestWorkspace.make(
-      pages: [TestWorkspace.day("2026-11-26", rows: [])],
+      pages: [
+        TestWorkspace.day("2026-11-26", rows: []),
+        TestWorkspace.day("2026-11-25", rows: [TestWorkspace.row("b")]),
+      ],
       tasks: [
         Self.task("a", title: "Fix the bike", due: "2026-11-26", paused: true),
         Self.task("b", title: "Sort the shed", due: nil, start: "2026-11-20", paused: true),
