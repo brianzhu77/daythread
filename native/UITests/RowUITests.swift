@@ -422,56 +422,11 @@ extension XCUIApplication {
   /// Waits up to `timeout` seconds for the notice to say `words`: words outside the page's rows, so a row's own
   /// `Cancelled` mark is not taken for the notice.
   @MainActor
-  fileprivate func showsNotice(_ words: String, timeout: TimeInterval) -> Bool {
+  func showsNotice(_ words: String, timeout: TimeInterval) -> Bool {
     let everywhere = staticTexts.matching(NSPredicate(format: "label == %@", words))
     let inRows = collectionViews.firstMatch.staticTexts.matching(NSPredicate(format: "label == %@", words))
     let shown = XCTNSPredicateExpectation(
       predicate: NSPredicate { _, _ in everywhere.count > inRows.count }, object: nil)
     return XCTWaiter.wait(for: [shown], timeout: timeout) == .completed
-  }
-}
-
-/// The web's date words (`dates.ts`, `en-US`) for days counted from the seeded today, written with an `en_US_POSIX`
-/// formatter in UTC, so the tests do not read them from the app's own code.
-private enum Words {
-  private static func format(_ today: Date, adding days: Int, _ pattern: String) -> String {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = .gmt
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = .gmt
-    formatter.calendar = calendar
-    formatter.dateFormat = pattern
-    return formatter.string(from: calendar.date(byAdding: .day, value: days, to: today)!)
-  }
-
-  /// "Sat"
-  static func weekday(_ today: Date, adding days: Int) -> String { format(today, adding: days, "EEE") }
-  /// "Nov 19", with the year when it is not today's: "Nov 19, 2025".
-  static func monthDay(_ today: Date, adding days: Int) -> String {
-    format(today, adding: days, "yyyy") == format(today, adding: 0, "yyyy")
-      ? format(today, adding: days, "MMM d") : format(today, adding: days, "MMM d, yyyy")
-  }
-  /// "Mon 12/7"
-  static func shortLabel(_ today: Date, adding days: Int) -> String { format(today, adding: days, "EEE M/d") }
-  /// "Sat, Nov 28"
-  static func longLabel(_ today: Date, adding days: Int) -> String { format(today, adding: days, "EEE, MMM d") }
-  /// "2026-11-28"
-  static func iso(_ today: Date, adding days: Int = 0) -> String { format(today, adding: days, "yyyy-MM-dd") }
-  /// "November 30", as the system's calendar names a day.
-  static func calendarLabel(_ today: Date, adding days: Int) -> String { format(today, adding: days, "MMMM d") }
-
-  /// The web's `anotherDayOptions` on today's page of a plan row, less `Tomorrow`, which today's row has of its own:
-  /// `This weekend` from Monday to Thursday, `Next week`, never two for one day.
-  static func anotherDay(_ today: Date) -> [(label: String, days: Int)] {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = .gmt
-    let weekday = calendar.component(.weekday, from: today) - 1  // 0 is Sunday, as in JavaScript
-    let toSaturday = (6 - weekday + 7) % 7 == 0 ? 7 : (6 - weekday + 7) % 7
-    let toMonday = (1 - weekday + 7) % 7 == 0 ? 7 : (1 - weekday + 7) % 7
-    var options: [(label: String, days: Int)] = []
-    if (1...4).contains(weekday) { options.append(("This weekend", toSaturday)) }
-    if toMonday != 1 { options.append(("Next week", toMonday)) }
-    return options
   }
 }

@@ -270,6 +270,45 @@ struct SeededServer {
     XCTFail("the server does not hold \"\(title)\" set aside", file: file, line: line)
   }
 
+  /// Whether the server holds the to-do with these words set aside (`paused`) now.
+  func paused(_ title: String) async throws -> Bool {
+    try await task(title)["paused"] as? Bool == true
+  }
+
+  /// Sends `action` as a command (`POST /api/v1/commands`) on the workspace as the server has it now, as the seed does;
+  /// fails unless it is applied.
+  func send(_ action: [String: Any], file: StaticString = #filePath, line: UInt = #line) async throws {
+    let (workspace, owner) = try await workspace()
+    let revision = try XCTUnwrap(workspace["revision"] as? Int)
+    let body: [String: Any] = [
+      "operationId": "ui-test-command-\(UUID().uuidString.lowercased())",
+      "expectedRevision": revision,
+      "expectedOwner": owner,
+      "action": action,
+      "basis": ["baseRevision": revision, "ownRevisions": [Int](), "readsBeyond": false],
+    ]
+    var request = URLRequest(url: try XCTUnwrap(URL(string: "\(base)/api/v1/commands")))
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "content-type")
+    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    let (data, _) = try await URLSession.shared.data(for: request)
+    let reply = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    XCTAssertEqual(
+      reply?["status"] as? String, "applied", "\(action["type"] ?? ""): \(String(decoding: data, as: UTF8.self))",
+      file: file, line: line)
+  }
+
+  /// Sets the to-do with these words aside again, from the day it is planned on (else `today`), when it is not: what
+  /// a test that brought it back leaves the seed as it found it with.
+  func setAside(_ title: String, today: String) async throws {
+    let isPaused = try await paused(title)
+    guard !isPaused else { return }
+    let task = try await task(title)
+    let taskId = try XCTUnwrap(task["id"] as? String)
+    let day = try await plannedDay(of: title) ?? today
+    try await send(["type": "not-today", "taskId": taskId, "date": day])
+  }
+
   /// A line of a page as the server stores it: the block's id, its type and its words.
   struct Line: Equatable, Sendable, CustomStringConvertible {
     let id: String
@@ -375,5 +414,50 @@ struct SeededServer {
     h4 ^= h1
     let hex = [h1, h2, h3, h4].map { String(repeating: "0", count: 8 - String($0, radix: 16).count) + String($0, radix: 16) }
     return "d:\(units.count):\(hex.joined())"
+  }
+}
+
+/// The web's date words (`dates.ts`, `en-US`) for days counted from the seeded today, written with an `en_US_POSIX`
+/// formatter in UTC, so the tests do not read them from the app's own code.
+enum Words {
+  private static func format(_ today: Date, adding days: Int, _ pattern: String) -> String {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .gmt
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = .gmt
+    formatter.calendar = calendar
+    formatter.dateFormat = pattern
+    return formatter.string(from: calendar.date(byAdding: .day, value: days, to: today)!)
+  }
+
+  /// "Sat"
+  static func weekday(_ today: Date, adding days: Int) -> String { format(today, adding: days, "EEE") }
+  /// "Nov 19", with the year when it is not today's: "Nov 19, 2025".
+  static func monthDay(_ today: Date, adding days: Int) -> String {
+    format(today, adding: days, "yyyy") == format(today, adding: 0, "yyyy")
+      ? format(today, adding: days, "MMM d") : format(today, adding: days, "MMM d, yyyy")
+  }
+  /// "Mon 12/7"
+  static func shortLabel(_ today: Date, adding days: Int) -> String { format(today, adding: days, "EEE M/d") }
+  /// "Sat, Nov 28"
+  static func longLabel(_ today: Date, adding days: Int) -> String { format(today, adding: days, "EEE, MMM d") }
+  /// "2026-11-28"
+  static func iso(_ today: Date, adding days: Int = 0) -> String { format(today, adding: days, "yyyy-MM-dd") }
+  /// "November 30", as the system's calendar names a day.
+  static func calendarLabel(_ today: Date, adding days: Int) -> String { format(today, adding: days, "MMMM d") }
+
+  /// The web's `anotherDayOptions` on today's page of a plan row, less `Tomorrow`, which today's row has of its own:
+  /// `This weekend` from Monday to Thursday, `Next week`, never two for one day.
+  static func anotherDay(_ today: Date) -> [(label: String, days: Int)] {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .gmt
+    let weekday = calendar.component(.weekday, from: today) - 1  // 0 is Sunday, as in JavaScript
+    let toSaturday = (6 - weekday + 7) % 7 == 0 ? 7 : (6 - weekday + 7) % 7
+    let toMonday = (1 - weekday + 7) % 7 == 0 ? 7 : (1 - weekday + 7) % 7
+    var options: [(label: String, days: Int)] = []
+    if (1...4).contains(weekday) { options.append(("This weekend", toSaturday)) }
+    if toMonday != 1 { options.append(("Next week", toMonday)) }
+    return options
   }
 }
