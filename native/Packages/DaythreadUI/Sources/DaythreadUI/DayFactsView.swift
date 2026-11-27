@@ -79,24 +79,34 @@
           EventsLineView(events: events, isButton: facts.eventsHeadingId != nil, model: model)
         }
         if !facts.dueSoon.isEmpty {
-          GroupBox("Due soon") {
-            VStack(alignment: .leading) {
+          GroupBox {
+            VStack(alignment: .leading, spacing: 0) {
               ForEach(facts.dueSoon, id: \.taskId) { row in
                 FactRowView(row: row, acting: model.acting == row.taskId)
               }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+          } label: {
+            // The web's small `DUE SOON` label: it does not compete with the page's headings.
+            Text("Due soon")
+              .font(.footnote.weight(.semibold))
+              .foregroundStyle(.secondary)
+              .textCase(.uppercase)
           }
         }
         if let notToday = facts.notToday {
           DisclosureGroup(notToday.title, isExpanded: $model.notTodayOpen) {
-            VStack(alignment: .leading) {
+            // Air between one row's buttons and the next row's words, so each row reads as one.
+            VStack(alignment: .leading, spacing: 12) {
               ForEach(notToday.rows, id: \.taskId) { row in
                 NotTodayRowView(row: row, menu: notToday.menu, model: model)
               }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
           }
+          // A quiet control, as the day's ghost buttons: the title in the secondary colour. The system draws the chevron
+          // in the label colour whatever the tint or foreground; recolouring it would need a style of our own.
+          .tint(Color(uiColor: .secondaryLabel))
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -118,12 +128,15 @@
     }
   }
 
-  /// Today's events in one line, cut at its tail; `+N more` and the chevron are never cut. A button only when the page
-  /// has an `Events` heading to scroll to.
+  /// Today's events in one line, cut at its tail (up to three lines at the accessibility text sizes, where one line
+  /// holds a letter or two); `+N more` and the chevron are never cut, at the end of the first line. Quieter and a
+  /// little smaller than the page's text, as on the web. A button only when the page has an `Events` heading to
+  /// scroll to.
   private struct EventsLineView: View {
     let events: EventsLine
     let isButton: Bool
     let model: DayFactsModel
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var spoken: String { events.more.map { "\(events.text), \($0)" } ?? events.text }
 
@@ -142,9 +155,9 @@
     }
 
     private func line(chevron: Bool) -> some View {
-      HStack {
+      HStack(alignment: .firstTextBaseline) {
         Label {
-          Text(events.text).lineLimit(1).truncationMode(.tail)
+          Text(events.text).lineLimit(typeSize.isAccessibilitySize ? 3 : 1).truncationMode(.tail)
         } icon: {
           Image(systemName: "calendar")
         }
@@ -158,12 +171,16 @@
             .fixedSize()
         }
       }
+      .font(.subheadline)
+      .foregroundStyle(.secondary)
       .contentShape(Rectangle())
     }
   }
 
-  /// A row's words and tag on one line, the tag at the end; the tag under the words when the two do not fit. The
-  /// words wrap, the tag never does. One accessibility element, `spoken`.
+  /// A row's words and tag on one line, the tag at the end; the tag under the words when the two do not fit, the two
+  /// kept together as one block. The words wrap, the tag never does. At least 44 points tall with its content centred,
+  /// as the web's rows are, so the rows have a rhythm and a tag is plainly its own row's. One accessibility element,
+  /// `spoken`.
   private struct FactRowView: View {
     let row: DayFacts.Row
     let acting: Bool
@@ -175,31 +192,33 @@
           Spacer(minLength: 0)
           tag
         }
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 0) {
           words.fixedSize(horizontal: false, vertical: true)
           tag
         }
         // At the largest text sizes a tag alone can be wider than the strip (`Not today · Due today`): it wraps then,
         // rather than pushing the strip past the screen's edges or being cut.
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 0) {
           words.fixedSize(horizontal: false, vertical: true)
           tag(wrapping: true)
         }
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
+      // Air above and below, so a block taller than 44 points still stands apart from the next row.
+      .padding(.vertical, 8)
+      .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(row.spoken)
     }
 
     private var words: some View {
-      Text(row.words).foregroundStyle(acting ? .tertiary : .primary)
+      Text(row.words).foregroundStyle(Color(uiColor: acting ? .tertiaryLabel : .label))
     }
 
     private var tag: some View { tag(wrapping: false) }
 
     @ViewBuilder private func tag(wrapping: Bool) -> some View {
       if let tag = row.tag {
-        let text = Text(tag).font(.footnote).foregroundStyle(.secondary)
+        let text = Text(tag).font(.footnote).foregroundStyle(Color(uiColor: .secondaryLabel))
         if wrapping {
           text.fixedSize(horizontal: false, vertical: true)
         } else {
@@ -219,8 +238,11 @@
       VStack(alignment: .leading) {
         FactRowView(row: row, acting: model.acting == row.taskId)
         HStack {
+          // Quiet controls, as the web's: the system's bordered button with its title in the label colour, the menu's
+          // ellipsis in the secondary colour.
           Button("Bring back") { model.bringBack(row.taskId) }
             .buttonStyle(.bordered)
+            .tint(.primary)
           Menu {
             Section(menu.title ?? "") {
               ForEach(menu.items, id: \.self) { item in
@@ -230,6 +252,7 @@
           } label: {
             Image(systemName: "ellipsis")
           }
+          .tint(Color(uiColor: .secondaryLabel))
           .accessibilityLabel(row.menuLabel)
           .onGeometryChange(for: CGRect.self) { proxy in
             proxy.frame(in: .named(DayFactsView.space))

@@ -247,7 +247,7 @@ private func settled(_ day: RowScreen) async throws {
       try copy(
         revision: 3, pages: AllThree.pages(todayLines: lines),
         tasks: AllThree.tasks() + [task("milk", "Buy milk", due: today)]))
-    #expect(day.words.contains("Notes for the day"), "the load was drawn")
+    #expect(words(of: day.editor.document).contains("Notes for the day"), "the load was drawn")
     #expect(day.screen.factsReads > reads, "the facts were read for the state")
     #expect(day.factsModel.changes == changes + 1, "the same facts are not handed over again")
     day.close()
@@ -560,7 +560,8 @@ private func settled(_ day: RowScreen) async throws {
       }
     }
     if let first = start { bands.append(first...(height - 1)) }
-    return bands
+    // A row of a pixel or two at an edge is the view's own antialiased border, not ink.
+    return bands.filter { $0.count > 2 }
   }
 
   /// Today's facts with only `Due soon`: one row per title, each `Was due Mon`.
@@ -583,10 +584,10 @@ private func settled(_ day: RowScreen) async throws {
 
   @Test func at_the_largest_size_a_rows_tag_is_nearer_its_own_words_than_the_next_row() throws {
     let (host, window) = try drawnStrip(
-      try dueSoonOnly(["Taxes", "Rent"]), width: 402, size: .accessibilityExtraExtraExtraLarge)
+      try dueSoonOnly(["File taxes", "Pay the rent"]), width: 402, size: .accessibilityExtraExtraExtraLarge)
     let bands = try inkBands(of: host.view)
     // The label, then each row's words and its tag under them.
-    try #require(bands.count == 5, "bands: \(bands)")
+    try #require(bands.count == 5, "bands: \(bands) in \(host.view.bounds)")
     let wordsToTag = bands[2].lowerBound - bands[1].upperBound
     let tagToNext = bands[3].lowerBound - bands[2].upperBound
     #expect(wordsToTag < tagToNext, "words to tag \(wordsToTag), tag to the next row \(tagToNext)")

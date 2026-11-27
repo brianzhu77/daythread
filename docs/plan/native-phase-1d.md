@@ -118,6 +118,11 @@ wins.
   (`DayFactsHostingController`) that observes its own `preferredContentSize`. The plan's other choice stands: the
   hosting controller's height follows the header's width in the list's self-sizing header (measured at 320, 402 and
   1024 points), so `UIHostingConfiguration` is not needed.
+- **The events line takes up to three lines at the accessibility text sizes** (Task 5, Brian's ruling in review).
+  §12.3 says it is one line, cut with an ellipsis, `+N more` and the chevron never cut; at
+  `accessibilityExtraExtraExtraLarge` on a phone that left one letter of the words (`L… +1 more ›`). From the
+  accessibility sizes the words wrap onto up to three lines and are cut after that; `+N more` and the chevron stay
+  uncut at the end of the first line. Below those sizes it is one line, as §12.3 says.
 - A correction found while building is written here with its reason before the code that follows it.
 
 ## Review Focus

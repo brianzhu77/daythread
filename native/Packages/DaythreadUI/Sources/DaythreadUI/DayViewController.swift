@@ -243,6 +243,14 @@
       } else {
         host.bringSubviewToFront(notice)
       }
+      // A change of the strip's height that came while the screen was away is laid out now.
+      if headerLayoutPending { stripHeightChanged() }
+    }
+
+    /// The header's deferred layout is not run for a screen that is gone; it waits until the screen appears again.
+    override func viewDidDisappear(_ animated: Bool) {
+      super.viewDidDisappear(animated)
+      NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(layOutHeader), object: nil)
     }
 
     /// UIKit calls this again whenever what it reads from `model` changes; a change of day or of an empty state's
@@ -396,8 +404,9 @@
     // MARK: The strip above the page
 
     /// Works the day's facts out from `workspace`, the one the page is drawn against, with the index of that same
-    /// value (`DayFacts.of` does not check that they agree). On a page the list's reading has already built that
-    /// index; `todoIndex(of:)` builds none twice. Only `showDay` calls it, when a state or the day is drawn: a
+    /// value (`DayFacts.of` does not check that they agree). While his words stay on the page, the list's reading has
+    /// already built that index; when the list takes the page, or on a day without one, `todoIndex(of:)` builds it
+    /// here (and keeps it for the next state). Only `showDay` calls this, when a state or the day is drawn: a
     /// keystroke draws neither.
     private func updateFacts(from workspace: Workspace, on date: LocalDate) {
       factsReads += 1
@@ -416,11 +425,16 @@
     /// The list lays its header out again on the run loop's next turn, once for all the strip's changes until then:
     /// never inside its own layout pass or a snapshot's apply.
     private func stripHeightChanged() {
+      headerLayoutPending = true
       NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(layOutHeader), object: nil)
       perform(#selector(layOutHeader), with: nil, afterDelay: 0, inModes: [.common])
     }
 
+    /// A header layout was asked for and has not run.
+    private var headerLayoutPending = false
+
     @objc private func layOutHeader() {
+      headerLayoutPending = false
       document.headerDidChange()
       emptyBackground.setNeedsLayout()
     }
