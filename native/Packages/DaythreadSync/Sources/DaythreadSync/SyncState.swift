@@ -29,11 +29,14 @@ public struct SyncState: Sendable, Equatable {
   public var address: String?
   /// The signed-in account's pages with words not yet saved, oldest change first. Another account's are never here.
   public var drafts: [DraftStatus]
+  /// The account whose copy is shown, which `workspace` and `drafts` are of; nil when no copy is shown. A call about
+  /// a page's words names it (`expectedOwner`), so the engine never makes it on another account's copy.
+  public var owner: String?
 
   public init(
     phase: Phase = .starting, workspace: Workspace? = nil, offline: Bool = false, held: [HeldChange] = [],
     pending: Int = 0, waiting: Int = 0, failure: SyncFailure? = nil, signedIn: Bool = false, enqueued: Int = 0,
-    address: String? = nil, drafts: [DraftStatus] = []
+    address: String? = nil, drafts: [DraftStatus] = [], owner: String? = nil
   ) {
     self.phase = phase
     self.workspace = workspace
@@ -46,6 +49,7 @@ public struct SyncState: Sendable, Equatable {
     self.enqueued = enqueued
     self.address = address
     self.drafts = drafts
+    self.owner = owner
   }
 
   static let initial = SyncState()

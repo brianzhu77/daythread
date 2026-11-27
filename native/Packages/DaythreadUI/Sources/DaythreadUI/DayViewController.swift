@@ -331,7 +331,7 @@
     /// behind again, and the page is merged again (merging twice is safe, the merge settles); or the page is the
     /// server's, and the list takes it.
     private func mergeIfBehind() {
-      guard let open = openPage, !merging,
+      guard let open = openPage, !merging, let owner = model.state.owner,
         model.state.drafts.contains(where: { $0.id.utf8.elementsEqual(open.id.utf8) && $0.state == .behind })
       else { return }
       guard !document.isComposing else {
@@ -340,6 +340,7 @@
       }
       merging = true
       let pageId = open.id
+      // The merge is of the words he typed under this account: the engine takes it under this account only.
       Task { [weak self, model] in
         let pair = await model.merging(pageId)
         guard let self else { return }
@@ -366,7 +367,7 @@
         }
         _ = await self.model.rebase(
           pageId: pageId, baseDocument: pair.theirs, document: merged.document,
-          singleDeleteIds: self.openPage?.singleDeleteIds ?? []
+          singleDeleteIds: self.openPage?.singleDeleteIds ?? [], owner: owner
         ).value
         self.merging = false
         // Refused, the state says behind again (and this merges again) or says the page is the server's.

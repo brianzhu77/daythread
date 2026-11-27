@@ -63,6 +63,8 @@ public final class AppModel {
   @ObservationIgnored private let now: () -> Date
   @ObservationIgnored private var following: Task<Void, Never>?
   @ObservationIgnored private var auditedRevision: Int?
+  /// The owner of the last state that showed a copy.
+  @ObservationIgnored private var shownOwner: String?
 
   /// Counts the times a page stopped having calls waiting: its last call answered, or its calls dropped. Observed, so a screen that held back an outside change
   /// while it was ahead (`isWriting`) looks again once it is not.
@@ -157,7 +159,7 @@ public final class AppModel {
   /// Without `discardingUnsent`, tries once to send what is waiting, and signs out only when nothing is left unsent.
   public func signOut(discardingUnsent: Bool) async -> SignOutAnswer {
     // The words he typed a moment ago are counted too: everything handed over first reaches the engine.
-    _ = await Self.answer(enqueue(.flush))
+    _ = await Self.answer(enqueue(.flush, owner: nil))
     let unsent = await engine.signOut(discardingUnsent: discardingUnsent)
     guard unsent == 0 else { return .unsent(unsent) }
     forgetTicks()
@@ -257,11 +259,16 @@ public final class AppModel {
   }
 
   private func receive(_ state: SyncState) {
+    // The engine may move to another account's copy on its own (an owner mismatch, then a load): what was made for
+    // the pages of the one before is not made on this one's, whose day pages have the same ids.
+    let ownerChanged = state.owner.map { owner in shownOwner.map { $0 != owner } ?? false } ?? false
+    if let owner = state.owner { shownOwner = owner }
     self.state = state
     checkToday()
-    if state.phase == .signedOut {
+    if state.phase == .signedOut || ownerChanged {
       forgetTicks()
-    } else {
+    }
+    if state.phase != .signedOut {
       dropDrawnRecords()
       mergeDraftsNotOpen()
     }
@@ -319,6 +326,9 @@ private enum WritingCall {
 
 private struct QueuedCall {
   var call: WritingCall
+  /// The account whose state the call was made under, which the engine makes it under or not at all; nil for a
+  /// flush, which is nobody's.
+  var owner: String?
   /// Each is told whether the engine did what was asked, then finished; finished with no answer when the call is
   /// dropped.
   var answers: [AsyncStream<Bool>.Continuation]
@@ -334,10 +344,12 @@ extension AppModel {
   /// Hands the engine the open page's document after a change. Never awaited by the caller. While it waits behind
   /// the page's earlier calls, a newer document for the same page takes its place: only the newest words need to
   /// reach the engine. `startedFrom` is the page his words were typed onto, which the engine takes as the base of a
-  /// draft it does not have yet; of several documents that went as one, the first one's.
+  /// draft it does not have yet; of several documents that went as one, the first one's. Made under the account the
+  /// state shows; with none shown there is no page to write on, and nothing is done.
   public func wrote(pageId: String, document: String, singleDeleteIds: [String], startedFrom: String) {
+    guard let owner = state.owner else { return }
     if let last = queuedCalls.indices.last, case .keep(let waiting, _, _, let firstStart) = queuedCalls[last].call,
-      waiting.utf8.elementsEqual(pageId.utf8)
+      waiting.utf8.elementsEqual(pageId.utf8), queuedCalls[last].owner == owner
     {
       queuedCalls[last].call = .keep(
         pageId: pageId, document: document, singleDeleteIds: singleDeleteIds, startedFrom: firstStart)
@@ -346,7 +358,7 @@ extension AppModel {
     queuedCalls.append(
       QueuedCall(
         call: .keep(pageId: pageId, document: document, singleDeleteIds: singleDeleteIds, startedFrom: startedFrom),
-        answers: []))
+        owner: owner, answers: []))
     sendCalls()
   }
 
@@ -355,7 +367,7 @@ extension AppModel {
   /// and what he types meanwhile is stored at once, not after it.
   @discardableResult
   public func saveNow() -> Task<Void, Never> {
-    let stored = enqueue(.flush)
+    let stored = enqueue(.flush, owner: nil)
     let engine = engine
     return Task {
       _ = await Self.answer(stored)
@@ -363,14 +375,16 @@ extension AppModel {
     }
   }
 
+  /// Under the account the state shows now; with none shown, nothing is done.
   public func discardDraft(pageId: String) async {
-    _ = await Self.answer(enqueue(.discard(pageId: pageId)))
+    guard let owner = state.owner else { return }
+    _ = await Self.answer(enqueue(.discard(pageId: pageId), owner: owner))
   }
 
   /// The stored draft's words as plain text, one line per row, for "Copy draft"; nil when the page has none. Read
   /// once every change handed over before has been stored.
   public func draftText(of pageId: String) async -> String? {
-    _ = await Self.answer(enqueue(.flush))
+    _ = await Self.answer(enqueue(.flush, owner: nil))
     guard let draft = await engine.draft(of: pageId) else { return nil }
     let page = state.workspace?.page(pageId)
     // As the engine draws a draft: only a day page reads its date into a `@date` chip.
@@ -383,11 +397,15 @@ extension AppModel {
   }
 
   /// Hands the engine the merged page as the draft on the server's page (`SyncEngine.rebaseDraft`), behind the calls
-  /// made before it, with the rows he removed one at a time that the list still names. The task answers whether the
-  /// engine took it.
-  func rebase(pageId: String, baseDocument: String, document: String, singleDeleteIds: [String]) -> Task<Bool, Never> {
+  /// made before it, with the rows he removed one at a time that the list still names. `owner` is the account the
+  /// state showed when the merge began: the words merged are that account's. The task answers whether the engine
+  /// took it.
+  func rebase(
+    pageId: String, baseDocument: String, document: String, singleDeleteIds: [String], owner: String
+  ) -> Task<Bool, Never> {
     let answer = enqueue(
-      .rebase(pageId: pageId, baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds))
+      .rebase(pageId: pageId, baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds),
+      owner: owner)
     return Task { await Self.answer(answer) }
   }
 
@@ -412,9 +430,9 @@ extension AppModel {
     openPages[pageId] = count > 1 ? count - 1 : nil
   }
 
-  private func enqueue(_ call: WritingCall) -> AsyncStream<Bool> {
+  private func enqueue(_ call: WritingCall, owner: String?) -> AsyncStream<Bool> {
     let (answer, continuation) = AsyncStream.makeStream(of: Bool.self)
-    queuedCalls.append(QueuedCall(call: call, answers: [continuation]))
+    queuedCalls.append(QueuedCall(call: call, owner: owner, answers: [continuation]))
     sendCalls()
     return answer
   }
@@ -429,7 +447,7 @@ extension AppModel {
     guard sendingCalls == nil else { return }
     sendingCalls = Task { [weak self] in
       while let call = self?.nextCall() {
-        let answer = await self?.perform(call.call) ?? false
+        let answer = await self?.perform(call) ?? false
         self?.answered(call, answer)
       }
     }
@@ -455,7 +473,7 @@ extension AppModel {
   }
 
   /// The calls not yet handed over go unanswered: they were made under the account that is gone. The one being
-  /// answered is the engine's to settle; it refuses a call once the account changed.
+  /// answered names the account it was made under, and the engine refuses it on another account's copy.
   private func dropQueuedCalls() {
     let dropped = queuedCalls
     guard !dropped.isEmpty else { return }
@@ -465,18 +483,21 @@ extension AppModel {
     answeredWrites += 1
   }
 
-  private func perform(_ call: WritingCall) async -> Bool {
+  private func perform(_ queued: QueuedCall) async -> Bool {
     let engine = engine
-    switch call {
+    guard let owner = queued.owner else { return true }
+    switch queued.call {
     case .keep(let pageId, let document, let singleDeleteIds, let startedFrom):
       do {
         try await engine.keepDraft(
-          pageId: pageId, document: document, singleDeleteIds: singleDeleteIds, startedFrom: startedFrom)
+          pageId: pageId, document: document, singleDeleteIds: singleDeleteIds, startedFrom: startedFrom,
+          expectedOwner: owner)
         unstored.remove(pageId)
         return true
       } catch {
-        // The screen keeps his words, and his next change hands them over again. The error's type only.
-        unstored.insert(pageId)
+        // The screen keeps his words, and his next change hands them over again; but not words refused because the
+        // account changed meanwhile, which the new account's page must not wait for. The error's type only.
+        if shownOwner == owner { unstored.insert(pageId) }
         if error as? SyncError != .notReady {
           Self.writingLog.error(
             "A page's words were not stored: \(String(describing: type(of: error)), privacy: .public)")
@@ -486,7 +507,8 @@ extension AppModel {
     case .rebase(let pageId, let baseDocument, let document, let singleDeleteIds):
       do {
         let taken = try await engine.rebaseDraft(
-          pageId: pageId, baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds)
+          pageId: pageId, baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds,
+          expectedOwner: owner)
         if taken { unstored.remove(pageId) }
         return taken
       } catch {
@@ -497,8 +519,8 @@ extension AppModel {
         return false
       }
     case .discard(let pageId):
-      await engine.discardDraft(pageId: pageId)
-      unstored.remove(pageId)
+      await engine.discardDraft(pageId: pageId, expectedOwner: owner)
+      if shownOwner == owner { unstored.remove(pageId) }
       return true
     case .flush:
       return true
@@ -511,11 +533,13 @@ extension AppModel {
   private func mergeDraftsNotOpen() {
     let behind = state.drafts.filter { $0.state == .behind }.map(\.id)
     mergedAt = mergedAt.filter { behind.contains($0.key) }
-    guard let revision = state.workspace?.revision else { return }
+    guard let revision = state.workspace?.revision, let owner = state.owner else { return }
     for pageId in behind where openPages[pageId] == nil && mergedAt[pageId] != revision && !isWriting(pageId) {
       mergedAt[pageId] = revision
       let engine = engine
       Task { [weak self] in
+        // The pair and the draft are read as the engine shows them now; under another account than `owner` the
+        // rebase is refused.
         guard let pair = await engine.merging(pageId), let draft = await engine.draft(of: pageId), let self else {
           return
         }
@@ -528,7 +552,8 @@ extension AppModel {
         _ = self.enqueue(
           .rebase(
             pageId: pageId, baseDocument: pair.theirs, document: merged.document,
-            singleDeleteIds: DraftMerging.rowsStillRemoved(draft.singleDeleteIds, from: merged.document)))
+            singleDeleteIds: DraftMerging.rowsStillRemoved(draft.singleDeleteIds, from: merged.document)),
+          owner: owner)
       }
     }
   }

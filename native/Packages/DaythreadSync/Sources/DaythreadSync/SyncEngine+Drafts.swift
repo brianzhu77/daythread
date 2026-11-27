@@ -42,14 +42,16 @@ extension SyncEngine {
   /// sent, and the screen's merge is a real three-way one.
   ///
   /// A document equal to the draft's base removes the draft and sends nothing, unless a save is on its way: then the
-  /// draft stays until its answer. Throws `SyncError.notReady` when no workspace is shown, the copy has no such page,
-  /// or a sign-out has begun, and what the store threw when it refuses the draft; either way nothing was kept.
+  /// draft stays until its answer. Throws `SyncError.notReady` when no workspace is shown, the copy shown is not
+  /// `expectedOwner`'s (the account whose state the screen typed under), the copy has no such page, or a sign-out has
+  /// begun, and what the store threw when it refuses the draft; either way nothing was kept.
   public func keepDraft(
-    pageId: String, document: String, singleDeleteIds: [String], startedFrom: String
+    pageId: String, document: String, singleDeleteIds: [String], startedFrom: String, expectedOwner: String
   ) async throws {
     await acquire()
     defer { release() }
-    guard copyShown, phase != .signedOut, !leaving, let copy, let page = copy.workspace.page(pageId) else {
+    guard isShown(expectedOwner), phase != .signedOut, !leaving, let copy, let page = copy.workspace.page(pageId)
+    else {
       throw SyncError.notReady
     }
     let kept = accountDraft(page.id)
@@ -91,13 +93,15 @@ extension SyncEngine {
   /// Answers false, changing nothing, when the page has no draft (it was saved or discarded while the screen
   /// merged: what it merged must not bring back words just thrown away), when the copy's page is not `baseDocument`
   /// in its stored form (the page moved again while the screen merged), or when a save of the draft is on its way. A
-  /// `document` equal to `baseDocument` removes the draft. Throws as `keepDraft` does.
+  /// `document` equal to `baseDocument` removes the draft. Answers false too when no copy is shown or the copy shown is
+  /// not `expectedOwner`'s: the merge was made of another account's words. Otherwise throws as `keepDraft` does.
   @discardableResult
   public func rebaseDraft(
-    pageId: String, baseDocument: String, document: String, singleDeleteIds: [String]
+    pageId: String, baseDocument: String, document: String, singleDeleteIds: [String], expectedOwner: String
   ) async throws -> Bool {
     await acquire()
     defer { release() }
+    guard isShown(expectedOwner) else { return false }
     guard copyShown, phase != .signedOut, !leaving, let copy, let page = copy.workspace.page(pageId) else {
       throw SyncError.notReady
     }
@@ -126,10 +130,11 @@ extension SyncEngine {
   /// still answered into the copy. The pending ticks on a to-do that only this draft had go with it: sent, they
   /// would only be held as gone. Not those on a to-do its recorded save makes (that save may land, or have landed,
   /// and the tick goes after its answer or is held as gone where he sees it), nor on one another page's draft makes.
-  public func discardDraft(pageId: String) async {
+  /// Does nothing when no copy is shown or the copy shown is not `expectedOwner`'s.
+  public func discardDraft(pageId: String, expectedOwner: String) async {
     await acquire()
     defer { release() }
-    guard copyShown, phase != .signedOut, !leaving, let copy else { return }
+    guard isShown(expectedOwner), phase != .signedOut, !leaving, let copy else { return }
     // A keystroke made before he discarded is not typed onto what an earlier save sent.
     landedSaves[pageId] = nil
     guard let kept = accountDraft(pageId) else { return }
@@ -194,9 +199,18 @@ extension SyncEngine {
 
   // MARK: What is drawn and said
 
+  /// The owner of the copy, while it is shown.
+  var shownOwner: String? { copyShown ? copy?.owner : nil }
+
+  /// Whether the copy shown is `owner`'s: a call made under another account's state, or under none, is not made on it.
+  /// Read inside the store section the call acts in, so the copy cannot change owner between the check and the act.
+  private func isShown(_ owner: String) -> Bool {
+    shownOwner.map { $0.utf8.elementsEqual(owner.utf8) } ?? false
+  }
+
   /// The drafts of the copy's owner, while the copy is shown: the only ones drawn or sent.
   var accountDrafts: [PageDraft] {
-    guard copyShown, let owner = copy?.owner else { return [] }
+    guard let owner = shownOwner else { return [] }
     return drafts.filter { $0.owner == owner }
   }
 

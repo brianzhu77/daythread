@@ -1448,7 +1448,8 @@ private struct DraftHarness {
     await h.engine.saveNow()
     // The session still names user-1; the copy shown, and the draft he is told about, are user-2's.
     try await h.engine.keepDraft(
-      pageId: day, document: typed("Theirs too"), singleDeleteIds: [], startedFrom: typed("Theirs"), expectedOwner: "user-1")
+      pageId: day, document: typed("Theirs too"), singleDeleteIds: [], startedFrom: typed("Theirs"),
+      expectedOwner: "user-2")
     #expect(await current(h.engine)?.drafts == waiting())
 
     #expect(await h.engine.signOut(discardingUnsent: true) == 0)

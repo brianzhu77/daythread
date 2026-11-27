@@ -728,6 +728,6 @@ public actor SyncEngine {
       SyncState(
         phase: phase, workspace: drawn, offline: offline, held: shown ? held : [], pending: shown ? pending : 0,
         waiting: shown ? behind.count : 0, failure: failure, signedIn: signedIn, enqueued: enqueued,
-        address: address, drafts: draftStatuses(retrying: retry != nil)))
+        address: address, drafts: draftStatuses(retrying: retry != nil), owner: shownOwner))
   }
 }
