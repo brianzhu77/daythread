@@ -52,6 +52,13 @@
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// The button's room is counted from the cell's own margin (`updateConfiguration`), which the list may set after
+    /// the row was configured.
+    override func layoutMarginsDidChange() {
+      super.layoutMarginsDidChange()
+      if !planButton.isHidden { setNeedsUpdateConfiguration() }
+    }
+
     override func layoutSubviews() {
       super.layoutSubviews()
       // The list cell's content view covers the whole cell and is kept above the circle, and so are the words; the
@@ -221,8 +228,8 @@
     private var planBeside: [NSLayoutConstraint] = []
     private var planUnder: [NSLayoutConstraint] = []
     private weak var planMargins: UILayoutGuide?
-    /// The text size the button was last made for, so a keystroke makes nothing again.
-    private var planMadeFor: UIContentSizeCategory?
+    /// The text size and weight the button was last made for, so a keystroke makes nothing again.
+    private var planMadeFor: (contentSize: UIContentSizeCategory, legibilityWeight: UILegibilityWeight)?
     /// Between the words' end and the button's title, when it is beside them.
     private static let planGap: CGFloat = 8
 
@@ -236,7 +243,8 @@
       planButton.isHidden = facts?.planForToday != true
       guard !planButton.isHidden else { return PlanRoom() }
       let under = traits.preferredContentSizeCategory.isAccessibilityCategory
-      if planMadeFor != traits.preferredContentSizeCategory {
+      let madeFor = (traits.preferredContentSizeCategory, traits.legibilityWeight)
+      if planMadeFor.map({ $0 != madeFor }) ?? true {
         var button = UIButton.Configuration.plain()
         var title = AttributeContainer()
         title.font = UIFont.preferredFont(forTextStyle: .caption1, compatibleWith: traits)
@@ -249,7 +257,7 @@
         let size = planButton.intrinsicContentSize
         planWidth.constant = ceil(size.width)
         planHeight.constant = max(Self.minimumTouchTarget, ceil(size.height))
-        planMadeFor = traits.preferredContentSizeCategory
+        planMadeFor = madeFor
       }
       return under ? PlanRoom(bottom: planHeight.constant) : PlanRoom(trailing: planWidth.constant)
     }
@@ -330,7 +338,12 @@
       var content = defaultContentConfiguration()
       let finished = status == .done || status == .cancelled
       let room = makeRoomForPlanButton(traits: state.traitCollection)
-      content.directionalLayoutMargins.trailing += room.trailing
+      if room.trailing > 0 {
+        // The list content view keeps the larger of its configuration's margin and the cell's own, so the room is
+        // added to the one the words would end at, or the button would sit past it by the difference.
+        content.directionalLayoutMargins.trailing =
+          max(content.directionalLayoutMargins.trailing, directionalLayoutMargins.trailing) + room.trailing
+      }
       content.directionalLayoutMargins.bottom += room.bottom
       applyWords(to: &content, traits: state.traitCollection)
 

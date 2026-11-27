@@ -522,10 +522,18 @@
       @Test func plan_for_today_follows_bold_text() throws {
         let screen = try Screen.editing(
           [taskRow("ref", "k-ref", "Read the lease", reference: true)], tasks: [todo("k-ref")], today: today)
+        // Bold Text is carried inside the text style's font, not as the descriptor's bold trait: the title's font is the
+        // caption font the system gives for that weight.
+        let regular = UIFont.preferredFont(
+          forTextStyle: .caption1, compatibleWith: UITraitCollection(legibilityWeight: .regular))
+        let heavier = UIFont.preferredFont(
+          forTextStyle: .caption1, compatibleWith: UITraitCollection(legibilityWeight: .bold))
+        #expect(regular != heavier)
         func bold() throws -> Bool {
           let title = try cell(screen, 0).planButton.configuration?.attributedTitle
           let font = try #require(title?.runs.first?.uiKit.font)
-          return font.fontDescriptor.symbolicTraits.contains(.traitBold)
+          #expect(font == regular || font == heavier, "the caption font, \(font)")
+          return font == heavier
         }
         #expect(!(try bold()))
         screen.window.traitOverrides.legibilityWeight = .bold

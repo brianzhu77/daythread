@@ -42,10 +42,17 @@
     public var actingRow: String? {
       didSet {
         guard actingRow != oldValue else { return }
-        // In place, not by a snapshot: the row may be the one being typed or composed in.
-        for id in [oldValue, actingRow].compactMap({ $0 }) {
-          (cell(for: id) as? TodoBlockCell)?.setDimmed(id == actingRow)
-        }
+        let ids = [oldValue, actingRow].compactMap { $0 }.filter { rowsByID[$0] != nil }
+        // A row being composed in is never reconfigured from outside: its cell takes the look in place, and its words
+        // are drawn in it once the composition ends (`applyWords` leaves marked text alone).
+        for id in ids where id == composingRow { (cell(for: id) as? TodoBlockCell)?.setDimmed(id == actingRow) }
+        // The others are reconfigured, which keeps each cell (and its caret and keyboard), and reaches a cell the list
+        // made ahead of time off screen, which `cellForItem` does not return.
+        let reconfigured = ids.filter { $0 != composingRow }
+        guard !reconfigured.isEmpty else { return }
+        var snapshot = dataSource.snapshot()
+        snapshot.reconfigureItems(reconfigured.filter { snapshot.indexOfItem($0) != nil })
+        dataSource.apply(snapshot, animatingDifferences: false)
       }
     }
 
@@ -559,10 +566,7 @@
           text: self.drawn[id] ?? AttributedString(),
           editable: self.editableIDs.contains(id), rowID: id, delegate: self.lineInput,
           onTick: { [weak self] in self?.onTick?(taskId) },
-          onRowAction: { [weak self] kind in
-            guard let self, let menu = facts?.menu else { return false }
-            return self.reportRowAction(RowRequest(kind: kind, rowID: id, taskId: taskId, menu: menu))
-          })
+          onRowAction: { [weak self] kind in self?.reportRowAction(kind, row: id, taskId: taskId) ?? false })
       }
       let separator = UICollectionView.CellRegistration<SeparatorBlockCell, String> { [weak self] cell, _, id in
         cell.configure(depth: self?.rowsByID[id]?.depth ?? 0)
@@ -1065,10 +1069,23 @@
 
     // MARK: the row's actions
 
-    /// Hands a row's request to the host, unless an action is already out. True when it was handed on.
-    private func reportRowAction(_ request: RowRequest) -> Bool {
-      guard actingRow == nil, let onRowAction else { return false }
-      onRowAction(request)
+    /// Hands what he asked of row `id` (of to-do `taskId`) to the host with the row's menu as it is now, unless an
+    /// action is already out, or the request is stale: a swipe, a menu or ⌘/'s menu still open keeps the items it was
+    /// made with after the row is redrawn, so the row must still be there with that to-do and still offer the action
+    /// (`More` while its menu holds more, the button while the row shows it). True when it was handed on.
+    private func reportRowAction(_ kind: RowRequest.Kind, row id: String, taskId: String) -> Bool {
+      guard actingRow == nil, let onRowAction, let row = rowsByID[id],
+        case .todo(let current, _, _, let facts?) = row.kind, current == taskId, let menu = facts.menu
+      else { return false }
+      let offered =
+        switch kind {
+        case .more: !menu.more.isEmpty
+        case .action(.planForTodayButton): facts.planForToday
+        case .action(let action):
+          menu.groups.contains { $0.items.contains { $0.action == action } } || menu.swipe.contains { $0.action == action }
+        }
+      guard offered else { return false }
+      onRowAction(RowRequest(kind: kind, rowID: id, taskId: taskId, menu: menu))
       return true
     }
 
@@ -1085,8 +1102,7 @@
       if let line = focusedLine, line.rowID == id || line.selectedRange.length > 0 { return nil }
       func action(_ title: String, _ kind: RowRequest.Kind) -> UIContextualAction {
         UIContextualAction(style: .normal, title: title) { [weak self] _, _, done in
-          let reported = self?.reportRowAction(RowRequest(kind: kind, rowID: id, taskId: taskId, menu: menu)) ?? false
-          done(reported)
+          done(self?.reportRowAction(kind, row: id, taskId: taskId) ?? false)
         }
       }
       // `More` holds the rest, `Cancel task` among it.

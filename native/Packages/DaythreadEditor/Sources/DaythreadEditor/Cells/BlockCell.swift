@@ -162,7 +162,8 @@
     /// titled in Chinese) can make the line taller: then the first line is read as the text view lays it out. Reading
     /// the layout on every keystroke cost close to a millisecond in `TypingFeelTests`, so plain words never do.
     final func firstLineMidline(traits: UITraitCollection) -> CGFloat {
-      let text = line.attributedText ?? NSAttributedString()
+      // The storage itself: `attributedText` would copy the whole line on every keystroke.
+      let text = line.textStorage
       if text.containsAttachments(in: NSRange(location: 0, length: text.length)), let manager = line.textLayoutManager {
         var midline: CGFloat?
         manager.enumerateTextLayoutFragments(from: manager.documentRange.location, options: [.ensuresLayout]) {
