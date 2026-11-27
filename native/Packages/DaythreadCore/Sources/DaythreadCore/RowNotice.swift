@@ -1,25 +1,23 @@
 /// The server's answer to a command, as far as a notice needs it.
 public struct Receipt: Hashable, Sendable {
   public let message: String
-  /// The days of the to-dos a repeat made in that command (`nextTodos`).
-  public let nextTodos: [LocalDate]
-
-  /// Nil when `message` is not a string, or `nextTodos` is present and not a list of `{ on }` days: the notice
-  /// reads one of them, and a receipt that does not read is no basis for words.
+  /// Nil only when `message` is not a string. `nextTodos` is read best-effort and only a cancel's notice uses it, so
+  /// a list that does not read must not cost the notice of any other action. An entry that does not read is kept
+  /// as nil, so it still counts as an entry: it is never the one, and never makes two read as one.
   public init?(_ json: JSONValue) {
     guard let object = json.objectValue, let message = object["message"]?.stringValue else { return nil }
-    var days: [LocalDate] = []
-    switch object["nextTodos"] {
-    case nil, .null?: break
-    case .array(let items)?:
-      for item in items {
-        guard let day = item.objectValue?["on"]?.stringValue.flatMap(LocalDate.init) else { return nil }
-        days.append(day)
-      }
-    default: return nil
-    }
     self.message = message
-    nextTodos = days
+    nextEntries = object["nextTodos"]?.arrayValue?.map { $0.objectValue?["on"]?.stringValue.flatMap(LocalDate.init) } ?? []
+  }
+
+  private let nextEntries: [LocalDate?]
+
+  /// The days of the to-dos a repeat made in that command, those that read.
+  public var nextTodos: [LocalDate] { nextEntries.compactMap { $0 } }
+
+  /// The day of the next to-do when the command made exactly one and it reads (`noticeWithNext`).
+  var onlyNextTodo: LocalDate? {
+    nextEntries.count == 1 ? nextEntries[0] : nil
   }
 }
 
@@ -42,8 +40,7 @@ public enum RowNotice {
         : notToday(task: task, date: pageDate, today: today)
     case .cancel:
       // The next to-do's day, when the command made exactly one (`noticeWithNext`).
-      receipt.nextTodos.count == 1
-        ? "Cancelled · Next \(DayWords.nextDayLabel(receipt.nextTodos[0], today: today))" : "Cancelled"
+      receipt.onlyNextTodo.map { "Cancelled · Next \(DayWords.nextDayLabel($0, today: today))" } ?? "Cancelled"
     case .restore: "Restored"
     case .pickDate: ""
     }
