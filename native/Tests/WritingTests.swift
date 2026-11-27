@@ -519,6 +519,71 @@ private struct DayScreen {
     day.close()
   }
 
+  /// The model takes another account's state, and he types again before the screen has drawn it: the keystroke is
+  /// made under the account whose page he typed it on, and the engine refuses it. Nothing is stored under the other.
+  @Test func a_keystroke_after_the_model_took_another_accounts_state_is_made_under_the_first() async throws {
+    let h = try await harness()
+    let day = try DayScreen(h.model)
+    await h.server.add([.workspace(.full(try copy(revision: 1, pages: [page(today, base)]), owner: "two"))])
+    // The load holds the store: his first keystroke waits in the engine, his second in the model.
+    await h.store.holdReplace()
+    let refreshing = Task { [model = h.model] in await model.refresh() }
+    await h.store.replaceHeld()
+    let walk = try day.type(" t", atEndOf: "Walk")
+    try await turns()
+    walk.insertText("h")
+    // Taking the new state, the model drops the keystroke it holds; he types once more at that moment, in the same
+    // turn of the main actor, so before the screen can draw that state.
+    let seen = Seen()
+    withObservationTracking {
+      _ = h.model.answeredWrites
+    } onChange: {
+      MainActor.assumeIsolated {
+        seen.owner.withLock { $0 = h.model.state.owner }
+        walk.insertText("e")
+      }
+    }
+    await h.store.releaseReplace()
+    await refreshing.value
+    try await until { h.model.state.owner == "two" }
+    try await until { !h.model.isWriting(todayId) }
+    try await turns()
+
+    #expect(seen.owner.withLock { $0 } == "two", "typed after the model took the other account's state")
+    let puts = await h.store.puts
+    #expect(puts.allSatisfy { $0.owner == "one" }, "stored as two's: \(puts.map { words(of: $0.document) })")
+    #expect(try await h.store.drafts().allSatisfy { $0.owner == "one" })
+    #expect(h.model.state.drafts.isEmpty)
+    day.close()
+  }
+
+  /// He is composing when the screen is given another account's page with the same id: what he composed is committed
+  /// into the page he composed it on, under its account, which the engine refuses; it never goes into the new page.
+  @Test func a_composition_when_another_accounts_page_is_given_never_goes_into_it() async throws {
+    let h = try await harness()
+    let day = try DayScreen(h.model)
+    let walk = try day.line("Walk")
+    #expect(walk.becomeFirstResponder())
+    walk.selectedRange = NSRange(location: 4, length: 0)
+    walk.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
+
+    let theirs = document([line("a", "Morning"), line("b", "Run")])
+    await h.server.add([.workspace(.full(try copy(revision: 1, pages: [page(today, theirs)]), owner: "two"))])
+    await h.model.refresh()
+    try await until { h.model.state.owner == "two" }
+    try await until { day.words == ["Morning", "Run"] }
+    try await until { !h.model.isWriting(todayId) }
+    try await turns()
+
+    #expect(day.words == ["Morning", "Run"], "the other account's page, without what he composed")
+    #expect(!day.screen.replacedDocuments.contains { words(of: $0).contains("Walk今") })
+    let puts = await h.store.puts
+    #expect(!puts.contains { words(of: $0.document).contains("Walk今") }, "stored: \(puts.map(\.owner))")
+    #expect(try await h.store.drafts().isEmpty)
+    #expect(h.model.state.drafts.isEmpty)
+    day.close()
+  }
+
   @Test func a_to_do_typed_offline_can_be_ticked_and_both_arrive_in_order() async throws {
     let h = try await harness([page(today, document([line("a", "Morning"), todoLine("r1", "")]))])
     let day = try DayScreen(h.model)
@@ -736,6 +801,68 @@ private struct DayScreen {
     #expect(day.status == nil)
     #expect(h.model.state.drafts.first { $0.id == todayId }?.state == .waiting, "nothing to merge")
     #expect(await saves(h.server).count == 2, "no merged page was saved")
+    day.close()
+  }
+
+  /// A draft kept from before a relaunch is opened as it is drawn, and his next words are saved; a keystroke on its
+  /// way when that save lands is typed onto what was saved.
+  @Test func a_keystroke_on_its_way_when_a_save_landed_on_a_draft_from_before_a_relaunch_is_not_doubled()
+    async throws
+  {
+    let drafted = document([line("a", "Morning"), line("b", "Walk the dog")])
+    let store = TestStore()
+    try await store.replace(with: try copy(pages: [page(today, base), page(yesterday, base)]), owner: "one")
+    try await store.put(
+      PageDraft(
+        pageId: todayId, owner: "one", base: ContentKey.of(base), baseDocument: base, document: drafted,
+        singleDeleteIds: [], sent: nil, changedAt: noon))
+    // The load finds no network, so the draft is not sent before he types.
+    let server = TestServer([.account(Account(owner: "one", email: "one@example.com", signIn: true))])
+    let tokens = MemoryTokenStore()
+    try tokens.write(one)
+    let engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: neverEnding, now: { noon })
+    let model = AppModel(engine: engine, now: { noon })
+    model.start()
+    try await until { model.workspace != nil }
+    await engine.settled()
+    let day = try DayScreen(model)
+    #expect(day.words == ["Morning", "Walk the dog"])
+
+    try day.type("!", atEndOf: "Walk the dog")
+    try await eventually {
+      await engine.draft(of: todayId).map { words(of: $0.document) } == ["Morning", "Walk the dog!"]
+    }
+    let saved = document([line("a", "Morning"), line("b", "Walk the dog!")])
+    await server.add([
+      .saved(
+        .applied(
+          receipt: .object(["revision": .number("2")]),
+          changes: try changes(from: 1, to: 2, pages: [page(today, saved)]), owner: "one"))
+    ])
+    await server.holdSaves()
+    let saving = model.saveNow()
+    try await eventually { await server.waitingCalls == 1 }
+
+    // His next keystroke waits in the model behind words for another day, whose store write is held.
+    await store.holdPut()
+    model.wrote(
+      pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
+      startedFrom: base, owner: "one")
+    await store.putHeld()
+    try day.type("?", atEndOf: "Walk the dog!")
+
+    // The save's answer comes first and removes the draft; then the keystroke reaches the engine.
+    await server.release()
+    try await turns()
+    await store.releasePut()
+    await saving.value
+    try await until { model.state.drafts.contains { $0.id == todayId } }
+    try await turns()
+
+    #expect(day.words == ["Morning", "Walk the dog!?"])
+    #expect(day.status == nil)
+    #expect(model.state.drafts.first { $0.id == todayId }?.state == .waiting, "nothing to merge")
+    #expect(await saves(server).count == 1, "no merged page was saved")
     day.close()
   }
 
@@ -958,6 +1085,11 @@ private struct DayScreen {
 /// Set from an observation's change handler, which may run on any thread.
 private final class Heard: Sendable {
   let value = Mutex(false)
+}
+
+/// The owner the model's state named when an observation's change handler ran.
+private final class Seen: Sendable {
+  let owner = Mutex<String?>(nil)
 }
 
 /// Background time the test owns: each task it begins is 7, and the test says when time is up.

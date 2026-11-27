@@ -62,7 +62,8 @@ is a launch with `-DaythreadServerURL http://127.0.0.1:9` and the same `-Daythre
 
 The writing tests (`UITests/WritingUITests.swift`) type into today's page and read the page back from the server:
 each types words of its own, at the end of the page under Notes or in the template's empty to-do, since the seed is
-shared and never reset. The one that changes the page "on another device" saves it through `POST /api/v1/saves`
+shared and never reset. They are written for one run per seeded server, as the wrapper starts one: run again against
+the same server (one kept by `--serve`), they meet the words and to-dos the run before left. The one that changes the page "on another device" saves it through `POST /api/v1/saves`
 with the page's revision and content key read first (`SeededServer.save` in `UITests/Launch.swift`, which holds its
 own copy of the web's `textKey`). The simulator keeps the keyboard last used: the tests turn it to English with the
 globe key before typing, and the Chinese test turns it to Pinyin and taps the keys one by one (`typeText` would put

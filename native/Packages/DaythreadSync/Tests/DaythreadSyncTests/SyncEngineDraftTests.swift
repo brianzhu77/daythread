@@ -467,6 +467,30 @@ private struct DraftHarness {
     #expect(await h.transport.unscripted == [])
   }
 
+  @Test func a_save_the_server_failed_says_it_is_tried_again() async throws {
+    let h = try await DraftHarness(opening + [.failure(TransportError.server(status: 500))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+
+    await h.engine.saveNow()
+
+    #expect(await h.waits.asked.last == .seconds(2))
+    #expect(await current(h.engine)?.drafts == [DraftStatus(id: day, state: .retrying)])
+  }
+
+  @Test func a_draft_not_yet_sent_is_not_said_to_be_tried_again_for_a_tick_the_server_failed() async throws {
+    let h = try await DraftHarness(
+      opening + [.failure(TransportError.server(status: 500))], copy: served(5, tasks: [otherTask]))
+    await h.engine.start()
+    try await h.engine.enqueue(action: tick("other"), label: "Tick other")
+    await h.engine.settled()
+    #expect(await h.waits.asked.last == .seconds(2), "the tick is tried again")
+
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+
+    #expect(await current(h.engine)?.drafts == waiting(), "its own save has not failed")
+  }
+
   @Test func a_tick_on_a_to_do_typed_into_a_draft_is_sent_after_that_drafts_save() async throws {
     let answer = try saved(from: 5, to: 6, document: withTodo(planned: true), tasks: [todo("open")], receipt: 6)
     let ticked = try changes(from: 6, to: 7, tasks: [todo("done", version: 2)])
@@ -1350,10 +1374,13 @@ private struct DraftHarness {
     #expect(await h.saves == [])
   }
 
-  @Test func an_expired_receipt_is_followed_by_a_load_and_the_draft_is_behind() async throws {
+  /// The server's words when the save went in long ago and its receipt has expired.
+  private static let alreadyApplied = "This change was already applied \u{00B7} reload"
+
+  @Test func an_expired_receipt_with_nothing_typed_since_and_the_page_as_sent_removes_the_draft() async throws {
     let h = try await DraftHarness(
       opening + [
-        .saved(.refused(message: "This change was already applied \u{00B7} reload")),
+        .saved(.refused(message: Self.alreadyApplied)),
         .workspace(.full(served(6, document: typed("Walk")), owner: "user-1")),
       ])
     await h.engine.start()
@@ -1363,9 +1390,42 @@ private struct DraftHarness {
 
     #expect(await h.transport.calls.last == .workspace(token: "tok-1", have: 5))
     #expect(await h.saves.count == 1)
-    #expect(try await h.drafts.first?.sent == nil)
-    #expect(await current(h.engine)?.drafts == behind())
+    #expect(try await h.drafts == [], "the save he made is the page")
+    let state = await current(h.engine)
+    #expect(state?.drafts == [])
+    #expect(state?.workspace?.page(day)?.document == typed("Walk"))
     #expect(await h.waits.asked.allSatisfy { $0 == .milliseconds(450) })
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func an_expired_receipt_after_he_typed_more_starts_the_draft_from_what_was_sent() async throws {
+    let gate = Gate()
+    let h = try await DraftHarness(opening + [.gated(gate)])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    let saving = Task { await h.engine.saveNow() }
+    await gate.reached()
+    try await h.engine.keepDraft(
+      pageId: day, document: withTodo(more: "Then call"), singleDeleteIds: [], startedFrom: baseDocument,
+      expectedOwner: "user-1")
+
+    // The save went in long ago; the server has since planned its to-do.
+    await h.transport.add([
+      .workspace(.full(served(6, document: withTodo(planned: true), tasks: [todo("open")]), owner: "user-1"))
+    ])
+    await gate.open(.saved(.refused(message: Self.alreadyApplied)))
+    await saving.value
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.sent == nil)
+    #expect(draft.baseDocument == withTodo())
+    #expect(draft.base == ContentKey.of(withTodo()))
+    #expect(await current(h.engine)?.drafts == behind())
+    #expect(await h.saves.count == 1, "nothing is sent over the server's page")
+    let pair = try #require(await h.engine.merging(day))
+    let merged = PageMerge.merge(base: pair.baseDocument, mine: draft.document, theirs: pair.theirs)
+    #expect(merged.document == withTodo(planned: true, more: "Then call"))
+    #expect(!merged.bothChanged, "his line is not doubled")
     #expect(await h.transport.unscripted == [])
   }
 
@@ -1685,7 +1745,91 @@ private struct DraftHarness {
     #expect(await h.saves.count == 1)
   }
 
+  @Test
+  func a_keystroke_on_its_way_when_a_save_landed_on_a_draft_opened_after_a_relaunch_starts_from_what_was_sent()
+    async throws
+  {
+    // The load fails, so the draft is not sent before he types.
+    let h = try await DraftHarness([
+      .account(Account(owner: "user-1", email: "one@example.com", signIn: true)), .failure(TransportError.offline),
+      try saved(from: 5, to: 6, document: typed("Walk on")),
+    ])
+    // Draft D, typed on P0 before the relaunch: this engine never saw the page it was created on.
+    try await h.store.put(
+      PageDraft(
+        pageId: day, owner: "user-1", base: ContentKey.of(baseDocument), baseDocument: baseDocument,
+        document: typed("Walk"), singleDeleteIds: [], sent: nil, changedAt: noon))
+    await h.engine.start()
+
+    // The screen opened the page as the draft draws it, and types on it.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: typed("Walk"), expectedOwner: "user-1")
+    await h.engine.saveNow()
+    #expect(try await h.drafts == [], "the answer removed the draft")
+
+    // A keystroke made before the answer reached the screen, which still had the page it opened.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on by"), singleDeleteIds: [], startedFrom: typed("Walk"),
+      expectedOwner: "user-1")
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.baseDocument == typed("Walk on"))
+    #expect(draft.base == ContentKey.of(typed("Walk on")))
+    #expect(await current(h.engine)?.drafts == waiting())
+    #expect(await h.engine.merging(day) == nil, "nothing to merge")
+  }
+
+  @Test func a_keystroke_typed_on_the_page_a_save_left_starts_from_it() async throws {
+    // The server took the save and left the page as it was before (a rewrite back to an earlier version).
+    let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: baseDocument)])
+    await h.engine.start()
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await h.engine.saveNow()
+    #expect(try await h.drafts == [])
+    #expect(await current(h.engine)?.workspace?.page(day)?.document == baseDocument)
+
+    // He types on the page as the save left it, which is also the page the draft was created on.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Run"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.baseDocument == baseDocument)
+    #expect(await current(h.engine)?.drafts == waiting())
+  }
+
   // MARK: Whose state it is
+
+  @Test func a_refusal_under_one_account_does_not_hold_another_accounts_draft_of_the_same_page() async throws {
+    let theirs = typed("Theirs")
+    let h = try await DraftHarness(
+      opening + [
+        .saved(.refused(message: "Invalid editor document")),
+        .workspace(.full(served(1, document: theirs), owner: "user-2")),
+      ])
+    // The other account's draft of the same day page, from before: it started from a page theirs has moved on from.
+    try await h.store.put(
+      PageDraft(
+        pageId: day, owner: "user-2", base: ContentKey.of(baseDocument), baseDocument: baseDocument,
+        document: typed("Theirs too"), singleDeleteIds: [], sent: nil, changedAt: noon))
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await h.engine.saveNow()
+    #expect(await current(h.engine)?.drafts == stuck("Invalid editor document"))
+
+    // The server answers as the other account.
+    await h.engine.refresh()
+
+    #expect(await current(h.engine)?.owner == "user-2")
+    #expect(await current(h.engine)?.drafts == behind(), "merged, not held for the first account's reason")
+    #expect(await h.engine.merging(day) != nil)
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Theirs too!"), singleDeleteIds: [], startedFrom: typed("Theirs too"),
+      expectedOwner: "user-2")
+    #expect(await current(h.engine)?.drafts == behind())
+    #expect(await h.saves.count == 1)
+    #expect(await h.transport.unscripted == [])
+  }
 
   @Test func the_state_names_the_owner_of_the_copy_shown() async throws {
     let other = Session(token: "tok-2", owner: "user-2", expiresAt: Date(timeIntervalSince1970: 1_900_000_000))

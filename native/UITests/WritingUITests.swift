@@ -1,5 +1,11 @@
 import XCTest
 
+/// A page's text and the key the Core gives it (`ContentKey.of`), held to the same value by
+/// `DaythreadTests/SeededContentKeyTests`: the UI tests cannot import the Core.
+let seededContentKeyText =
+  #"[{"id":"a","type":"paragraph","props":{},"content":[{"type":"text","text":"café 今天 😀","styles":{}}],"children":[]}]"#
+let seededContentKey = "d:116:dfbd672cde24dcdbbce455a0224dab9f"
+
 /// Writing on today's page, seen on the screen and on the server. The seed is shared by every test and never reset, so
 /// each test types words of its own and reads only them back; a test that needs a fresh line makes one at the end of
 /// the page, under Notes.
@@ -38,8 +44,6 @@ final class WritingUITests: XCTestCase {
     let words = "Picked up the parcel"
     let app = try open(server: base, store: Wrapper.storeName())
 
-    let notes = try XCTUnwrap(app.lines.last, "the empty bullet under Notes")
-    XCTAssertEqual(notes.value as? String, "", "the seeded page ends with Notes' empty bullet")
     app.startLineAtTheEnd().typeText(words)
     XCTAssertTrue(app.line(words).waitForExistence(timeout: 2), "on screen as typed")
 
@@ -133,6 +137,7 @@ final class WritingUITests: XCTestCase {
     let circle = app.circle(words)
     XCTAssertTrue(circle.waitForExistence(timeout: 2), "a circle for the to-do typed")
     XCTAssertEqual(circle.value as? String, "not done")
+    XCTAssertTrue(circle.wait(for: \.isEnabled, toEqual: true, timeout: 5), "the circle can be ticked")
     circle.tap()
     XCTAssertTrue(circle.waitForValue("done", timeout: 2), "ticked at once")
     try await server.waitForStatus(of: words, "done", timeout: 10)
@@ -176,10 +181,25 @@ final class WritingUITests: XCTestCase {
     try await server.waitForLines(of: page, timeout: 30, "holding both lines") { lines in
       lines.filter { $0.words == mine }.count == 1 && lines.filter { $0.words == theirs }.count == 1
     }
+    // And still once each a moment later: no second merge or save adds another.
+    try await Task.sleep(nanoseconds: 1_000_000_000)
+    let later = try await server.lines(of: page)
+    XCTAssertEqual(later.filter { $0.words == mine }.count, 1, "his line, once: \(later)")
+    XCTAssertEqual(later.filter { $0.words == theirs }.count, 1, "their line, once: \(later)")
     back.scrollToTheTop()
+    XCTAssertTrue(
+      back.buttons[dayHeader(try Wrapper.today())].waitForExistence(timeout: 5), "the day's header, with its status line")
     XCTAssertFalse(
       back.staticTexts["Latest loaded · your changes are below their lines"].exists, "no line both changed, nothing said")
     back.terminate()
+  }
+
+  /// The tests' own copy of the content key (`SeededServer.contentKey`) gives the key the app's Core gives for the
+  /// same text: `DaythreadTests/SeededContentKeyTests` holds the Core to the same value.
+  func test_the_seeded_servers_content_key_is_the_cores() {
+    XCTAssertEqual(
+      SeededServer.contentKey(seededContentKeyText), seededContentKey,
+      "SeededServer.contentKey no longer gives the Core's key (see DaythreadTests/SeededContentKeyTests)")
   }
 
   /// Chinese typed with the simulator's Pinyin keyboard: "jintian", then Space for the first candidate, on a new line and

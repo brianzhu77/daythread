@@ -116,11 +116,12 @@
 
     /// Replaces `range` with `words` on the run loop's next turn, as typing would: a text view ignores a change made
     /// while it asks its delegate about another. Dropped if the line is given to another row, its text changes, or it
-    /// stops being editable before then: the range belongs to the text as it is now.
+    /// stops being editable before then: the range belongs to the text as it is now. In the common modes, so it does
+    /// not wait for a scroll of the list to end.
     func replaceSoon(_ range: NSRange, with words: String) {
       cancelPendingReplacement()
       pendingReplacement = (range, words, rowID, text)
-      perform(#selector(replacePending), with: nil, afterDelay: 0)
+      perform(#selector(replacePending), with: nil, afterDelay: 0, inModes: [.common])
     }
 
     func cancelPendingReplacement() {

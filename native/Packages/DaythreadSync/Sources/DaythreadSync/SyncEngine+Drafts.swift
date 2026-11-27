@@ -32,8 +32,8 @@ extension SyncEngine {
   /// `startedFrom` is the page the screen typed onto. The first call for a page records it as the draft's base, never
   /// the copy's page now: a load may have changed that page between his keystroke and this call, and his document
   /// would then replace another device's lines. When the copy's page is not `startedFrom`, the draft is behind and
-  /// waits for the screen's merge. Once a draft exists, its base stands and `startedFrom` is not read. A draft the
-  /// server refused is sent again with these words.
+  /// waits for the screen's merge. Once a draft exists, its base stands and `startedFrom` is only kept among the
+  /// draft's origins (see `firstBase`). A draft the server refused is sent again with these words.
   ///
   /// One exception for the first call: a `startedFrom` with the content key of the page that the page's last landed
   /// save was made on, when that save removed its draft. The keystroke was made before the answer reached the screen,
@@ -70,18 +70,33 @@ extension SyncEngine {
         pageId: page.id, owner: copy.owner, base: kept?.base ?? ContentKey.of(baseDocument),
         baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds, sent: kept?.sent,
         changedAt: now()))
-    if kept == nil { draftOrigins[page.id] = DraftOrigin(owner: copy.owner, keys: [ContentKey.of(startedFrom)]) }
+    recordOrigin(startedFrom, of: page.id, owner: copy.owner)
     refusedDrafts[page.id] = nil
     publishDrafts()
     waitThenSave(page.id)
   }
 
+  /// Adds the page the screen typed onto to the draft's origins, on every keep: the screen can open a page whose draft
+  /// this engine did not create (after a relaunch, after he left the day and came back, after a merge it refused) and
+  /// type onto the draft as drawn. The text is compared first, so a keystroke on the same page costs no hash. Runs
+  /// inside a store section.
+  private func recordOrigin(_ startedFrom: String, of pageId: String, owner: String) {
+    var origin = draftOrigins[pageId].flatMap { $0.owner == owner ? $0 : nil } ?? DraftOrigin(owner: owner, keys: [])
+    if let last = origin.lastText, last.utf8.elementsEqual(startedFrom.utf8) { return }
+    origin.keys.append(ContentKey.of(startedFrom))
+    origin.lastText = startedFrom
+    draftOrigins[pageId] = origin
+  }
+
   /// Where a page's first draft starts: `startedFrom`, or what the page's last landed save sent when `startedFrom` is
   /// the page that save was made on, or a page the screen typed that save's draft onto (see `keepDraft`): the screen
   /// moves its `startedFrom` on only while the page has no draft, so a draft that lived through several saves still
-  /// carries the page it was created on. Runs inside a store section.
+  /// carries the page it was created on. A `startedFrom` that is the page as the save left it was typed after the
+  /// answer reached the screen: nothing to translate, even when it is also one of those pages (a server that wrote
+  /// the page back to an earlier version). Runs inside a store section.
   private func firstBase(of pageId: String, owner: String, startedFrom: String) -> String {
     guard let landed = landedSaves[pageId], landed.owner == owner else { return startedFrom }
+    if ContentKey.storedDocument(startedFrom).utf8.elementsEqual(landed.pageAfter.utf8) { return startedFrom }
     guard
       Self.document(startedFrom, hasKey: landed.base, keyOf: landed.baseDocument)
         || landed.origins.contains(ContentKey.of(startedFrom))
@@ -138,6 +153,7 @@ extension SyncEngine {
       var origin = draftOrigins[page.id].flatMap { $0.owner == copy.owner ? $0 : nil }
         ?? DraftOrigin(owner: copy.owner, keys: [])
       origin.keys.append(ContentKey.of(document))
+      origin.lastText = document
       draftOrigins[page.id] = origin
     }
     stopDraftWait(page.id)
@@ -314,6 +330,7 @@ extension SyncEngine {
     return draft.sent != nil || draftWaits[draft.pageId] == nil
   }
 
+  /// `retrying`: a try is planned. A draft is said to be tried again only when that try is for its own save.
   func draftStatuses(retrying: Bool) -> [DraftStatus] {
     accountDrafts.map { draft in
       let state: DraftStatus.State =
@@ -323,7 +340,7 @@ extension SyncEngine {
           switch standing(of: draft) {
           case .stuck(let reason): .stuck(reason)
           case .behind: .behind
-          case .free: offline ? .offline : retrying ? .retrying : .waiting
+          case .free: offline ? .offline : retrying && savesRetrying.contains(draft.pageId) ? .retrying : .waiting
           }
         }
       return DraftStatus(id: draft.pageId, state: state)
@@ -349,6 +366,7 @@ extension SyncEngine {
   private func forgetDraft(pageId: String, owner: String) {
     drafts.removeAll { $0.owner == owner && $0.pageId.utf8.elementsEqual(pageId.utf8) }
     if draftOrigins[pageId]?.owner == owner { draftOrigins[pageId] = nil }
+    savesRetrying.remove(pageId)
   }
 
   // MARK: The wait after a change
@@ -383,6 +401,7 @@ extension SyncEngine {
   func forgetDraftWork() {
     cutDraftWaitsShort()
     savesInFlight = []
+    savesRetrying = []
     refusedDrafts = [:]
     landedSaves = [:]
     draftOrigins = [:]
@@ -411,6 +430,8 @@ extension SyncEngine {
     case savedElsewhere
     /// "Page changed elsewhere": the page moved on since the draft started from it.
     case pageChanged
+    /// "This change was already applied": the save went in long ago and its receipt has expired.
+    case appliedLongAgo
   }
 
   /// What the saves of a pass came to.
@@ -427,8 +448,9 @@ extension SyncEngine {
   /// more: after "Saved elsewhere" with the page as it was, the same save goes once more on the new revision (a
   /// refused operation left no receipt, so its id is free); with the page changed, the draft is behind. A second
   /// such answer in the pass, or "Page changed elsewhere" over a page that has the draft's key after all, leaves
-  /// the save for the retry schedule. `loaded`: the pass already loaded after the server held an outbox entry, so
-  /// the copy is as new as this pass will make it.
+  /// the save for the retry schedule. An expired receipt ("This change was already applied") says that exact save
+  /// landed long ago: after the same one load, the draft is settled as for an answer. `loaded`: the pass already
+  /// loaded after the server held an outbox entry, so the copy is as new as this pass will make it.
   func saveDrafts(_ pass: Pass, loaded: Bool) async throws -> SavesDone {
     var done = SavesDone()
     var loaded = loaded
@@ -446,8 +468,9 @@ extension SyncEngine {
         try await hold(save, because: status == 400 ? "bad-request" : reason ?? "refused", status: status, pass)
         continue
       } catch {
-        // Kept as sent; the pass's failure plans the next try.
+        // Kept as sent; the pass's failure plans the next try. A pass dropped for another account plans none.
         savesInFlight.remove(save.pageId)
+        if !Task.isCancelled { savesRetrying.insert(save.pageId) }
         throw error
       }
       switch try await settle(outcome, of: save, pass) {
@@ -471,6 +494,7 @@ extension SyncEngine {
       case .savedElsewhere:
         guard !loaded, !sentAgain.contains(save.pageId) else {
           later.insert(save.pageId)
+          savesRetrying.insert(save.pageId)
           done.leftForRetry = true
           continue
         }
@@ -498,9 +522,23 @@ extension SyncEngine {
         if pageHasBase(of: save) {
           // The load shows the page it was built on after all: not behind, so tried again later, not in this pass.
           later.insert(save.pageId)
+          savesRetrying.insert(save.pageId)
           done.leftForRetry = true
         }
         publish()
+      case .appliedLongAgo:
+        if !loaded {
+          try await loadWorkspace(pass, have: copy?.workspace.revision)
+          loaded = true
+        }
+        try await enter(pass)
+        defer { release() }
+        guard copy?.owner == save.owner else { return done }
+        // The exact action landed: settled as an answer is, against the page the load brought.
+        try await settleDraft(save, removingOnlyOntoWhatWasSent: true)
+        await readOutbox()
+        publish()
+        done.landed = true
       }
     }
     return done
@@ -538,6 +576,7 @@ extension SyncEngine {
         try await keep(draft)
       }
       savesInFlight.insert(draft.pageId)
+      savesRetrying.remove(draft.pageId)
       publish()
       return DraftSave(
         pageId: draft.pageId, owner: copy.owner, operationId: sent.operationId, document: sent.document,
@@ -584,9 +623,13 @@ extension SyncEngine {
         publish()
         return .savedElsewhere
       }
-      // An expired receipt says the save went in long ago, not that the document is wrong: the page is not what
-      // the draft started from any more.
-      if message.hasPrefix(Self.pageChangedElsewhere) || message.hasPrefix(Self.alreadyApplied) {
+      // An expired receipt says the save went in long ago, not that the document is wrong.
+      if message.hasPrefix(Self.alreadyApplied) {
+        SyncLog.logger.notice("Save of a page: already applied, loading")
+        publish()
+        return .appliedLongAgo
+      }
+      if message.hasPrefix(Self.pageChangedElsewhere) {
         SyncLog.logger.notice("Save of a page: page changed elsewhere, loading")
         publish()
         return .pageChanged
@@ -620,11 +663,17 @@ extension SyncEngine {
   /// The draft after its save's answer is in the copy: removed when he typed nothing since; otherwise it starts from
   /// the server's page when that page is what was sent, and goes as the next save. When the server changed what it
   /// was sent, the draft starts from what was sent, which leaves it behind the server's page for the screen to
-  /// merge. Runs inside a store section.
-  private func settleDraft(_ save: DraftSave) async throws {
+  /// merge. `removingOnlyOntoWhatWasSent`: the answer says only that the save went in, not that the page is what it
+  /// left (an expired receipt), so a draft with nothing typed since is removed only over a page that is what was
+  /// sent. Runs inside a store section.
+  private func settleDraft(_ save: DraftSave, removingOnlyOntoWhatWasSent: Bool = false) async throws {
     guard var draft = recordedDraft(of: save), let sent = draft.sent, sent.operationId == save.operationId
     else { return }
-    if draft.document.utf8.elementsEqual(sent.document.utf8) {
+    let page = copy?.workspace.page(draft.pageId)?.document
+    let pageIsSent =
+      page.map { ContentKey.storedDocument($0).utf8.elementsEqual(ContentKey.storedDocument(sent.document).utf8) }
+      ?? false
+    if draft.document.utf8.elementsEqual(sent.document.utf8), !removingOnlyOntoWhatWasSent || pageIsSent {
       let origins = draftOrigins[draft.pageId].flatMap { $0.owner == draft.owner ? $0.keys : nil } ?? []
       try await store.removeDraft(pageId: draft.pageId, owner: draft.owner)
       forgetDraft(pageId: draft.pageId, owner: draft.owner)
@@ -636,8 +685,7 @@ extension SyncEngine {
     } else {
       // His newer words go on from this draft: no keystroke starts from an older landed save's page any more.
       landedSaves[draft.pageId] = nil
-      let page = copy?.workspace.page(draft.pageId)?.document
-      if let page, ContentKey.storedDocument(page).utf8.elementsEqual(ContentKey.storedDocument(sent.document).utf8) {
+      if let page, pageIsSent {
         draft.baseDocument = page
       } else {
         draft.baseDocument = sent.document
@@ -726,6 +774,8 @@ struct LandedSave: Sendable {
 struct DraftOrigin: Sendable {
   let owner: String
   var keys: [String]
+  /// The page last added, as text, so the same page given again is told without a hash.
+  var lastText: String?
 }
 
 /// The wait in progress after his last change to a page; `number` tells a wait that ended after it was replaced.

@@ -75,6 +75,9 @@ public actor SyncEngine {
   var draftWaitNumber = 0
   /// Pages whose save is on its way.
   var savesInFlight: Set<String> = []
+  /// Pages whose own save was turned away for now and waits for the next try (the server failed it, or it was left
+  /// for the retry schedule): only these are said to be tried again.
+  var savesRetrying: Set<String> = []
   /// Pages whose document the server refused, with its reason: not sent again until he acts. Kept in memory only, so
   /// such a draft is sent once more at the next launch; everything else that holds a draft is read from the store.
   var refusedDrafts: [String: String] = [:]
@@ -82,8 +85,8 @@ public actor SyncEngine {
   /// it was answered starts from what it sent (`keepDraft`). Kept in memory only: after a relaunch no keystroke is on
   /// its way.
   var landedSaves: [String: LandedSave] = [:]
-  /// By page, the content keys of the pages the screen typed the draft's words onto: the one it was created on, and
-  /// each merge it was handed. A keystroke on its way still carries one of them after the draft's last save (see
+  /// By page, the content keys of the pages the screen typed the draft's words onto: the one each keep names, and each
+  /// merge it was handed. A keystroke on its way still carries one of them after the draft's last save (see
   /// `landedSaves`). Kept in memory only, beside the draft, and dropped with it.
   var draftOrigins: [String: DraftOrigin] = [:]
   /// The calls about a page's words (`keepDraft`, `rebaseDraft`, `discardDraft`) that changed what is drawn, in this
@@ -560,10 +563,12 @@ public actor SyncEngine {
       }
     case .full(let workspace, let owner):
       try await store.replace(with: workspace, owner: owner)
-      // What one account's saves sent says nothing about another's pages, which have the same ids.
+      // What one account's saves sent, and what the server refused of them, says nothing about another's pages,
+      // which have the same ids.
       if copy?.owner != owner {
         landedSaves = [:]
         draftOrigins = [:]
+        refusedDrafts = [:]
       }
       copy = (workspace, owner)
       forgetOverwrittenSaves()
@@ -630,6 +635,7 @@ public actor SyncEngine {
     retry?.cancel()
     retry = nil
     failedPasses = 0
+    savesRetrying = []
   }
 
   private func listenForTheNetwork() {

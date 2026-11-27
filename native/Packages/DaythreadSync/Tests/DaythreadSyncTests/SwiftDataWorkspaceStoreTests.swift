@@ -184,6 +184,23 @@ import Testing
     try await store.corruptAPage()
     await #expect(throws: StoreError.unreadable) { try await store.load() }
   }
+
+  @Test func a_draft_row_that_cannot_be_read_leaves_the_others_read() async throws {
+    let store = try SwiftDataWorkspaceStore.open(at: nil)
+    let time = Date(timeIntervalSince1970: 1_798_194_615)
+    let good = PageDraft(
+      pageId: "p1", owner: "user-1", base: "k", baseDocument: "[]", document: "[1]", singleDeleteIds: ["a"],
+      sent: nil, changedAt: time)
+    try await store.put(good)
+    try await store.put(
+      PageDraft(
+        pageId: "p2", owner: "user-1", base: "k", baseDocument: "[]", document: "[2]", singleDeleteIds: [],
+        sent: nil, changedAt: time.addingTimeInterval(1)))
+    try await store.corruptTheRowsRemoved(ofDraft: "p2")
+
+    #expect(try await store.drafts() == [good])
+    #expect(try await store.drafts() == [good], "read the same way again")
+  }
 }
 
 extension SwiftDataWorkspaceStore {
@@ -193,6 +210,14 @@ extension SwiftDataWorkspaceStore {
     descriptor.fetchLimit = 1
     let row = try required(try modelContext.fetch(descriptor).first)
     row.json = "{not json"
+    try modelContext.save()
+  }
+
+  /// Replaces the stored ids of the rows a page's draft removed with text that is not JSON.
+  fileprivate func corruptTheRowsRemoved(ofDraft pageId: String) throws {
+    let rows = try modelContext.fetch(FetchDescriptor<DraftRow>(predicate: #Predicate { $0.pageId == pageId }))
+    let row = try required(rows.first)
+    row.singleDeleteIdsJSON = "{not json"
     try modelContext.save()
   }
 }

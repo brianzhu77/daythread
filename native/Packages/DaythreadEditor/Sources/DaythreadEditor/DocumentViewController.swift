@@ -173,7 +173,7 @@
       // rows are measured again in the layout after the cells take the new size, so the caret is looked for then.
       registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
         // The run loop's next turn, as a line's deferred paste (`LineTextView.replaceSoon`).
-        self.perform(#selector(self.revealCaretAfterTextSizeChange), with: nil, afterDelay: 0)
+        self.perform(#selector(self.revealCaretAfterTextSizeChange), with: nil, afterDelay: 0, inModes: [.common])
       }
     }
 
@@ -759,7 +759,7 @@
       guard redrawAfterResign != nil else { return }
       guard !line.isBeingReleased else {
         // The run loop's next turn, as a line's deferred paste (`LineTextView.replaceSoon`).
-        perform(#selector(drawAfterResign), with: nil, afterDelay: 0)
+        perform(#selector(drawAfterResign), with: nil, afterDelay: 0, inModes: [.common])
         return
       }
       drawAfterResign()
