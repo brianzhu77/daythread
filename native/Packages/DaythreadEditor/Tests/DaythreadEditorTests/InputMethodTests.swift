@@ -508,6 +508,94 @@
         #expect(reports == 0)
       }
 
+      // MARK: The resign path
+
+      private var withHisRow: [Block] {
+        [block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two"), block("c", "paragraph", text: "three")]
+      }
+
+      /// The server changed the words of the row he composes in, so the merge puts his words in a row of their own.
+      private var serverChangedHisRow: String {
+        Document.write([
+          block("a", "paragraph", text: "one"), block("b", "paragraph", text: "TWO"), block("c", "paragraph", text: "three"),
+        ])
+      }
+
+      /// A cell given to another row while its line composes over a held change: the commit goes as the keyboard goes,
+      /// so nothing takes the keyboard back for his words, and the merged page is drawn once the line has let it go.
+      @Test func a_composing_cell_with_a_held_change_given_to_another_row_takes_no_keyboard() throws {
+        let screen = try Screen.editing(withHisRow)
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let cell = try #require(try screen.cell(1) as? TextBlockCell)
+        let line = try screen.focus(1)
+        compose("今天", in: line)
+        screen.controller.replace(document: serverChangedHisRow, in: try makeWorkspace())
+
+        rebind(cell, to: "a", showing: "one")
+        _ = screen.wait(0.3) { false }
+
+        #expect(!screen.holdsKeyboard, "a line took the keyboard inside the cell's reuse")
+        #expect(try screen.words() == ["one", "TWO", "two今天", "three"])
+        #expect(screen.controller.itemCount == 4)
+        #expect(reports == 1)
+        #expect(!screen.controller.isComposing)
+      }
+
+      /// A resign the line refuses ends the composition, and the line keeps the keyboard: the caret follows his words,
+      /// as it does for a line that keeps the keyboard.
+      @Test func a_resign_the_line_refuses_keeps_the_keyboard_and_the_caret_follows_his_words() throws {
+        let screen = try Screen.editing(withHisRow)
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        let line = try screen.focus(1)
+        let refusing = RefusesOneResign(try #require(line.delegate as? LineTextViewDelegate))
+        line.delegate = refusing
+        compose("今天", in: line)
+        screen.controller.replace(document: serverChangedHisRow, in: try makeWorkspace())
+
+        #expect(line.resignFirstResponder() == false)
+        _ = screen.list
+
+        #expect(try screen.words() == ["one", "TWO", "two今天", "three"])
+        let his = try screen.line(2)
+        #expect(his.isFirstResponder, "the caret stayed in the server's line")
+        #expect(his.selectedRange == NSRange(location: 5, length: 0))
+        #expect(reports == 1)
+        #expect(!screen.controller.isComposing)
+      }
+
+      /// A change from outside that arrives while the line's resign is under way, before the merge it committed is
+      /// drawn: the page is drawn once, after the resign, with the newer workspace.
+      @Test func a_change_from_outside_during_a_resign_is_drawn_after_it_and_not_undone() throws {
+        let blocks = withHisRow + [block("t", "task", ["taskId": .string("k")], text: "Call")]
+        let screen = try Screen.editing(blocks, tasks: [taskJSON("k", status: "open")])
+        let done = try makeWorkspace(tasks: [taskJSON("k", status: "done")])
+        let line = try screen.focus(1)
+        compose("今天", in: line)
+        screen.controller.replace(
+          document: Document.write(
+            [block("a", "paragraph", text: "one"), block("b", "paragraph", text: "TWO"), block("c", "paragraph", text: "three")]
+              + [block("t", "task", ["taskId": .string("k")], text: "Call")]),
+          in: try makeWorkspace(tasks: [taskJSON("k", status: "open")]))
+        // The host answers his words with the page as it now has it, in which the to-do was ticked.
+        var answered = false
+        screen.controller.onChange = { document, _ in
+          guard !answered else { return }
+          answered = true
+          screen.controller.replace(document: document, in: done)
+        }
+
+        line.resignFirstResponder()
+        _ = screen.wait(0.3) { false }
+
+        #expect(answered)
+        #expect(try screen.words() == ["one", "TWO", "two今天", "three", "Call"])
+        let todo = try #require(try screen.cell(4) as? TodoBlockCell)
+        #expect(todo.symbolName == "checkmark.circle.fill", "the older workspace was drawn back")
+        #expect(!screen.holdsKeyboard)
+      }
+
       /// What the list does to a cell it gives to another row.
       private func rebind(_ cell: TextBlockCell, to row: String, showing words: String) {
         cell.configure(
@@ -515,6 +603,44 @@
           delegate: cell.line.delegate as? LineTextViewDelegate)
         cell.layoutIfNeeded()
       }
+    }
+  }
+
+  /// The screen's delegate of a line, which refuses the line's first resign (as a delegate may, through
+  /// `textViewShouldEndEditing`) and passes everything else on.
+  @MainActor
+  private final class RefusesOneResign: NSObject, LineTextViewDelegate {
+    private let screen: LineTextViewDelegate
+    private var refusals = 1
+
+    init(_ screen: LineTextViewDelegate) {
+      self.screen = screen
+    }
+
+    func textViewShouldEndEditing(_ textView: UITextView) -> Bool {
+      guard refusals > 0 else { return true }
+      refusals -= 1
+      return false
+    }
+
+    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+      screen.textView?(textView, shouldChangeTextIn: range, replacementText: text) ?? true
+    }
+
+    func textViewDidChange(_ textView: UITextView) { screen.textViewDidChange?(textView) }
+    func textViewDidBeginEditing(_ textView: UITextView) { screen.textViewDidBeginEditing?(textView) }
+    func textViewDidChangeSelection(_ textView: UITextView) { screen.textViewDidChangeSelection?(textView) }
+    func textViewDidEndEditing(_ textView: UITextView) { screen.textViewDidEndEditing?(textView) }
+    func lineTextView(_ line: LineTextView, didPress key: EditablePage.Key) -> Bool {
+      screen.lineTextView(line, didPress: key)
+    }
+    func lineTextViewMarkedTextDidChange(_ line: LineTextView) { screen.lineTextViewMarkedTextDidChange(line) }
+    func lineTextViewDidGiveUpKeyboard(_ line: LineTextView) { screen.lineTextViewDidGiveUpKeyboard(line) }
+    func lineTextView(_ line: LineTextView, canMoveCaret direction: LineTextView.Direction) -> Bool {
+      screen.lineTextView(line, canMoveCaret: direction)
+    }
+    func lineTextView(_ line: LineTextView, moveCaret direction: LineTextView.Direction, near point: CGPoint) {
+      screen.lineTextView(line, moveCaret: direction, near: point)
     }
   }
 #endif
