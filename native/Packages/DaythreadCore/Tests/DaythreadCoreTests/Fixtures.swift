@@ -167,3 +167,63 @@ extension Fixtures {
     try #require(try json(path).arrayValue).compactMap(\.objectValue)
   }
 }
+
+/// A shared case of `actions/`: one row command and what the server answered, or refused.
+struct ActionCase {
+  var name: String
+  var before: Workspace
+  /// The web's `RowIntent`; nil for Undo.
+  var intent: JSONObject?
+  var taskId: String?
+  var day: String?
+  var today: String
+  var action: JSONValue
+  var receipt: JSONValue?
+  var after: Workspace?
+  var plannedAfter: String?
+  var notice: String
+  var refused: String?
+}
+
+extension Fixtures {
+  static func actionNames() throws -> [String] {
+    try FileManager.default.contentsOfDirectory(atPath: core.appending(path: "actions").path)
+      .filter { $0.hasSuffix(".json") }
+      .map { String($0.dropLast(".json".count)) }
+      .sorted()
+  }
+
+  static func actionCase(_ name: String) throws -> ActionCase {
+    let object = try #require(try json("actions/\(name).json").objectValue)
+    return ActionCase(
+      name: name,
+      before: try #require(object["before"].flatMap(Workspace.init), "before: \(name)"),
+      intent: object["intent"]?.objectValue,
+      taskId: object["taskId"]?.stringValue,
+      day: object["day"]?.stringValue,
+      today: try #require(object["today"]?.stringValue, "today: \(name)"),
+      action: try #require(object["action"], "action: \(name)"),
+      receipt: object["receipt"],
+      after: object["after"].flatMap(Workspace.init),
+      plannedAfter: object["plannedAfter"]?.stringValue,
+      notice: try #require(object["notice"]?.stringValue, "notice: \(name)"),
+      refused: object["refused"]?.stringValue)
+  }
+}
+
+extension RowAction {
+  /// The action a shared case's web intent stands for; `button` is the reference row's own `Plan for today`.
+  init?(intent: JSONObject?, button: Bool = false) {
+    switch intent?["kind"]?.stringValue {
+    case "move":
+      guard let date = intent?["date"]?.stringValue.flatMap(LocalDate.init) else { return nil }
+      self = .move(date)
+    case "pick-date": self = .pickDate
+    case "bring-today": self = button ? .planForTodayButton : .bringToToday
+    case "not-today": self = .notToday
+    case "cancel": self = .cancel
+    case "restore": self = .restore
+    default: return nil
+    }
+  }
+}

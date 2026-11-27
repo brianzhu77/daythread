@@ -45,6 +45,27 @@ import Testing
     #expect(Command.taskId(of: .null) == nil)
   }
 
+  @Test func pick_date_is_never_a_command() throws {
+    let today = try #require(LocalDate("2026-11-26"))
+    #expect(Command.forRow(.pickDate, taskId: "t", pageDate: today, today: today) == nil)
+  }
+
+  @Test func the_row_commands_are_written_in_the_webs_key_order() throws {
+    let today = try #require(LocalDate("2026-11-26"))
+    let friday = try #require(LocalDate("2026-11-27"))
+    #expect(
+      written(Command.planTask(taskId: "t", date: friday, from: today, today: today))
+        == #"{"type":"plan-task","taskId":"t","date":"2026-11-27","from":"2026-11-26","today":"2026-11-26"}"#)
+    #expect(
+      written(Command.planTask(taskId: "t", date: today, from: nil, today: today))
+        == #"{"type":"plan-task","taskId":"t","date":"2026-11-26","today":"2026-11-26"}"#)
+    #expect(
+      written(Command.notToday(taskId: "t", date: friday))
+        == #"{"type":"not-today","taskId":"t","date":"2026-11-27","onlyThisDay":true}"#)
+    #expect(
+      written(Command.undo(targetOperationId: "cmd-1")) == #"{"type":"undo","targetOperationId":"cmd-1"}"#)
+  }
+
   @Test func the_type_is_read_from_any_action() throws {
     #expect(Command.type(of: Command.restoreBatch(trashId: "b1")) == "restore-batch")
     #expect(Command.type(of: try json(#"{"type":"something-new"}"#)) == "something-new")
