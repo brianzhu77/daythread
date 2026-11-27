@@ -691,8 +691,9 @@ In this order, separated by ` · `, each only when it applies, and only on an **
 - **A done row** shows none of these (the web drops them the moment it is ticked), a cancelled row only
   `Cancelled`; except `Reference`, which the web keeps on a reference row whatever its status. A to-do typed and not saved yet has no dates, repeat or blocker, so it shows none.
 - **A reference row of an open to-do** has the web's quiet `Plan for today` button at its trailing end (a plain
-  button, caption size, the secondary colour), not shown when the to-do is already planned today. It is the only
-  control a row gains, and it is on the web's phone row too.
+  button, caption size, the secondary colour), on every such row as on the web (also when the to-do is already
+  planned today; only the swipe leaves the action out then, as the web's phone bar does). It is the only control
+  a row gains, and it is on the web's phone row too.
 - A paused to-do has no look of its own on a day page, as on the web (its plan row is gone).
 - The marks are read from the workspace as drawn (with drafts and queued ticks), so they follow what he sees.
   They move with the app's today at midnight.

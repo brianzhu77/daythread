@@ -77,6 +77,11 @@ and offers Undo by §11.5's rule. Nothing is drawn ahead: a row action is sent a
   - Task 6's Step 1 is done; its builder starts at Step 2, and first checks one thing the spike saw and did not
     pin down: whether a tap in the middle of a line's words puts the caret where it was tapped (see the spike
     result).
+- **The reference row's `Plan for today` button follows the web** (decided after Task 1's review): it is on every
+  open reference row, also when the to-do is already planned today, as the shared case `rows/marks.json` "a
+  reference row planned today" has it (`planForToday: 'active'`). Only the swipe's and the menu's `Plan for today`
+  are left out when the to-do is planned today (`rowMenu`). Where a task below says the button is "not shown when
+  planned today", the shared case wins. The design's §11.2 says the same now.
 - A correction found while building is written here with its reason before the code that follows it.
 
 ## Review Focus
