@@ -98,11 +98,11 @@
     }
 
     /// The line is about to speak for another row, or for none: whatever it holds is read into the row it belongs to
-    /// first (marked text is committed), nothing deferred is applied to it later, and it gives up the keyboard.
+    /// first (its resign commits marked text, as the keyboard goes, so nothing takes the keyboard back for it), nothing
+    /// deferred is applied to it later, and it gives up the keyboard.
     final func releaseLine() {
       line.cancelPendingReplacement()
       guard line.isFirstResponder else { return }
-      if line.markedTextRange != nil { line.unmarkText() }
       line.resignFirstResponder()
     }
 

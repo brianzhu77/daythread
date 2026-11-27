@@ -82,8 +82,17 @@
     }
     /// Set while `finishEditing` commits: the page is about to be left, so nothing of it is drawn or given the keyboard.
     private var leavingPage = false
-    /// What a commit during a line's resign left to draw, once the line no longer has the keyboard.
-    private var redrawAfterResign: Workspace?
+    /// What a commit during a line's resign left to draw, once the line no longer has the keyboard; and, should the
+    /// resign be refused, where the caret follows his words.
+    private struct AfterResign {
+      var workspace: Workspace
+      /// The row he composed in.
+      let row: String
+      /// After what he committed, in the row that holds it; nil when he committed nothing or no row holds it.
+      let caret: EditablePage.Caret?
+    }
+
+    private var redrawAfterResign: AfterResign?
     /// While set, a change is not reported but noted (`holdingReports`).
     private var reportsHeld = false
     private var reportWasHeld = false
@@ -215,6 +224,13 @@
     /// composition ends, when his composed words and this page are merged (`commitHeld`).
     public func replace(document: String, in workspace: Workspace) {
       guard let editedPage, let pageID = shownPageID else { return }
+      // A line's resign is under way and its merge is drawn once the line has let the keyboard go: drawn now, this
+      // page would be drawn over by that draw's older workspace. It is that draw's page and workspace instead.
+      if redrawAfterResign != nil {
+        self.editedPage = replacing(editedPage, with: document)
+        redrawAfterResign?.workspace = workspace
+        return
+      }
       if isComposing {
         heldReplace = (heldReplace?.base ?? editedPage.document, document, workspace)
       }
@@ -437,6 +453,10 @@
 
     func lineTextViewDidGiveUpKeyboard(_ line: LineTextView) {
       screen?.lineDidGiveUpKeyboard(line)
+    }
+
+    func lineTextViewKeptKeyboard(_ line: LineTextView) {
+      screen?.lineKeptKeyboard(line)
     }
 
     func textViewDidBeginEditing(_ textView: UITextView) {
@@ -683,26 +703,33 @@
       // The page shown meanwhile carries the rows he removed; the merged one goes on naming them.
       editedPage = editedPage.map { replacing($0, with: merged) } ?? EditablePage(document: merged, pageDate: pageDate)
       defer { if committed != nil { report() } }
-      guard let pageID = shownPageID, !leavingPage else { return }
-      if line.isGivingUpKeyboard {
-        redrawAfterResign = held.workspace
-        return
-      }
+      guard shownPageID != nil, !leavingPage else { return }
       let caret = committed.flatMap { committed in
         rowHolding(wordsOf: id, in: mine, theirs: held.document).map {
           EditablePage.Caret(block: $0, offset: committed.offset)
         }
       }
+      if line.isGivingUpKeyboard {
+        redrawAfterResign = AfterResign(workspace: held.workspace, row: id, caret: caret)
+        return
+      }
+      drawMerge(from: line, composedIn: id, caret: caret, in: held.workspace)
+    }
+
+    /// Draws the page after a merge his composition in `id` ended with, the caret following his words to `caret`
+    /// while `line` keeps the keyboard.
+    private func drawMerge(from line: LineTextView, composedIn id: String, caret: EditablePage.Caret?, in workspace: Workspace) {
+      guard let pageID = shownPageID else { return }
       if line.isFirstResponder, let caret, caret.block != id {
-        restructure(from: line, caret: caret, selectionLength: 0, pageID: pageID, workspace: held.workspace)
+        restructure(from: line, caret: caret, selectionLength: 0, pageID: pageID, workspace: workspace)
         return
       }
       // No row holds his words for the caret to go to, and his row leaves the list: the keyboard is given up first,
       // so it is not taken away with the row.
-      if line.isFirstResponder, !rowsOfThePage(in: held.workspace).contains(id) {
+      if line.isFirstResponder, !rowsOfThePage(in: workspace).contains(id) {
         line.resignFirstResponder()
       }
-      redraw(pageID: pageID, pageDate: pageDate, in: held.workspace)
+      redraw(pageID: pageID, pageDate: pageDate, in: workspace)
     }
 
     /// The ids of the rows the page being edited is drawn with.
@@ -712,9 +739,17 @@
 
     /// A line's resign is over: what a commit during it left to draw is drawn now that no line holds the keyboard.
     fileprivate func lineDidGiveUpKeyboard(_ line: LineTextView) {
-      guard let workspace = redrawAfterResign, let pageID = shownPageID else { return }
+      guard let pending = redrawAfterResign, let pageID = shownPageID else { return }
       redrawAfterResign = nil
-      redraw(pageID: pageID, pageDate: pageDate, in: workspace)
+      redraw(pageID: pageID, pageDate: pageDate, in: pending.workspace)
+    }
+
+    /// A line's resign was refused: it still has the keyboard, so what a commit during the resign left to draw is
+    /// drawn as for a line that keeps it, the caret following his words.
+    fileprivate func lineKeptKeyboard(_ line: LineTextView) {
+      guard let pending = redrawAfterResign else { return }
+      redrawAfterResign = nil
+      drawMerge(from: line, composedIn: pending.row, caret: pending.caret, in: pending.workspace)
     }
 
     /// The row of the page that holds `id`'s words as he has them in `mine`: `id` itself when it still does,

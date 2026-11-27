@@ -636,6 +636,7 @@
     }
     func lineTextViewMarkedTextDidChange(_ line: LineTextView) { screen.lineTextViewMarkedTextDidChange(line) }
     func lineTextViewDidGiveUpKeyboard(_ line: LineTextView) { screen.lineTextViewDidGiveUpKeyboard(line) }
+    func lineTextViewKeptKeyboard(_ line: LineTextView) { screen.lineTextViewKeptKeyboard(line) }
     func lineTextView(_ line: LineTextView, canMoveCaret direction: LineTextView.Direction) -> Bool {
       screen.lineTextView(line, canMoveCaret: direction)
     }

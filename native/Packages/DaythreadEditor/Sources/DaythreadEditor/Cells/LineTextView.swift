@@ -12,6 +12,8 @@
     func lineTextViewMarkedTextDidChange(_ line: LineTextView)
     /// The line has given the keyboard up: its resign is over.
     func lineTextViewDidGiveUpKeyboard(_ line: LineTextView)
+    /// The line's resign was refused: it keeps the keyboard, though its resign may have ended a composition.
+    func lineTextViewKeptKeyboard(_ line: LineTextView)
     /// Whether some row in that direction takes a caret.
     func lineTextView(_ line: LineTextView, canMoveCaret direction: LineTextView.Direction) -> Bool
     /// The caret goes to the next row in that direction that takes one, as near to `point` (in the line's
@@ -252,7 +254,11 @@
       if markedTextRange != nil { unmarkText() }
       let resigned = super.resignFirstResponder()
       isGivingUpKeyboard = false
-      lineDelegate?.lineTextViewDidGiveUpKeyboard(self)
+      if resigned {
+        lineDelegate?.lineTextViewDidGiveUpKeyboard(self)
+      } else {
+        lineDelegate?.lineTextViewKeptKeyboard(self)
+      }
       return resigned
     }
 
