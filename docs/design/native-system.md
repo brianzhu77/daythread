@@ -65,6 +65,7 @@
 | 1 later change waiting (N later changes waiting) | The held menu's last line, disabled, while changes wait behind a held one; the web's words |
 | Round trip · N of M pages fail | The More menu, Debug builds only, when any page's document does not write back |
 | Untitled | A page reference whose page has no title |
+| Undo | The notice's only button (a plain system button, footnote text), and the notice's accessibility action of the same name. The notice's other words are composed by the app from `native-phase-1.md` §11.5's table and are added here by the task that first shows them |
 | Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
 | Today, Tasks, Calendar, Pages | The tab bar's tabs, the web's places in its order: the system's tab bar with its default appearance (the floating glass capsule on iOS 26). Symbols: `<day of month>.calendar` for Today (the account's today, `26.calendar` on the 26th; it changes at the account's midnight), `checkmark.square`, `calendar`, `doc.text` |
@@ -88,6 +89,23 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
   disabled grey, since a cancelled to-do's `xmark.circle` is its status, not a control turned off.
 - **Separator:** one hairline in the system's separator colour.
 - **Placeholder:** a `rectangle.dashed` symbol and the block's name in secondary colour.
+
+The notice (`NoticeView`, in `native/Packages/DaythreadUI`; `native-app.md` §9 rule 3), the one line of words that
+says what a row action did:
+
+- **Look:** a floating surface of the system's glass (`UIGlassEffect`, the material iOS 26 gives a surface that floats
+  over content) with the system's capsule corners, capped at 560 points and centred, with a 16-point gutter on a phone.
+  The words are footnote text in the label colour, they wrap at any text size (the button goes under them from the
+  accessibility sizes), and `Undo` is a plain system button at least 44 points high. No colour, font, shadow or
+  radius of its own.
+- **Place:** at the top, one system spacing under the safe area's top (so under the navigation bar, never over its
+  items), above the page. Only its surface takes touches; the rest of the screen is the page's. It never becomes first
+  responder, so the keyboard and the caret stay as they were.
+- **Time:** one at a time, a new one replaces the one showing. It leaves after 8 seconds, `Undone` after 4, a failure
+  after 6, or when swiped up (also VoiceOver's escape gesture). A tap on the words does nothing.
+- **VoiceOver:** the words are announced when shown; while the notice has `Undo` it does not leave on a timer, and
+  once `Undo` is spent or withdrawn its time runs from then. The notice is one accessibility element whose custom
+  action is `Undo`. A button that is withdrawn, or used once, never comes back.
 
 ## Not decided yet
 
