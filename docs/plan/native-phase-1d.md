@@ -25,7 +25,15 @@ The web's behaviour, with exact strings, is in `.superpowers/sdd/native-phase-1/
 app has today in `.superpowers/sdd/native-phase-1/native-facts-1d.md`. Where either disagrees with the code, the code
 wins.
 
-**Status (2026-11-27):** Planned; no task built.
+**Status (2026-11-27):** Tasks 1 to 8 built; the strip seen on the simulator against its own seeded server (3743),
+with the screenshots in `tests/evidence/native-phase-1d/`. Task 9 (on his data) is his, to come. Found on the
+simulator in Task 8 and fixed: each `Not today` row's menu was an 18-by-5-point target, and a tap that missed it by
+12 points brought the to-do back (`Bring back` beside it took the touch); it is now 44 by 44. Seen and left for the
+final round: while a strip action is out, a page row's swipe and its circle's menu still open, and a choice made in
+them is dropped without a word (a row's own action hides them while it is out). Task 8's seed puts the two events
+under the day template's own `Events` heading, not a second heading after the template's blocks (the template
+already has one, and the events line scrolls to the first), and adds a to-do due the day before yesterday, on
+today's page, so yesterday has a `Due soon`.
 
 ## Questions the plan raised, answered (2026-11-27)
 

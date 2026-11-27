@@ -48,8 +48,9 @@ native/scripts/ui-test.sh -only-testing:DaythreadUITests/TickUITests/test_a_tap_
 native/scripts/ui-test.sh --serve                                               # the seeded servers only, until Ctrl-C
 ```
 
-The wrapper starts two throwaway servers from this checkout, each on SQLite in a directory under the system temp
-directory: 3741 with sign-in off, seeded with today's page and its to-dos, and 3742 with sign-in on. "Water the
+The wrapper starts three throwaway servers from this checkout, each on SQLite in a directory under the system temp
+directory: 3741 with sign-in off, seeded with today's page and its to-dos, 3742 with sign-in on, and 3743 with
+sign-in off, seeded for the strip above the page (below). "Water the
 plants" is only read by the tests; each test that ticks has a to-do of its own ("Tick me offline", "Tick me twice";
 "Tick me" is left for looking by hand), since the seed is shared by every test and never reset. For the to-do row
 (slice 1c) it adds, planned on today's page, rows with each kind of mark ("Pay the rent" due tomorrow, "File the
@@ -59,10 +60,27 @@ today's draft, so it reads `Since`) and one to-do for each test that acts on a r
 "Cancel me", "Undo me", "Pick a day for me", and "Show the notice", added first so its row is on the screen with the
 page at its top). The row tests (`UITests/RowUITests.swift`) keep their screenshots as
 attachments in the test results (`-resultBundlePath`, then `xcrun xcresulttool export attachments`); the ones in
-`tests/evidence/native-phase-1c/` came from there. It passes the
+`tests/evidence/native-phase-1c/` came from there.
+
+The strip above the page (slice 1d.1, `UITests/MorningUITests.swift`) has a server of its own, 3743, so the rows the
+tests of 3741 reach do not move down by the strip's height. Its seed, a second script run from the repository root
+(it imports the web's `pageContentKey` to save a page), uses the server's own commands and saves: today's page with
+two events under its template's `Events` heading and sixteen lines of notes (so the heading can reach the top of the
+screen), yesterday's page with an all-day event of today's (the events line reads `Lunch with Kathy · 10:30 AM
+Standup with Lu`, `+1 more`); on yesterday's page "Pay the gas bill" due today, "Start the essay" started today and
+"Call the insurance company about the claim from last spring" due today (its tag goes under its words); on today's
+page "Return the library books", due the day before yesterday, which is yesterday's `Due soon`; and three to-dos set
+aside, one for each test that acts ("Fix the bike", "Bring me back later", "Plan me for later": `Not today · 3`). A
+test that acts sets its to-do aside again when it ends, through the server's commands, so every test meets
+`Not today · 3`; `test_twenty_due_soon_rows` adds seventeen to-dos due today, on a day page three days back that no other test
+looks at, and cancels them when it ends. Their
+screenshots are in `tests/evidence/native-phase-1d/`. The landscape test is skipped when the simulator does not turn
+the app.
+
+The wrapper passes the
 addresses and the seeded day to the UI tests (`TEST_RUNNER_DAYTHREAD_SERVER_URL`,
-`TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_TODAY`), runs
-`xcodebuild test`, and on exit stops both servers, removes their directories and removes the stores the tests made in
+`TEST_RUNNER_DAYTHREAD_SIGN_IN_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_MORNING_SERVER_URL`, `TEST_RUNNER_DAYTHREAD_TODAY`),
+runs `xcodebuild test`, and on exit stops the servers, removes their directories and removes the stores the tests made in
 the app's container. Run any other way, the UI tests skip. The app hosting the unit tests is pointed at `127.0.0.1:9`,
 where nothing listens. A full run takes a few minutes; `-only-testing:` runs one class or one test.
 
@@ -102,14 +120,18 @@ the strip's facts show, since the day screen reads them for each state it draws.
 today's facts read from it. A median is the middle of five runs; read the runs beside it, since a run that overlaps
 other work on the machine (another build, a simulator in use) reads high. The measurement must be run alone: check
 `pgrep -fl xcodebuild` first, and discard and repeat a run that overlapped another. The medians measured are written at
-the end of `docs/plan/native-phase-1d.md` ("Cost, measured"). A wait for the engine's state that fails says what the
+the end of `docs/plan/native-phase-1d.md` ("Cost, measured"); in short, on an M4 Mac: the index of 3,000 to-dos on 300
+pages about 55 ms a state (the rows read it before the strip existed), today's facts from it about 3.4 ms, the strip
+about 14 ms a state on the 300-line page in all, and a keystroke 9.3 ms (300 lines) and 3.3 ms (10 lines) against
+limits of 10.56 and 4.01, unchanged by the strip. A wait for the engine's state that fails says what the
 model held when it gave up and, after a further two minutes, whether the state came late or not at all.
 
 Leave it off in CI and on other machines: their times differ, and a budget from this Mac would only be noise there.
 
-`--serve` seeds the same two servers and keeps them until Ctrl-C, for looking at the app by hand: launch it with
+`--serve` seeds the same three servers and keeps them until Ctrl-C, for looking at the app by hand: launch it with
 `xcrun simctl launch <simulator> app.daythread.Daythread -DaythreadServerURL http://127.0.0.1:3741
--DaythreadStoreName test-<anything>` (a `test-` store is removed when the wrapper stops). Screenshots:
+-DaythreadStoreName test-<anything>` (3743 for the strip above the page; a `test-` store is removed when the wrapper
+stops). Screenshots:
 `xcrun simctl io <simulator> screenshot <file>.png`.
 
 The UI tests are not run in CI: they need the simulator and the local servers. Run them before merging a change to
