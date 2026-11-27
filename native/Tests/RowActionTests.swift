@@ -908,6 +908,36 @@ private struct RowScreen {
     day.close()
   }
 
+  @Test func undo_tapped_while_he_composes_sends_nothing_and_keeps_his_words() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    _ = try await moveWithUndo(h, day)
+    try await soon { day.words == ["Morning", "Read the lease", "Walk"] }
+    let composed = [line("a", "Morning"), row("r2", "t2", "Read the lease"), line("b", "Walk今")]
+    await h.server.add([savedAs(try changes(from: 2, to: 3, pages: [page(today, composed)]))])
+
+    // He is composing in a line when he taps Undo: what he composed is committed first, and the server would refuse
+    // an Undo once his words have taken its slot, so none is sent.
+    let walk = try day.line("Walk")
+    #expect(walk.becomeFirstResponder())
+    walk.selectedRange = NSRange(location: 4, length: 0)
+    walk.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
+    try day.undo()
+    try await turns()
+
+    #expect(!(await h.server.sent.contains { type(of: $0) == "undo" }), "no undo sent")
+    #expect(day.notice == Notice(text: "Moved to Fri, Nov 27", kind: .done, undoing: nil), "Undo is withdrawn")
+    #expect(day.words == ["Morning", "Read the lease", "Walk今"])
+    #expect(walk.markedTextRange == nil)
+    // His words are saved by the usual path.
+    await h.model.saveNow().value
+    try await eventually {
+      await words(of: h.server.sent.last { type(of: $0) == "save-editor" }?.objectValue?["document"]?.stringValue)
+        == ["Morning", "Read the lease", "Walk今"]
+    }
+    day.close()
+  }
+
   @Test func a_to_do_typed_and_acted_on_in_the_same_turn_is_saved_then_acted_on() async throws {
     let h = try await harness(
       pages: [page(today, [line("a", "Morning"), row("r1", "editor-task:r1", "")])], tasks: [])
