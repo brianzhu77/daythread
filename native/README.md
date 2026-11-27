@@ -68,6 +68,8 @@ where nothing listens. A full run takes a few minutes; `-only-testing:` runs one
 
 The UI tests read the server the way any client does (`GET /api/v1/workspace` on 3741, where sign-in is off). Offline
 is a launch with `-DaythreadServerURL http://127.0.0.1:9` and the same `-DaythreadStoreName` as the launch before it.
+The landscape row test (`RowUITests`) is skipped when the simulator does not turn the app; the editor's unit test
+`plan_for_today_ends_at_the_rows_trailing_margin` holds the same margin.
 
 The writing tests (`UITests/WritingUITests.swift`) type into today's page and read the page back from the server:
 each types words of its own, at the end of the page under Notes or in the template's empty to-do, since the seed is

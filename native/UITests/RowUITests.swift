@@ -51,15 +51,24 @@ final class RowUITests: XCTestCase {
   @MainActor
   func test_plan_for_today_keeps_to_the_rows_margin_in_landscape() throws {
     let app = try open()
+    let other = app.line("Renew the passport")
+    XCTAssertTrue(other.waitForExistence(timeout: 10))
+    // The window reports its upright frame in landscape too, and the margins match upright as well, so the turn is
+    // seen as the other rows' words leaving the margin they have upright.
+    let upright = other.frame.maxX
     XCUIDevice.shared.orientation = .landscapeLeft
+    let turned = XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in abs(other.frame.maxX - upright) > 1 }, object: nil)
+    if XCTWaiter.wait(for: [turned], timeout: 15) != .completed {
+      throw XCTSkip(
+        "the simulator did not turn the app to landscape (the other row's words still end at \(other.frame.maxX), window \(app.windows.firstMatch.frame)); the button's margin on its side is held by the editor's unit test plan_for_today_ends_at_the_rows_trailing_margin")
+    }
     app.scrollToTheTop()
     let words = app.line("Water the plants")
     XCTAssertTrue(words.waitForExistence(timeout: 10))
     let row = try self.row("Water the plants", in: app)
     let button = row.buttons["Plan for today"]
     XCTAssertTrue(button.waitForExistence(timeout: 10), "an open reference row has the button")
-    let other = app.line("Renew the passport")
-    XCTAssertTrue(other.exists)
     // Rotation settles over a few frames; the frames are read once it has.
     let settled = XCTNSPredicateExpectation(
       predicate: NSPredicate { _, _ in abs(button.frame.maxX - other.frame.maxX) <= 1 }, object: nil)
