@@ -19,6 +19,10 @@
     /// The caret goes to the next row in that direction that takes one, as near to `point` (in the line's
     /// coordinates) across the row as its words allow.
     func lineTextView(_ line: LineTextView, moveCaret direction: LineTextView.Direction, near point: CGPoint)
+    /// Whether the line's row has actions for ⌘/ to open.
+    func lineTextViewHasRowMenu(_ line: LineTextView) -> Bool
+    /// ⌘/: the row's actions, at the caret.
+    func lineTextViewShowRowMenu(_ line: LineTextView)
   }
 
   /// A row's words: a text view on TextKit 2 that does not scroll and adds no inset of its own, so the row's margins
@@ -283,8 +287,11 @@
       let down = UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: #selector(caretToRowBelow))
       // Without priority the text view would type a tab character into the line, and move the caret itself on the
       // arrows. The arrows are taken only on the line's edge (`canPerformAction`); elsewhere they are the system's.
-      for command in [tab, shiftTab, up, down] { command.wantsPriorityOverSystemBehavior = true }
-      return (super.keyCommands ?? []) + [tab, shiftTab, up, down]
+      // ⌘/ opens the row's actions, as on the web; only on a row that has them (`canPerformAction`).
+      // No discoverability title: the app shows no words of its own the web does not.
+      let menu = UIKeyCommand(input: "/", modifierFlags: .command, action: #selector(showRowMenu))
+      for command in [tab, shiftTab, up, down, menu] { command.wantsPriorityOverSystemBehavior = true }
+      return (super.keyCommands ?? []) + [tab, shiftTab, up, down, menu]
     }
 
     /// Up or down out of a row.
@@ -294,6 +301,8 @@
       switch action {
       case #selector(caretToRowAbove): leavesRow(.up)
       case #selector(caretToRowBelow): leavesRow(.down)
+      // Not while composing: the key would interrupt the input method's words.
+      case #selector(showRowMenu): markedTextRange == nil && lineDelegate?.lineTextViewHasRowMenu(self) == true
       default: super.canPerformAction(action, withSender: sender)
       }
     }
@@ -306,6 +315,11 @@
       let here = caretRect(for: caret.start)
       guard abs(here.midY - edge.midY) < max(1, edge.height / 2) else { return false }
       return lineDelegate?.lineTextView(self, canMoveCaret: direction) ?? false
+    }
+
+    @objc private func showRowMenu() {
+      guard markedTextRange == nil else { return }
+      lineDelegate?.lineTextViewShowRowMenu(self)
     }
 
     @objc private func caretToRowAbove() { moveCaret(.up) }

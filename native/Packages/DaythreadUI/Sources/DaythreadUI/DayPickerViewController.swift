@@ -3,10 +3,12 @@
   import UIKit
 
   /// The system's calendar for picking a day: a dot on each day with something written, the week starting as the
-  /// account has it, and the shown day selected. Picking a day, a future one too, hands it to `onPick`.
+  /// account has it, and the shown day selected. Picking a day, a future one too, hands it to `onPick`. For `Pick
+  /// date…` no day is selected and the days before today cannot be picked.
   @MainActor
   final class DayPickerViewController: UIViewController, UICalendarViewDelegate, UICalendarSelectionSingleDateDelegate {
-    private let selected: LocalDate
+    private let selected: LocalDate?
+    private let notBefore: LocalDate?
     private let written: Set<LocalDate>
     private let onPick: (LocalDate) -> Void
     let calendarView = UICalendarView()
@@ -14,11 +16,22 @@
     /// out as year, month and day only, so the zone never moves the day tapped.
     private let calendar: Calendar
 
-    init(
+    convenience init(
       selected: LocalDate, written: Set<LocalDate>, weekStartsOnMonday: Bool, timezone: String,
       onPick: @escaping (LocalDate) -> Void
     ) {
+      self.init(
+        selected: selected, notBefore: nil, written: written, weekStartsOnMonday: weekStartsOnMonday,
+        timezone: timezone, onPick: onPick)
+    }
+
+    /// `selected` nil selects no day; `notBefore` makes the days before it unselectable (`availableDateRange`).
+    init(
+      selected: LocalDate?, notBefore: LocalDate?, written: Set<LocalDate>, weekStartsOnMonday: Bool,
+      timezone: String, onPick: @escaping (LocalDate) -> Void
+    ) {
       self.selected = selected
+      self.notBefore = notBefore
       self.written = written
       self.onPick = onPick
       var calendar = Calendar(identifier: .gregorian)
@@ -44,10 +57,12 @@
       calendarView.timeZone = calendar.timeZone
       calendarView.delegate = self
       let selection = UICalendarSelectionSingleDate(delegate: self)
-      let shown = components(of: selected)
-      selection.selectedDate = shown
+      selection.selectedDate = selected.map(components(of:))
       calendarView.selectionBehavior = selection
-      calendarView.visibleDateComponents = shown
+      if let notBefore, let start = calendar.date(from: components(of: notBefore)) {
+        calendarView.availableDateRange = DateInterval(start: start, end: .distantFuture)
+      }
+      if let shown = selected ?? notBefore { calendarView.visibleDateComponents = components(of: shown) }
 
       calendarView.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(calendarView)
@@ -91,7 +106,16 @@
 
     func dateSelection(_ selection: UICalendarSelectionSingleDate, didSelectDate dateComponents: DateComponents?) {
       // A tap on the shown day may clear the selection; it still means that day.
-      onPick(dateComponents.flatMap(localDate(of:)) ?? selected)
+      guard let day = dateComponents.flatMap(localDate(of:)) ?? selected else { return }
+      onPick(day)
+    }
+
+    func dateSelection(_ selection: UICalendarSelectionSingleDate, canSelectDate dateComponents: DateComponents?)
+      -> Bool
+    {
+      guard let notBefore else { return true }
+      guard let day = dateComponents.flatMap(localDate(of:)) else { return false }
+      return !(day < notBefore)
     }
   }
 #endif

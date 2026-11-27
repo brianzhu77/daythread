@@ -79,6 +79,14 @@
       setNeedsUpdateConfiguration()
     }
 
+    /// Draws the same words with another look (a row dimmed while an action is out), keeping the caret and the
+    /// selection; never over marked text (`applyWords`).
+    final func setLook(_ look: LineLook) {
+      guard look != self.look else { return }
+      self.look = look
+      setNeedsUpdateConfiguration()
+    }
+
     /// The words he typed are on screen already: they become the row's without being drawn again.
     final func wordsWereTyped(_ words: AttributedString) {
       self.words = words
@@ -146,6 +154,29 @@
       attributes[.attachment] = nil
       attributes[InlineTextStorage.tokenWords] = nil
       return attributes
+    }
+
+    /// How far below the text view's top the middle of its first line lies: half the line's font's height, as the text
+    /// view lays a line out without the font's leading (`LineTextView`), words in a fallback font (Chinese, emoji)
+    /// included (measured on the simulator). Only a chip (an attachment drawn from words that may fall back, a page
+    /// titled in Chinese) can make the line taller: then the first line is read as the text view lays it out. Reading
+    /// the layout on every keystroke cost close to a millisecond in `TypingFeelTests`, so plain words never do.
+    final func firstLineMidline(traits: UITraitCollection) -> CGFloat {
+      // The storage itself: `attributedText` would copy the whole line on every keystroke.
+      let text = line.textStorage
+      if text.containsAttachments(in: NSRange(location: 0, length: text.length)), let manager = line.textLayoutManager {
+        var midline: CGFloat?
+        manager.enumerateTextLayoutFragments(from: manager.documentRange.location, options: [.ensuresLayout]) {
+          fragment in
+          if let first = fragment.textLineFragments.first {
+            midline = fragment.layoutFragmentFrame.minY + first.typographicBounds.midY
+          }
+          return false
+        }
+        if let midline, midline > 0 { return midline }
+      }
+      guard let font = baseAttributes(traits: traits)[.font] as? UIFont else { return 0 }
+      return (font.ascender - font.descender) / 2
     }
 
     /// For a subclass: the circle's name, say, which is made from the words.

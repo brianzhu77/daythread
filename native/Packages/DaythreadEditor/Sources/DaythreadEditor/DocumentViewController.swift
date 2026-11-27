@@ -33,6 +33,34 @@
     /// the run loop. A tick does not take the caret from the line being typed.
     public var onTick: ((_ taskId: String) -> Void)?
 
+    /// The one callback for a row's actions: a swipe action, `More`, an item of the circle's menu, ⌘/'s menu (the
+    /// same), a VoiceOver custom action, the `Plan for today` button. The list presents nothing itself.
+    public var onRowAction: ((RowRequest) -> Void)?
+
+    /// The row an action is out for: drawn dimmed (its words and marks in `.tertiaryLabel`), and every row's actions
+    /// report nothing until it is nil again. Typing and ticking go on.
+    public var actingRow: String? {
+      didSet {
+        guard actingRow != oldValue else { return }
+        let ids = [oldValue, actingRow].compactMap { $0 }.filter { rowsByID[$0] != nil }
+        // A row being composed in is never reconfigured from outside: its cell takes the look in place, and its words
+        // are drawn in it once the composition ends (`applyWords` leaves marked text alone).
+        for id in ids where id == composingRow { (cell(for: id) as? TodoBlockCell)?.setDimmed(id == actingRow) }
+        // The others are reconfigured, which keeps each cell (and its caret and keyboard), and reaches a cell the list
+        // made ahead of time off screen, which `cellForItem` does not return.
+        let reconfigured = ids.filter { $0 != composingRow }
+        guard !reconfigured.isEmpty else { return }
+        var snapshot = dataSource.snapshot()
+        snapshot.reconfigureItems(reconfigured.filter { snapshot.indexOfItem($0) != nil })
+        dataSource.apply(snapshot, animatingDifferences: false)
+      }
+    }
+
+    /// The row's frame in the list's coordinates, for a popover; nil when it is not drawn.
+    public func sourceRect(ofRow rowID: String) -> CGRect? {
+      cell(for: rowID)?.frame
+    }
+
     /// Called on the main actor after each change he makes, with the page's document and the rows he removed one at a
     /// time. Never for `edit` or `replace`.
     public var onChange: ((_ document: String, _ singleDeleteIds: [String]) -> Void)?
@@ -52,6 +80,19 @@
     /// What the rows are drawn with: the page's day, and the workspace its to-dos and page titles come from.
     private var pageDate: LocalDate?
     private var workspace: Workspace?
+    /// The page drawn by `show`, so a new today can draw it again; nil while a page is edited.
+    private var shownPage: Page?
+    /// The index the rows' facts were last read with, and the workspace it is of: a draw in the same workspace (a key
+    /// that restructures the page, a composition that ends) reads no page again.
+    private var factsIndex: (workspace: Workspace, index: TodoIndex)?
+
+    /// The app's today, for the rows' facts; a change redraws the rows whose facts change. Nil: no facts.
+    public var today: LocalDate? {
+      didSet {
+        guard today != oldValue, shownPageID != nil else { return }
+        drawAgainForToday()
+      }
+    }
     private var rowsByID: [String: BlockRow] = [:]
     private var orderedIDs: [String] = []
     private var drawn: [String: AttributedString] = [:]
@@ -61,6 +102,8 @@
     private var shownPageID: String?
     /// The row whose text view holds marked text. What is being composed is not the document yet.
     private var composingRow: String?
+    /// Today changed while he composed: the row composed in still shows the facts it had (`drawStaleFacts`).
+    private var composingRowFactsAreStale = false
     /// The last change from outside that arrived while he composed, with the page as it was when the first did. The
     /// rest of it is on screen already; the composing row's part waits for the composition to end.
     private var heldReplace: (base: String, document: String, workspace: Workspace)?
@@ -103,12 +146,12 @@
       didSet {
         guard headerView !== oldValue else { return }
         oldValue?.removeFromSuperview()
-        collectionView.setCollectionViewLayout(Self.layout(withHeader: headerView != nil), animated: false)
+        collectionView.setCollectionViewLayout(Self.layout(using: listConfiguration), animated: false)
       }
     }
 
     private lazy var collectionView: UICollectionView = {
-      let view = UICollectionView(frame: .zero, collectionViewLayout: Self.layout(withHeader: false))
+      let view = UICollectionView(frame: .zero, collectionViewLayout: Self.layout(using: listConfiguration))
       view.backgroundColor = .systemBackground
       view.allowsSelection = false
       view.alwaysBounceVertical = true
@@ -117,16 +160,24 @@
       return view
     }()
 
-    private static func layout(withHeader: Bool) -> UICollectionViewLayout {
+    /// The list as the system lays it out, the rows' trailing swipe included.
+    var listConfiguration: UICollectionLayoutListConfiguration {
       var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
       configuration.showsSeparators = false
       // The section's own background lies over the list's background view, where a day without a page says so; the
       // list itself is the page's background.
       configuration.backgroundColor = .clear
-      configuration.headerMode = withHeader ? .supplementary : .none
+      configuration.headerMode = headerView != nil ? .supplementary : .none
       // The header is the page's first line, not a section title: no gap above it beyond its own margins.
       configuration.headerTopPadding = 0
-      return UICollectionViewCompositionalLayout { _, environment in
+      configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
+        self?.trailingSwipeActions(at: indexPath)
+      }
+      return configuration
+    }
+
+    private static func layout(using configuration: UICollectionLayoutListConfiguration) -> UICollectionViewLayout {
+      UICollectionViewCompositionalLayout { _, environment in
         let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
         // A plain list pins its header to the top; this one is the page's first line and scrolls away with it.
         for header in section.boundarySupplementaryItems { header.pinToVisibleBounds = false }
@@ -195,7 +246,42 @@
       finishEditing()
       editedPage = nil
       heldReplace = nil
-      draw(BlockRows.rows(for: page, in: workspace), pageID: page.id, pageDate: page.date, in: workspace, editable: [])
+      shownPage = page
+      let rows = BlockRows.rows(
+        for: Document.blocks(page.document), in: workspace, facts: factsSource(in: workspace, pageDate: page.date))
+      draw(rows, pageID: page.id, pageDate: page.date, in: workspace, editable: [])
+    }
+
+    /// What the rows' facts are read with now: nil without a today. The index is built again only for another
+    /// workspace; a workspace value handed on unchanged compares by its storage, at no cost.
+    private func factsSource(in workspace: Workspace, pageDate: LocalDate?) -> BlockRows.FactsSource? {
+      guard let today else {
+        factsIndex = nil
+        return nil
+      }
+      let index: TodoIndex
+      if let cached = factsIndex, cached.workspace == workspace {
+        index = cached.index
+      } else {
+        index = TodoIndex(workspace)
+        factsIndex = (workspace, index)
+      }
+      return BlockRows.FactsSource(today: today, pageDate: pageDate, index: index)
+    }
+
+    /// Today changed: the page is drawn again in the workspace it was drawn in, and only the rows whose facts changed
+    /// are redrawn, in place (`draw`).
+    private func drawAgainForToday() {
+      guard let workspace, let pageID = shownPageID else { return }
+      if editedPage != nil {
+        // A line's resign is under way: its draw, once the line has let the keyboard go, reads the new today.
+        guard redrawAfterResign == nil else { return }
+        // The row being composed in is pinned with the facts it had: they are drawn when the composition ends.
+        if isComposing { composingRowFactsAreStale = true }
+        redraw(pageID: pageID, pageDate: pageDate, in: workspace)
+      } else if let shownPage {
+        show(page: shownPage, in: workspace)
+      }
     }
 
     /// Shows a page for editing. `page` is the workspace's (the draft's document when it has one). The page that is
@@ -208,6 +294,7 @@
       }
       finishEditing()
       editedPage = EditablePage(document: page.document, pageDate: page.date)
+      shownPage = nil
       heldReplace = nil
       redraw(pageID: page.id, pageDate: page.date, in: workspace)
     }
@@ -225,6 +312,8 @@
       redrawAfterResign = nil
       collectionView.endEditing(true)
       redrawAfterResign = nil
+      // The next page is drawn afresh, with every row's facts.
+      composingRowFactsAreStale = false
       // Its line was not found to commit (its cell had gone): the composition ends with nothing read.
       if composingRow != nil {
         composingRow = nil
@@ -232,8 +321,35 @@
       }
     }
 
-    /// Replaces the page from outside (a merge, a load) keeping the caret where its line still exists. While he
-    /// composes, every row but the composing one is drawn from it at once; that row's part waits until the
+    /// Commits the marked text of the line that holds it, in place: the caret and the keyboard stay, the committed
+    /// words are reported through `onChange` once. Nothing when no line composes.
+    ///
+    /// The host calls it before it sends a change the page must not be under while words are only composed (a row
+    /// action, §11.4 step 1). The commit takes the keyboard's own path (`unmarkText`), so a change held meanwhile is
+    /// merged as it would be then.
+    public func commitComposition() {
+      guard isComposing else { return }
+      for line in lines where line.markedTextRange != nil { line.unmarkText() }
+      // The marked text can end without the line being told (an edit of its text outside the input system): the
+      // composing row's line is read as a commit is. With no line to read, the composition ends with nothing read,
+      // as in `finishEditing`. Either way the host never sends a change over a page still composing.
+      if let id = composingRow, let line = lineView(for: id), line.markedTextRange == nil { read(line) }
+      if composingRow != nil {
+        composingRow = nil
+        // The page already is the latest from outside; drawn again, the row that was pinned is drawn from it.
+        if let held = heldReplace, let pageID = shownPageID {
+          heldReplace = nil
+          redraw(pageID: pageID, pageDate: pageDate, in: held.workspace)
+        } else {
+          drawStaleFactsNow()
+        }
+        onComposingChange?(false)
+      }
+    }
+
+    /// Replaces the page from outside (a merge, a load) keeping the caret where its line still exists. When its row is
+    /// not in the new page, the caret goes to the end of the nearest line above that is (or to the start of the first
+    /// line), and the keyboard stays up (`draw`). While he composes, every row but the composing one is drawn from it at once; that row's part waits until the
     /// composition ends, when his composed words and this page are merged (`commitHeld`).
     public func replace(document: String, in workspace: Workspace) {
       guard let editedPage, let pageID = shownPageID else { return }
@@ -263,7 +379,8 @@
     /// whatever the page now holds for it.
     private func redraw(pageID: String, pageDate: LocalDate?, in workspace: Workspace) {
       guard let editedPage else { return }
-      var rows = BlockRows.rows(for: editedPage.blocks, in: workspace)
+      var rows = BlockRows.rows(
+        for: editedPage.blocks, in: workspace, facts: factsSource(in: workspace, pageDate: pageDate))
       var editable = editedPage.isReadable ? Set(editedPage.textBlocks) : []
       let pinned = composingRow.flatMap { id in rowsByID[id].map { (id: id, row: $0) } }
       if let pinned {
@@ -277,6 +394,8 @@
         }
         editable.insert(pinned.id)
       }
+      // Every row, the one composed in included, is drawn from this page and today.
+      if pinned == nil { composingRowFactsAreStale = false }
       draw(rows, pageID: pageID, pageDate: pageDate, in: workspace, editable: editable, pinned: pinned?.id)
     }
 
@@ -313,6 +432,11 @@
       if pageID == shownPageID, changed.isEmpty, ids == orderedIDs { return }
 
       let focus = focusedLine.flatMap { line in line.rowID.map { (id: $0, selection: line.selectedRange) } }
+      // The row holding the caret is not in the new page (the server moved its to-do to another day): where the
+      // caret goes instead, and that line's text view while the list still shows the rows as they were.
+      let leaving = focus.flatMap { newRows[$0.id] == nil ? $0.id : nil }
+      let successor = leaving.flatMap { Self.caret(afterLeaving: $0, from: orderedIDs, to: ids, editable: editable) }
+      let successorLine = successor.flatMap { lineView(for: $0.row) }
       let oldRows = rowsByID
       rowsByID = newRows
       drawn = newDrawn
@@ -337,11 +461,40 @@
       // and the keyboard is held meanwhile.
       let rebuilt = focus.map { reloaded.contains($0.id) } == true
       if rebuilt, let line = focusedLine { holdKeyboard(from: line) }
+      // The list resigns a first responder in a cell it takes away, and with no other the keyboard goes down: the
+      // keyboard leaves the row before the row leaves the list. Straight to the caret's line when the list shows it
+      // and keeps its cell, else held until that line is in the list; with no line left, given up first.
+      if leaving != nil, let line = focusedLine {
+        if let successor {
+          let handed =
+            !reloaded.contains(successor.row) && successorLine.map { $0.isEditable && $0.becomeFirstResponder() } == true
+          if !handed { holdKeyboard(from: line) }
+        } else {
+          line.resignFirstResponder()
+        }
+      }
       dataSource.apply(snapshot, animatingDifferences: animated)
       if let focus, rebuilt {
         place(caretIn: focus.id, selection: focus.selection)
         releaseKeyboardHold()
       }
+      if let successor {
+        place(caretIn: successor.row, selection: successor.selection)
+        releaseKeyboardHold()
+      }
+    }
+
+    /// Where the caret goes when its row `id` leaves the page: the end of the nearest line above it in the order on
+    /// screen before (as for the pinned row in `redraw`) that is still on the page and takes a caret, wherever the new
+    /// page puts it; with none, the start of the new page's first line that takes one; nil when no line takes a caret.
+    private static func caret(
+      afterLeaving id: String, from before: [String], to after: [String], editable: Set<String>
+    ) -> (row: String, selection: NSRange)? {
+      let remaining = Set(after).intersection(editable)
+      if let line = before.prefix(while: { $0 != id }).reversed().first(where: remaining.contains) {
+        return (line, NSRange(location: Int.max, length: 0))
+      }
+      return after.first(where: remaining.contains).map { ($0, NSRange(location: 0, length: 0)) }
     }
 
     /// A text view of the screen's own, out of sight, that holds the keyboard while the row that had it is rebuilt or
@@ -405,11 +558,15 @@
           editable: self.editableIDs.contains(id), rowID: id, delegate: self.lineInput)
       }
       let todo = UICollectionView.CellRegistration<TodoBlockCell, String> { [weak self] cell, _, id in
-        guard let self, let row = self.rowsByID[id], case .todo(let taskId, let status, _) = row.kind else { return }
+        guard let self, let row = self.rowsByID[id], case .todo(let taskId, let status, _, let facts) = row.kind else {
+          return
+        }
         cell.configure(
-          status: status, canBeTicked: row.canBeTicked, depth: row.depth, text: self.drawn[id] ?? AttributedString(),
-          editable: self.editableIDs.contains(id), rowID: id, delegate: self.lineInput
-        ) { [weak self] in self?.onTick?(taskId) }
+          status: status, facts: facts, canBeTicked: row.canBeTicked, dimmed: id == self.actingRow, depth: row.depth,
+          text: self.drawn[id] ?? AttributedString(),
+          editable: self.editableIDs.contains(id), rowID: id, taskId: taskId, delegate: self.lineInput,
+          onTick: { [weak self] in self?.onTick?(taskId) },
+          onRowAction: { [weak self] kind in self?.reportRowAction(kind, row: id, taskId: taskId) ?? false })
       }
       let separator = UICollectionView.CellRegistration<SeparatorBlockCell, String> { [weak self] cell, _, id in
         cell.configure(depth: self?.rowsByID[id]?.depth ?? 0)
@@ -497,6 +654,14 @@
 
     func lineTextView(_ line: LineTextView, moveCaret direction: LineTextView.Direction, near point: CGPoint) {
       screen?.moveCaret(from: line, going: direction, near: point)
+    }
+
+    func lineTextViewHasRowMenu(_ line: LineTextView) -> Bool {
+      screen?.hasRowMenu(line) ?? false
+    }
+
+    func lineTextViewShowRowMenu(_ line: LineTextView) {
+      screen?.showRowMenu(line)
     }
   }
 
@@ -658,10 +823,29 @@
       if let held = heldReplace {
         heldReplace = nil
         commitHeld(line, in: id, held: held)
-      } else if absorb(line) != nil {
-        report()
+      } else {
+        if absorb(line) != nil { report() }
+        drawStaleFacts(after: line)
       }
       onComposingChange?(false)
+    }
+
+    /// Today changed while he composed, and the row he composed in kept the facts it had (`redraw`): now that the
+    /// composition has ended, the page is drawn again, which reconfigures that row in place. A line its cell is giving
+    /// up, or that is giving up the keyboard, is inside the list's own work: the draw waits for the next turn.
+    private func drawStaleFacts(after line: LineTextView) {
+      guard composingRowFactsAreStale, !leavingPage else { return }
+      if line.isBeingReleased || line.isGivingUpKeyboard {
+        perform(#selector(drawStaleFactsNow), with: nil, afterDelay: 0, inModes: [.common])
+      } else {
+        drawStaleFactsNow()
+      }
+    }
+
+    @objc private func drawStaleFactsNow() {
+      guard composingRowFactsAreStale, !isComposing, redrawAfterResign == nil, let workspace, let pageID = shownPageID
+      else { return }
+      redraw(pageID: pageID, pageDate: pageDate, in: workspace)
     }
 
     /// The line on screen is compared with what it was last synced with, around the caret, and the difference is the
@@ -737,17 +921,9 @@
         restructure(from: line, caret: caret, selectionLength: 0, pageID: pageID, workspace: workspace)
         return
       }
-      // No row holds his words for the caret to go to, and his row leaves the list: the keyboard is given up first,
-      // so it is not taken away with the row.
-      if line.isFirstResponder, !rowsOfThePage(in: workspace).contains(id) {
-        line.resignFirstResponder()
-      }
+      // No row holds his words for the caret to go to and his row leaves the list: the caret goes as for any row that
+      // leaves while it holds it (`draw`).
       redraw(pageID: pageID, pageDate: pageDate, in: workspace)
-    }
-
-    /// The ids of the rows the page being edited is drawn with.
-    private func rowsOfThePage(in workspace: Workspace) -> Set<String> {
-      Set((editedPage.map { BlockRows.rows(for: $0.blocks, in: workspace) } ?? []).map(\.id))
     }
 
     /// A line's resign is over: what a commit during it left to draw is drawn now that no line holds the keyboard.
@@ -801,18 +977,20 @@
     /// the row's kind, or made rows) the page is drawn again and the caret goes where the page put it.
     private func typed(in line: LineTextView, caret: EditablePage.Caret) {
       guard let page = editedPage, let workspace, let id = line.rowID, let pageID = shownPageID else { return }
+      // Without facts: they are read from the rows' to-dos and the workspace, which a keystroke does not change, so a
+      // keystroke reads no to-do's facts and the rows keep theirs.
       let rows = BlockRows.rows(for: page.blocks, in: workspace)
       let onlyItsWords =
         caret.block == id && rows.map(\.id) == orderedIDs
         && rows.allSatisfy { row in
-          guard row.id == id else { return rowsByID[row.id] == row }
-          return rowsByID[id].map { $0.kind == row.kind && $0.depth == row.depth } ?? false
+          guard row.id == id else { return rowsByID[row.id]?.withoutFacts == row }
+          return rowsByID[id].map { $0.withoutFacts.kind == row.kind && $0.depth == row.depth } ?? false
         }
-      guard onlyItsWords, let row = rows.first(where: { $0.id == id }) else {
+      guard onlyItsWords, let row = rows.first(where: { $0.id == id }), let before = rowsByID[id] else {
         restructure(from: line, caret: caret, selectionLength: 0, pageID: pageID, workspace: workspace)
         return
       }
-      rowsByID[id] = row
+      rowsByID[id] = BlockRow(id: id, kind: before.kind, depth: row.depth, content: row.content)
       let words = InlineAttributedText.make(InlineContent(row.content), pageDate: pageDate, in: workspace)
       drawn[id] = words
       (line.superview as? LineBlockCell)?.wordsWereTyped(words)
@@ -880,8 +1058,69 @@
 
     /// The text view a row's cell holds now, if the list has made one.
     private func lineView(for id: String) -> LineTextView? {
+      (cell(for: id) as? LineBlockCell)?.line
+    }
+
+    /// A row's cell, if the list has made one.
+    private func cell(for id: String) -> UICollectionViewCell? {
       guard let item = orderedIDs.firstIndex(of: id) else { return nil }
-      return (collectionView.cellForItem(at: IndexPath(item: item, section: 0)) as? LineBlockCell)?.line
+      return collectionView.cellForItem(at: IndexPath(item: item, section: 0))
+    }
+
+    // MARK: the row's actions
+
+    /// Hands what he asked of row `id` (of to-do `taskId`) to the host with the row's menu as it is now, unless an
+    /// action is already out, or the request is stale: a swipe, a menu or ⌘/'s menu still open keeps the items it was
+    /// made with after the row is redrawn, so the row must still be there with that to-do and still offer the action
+    /// (`More` while its menu holds more, the button while the row shows it). True when it was handed on.
+    private func reportRowAction(_ kind: RowRequest.Kind, row id: String, taskId: String) -> Bool {
+      guard actingRow == nil, let onRowAction, let row = rowsByID[id],
+        case .todo(let current, _, _, let facts?) = row.kind, current == taskId, let menu = facts.menu
+      else { return false }
+      let offered =
+        switch kind {
+        case .more: !menu.more.isEmpty
+        case .action(.planForTodayButton): facts.planForToday
+        case .action(let action):
+          menu.groups.contains { $0.items.contains { $0.action == action } } || menu.swipe.contains { $0.action == action }
+        }
+      guard offered else { return false }
+      onRowAction(RowRequest(kind: kind, rowID: id, taskId: taskId, menu: menu))
+      return true
+    }
+
+    /// A to-do row's trailing swipe: the actions the web's phone bar puts first, then `More` when the menu holds more,
+    /// none on a full swipe. None on the row being typed in (the system would take the keyboard away to open it),
+    /// none anywhere while words are selected (a handle dragged sideways would open one), and none while an action is
+    /// out.
+    fileprivate func trailingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+      guard actingRow == nil, orderedIDs.indices.contains(indexPath.item) else { return nil }
+      let id = orderedIDs[indexPath.item]
+      guard let row = rowsByID[id], case .todo(let taskId, _, _, let facts) = row.kind, let menu = facts?.menu else {
+        return nil
+      }
+      if let line = focusedLine, line.rowID == id || line.selectedRange.length > 0 { return nil }
+      func action(_ title: String, _ kind: RowRequest.Kind) -> UIContextualAction {
+        UIContextualAction(style: .normal, title: title) { [weak self] _, _, done in
+          done(self?.reportRowAction(kind, row: id, taskId: taskId) ?? false)
+        }
+      }
+      // `More` holds the rest, `Cancel task` among it.
+      let actions = menu.swipe.map { action($0.title, .action($0.action)) } + (menu.more.isEmpty ? [] : [action("More", .more)])
+      guard !actions.isEmpty else { return nil }
+      let configuration = UISwipeActionsConfiguration(actions: actions)
+      // A swipe that runs on only shows the buttons.
+      configuration.performsFirstActionWithFullSwipe = false
+      return configuration
+    }
+
+    /// Whether ⌘/ has the row's actions to open for `line`.
+    fileprivate func hasRowMenu(_ line: LineTextView) -> Bool {
+      (line.superview as? TodoBlockCell)?.hasRowMenu ?? false
+    }
+
+    fileprivate func showRowMenu(_ line: LineTextView) {
+      (line.superview as? TodoBlockCell)?.presentRowMenu()
     }
 
     // MARK: the arrow keys

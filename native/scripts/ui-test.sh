@@ -2,7 +2,8 @@
 # Runs the app's tests (unit and UI) on the one simulator this machine gives to this work, against two throwaway
 # servers started from this checkout:
 #   3741  sign-in off, seeded with today's page and its to-dos: "Water the plants", which tests only read, and one for
-#         each test that ticks ("Tick me", "Tick me offline", "Tick me twice")
+#         each test that ticks ("Tick me", "Tick me offline", "Tick me twice"); for the to-do row, rows with each
+#         kind of mark and one to-do for each test that acts on a row ("Move me", "Set me aside", …)
 #   3742  sign-in on (no Supabase behind it: only "who is this?" is asked, and it answers 401)
 # Each server keeps its SQLite file in a directory under the system temp directory; both are stopped and their
 # directories removed on exit, however the run ends, and so are the stores the UI tests made in the app's container.
@@ -122,14 +123,75 @@ const send = async (operationId, action) => {
   })
   const outcome = await reply.json()
   if (outcome.status !== 'applied') throw new Error(`${action.type}: ${JSON.stringify(outcome)}`)
+  return outcome.receipt
+}
+// The id of the to-do with these words, read from the workspace as any client reads it.
+const taskId = async title => {
+  const { workspace } = await read()
+  const task = workspace.tasks.find(task => task.title === title)
+  if (!task) throw new Error(`no to-do "${title}"`)
+  return task.id
 }
 const { workspace } = await read()
 const today = new Intl.DateTimeFormat('en-CA', {
   timeZone: workspace.timezone, year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date())
+const addDays = (day, days) => {
+  const date = new Date(`${day}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+const at = new Date().toISOString()
+const todayPage = `day:${today}`
 await send('ui-test-day', { type: 'ensure-day', date: today })
 for (const [index, title] of ['Water the plants', 'Tick me', 'Tick me offline', 'Tick me twice'].entries()) {
-  await send(`ui-test-task-${index}`, { type: 'add-task', pageId: `day:${today}`, title })
+  await send(`ui-test-task-${index}`, { type: 'add-task', pageId: todayPage, title })
+}
+
+// Slice 1c: rows with marks, each planned today on today's page, and one to-do for each test that acts on a row.
+// Nothing here plans a to-do for today with `plan-task`: that is a choice, and it would restart Since.
+const planned = (title, dates = {}) => ({ type: 'add-task', pageId: todayPage, title, plannedOn: today, ...dates })
+// First, so its row is on the screen with the page at its top: the notice is seen there over an unscrolled page.
+await send('ui-test-notice', planned('Show the notice'))
+await send('ui-test-due', planned('Pay the rent', { deadlineOn: addDays(today, 1) }))
+await send('ui-test-was-due', planned('File the return', { deadlineOn: addDays(today, -3) }))
+await send('ui-test-start-due', planned('Book the venue', {
+  attentionOn: addDays(today, 4), deadlineOn: addDays(today, 10),
+}))
+await send('ui-test-repeat-task', planned('Water the fern'))
+await send('ui-test-repeat', {
+  type: 'set-todo-repeat', taskId: await taskId('Water the fern'), today, at,
+  repeat: { every: 'week', interval: 1, from: 'schedule' },
+})
+await send('ui-test-blocker', planned('Buy paint'))
+await send('ui-test-blocked', planned('Paint the fence'))
+await send('ui-test-link', {
+  type: 'link-tasks', taskId: await taskId('Paint the fence'), add: [await taskId('Buy paint')], remove: [], at,
+})
+await send('ui-test-cancelled-task', planned('Return the parcel'))
+await send('ui-test-cancelled', { type: 'task-status', taskId: await taskId('Return the parcel'), status: 'cancelled', today })
+
+// Carried seven days: made eight days ago on that day's page, then put on today's page by today's draft, as the
+// server's own carrying does, so its plan row today is the draft's.
+const eightDaysAgo = addDays(today, -8)
+await send('ui-test-carried-day', { type: 'ensure-day', date: eightDaysAgo })
+await send('ui-test-carried-task', {
+  type: 'add-task', pageId: `day:${eightDaysAgo}`, title: 'Renew the passport', plannedOn: eightDaysAgo,
+})
+const carried = await taskId('Renew the passport')
+const firstBlock = await (async () => {
+  const { workspace } = await read()
+  const page = workspace.pages.find(page => page.id === todayPage)
+  return JSON.parse(page.document)[0].id
+})()
+await send('ui-test-carry-draft', {
+  type: 'set-draft', pageId: todayPage, status: 'ready', moreOpen: [], allowedTaskIds: [carried],
+  items: [{ id: 'carry-0', anchor: firstBlock, place: 'after', taskId: carried, source: 'model', state: 'open' }],
+})
+await send('ui-test-carry', { type: 'apply-draft', pageId: todayPage, itemIds: ['carry-0'], today })
+
+for (const [index, title] of ['Move me', 'Set me aside', 'Cancel me', 'Undo me', 'Pick a day for me'].entries()) {
+  await send(`ui-test-act-${index}`, planned(title))
 }
 const title = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric',

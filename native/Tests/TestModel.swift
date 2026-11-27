@@ -1,6 +1,7 @@
 import DaythreadCore
 import DaythreadSync
 import Foundation
+import Synchronization
 import Testing
 import UIKit
 
@@ -28,6 +29,20 @@ final class Clock {
   var date = noon
 }
 
+/// The engine's time, which a test moves; read from the engine's actor, so it is held under a lock.
+final class EngineClock: Sendable {
+  private let date: Mutex<Date>
+
+  init(_ date: Date) {
+    self.date = Mutex(date)
+  }
+
+  var now: Date {
+    get { date.withLock { $0 } }
+    set { date.withLock { $0 = newValue } }
+  }
+}
+
 /// A wait that ends only when cancelled: the engine's waits (450 ms after a change, before a retry) never run out, so
 /// only what the test does sends a draft.
 let neverEnding: @Sendable (Duration) async throws -> Void = { _ in
@@ -44,10 +59,12 @@ struct Harness {
   let engine: SyncEngine
   let model: AppModel
 
-  /// `relay`: the engine's states reach the model through it, so a test can hand them over late.
+  /// `relay`: the engine's states reach the model through it, so a test can hand them over late. `engineClock`: the
+  /// engine reads its time from it, so a test can move the engine's day; without one it stays at the start.
   init(
     copy: Workspace, clock: Clock = Clock(), drafts: [PageDraft] = [],
-    sleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep, relay: StateRelay? = nil
+    sleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep, relay: StateRelay? = nil,
+    engineClock: EngineClock? = nil
   ) async throws {
     server = TestServer([
       .account(Account(owner: "one", email: "one@example.com", signIn: true)),
@@ -59,7 +76,13 @@ struct Harness {
     let tokens = MemoryTokenStore()
     try tokens.write(one)
     let start = clock.date
-    engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: sleep, now: { start })
+    let now: @Sendable () -> Date
+    if let engineClock {
+      now = { engineClock.now }
+    } else {
+      now = { start }
+    }
+    engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: sleep, now: now)
     if let relay {
       model = AppModel(engine: engine, keepsChanges: true, now: { clock.date }, states: relay.follow(engine.states))
     } else {
@@ -94,6 +117,16 @@ final class StateRelay {
   }
 
   func hold() { held = true }
+
+  /// Forgets the states kept back: the model next gets whatever comes after them, as a reader that subscribes late
+  /// gets only the current state.
+  func discardKept() { kept = [] }
+
+  /// Ends the model's stream, as when the engine is gone.
+  func finish() {
+    forwarding?.cancel()
+    continuation?.finish()
+  }
 
   func release() {
     held = false

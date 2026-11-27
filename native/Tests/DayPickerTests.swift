@@ -32,6 +32,24 @@ import UIKit
     }
   }
 
+  /// `Pick date…`: no day selected, today and later selectable, no day before it.
+  @Test func pick_date_selects_nothing_and_no_day_before_today() throws {
+    let picker = DayPickerViewController(
+      selected: nil, notBefore: LocalDate("2026-11-26")!, written: [], weekStartsOnMonday: false, timezone: "UTC"
+    ) { _ in }
+    picker.loadViewIfNeeded()
+    let selection = try #require(picker.calendarView.selectionBehavior as? UICalendarSelectionSingleDate)
+    #expect(selection.selectedDate == nil)
+    #expect(!picker.dateSelection(selection, canSelectDate: DateComponents(year: 2026, month: 11, day: 25)))
+    #expect(picker.dateSelection(selection, canSelectDate: DateComponents(year: 2026, month: 11, day: 26)))
+    #expect(picker.dateSelection(selection, canSelectDate: DateComponents(year: 2027, month: 1, day: 4)))
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .gmt
+    let start = calendar.date(from: DateComponents(year: 2026, month: 11, day: 26))
+    #expect(picker.calendarView.availableDateRange.start == start)
+    #expect(picker.calendarView.visibleDateComponents.month == 11)
+  }
+
   /// At the accessibility text sizes a month does not fit half the screen: the sheet opens at its full height.
   @Test func the_sheet_opens_at_full_height_at_the_accessibility_text_sizes() {
     #expect(DayPickerViewController.firstDetent(for: .large) == .medium)

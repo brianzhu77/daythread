@@ -126,10 +126,12 @@ final class WritingUITests: XCTestCase {
     let words = "Buy oat milk"
     let app = try open(server: base, store: Wrapper.storeName())
 
-    // The empty to-do the template leaves under TODO: the first line with no words, after the seeded to-dos.
-    let below = app.line("Tick me twice").frame.minY
+    // The empty to-do the template leaves under TODO: the line with no words right above the Events heading, after
+    // the seeded to-dos (more than a screen of them, so the page is scrolled to it first).
+    XCTAssertTrue(app.waitForLine("Events"), "the Events heading")
+    let events = app.line("Events").frame.minY
     let empty = try XCTUnwrap(
-      app.lines.first { $0.frame.minY > below && ($0.value as? String) == "" }, "the template's empty to-do")
+      app.lines.last { $0.frame.minY < events && ($0.value as? String) == "" }, "the template's empty to-do")
     empty.tap()
     app.useKeyboard(.english)
     app.focusedLine.typeText(words)
@@ -176,7 +178,8 @@ final class WritingUITests: XCTestCase {
 
     let back = XCUIApplication.daythread(server: base, store: store)
     back.launch()
-    XCTAssertTrue(back.line(theirs).waitForExistence(timeout: 30), "the other device's line")
+    // Under Events, below the seeded to-dos: the page is scrolled to it.
+    XCTAssertTrue(back.waitForLine(theirs, timeout: 30), "the other device's line")
     XCTAssertTrue(back.waitForLine(mine, timeout: 10), "his line, kept")
     try await server.waitForLines(of: page, timeout: 30, "holding both lines") { lines in
       lines.filter { $0.words == mine }.count == 1 && lines.filter { $0.words == theirs }.count == 1

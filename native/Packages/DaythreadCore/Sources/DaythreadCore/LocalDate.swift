@@ -28,6 +28,23 @@ public struct LocalDate: Hashable, Comparable, Sendable {
     lhs.value.utf8.lexicographicallyPrecedes(rhs.value.utf8)
   }
 
+  public var year: Int { Self.parts(of: value).year }
+  public var month: Int { Self.parts(of: value).month }
+  public var day: Int { Self.parts(of: value).day }
+
+  /// `daysBetween(self, other)` in `dates.ts`: whole days from this day to `other`, negative when it is earlier.
+  /// Calendar arithmetic only, so a clock change never makes a day 23 or 25 hours.
+  public func days(to other: LocalDate) -> Int {
+    Self.daysSinceEpoch(year: other.year, month: other.month, day: other.day)
+      - Self.daysSinceEpoch(year: year, month: month, day: day)
+  }
+
+  /// 0 is Sunday, as `Date#getDay()`. 1970-01-01 was a Thursday.
+  public var weekday: Int {
+    let days = Self.daysSinceEpoch(year: year, month: month, day: day)
+    return ((days % 7) + 7 + 4) % 7
+  }
+
   /// The account's day for an instant: the day it is in `timezone`, never the device's. A zone the
   /// system does not know reads as GMT.
   public static func today(in timezone: String, at: Date) -> LocalDate {
