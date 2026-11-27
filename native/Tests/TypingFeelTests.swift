@@ -124,10 +124,13 @@ final class TypingFeelTests: XCTestCase {
     values.map { String(format: "%.3f", $0) }.joined(separator: " ")
   }
 
-  /// Waits, a millisecond at a time, for `condition`, the main actor's other work running meanwhile; fails after two
-  /// seconds.
+  /// Waits, a millisecond at a time, for `condition`, the main actor's other work running meanwhile; fails after
+  /// thirty seconds. The wait is long because it is not what is measured: on CI's machines one keystroke's state
+  /// has taken more than two seconds to be drawn on the 300-line page, which failed the run without any defect.
   private func until(_ condition: () -> Bool) async throws {
-    for _ in 0..<2000 where !condition() {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: .seconds(30))
+    while !condition(), clock.now < deadline {
       try await Task.sleep(nanoseconds: 1_000_000)
     }
     XCTAssertTrue(condition(), "the engine's state reached the screen")
