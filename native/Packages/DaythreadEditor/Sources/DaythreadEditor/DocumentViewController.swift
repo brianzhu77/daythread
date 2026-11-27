@@ -52,6 +52,19 @@
     /// What the rows are drawn with: the page's day, and the workspace its to-dos and page titles come from.
     private var pageDate: LocalDate?
     private var workspace: Workspace?
+    /// The page drawn by `show`, so a new today can draw it again; nil while a page is edited.
+    private var shownPage: Page?
+    /// The index the rows' facts were last read with, and the workspace it is of: a draw in the same workspace (a key
+    /// that restructures the page, a composition that ends) reads no page again.
+    private var factsIndex: (workspace: Workspace, index: TodoIndex)?
+
+    /// The app's today, for the rows' facts; a change redraws the rows whose facts change. Nil: no facts.
+    public var today: LocalDate? {
+      didSet {
+        guard today != oldValue, shownPageID != nil else { return }
+        drawAgainForToday()
+      }
+    }
     private var rowsByID: [String: BlockRow] = [:]
     private var orderedIDs: [String] = []
     private var drawn: [String: AttributedString] = [:]
@@ -195,7 +208,40 @@
       finishEditing()
       editedPage = nil
       heldReplace = nil
-      draw(BlockRows.rows(for: page, in: workspace), pageID: page.id, pageDate: page.date, in: workspace, editable: [])
+      shownPage = page
+      let rows = BlockRows.rows(
+        for: Document.blocks(page.document), in: workspace, facts: factsSource(in: workspace, pageDate: page.date))
+      draw(rows, pageID: page.id, pageDate: page.date, in: workspace, editable: [])
+    }
+
+    /// What the rows' facts are read with now: nil without a today. The index is built again only for another
+    /// workspace; a workspace value handed on unchanged compares by its storage, at no cost.
+    private func factsSource(in workspace: Workspace, pageDate: LocalDate?) -> BlockRows.FactsSource? {
+      guard let today else {
+        factsIndex = nil
+        return nil
+      }
+      let index: TodoIndex
+      if let cached = factsIndex, cached.workspace == workspace {
+        index = cached.index
+      } else {
+        index = TodoIndex(workspace)
+        factsIndex = (workspace, index)
+      }
+      return BlockRows.FactsSource(today: today, pageDate: pageDate, index: index)
+    }
+
+    /// Today changed: the page is drawn again in the workspace it was drawn in, and only the rows whose facts changed
+    /// are redrawn, in place (`draw`).
+    private func drawAgainForToday() {
+      guard let workspace, let pageID = shownPageID else { return }
+      if editedPage != nil {
+        // A line's resign is under way: its draw, once the line has let the keyboard go, reads the new today.
+        guard redrawAfterResign == nil else { return }
+        redraw(pageID: pageID, pageDate: pageDate, in: workspace)
+      } else if let shownPage {
+        show(page: shownPage, in: workspace)
+      }
     }
 
     /// Shows a page for editing. `page` is the workspace's (the draft's document when it has one). The page that is
@@ -208,6 +254,7 @@
       }
       finishEditing()
       editedPage = EditablePage(document: page.document, pageDate: page.date)
+      shownPage = nil
       heldReplace = nil
       redraw(pageID: page.id, pageDate: page.date, in: workspace)
     }
@@ -288,7 +335,8 @@
     /// whatever the page now holds for it.
     private func redraw(pageID: String, pageDate: LocalDate?, in workspace: Workspace) {
       guard let editedPage else { return }
-      var rows = BlockRows.rows(for: editedPage.blocks, in: workspace)
+      var rows = BlockRows.rows(
+        for: editedPage.blocks, in: workspace, facts: factsSource(in: workspace, pageDate: pageDate))
       var editable = editedPage.isReadable ? Set(editedPage.textBlocks) : []
       let pinned = composingRow.flatMap { id in rowsByID[id].map { (id: id, row: $0) } }
       if let pinned {
@@ -464,9 +512,12 @@
           editable: self.editableIDs.contains(id), rowID: id, delegate: self.lineInput)
       }
       let todo = UICollectionView.CellRegistration<TodoBlockCell, String> { [weak self] cell, _, id in
-        guard let self, let row = self.rowsByID[id], case .todo(let taskId, let status, _) = row.kind else { return }
+        guard let self, let row = self.rowsByID[id], case .todo(let taskId, let status, _, let facts) = row.kind else {
+          return
+        }
         cell.configure(
-          status: status, canBeTicked: row.canBeTicked, depth: row.depth, text: self.drawn[id] ?? AttributedString(),
+          status: status, facts: facts, canBeTicked: row.canBeTicked, depth: row.depth,
+          text: self.drawn[id] ?? AttributedString(),
           editable: self.editableIDs.contains(id), rowID: id, delegate: self.lineInput
         ) { [weak self] in self?.onTick?(taskId) }
       }
@@ -852,18 +903,20 @@
     /// the row's kind, or made rows) the page is drawn again and the caret goes where the page put it.
     private func typed(in line: LineTextView, caret: EditablePage.Caret) {
       guard let page = editedPage, let workspace, let id = line.rowID, let pageID = shownPageID else { return }
+      // Without facts: they are read from the rows' to-dos and the workspace, which a keystroke does not change, so a
+      // keystroke reads no to-do's facts and the rows keep theirs.
       let rows = BlockRows.rows(for: page.blocks, in: workspace)
       let onlyItsWords =
         caret.block == id && rows.map(\.id) == orderedIDs
         && rows.allSatisfy { row in
-          guard row.id == id else { return rowsByID[row.id] == row }
-          return rowsByID[id].map { $0.kind == row.kind && $0.depth == row.depth } ?? false
+          guard row.id == id else { return rowsByID[row.id]?.withoutFacts == row }
+          return rowsByID[id].map { $0.withoutFacts.kind == row.kind && $0.depth == row.depth } ?? false
         }
-      guard onlyItsWords, let row = rows.first(where: { $0.id == id }) else {
+      guard onlyItsWords, let row = rows.first(where: { $0.id == id }), let before = rowsByID[id] else {
         restructure(from: line, caret: caret, selectionLength: 0, pageID: pageID, workspace: workspace)
         return
       }
-      rowsByID[id] = row
+      rowsByID[id] = BlockRow(id: id, kind: before.kind, depth: row.depth, content: row.content)
       let words = InlineAttributedText.make(InlineContent(row.content), pageDate: pageDate, in: workspace)
       drawn[id] = words
       (line.superview as? LineBlockCell)?.wordsWereTyped(words)

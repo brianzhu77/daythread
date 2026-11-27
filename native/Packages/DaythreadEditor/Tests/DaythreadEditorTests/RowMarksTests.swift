@@ -47,6 +47,19 @@
     return .object(object)
   }
 
+  /// Today's draft, which carried these to-dos onto today's page: a row it applied is not a day chosen for its to-do,
+  /// so the to-do is carried since it was first saved.
+  private func draft(carrying taskIds: [String]) throws -> Page {
+    let items = taskIds.map { #"{"id":"i-\#($0)","taskId":"\#($0)","state":"applied"}"# }.joined(separator: ",")
+    var object = JSONObject()
+    object["id"] = .string("draft:day:\(today)")
+    object["type"] = .string("draft")
+    object["date"] = .null
+    object["title"] = .string("")
+    object["document"] = .string(#"{"status":"ready","items":[\#(items)],"moreOpen":[]}"#)
+    return try #require(Page(.object(object)))
+  }
+
   private func link(blocked: String, blocker: String) -> JSONValue {
     var object = JSONObject()
     object["blockedId"] = .string(blocked)
@@ -93,7 +106,8 @@
             todo("k-since", createdOn: "2026-11-03"), todo("k-rep"), todo("k-cx", status: "cancelled"),
             todo("k-plain"), todo("k-all", deadlineOn: "2026-11-27", createdOn: "2026-11-03"),
           ],
-          today: today, rest: [("todoRepeats", .array([weekly("k-rep"), weekly("k-all")]))])
+          today: today, pages: [try draft(carrying: ["k-since", "k-all"])],
+          rest: [("todoRepeats", .array([weekly("k-rep"), weekly("k-all")]))])
 
         let due = try #require(try marks(screen, 0))
         #expect(due.string == "Due tomorrow")
@@ -198,7 +212,7 @@
         let screen = try Screen.editing(
           [row("all", "k-all", "Book the flights"), row("paint", "k-paint", "Buy paint")],
           tasks: [todo("k-all", deadlineOn: "2026-11-27", createdOn: "2026-11-03"), todo("k-paint", title: "Buy paint")],
-          today: today,
+          today: today, pages: [try draft(carrying: ["k-all"])],
           rest: [
             ("todoRepeats", .array([weekly("k-all")])), ("links", .array([link(blocked: "k-all", blocker: "k-paint")])),
           ])
@@ -225,6 +239,7 @@
             todo("k-paint", title: blocker),
           ],
           width: 874, height: 402, category: .accessibilityExtraExtraExtraLarge, today: today,
+          pages: [try draft(carrying: ["k-all"])],
           rest: [
             ("todoRepeats", .array([weekly("k-all")])), ("links", .array([link(blocked: "k-all", blocker: "k-paint")])),
           ])

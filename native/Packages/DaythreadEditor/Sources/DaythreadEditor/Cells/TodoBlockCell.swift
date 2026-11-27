@@ -44,13 +44,77 @@
       // The list cell's content view covers the whole cell and is kept above the circle, and so are the words; the
       // circle must be on top to get the touch.
       bringSubviewToFront(circle)
+      if let content = contentView as? UIListContentView, let guide = content.secondaryTextLayoutGuide {
+        marksElement.accessibilityFrameInContainerSpace = content.convert(guide.layoutFrame, to: self)
+      }
+    }
+
+    // MARK: the marks
+
+    /// What the row draws under its words: its to-do's marks and `Blocked by`, read by VoiceOver as one element after
+    /// the words.
+    private var facts: RowFacts?
+    private lazy var marksElement = UIAccessibilityElement(accessibilityContainer: self)
+
+    /// The marks line as last made, and what it was made from: `updateConfiguration` runs on every keystroke in the
+    /// row, and the same marks are handed back then rather than made again.
+    private struct MarksKey: Equatable {
+      var facts: RowFacts?
+      var regularWidth: Bool
+      var contentSize: UIContentSizeCategory
+      var legibilityWeight: UILegibilityWeight
+    }
+    private var madeMarks: (key: MarksKey, text: NSAttributedString?, spoken: String?)?
+
+    /// The marks at the cell's own width (`Reference` and `Moved to` only at a regular one, so a rotation needs no
+    /// new rows), one quiet line, ` · ` between marks, `Blocked by` on a line of its own; nil when there are none.
+    private func marksLine(traits: UITraitCollection) -> (text: NSAttributedString?, spoken: String?) {
+      let key = MarksKey(
+        facts: facts, regularWidth: traits.horizontalSizeClass == .regular,
+        contentSize: traits.preferredContentSizeCategory, legibilityWeight: traits.legibilityWeight)
+      if let madeMarks, madeMarks.key == key { return (madeMarks.text, madeMarks.spoken) }
+      let text = facts.flatMap { Self.marksText($0, regularWidth: key.regularWidth, traits: traits) }
+      let spoken = facts?.spoken(regularWidth: key.regularWidth)
+      madeMarks = (key, text, spoken)
+      return (text, spoken)
+    }
+
+    private static func marksText(_ facts: RowFacts, regularWidth: Bool, traits: UITraitCollection)
+      -> NSAttributedString?
+    {
+      let font = UIFont.preferredFont(forTextStyle: .footnote, compatibleWith: traits)
+      let quiet: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
+      let text = NSMutableAttributedString()
+      for mark in facts.marks(regularWidth: regularWidth) {
+        if text.length > 0 { text.append(NSAttributedString(string: " · ", attributes: quiet)) }
+        switch mark {
+        case .dateTag(let words, passed: true):
+          var passed = quiet
+          passed[.foregroundColor] = UIColor.systemRed
+          text.append(NSAttributedString(string: words, attributes: passed))
+        case .repeats:
+          // The symbol stands for the words; VoiceOver reads them from the marks' element.
+          let symbol = UIImage(systemName: "repeat", withConfiguration: UIImage.SymbolConfiguration(font: font))
+          let attachment = NSMutableAttributedString(attachment: NSTextAttachment(image: symbol ?? UIImage()))
+          attachment.addAttributes(quiet, range: NSRange(location: 0, length: attachment.length))
+          text.append(attachment)
+        default:
+          text.append(NSAttributedString(string: mark.words, attributes: quiet))
+        }
+      }
+      if let blockedBy = facts.blockedBy {
+        if text.length > 0 { text.append(NSAttributedString(string: "\n", attributes: quiet)) }
+        text.append(NSAttributedString(string: blockedBy, attributes: quiet))
+      }
+      return text.length > 0 ? text : nil
     }
 
     func configure(
-      status: TodoTask.Status?, canBeTicked: Bool, depth: Int, text: AttributedString, editable: Bool, rowID: String,
-      delegate: LineTextViewDelegate?, onTick: @escaping () -> Void
+      status: TodoTask.Status?, facts: RowFacts?, canBeTicked: Bool, depth: Int, text: AttributedString,
+      editable: Bool, rowID: String, delegate: LineTextViewDelegate?, onTick: @escaping () -> Void
     ) {
       self.status = status
+      self.facts = facts
       symbolName = Self.symbol(for: status)
       self.onTick = onTick
       circle.isEnabled = canBeTicked
@@ -60,7 +124,6 @@
         text, look: LineLook(textStyle: .body, color: finished ? .secondaryLabel : .label, struckThrough: finished),
         editable: editable, rowID: rowID, delegate: delegate)
       isAccessibilityElement = false
-      accessibilityElements = [circle, line]
       circle.accessibilityValue =
         switch status {
         case .done: "done"
@@ -85,8 +148,14 @@
       content.image = symbol
       content.imageProperties.preferredSymbolConfiguration = symbolConfiguration
       content.imageProperties.tintColor = .clear
+      let marks = marksLine(traits: state.traitCollection)
+      content.secondaryAttributedText = marks.text
       contentConfiguration = content
       pinWords()
+      if marksElement.accessibilityLabel != marks.spoken || accessibilityElements == nil {
+        marksElement.accessibilityLabel = marks.spoken
+        accessibilityElements = marks.spoken == nil ? [circle, line] : [circle, line, marksElement]
+      }
 
       let tint: UIColor = finished ? .tintColor : .secondaryLabel
       var button = UIButton.Configuration.plain()
