@@ -85,12 +85,20 @@ public final class AppModel {
   /// The web drops a second tap on the same to-do this soon after the first.
   private static let doubleTap: TimeInterval = 0.5
 
-  public init(engine: SyncEngine, keepsChanges: Bool = true, now: @escaping () -> Date = Date.init) {
+  public convenience init(engine: SyncEngine, keepsChanges: Bool = true, now: @escaping () -> Date = Date.init) {
+    self.init(engine: engine, keepsChanges: keepsChanges, now: now, states: nil)
+  }
+
+  /// `states`: what the model follows in place of the engine's own states, for tests that hand them over late.
+  init(engine: SyncEngine, keepsChanges: Bool, now: @escaping () -> Date, states: AsyncStream<SyncState>?) {
     self.engine = engine
     self.keepsChanges = keepsChanges
     self.now = now
+    givenStates = states
     today = LocalDate.today(in: TimeZone.current.identifier, at: now())
   }
+
+  @ObservationIgnored private let givenStates: AsyncStream<SyncState>?
 
   isolated deinit {
     following?.cancel()
@@ -128,7 +136,7 @@ public final class AppModel {
   /// Follows the engine's states, then shows the device's copy and asks the server. Calling it again does nothing.
   public func start() {
     guard following == nil else { return }
-    let states = engine.states
+    let states = givenStates ?? engine.states
     following = Task { [weak self] in
       for await state in states {
         guard let self else { return }

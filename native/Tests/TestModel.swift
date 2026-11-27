@@ -44,9 +44,10 @@ struct Harness {
   let engine: SyncEngine
   let model: AppModel
 
+  /// `relay`: the engine's states reach the model through it, so a test can hand them over late.
   init(
     copy: Workspace, clock: Clock = Clock(), drafts: [PageDraft] = [],
-    sleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep
+    sleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep, relay: StateRelay? = nil
   ) async throws {
     server = TestServer([
       .account(Account(owner: "one", email: "one@example.com", signIn: true)),
@@ -59,7 +60,11 @@ struct Harness {
     try tokens.write(one)
     let start = clock.date
     engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: sleep, now: { start })
-    model = AppModel(engine: engine, now: { clock.date })
+    if let relay {
+      model = AppModel(engine: engine, keepsChanges: true, now: { clock.date }, states: relay.follow(engine.states))
+    } else {
+      model = AppModel(engine: engine, now: { clock.date })
+    }
     model.start()
     try await until { [model] in model.state.phase == .ready && model.state.workspace != nil }
     await engine.settled()
@@ -67,6 +72,42 @@ struct Harness {
 
   func status(_ taskId: String) -> TodoTask.Status? {
     model.workspace?.task(taskId)?.status
+  }
+}
+
+/// Hands the engine's states to a model in the order published, or keeps them back while held: the order in which a
+/// state and the answer to the call that published it reach the model is not promised, and a test can turn it round.
+@MainActor
+final class StateRelay {
+  private var held = false
+  private(set) var kept: [SyncState] = []
+  private var continuation: AsyncStream<SyncState>.Continuation?
+  private var forwarding: Task<Void, Never>?
+
+  func follow(_ source: AsyncStream<SyncState>) -> AsyncStream<SyncState> {
+    let (stream, continuation) = AsyncStream.makeStream(of: SyncState.self)
+    self.continuation = continuation
+    forwarding = Task { [weak self] in
+      for await state in source { self?.pass(state) }
+    }
+    return stream
+  }
+
+  func hold() { held = true }
+
+  func release() {
+    held = false
+    for state in kept { continuation?.yield(state) }
+    kept = []
+  }
+
+  private func pass(_ state: SyncState) {
+    if held { kept.append(state) } else { continuation?.yield(state) }
+  }
+
+  isolated deinit {
+    forwarding?.cancel()
+    continuation?.finish()
   }
 }
 

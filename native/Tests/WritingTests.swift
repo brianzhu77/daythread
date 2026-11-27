@@ -707,6 +707,40 @@ private struct DayScreen {
     day.close()
   }
 
+  /// The answer to his keystroke can reach the model before the state the engine published with it. The screen does
+  /// not take the state before as the page changed from outside: it would put his last keystroke back.
+  @Test func a_state_that_comes_after_the_answer_to_his_keystroke_leaves_his_words() async throws {
+    let relay = StateRelay()
+    let h = try await Harness(copy: try copy(pages: [page(today, base)]), sleep: neverEnding, relay: relay)
+    let day = try DayScreen(h.model)
+    let walk = try day.type(" t", atEndOf: "Walk")
+    try await until {
+      h.model.state.workspace?.page(todayId).map { words(of: $0.document) } == ["Morning", "Walk t"]
+        && !h.model.isWriting(todayId)
+    }
+    day.drawn()
+    let replaced = day.screen.replacedDocuments.count
+
+    // The engine stores the keystroke and answers; the state it published waits.
+    relay.hold()
+    walk.insertText("h")
+    try await eventually { await h.engine.draft(of: todayId).map { words(of: $0.document) } == ["Morning", "Walk th"] }
+    try await turns()
+    day.drawn()
+    #expect(day.words == ["Morning", "Walk th"], "his keystroke was taken back")
+    #expect(day.screen.replacedDocuments.count == replaced)
+
+    relay.release()
+    try await until {
+      h.model.state.workspace?.page(todayId).map { words(of: $0.document) } == ["Morning", "Walk th"]
+    }
+    try await turns()
+    day.drawn()
+    #expect(day.words == ["Morning", "Walk th"])
+    #expect(day.screen.replacedDocuments.count == replaced, "the list was replaced with its own words")
+    day.close()
+  }
+
   @Test func saving_now_does_not_hold_up_what_he_types_next() async throws {
     let h = try await harness([page(today, base), page(yesterday, base)])
     let day = try DayScreen(h.model)
