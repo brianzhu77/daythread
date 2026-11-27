@@ -102,10 +102,10 @@ final class NoticeFixture {
   }
 
   var words: [String] {
-    descendants(of: notice).compactMap { $0 as? UILabel }.filter(isVisible).compactMap(\.text)
+    descendants(of: notice).compactMap { $0 as? UILabel }.filter { isVisible($0) && !isInsideButton($0) }.compactMap(\.text)
   }
 
-  var label: UILabel? { descendants(of: notice).compactMap { $0 as? UILabel }.first }
+  var label: UILabel? { descendants(of: notice).compactMap { $0 as? UILabel }.first { !isInsideButton($0) } }
 
   func press(_ button: UIButton) {
     button.sendActions(for: .primaryActionTriggered)
@@ -141,6 +141,15 @@ final class NoticeFixture {
       try await Task.sleep(nanoseconds: 5_000_000)
     }
     Issue.record("Timed out waiting")
+  }
+
+  private func isInsideButton(_ view: UIView) -> Bool {
+    var current = view.superview
+    while let candidate = current {
+      if candidate is UIButton { return true }
+      current = candidate.superview
+    }
+    return false
   }
 
   private func isVisible(_ view: UIView) -> Bool {
