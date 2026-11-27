@@ -75,6 +75,15 @@ and offers Undo by §11.5's rule. Nothing is drawn ahead: a row action is sent a
     (`presentEditMenu(with:)`; the delegate's `editMenuInteraction(_:menuFor:suggestedActions:)` supplies the
     menu). Mac Catalyst was built and not run in the spike: if it does not present there, ⌘/ presents the action
     sheet anchored to the row, and the report says which.
+    In the final fix wave (2026-11-27) the editor's on-screen tests were run under the Mac Catalyst destination
+    (`cd native/Packages/DaythreadEditor && xcodebuild test -scheme DaythreadEditor -destination
+    'platform=macOS,variant=Mac Catalyst' -only-testing:DaythreadEditorTests/OnScreen/RowActionsTests`). The test
+    target builds there, but no on-screen test can run: the package's test bundle has no host app, and making the
+    test's first `UIWindow` throws `NSInternalInconsistencyException` ("NSApplication has not been created yet"),
+    so `command_slash_opens_the_menu_for_the_caret_row` fails before it presses ⌘/ and the interaction's delegate is
+    never reached. It showed nothing either way about whether the menu presents on the Mac. ⌘/ on the Mac is
+    therefore one of the owner's hand checks (Task 12); the fallback named above (the action sheet anchored to the
+    row) is built only if the menu does not present there. The code is unchanged.
   - Task 6's Step 1 is done; its builder starts at Step 2, and first checks one thing the spike saw and did not
     pin down: whether a tap in the middle of a line's words puts the caret where it was tapped (see the spike
     result).
@@ -1007,7 +1016,8 @@ Nothing in this task is code, and Brian does the tapping: the app writes to his 
 - [ ] The marks on his real rows match the web's, row for row, on today's page and on a past and a future day: the
   date tags, Since, the repeat mark, Blocked by, Cancelled (and at regular width on the Mac, Reference and Moved to).
 - [ ] By hand, what no test drives: a swipe begun while typing in a long line on his phone; a touch and hold on a
-  row with VoiceOver off and on; ⌘/ with his keyboard; the notice read by VoiceOver with `Undo` as its action.
+  row with VoiceOver off and on; ⌘/ with his keyboard, on the phone and in the Mac app (on the Mac it has never
+  been seen to present: if it does not, the fallback in the Corrections is built); the notice read by VoiceOver with `Undo` as its action.
 - [ ] The audit still reports "0 of N pages fail". Record the results here and set the status line.
 
 ## Order and independence
