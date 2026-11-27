@@ -580,6 +580,9 @@ public actor SyncEngine {
         draftOrigins = [:]
         refusedDrafts = [:]
         savesRetrying = []
+        // The waits after his changes, by page id too: one left would keep the new account's draft of the page from
+        // being due until it ended.
+        cutDraftWaitsShort()
       }
       copy = (workspace, owner)
       forgetOverwrittenSaves()

@@ -324,10 +324,20 @@ extension SyncEngine {
   }
 
   /// Whether a pass sends `draft` now: a save on its way is sent again as it was; newer words go once the wait
-  /// after his last change has ended. Never a draft behind the server's page or stuck.
+  /// after his last change has ended, or at once while a queued command must not overtake the page (he may type on
+  /// after the tap). Never a draft behind the server's page or stuck.
   func isDue(_ draft: PageDraft) -> Bool {
     guard standing(of: draft) == .free, !savesInFlight.contains(draft.pageId) else { return false }
-    return draft.sent != nil || draftWaits[draft.pageId] == nil
+    return draft.sent != nil || draftWaits[draft.pageId] == nil || awaitsSave(draft)
+  }
+
+  /// Whether a queued command of the draft's account must not overtake the draft's page. A command leaves the queue
+  /// in the section that checks its page, so words typed after that start their wait as any do.
+  private func awaitsSave(_ draft: PageDraft) -> Bool {
+    performances.contains { performance in
+      performance.owner == draft.owner
+        && (performance.notOvertaking.map { $0.utf8.elementsEqual(draft.pageId.utf8) } ?? false)
+    }
   }
 
   /// `retrying`: a try is planned. A draft is said to be tried again only when that try is for its own save.
@@ -575,6 +585,8 @@ extension SyncEngine {
         draft.sent = sent
         try await keep(draft)
       }
+      // The wait after his last change is for these words, taken out now: ended, it would only ask for an empty pass.
+      if awaitsSave(draft) { stopDraftWait(draft.pageId) }
       savesInFlight.insert(draft.pageId)
       savesRetrying.remove(draft.pageId)
       publish()

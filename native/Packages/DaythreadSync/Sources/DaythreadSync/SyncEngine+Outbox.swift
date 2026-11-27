@@ -319,11 +319,13 @@ extension SyncEngine {
   /// workspace is loaded and it is sent once more, under the same operation id; any other hold or refusal is answered
   /// after a load. Never stored, so a command sent as the network drops is not sent again later. On `.applied` the
   /// answer names the first state that holds the reply's changes (`Performed.Answer.published`): the caller waits for
-  /// that state by its number, not for the order in which the two reach it.
+  /// the first state numbered that or more, not for the order in which the two reach it. When the whole load that
+  /// brings it in comes back as another account, it answers `.signedOut`.
   ///
-  /// With `notOvertaking`, that page's draft is due at once (as `saveNow`), and the command is sent only when, after
-  /// the pass's saves, the page has no draft of the account; checked again before a second send. Otherwise it answers
-  /// `.notSent`, having sent nothing: a command that rewrites the page must not land under words not on it yet.
+  /// With `notOvertaking`, that page's draft is due at once (as `saveNow`), and stays so for what he types while the
+  /// command is queued; the command is sent only when, after the pass's saves, the page has no draft of the account;
+  /// checked again before a second send. Otherwise it answers `.notSent`, and nothing was applied: a command that
+  /// rewrites the page must not land under words not on it yet.
   public func perform(action: JSONValue, notOvertaking pageId: String? = nil) async -> Performed {
     await acquire()
     guard phase != .signedOut, !leaving else {
@@ -358,9 +360,16 @@ extension SyncEngine {
         return
       }
       let performance = performances.removeFirst()
+      // Checked in the section it leaves the queue in: until then its page's words are due at once (`isDue`), and a
+      // draft he starts after this is one on the page as it was, merged onto the page the answer brings (§10.6).
+      let overtaking = overtakes(performance)
       release()
       guard performance.epoch == pass.epoch else {
         performance.answer.resume(returning: .signedOut)
+        continue
+      }
+      guard !overtaking else {
+        notSent(performance)
         continue
       }
       try await answer(performance, pass)
@@ -385,17 +394,15 @@ extension SyncEngine {
         throw error
       }
       let revision = copy?.workspace.revision
-      // Read in the section the command leaves from: a draft he starts after it is one on the page as it was, merged
-      // onto the page the answer brings (§10.6).
-      let overtaking = performance.notOvertaking.map { accountDraft($0) != nil } ?? false
+      // The first send was checked as it left the queue; a second goes only over a page that still has no draft.
+      let overtaking = sentAgain && overtakes(performance)
       release()
       guard let revision else {
         performance.answer.resume(returning: .signedOut)
         return
       }
       guard !overtaking else {
-        SyncLog.logger.notice("Not performed: its page has words not saved yet")
-        performance.answer.resume(returning: .notSent)
+        notSent(performance)
         return
       }
       let step: PerformStep
@@ -430,12 +437,28 @@ extension SyncEngine {
         performance.answer.resume(returning: interrupted(error, pass) ?? answered(lastPublished))
         throw error
       }
+      if case .loadWholeThenAnswerApplied = step, copy?.owner != performance.owner {
+        // The load came back as another account: no state of the one that asked holds what it did, and none of
+        // another account's is named.
+        performance.answer.resume(returning: .signedOut)
+        return
+      }
       guard case .loadThenSendAgain = step, !sentAgain, copy?.owner == performance.owner else {
         performance.answer.resume(returning: answered(loaded))
         return
       }
       sentAgain = true
     }
+  }
+
+  /// Whether the page `performance` must not overtake has a draft of the account. Runs inside a store section.
+  private func overtakes(_ performance: Performance) -> Bool {
+    performance.notOvertaking.map { accountDraft($0) != nil } ?? false
+  }
+
+  private func notSent(_ performance: Performance) {
+    SyncLog.logger.notice("Not performed: its page has words not saved yet")
+    performance.answer.resume(returning: .notSent)
   }
 
   /// What a command reads when its pass was cut off rather than answered: signed out when the account changed or a

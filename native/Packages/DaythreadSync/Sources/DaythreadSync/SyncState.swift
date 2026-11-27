@@ -158,9 +158,10 @@ public enum Performed: Sendable, Equatable {
     public let operationId: String
     /// The reply's receipt; nil when the server answered `already-applied`.
     public let receipt: JSONValue?
-    /// `SyncState.published` of the first state that holds what the server did. When the whole load needed to bring
-    /// it in failed, no state holds it yet: this is then the state published last before the answer, and the copy
-    /// catches up at the next load.
+    /// `SyncState.published` of the first state that holds what the server did: a caller waits for the first state
+    /// numbered this or more (a reader that subscribes later gets the current state, which may be numbered above it).
+    /// When the whole load needed to bring it in failed, no state holds it yet: this is then the state published last
+    /// before the answer, and the copy catches up at the next load.
     public let published: Int
 
     public init(operationId: String, receipt: JSONValue?, published: Int) {
@@ -178,7 +179,8 @@ public enum Performed: Sendable, Equatable {
   case signedOut
   /// The server would not apply it; its reason.
   case refused(String)
-  /// The page it was told not to overtake still had a draft after the pass's saves; nothing was sent.
+  /// The page it was told not to overtake still had a draft after the pass's saves; nothing was applied (on the check
+  /// before a second send, the first send did go and was held).
   case notSent
 }
 
