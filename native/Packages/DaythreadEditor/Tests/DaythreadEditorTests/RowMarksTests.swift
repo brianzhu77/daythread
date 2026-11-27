@@ -227,6 +227,18 @@
         #expect(cell.circle.accessibilityLabel == "Complete Book the flights")
       }
 
+      @Test func the_marks_element_is_where_the_marks_are_on_the_screen() throws {
+        // VoiceOver draws its cursor at, and UI automation finds the element by, `accessibilityFrame`, the frame in
+        // the screen's coordinates; an element whose frame there is empty is passed over.
+        let screen = try Screen.editing(
+          [row("rent", "k-rent", "Pay the rent")], tasks: [todo("k-rent", deadlineOn: "2026-11-27")], today: today)
+        let cell = try cell(screen, 0)
+        let marks = try #require(cell.accessibilityElements?.last as? UIAccessibilityElement)
+        let inCell = marks.accessibilityFrameInContainerSpace
+        #expect(!inCell.isEmpty)
+        #expect(marks.accessibilityFrame == UIAccessibility.convertToScreenCoordinates(inCell, in: cell))
+      }
+
       @Test func at_the_largest_text_size_and_in_landscape_the_marks_wrap_and_nothing_is_cut() throws {
         let blocker = "Buy paint, brushes and tape for the hallway, the kitchen and the stairs"
         let screen = try Screen.editing(
