@@ -810,7 +810,10 @@
       {
         drawn = workspace.drawing(draft: mine, of: page.id)
       }
-      return DayFacts.of(day: today, in: drawn, index: todoIndex(of: drawn), today: today).lists(taskId)
+      // A workspace with words typed since the last state is in no cache: its index is built here and let go, so a tap
+      // does not evict the list's.
+      let index = readingIndexes.first { $0.workspace == drawn }?.index ?? TodoIndex(drawn)
+      return DayFacts.of(day: today, in: drawn, index: index, today: today).lists(taskId)
     }
 
     /// §12.4: plans `taskId` on `day` from the strip, on today's screen only, sent and waited for as a row's action
