@@ -236,6 +236,7 @@
         let marks = try #require(cell.accessibilityElements?.last as? UIAccessibilityElement)
         let inCell = marks.accessibilityFrameInContainerSpace
         #expect(!inCell.isEmpty)
+        #expect(!marks.accessibilityFrame.isEmpty)
         #expect(marks.accessibilityFrame == UIAccessibility.convertToScreenCoordinates(inCell, in: cell))
       }
 
