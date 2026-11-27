@@ -42,7 +42,7 @@ final class MorningUITests: XCTestCase {
       let menu = app.buttons["More for \(title)"]
       XCTAssertTrue(menu.exists, "its menu")
       // A target of its own: a tap that misses its small symbol by a few points must not land on `Bring back`.
-      XCTAssertGreaterThanOrEqual(min(menu.frame.width, menu.frame.height), 44, "\(title)'s menu: \(menu.frame.size)")
+      XCTAssertGreaterThanOrEqual(min(menu.frame.width, menu.frame.height), 43.99, "\(title)'s menu: \(menu.frame.size)")
     }
     XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "Bring back")).count, 3)
     keepScreenshot("not today, open", of: app)

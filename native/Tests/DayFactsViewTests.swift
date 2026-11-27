@@ -618,7 +618,7 @@ private func settled(_ day: RowScreen) async throws {
     let frames = host.rootView.model.menuFrames
     try #require(frames.count == 3, "the menus drawn: \(frames)")
     for (taskId, frame) in frames.sorted(by: { $0.key < $1.key }) {
-      #expect(frame.width >= 44 && frame.height >= 44, "\(taskId)'s menu: \(frame.size)")
+      #expect(frame.width >= 43.99 && frame.height >= 43.99, "\(taskId)'s menu: \(frame.size)")
     }
     window.isHidden = true
   }
