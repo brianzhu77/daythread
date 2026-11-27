@@ -67,8 +67,43 @@ final class RowUITests: XCTestCase {
       "the title ends where the other rows' words end: \(button.frame) against \(other.frame)")
     XCTAssertLessThanOrEqual(words.frame.maxX, button.frame.minX + 1, "the words end before the button")
     XCTAssertLessThan(button.frame.maxX, app.windows.firstMatch.frame.maxX - 44, "clear of the side's safe area")
-    keepScreenshot("marks, landscape", of: app)
+    // The app's own screenshot is taken in its upright frame and comes out cut; the screen's is the device's.
+    let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+    attachment.name = "marks, landscape"
+    attachment.lifetime = .keepAlways
+    add(attachment)
     app.terminate()
+  }
+
+  /// The marks in dark mode, and at the largest accessibility text size, where the marks line wraps and nothing is
+  /// cut. The simulator's appearance is put back as it was.
+  @MainActor
+  func test_the_marks_in_dark_mode_and_at_the_largest_text_size() throws {
+    let appearance = XCUIDevice.shared.appearance
+    defer { XCUIDevice.shared.appearance = appearance }
+    XCUIDevice.shared.appearance = .dark
+    let dark = try open()
+    XCTAssertEqual(try marks(of: "Pay the rent", in: dark), "Due tomorrow")
+    dark.scrollToTheTop()
+    keepScreenshot("marks, dark", of: dark)
+    dark.terminate()
+    XCUIDevice.shared.appearance = appearance
+
+    let largest = XCUIApplication.daythread(server: try Wrapper.value("DAYTHREAD_SERVER_URL"), store: Wrapper.storeName())
+    largest.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+    largest.launch()
+    XCTAssertTrue(largest.line("Renew the passport").waitForExistence(timeout: 30), "today's page")
+    let since = "Since \(Words.monthDay(try Wrapper.today(), adding: -8))"
+    XCTAssertEqual(try marks(of: "Renew the passport", in: largest), since)
+    let words = largest.line("Book the venue")
+    XCTAssertTrue(largest.waitForLine("Book the venue"))
+    let venue = try row("Book the venue", in: largest)
+    let tag = try XCTUnwrap(
+      venue.staticTexts.allElementsBoundByIndex.first { $0.label.hasPrefix("Start") }, "the date tag at that size")
+    XCTAssertGreaterThanOrEqual(tag.frame.minY, words.frame.maxY - 1, "under the words")
+    XCTAssertLessThanOrEqual(tag.frame.maxX, largest.windows.firstMatch.frame.maxX, "not cut at the side")
+    keepScreenshot("marks, largest text", of: largest)
+    largest.terminate()
   }
 
   // MARK: The actions
