@@ -786,6 +786,21 @@ private func settled(_ day: RowScreen) async throws {
     day.close()
   }
 
+  /// The labels are read from the rows the strip draws: SwiftUI builds no accessibility tree for a unit test to read
+  /// (the hosting view reports no elements unless an assistive technology asks), so the view's use of them is seen
+  /// by VoiceOver and Voice Control only.
+  @Test func each_bring_back_names_its_own_to_do() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let rows = try #require(day.facts.notToday?.rows)
+    #expect(
+      rows.map(\.bringBackLabel) == ["Bring back Fix the bike", "Bring back Sort the shed", "Bring back Mend the fence"])
+    // Voice Control's "Bring back" still works: the title on screen is the first name the button answers to.
+    #expect(rows.map(\.bringBackInputLabels) == rows.map { ["Bring back", "Bring back \($0.words)"] })
+    day.close()
+  }
+
   @Test func the_controls_report_only_while_enabled() throws {
     let facts = DayFacts.of(
       day: today, in: try copy(pages: AllThree.pages(), tasks: AllThree.tasks()),
