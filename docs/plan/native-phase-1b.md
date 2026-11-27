@@ -785,3 +785,37 @@ Nothing in this task is code, and Brian does the typing: the app writes to his r
 - Tasks 11 and 12 are the editor; they need 3, 4 and 5 and can follow 10.
 - Task 13 needs 7, 10 and 12. Task 14 needs all.
 - Two pull requests: Task 1 alone (it touches the server), then the rest.
+
+## Decisions made while building (2026-11-26)
+
+The calls I made on Brian's behalf while the plan ran, in the order they were made, each with what it costs if
+it is wrong. The design (`native-phase-1.md` §10) holds the ones that changed what the app does.
+
+| Decision | Why | If it is wrong |
+|---|---|---|
+| Shift-Tab keeps BlockNote's behaviour (the lines after it at its old level come under it) | the design says "as on the web" | nothing unless he prefers the other |
+| An unreadable page gives back its stored string and takes no edit | one bad page must not be rewritten as empty | a page he cannot type in until it is fixed elsewhere |
+| Backspace on an empty row leaves its nested lines in its place (the web deletes them) | nothing he wrote is removed by a Backspace on an empty line | a stray nested line where the web would have deleted it |
+| The content key of a page with nothing to strip is the key of the string as stored | the app must not depend on its writer matching `JSON.stringify` to key a page it did not change | a page stored in a non-canonical spelling would be refused as changed on every save |
+| A to-do's row the server deleted and he changed comes back as a plain line | one to-do must not become two, and a to-do removed elsewhere must not come back | he makes that line a to-do again by hand |
+| A line is merged field by field (kind, each property, words); a stamp on a link is not a change of words | the server changes what he sends while he keeps typing; a whole-line comparison doubled his words under a to-do he had just typed | two changes to different properties of one line are combined without being shown |
+| A line added next to a line the other side nested follows it into the nesting | the page order is kept | one Shift-Tab |
+| A save in flight is recorded as the whole action first sent, and resent as recorded | the server recognises a repeated operation only when its action is the same | none known; `SchemaV2` was amended for it before anything shipped |
+| A save's answer teaches only the queued changes that waited for it, and only the save's own revision | otherwise a change made elsewhere in between could slip past the server's check | a tick held for nothing after a replayed save |
+| A draft's first page is the one the screen typed on, told by the screen (`startedFrom`) | a load racing the first keystroke let his page replace another device's | an extra merge at the first keystroke after a load |
+| A sign-out never removes another account's drafts | words nobody was asked about are not erased | an account that never returns leaves its unsent words on the device, neither drawn nor sent |
+| A page in Trash or gone holds its draft, even with a save on its way | he cannot see the page he would be saving into | the draft waits in the "Not saved" menu until he restores the page or discards it |
+| Every call from the screen to the engine names the account it was made under, and the engine refuses another's | a call already on its way when the account changed was stored under the new one | a keystroke typed in the instant of an account change is dropped |
+| The screen keeps its own words until the engine's state that holds them has arrived, counted, not assumed from order | on CI's slower machine the engine's answer arrived before its state and the screen took back a keystroke | none known |
+| A keystroke on its way when a save landed starts from what that save sent | otherwise the line he is typing in was merged with itself and doubled | a needless merge in a case the memory does not cover |
+| The rows he removed one at a time stay named across a redraw and a merge | the server settles them as removed one at a time only if the save says so | a harmless extra id in a later save |
+| The tab bar holds four places and Search; Tags has no tab | the system's bar holds five items on a phone | one line of code; his to decide |
+| The stuck-draft menu section is titled `<day> · <reason>` | the design gave no words | a wording change |
+| The feel budget (one and a half times 7.0 ms and 2.7 ms) is enforced only where the machine is known | CI's machines are slower and vary | a regression in feel is caught locally, not on CI |
+| Parked for the next slice: `savesRetrying` is not cleared when the engine changes account on its own | there is one fix wave | "Not saved yet · trying again" for about two seconds on the other account's same day page |
+
+What the reviews found that the tests had not, for the record: a resent save the server would have refused
+(the timestamp was rebuilt); typing, pausing, typing doubling a line (three variants, the last found by the
+whole-branch review); a first keystroke racing a load; one account's words under another's (two variants); a
+stale line written back over the page; the keyboard taken back after he dismissed it mid-composition; and, on
+CI only, the screen taking back a keystroke.
