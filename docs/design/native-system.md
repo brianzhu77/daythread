@@ -68,7 +68,8 @@
 | Untitled | A page reference whose page has no title |
 | Undo | The notice's only button (a plain system button, footnote text), and the notice's accessibility action of the same name. The notice's other words are composed by the app from `native-phase-1.md` §11.5's table and are listed below |
 | Moved to Fri, Nov 27 | The notice after a move (`Tomorrow`, an Another day option, a day picked); the day in the long form. 8 seconds, with `Undo` while it is offered |
-| On today | The notice after `Bring to today` on a past day, and after `Plan for today` from a reference row's swipe or menu. 8 seconds, with `Undo` |
+| On today | The notice after `Bring to today` on a past day, and after `Plan for today` from a reference row's swipe or menu; and after the strip's `Bring back`, or today picked in its calendar. 8 seconds, with `Undo` |
+| Moved to Sat 11/28 | The notice after a day of a `Not today` row's `Another day` menu, or a later day picked in its calendar: the day in the short form (a row's move says `Moved to Sat, Nov 28`), as on the web. 8 seconds, with `Undo` while it is offered |
 | Planned for today | The notice after the reference row's own `Plan for today` button. 8 seconds, with `Undo` |
 | Not today — won’t carry over, Not on Fri 11/27 | The notice after the off item when the to-do was set aside: the first on today's page (an em dash and a typographic apostrophe, as the web writes it), the second on another day's. 8 seconds, with `Undo` |
 | · due Fri still tracked | Added to those two when the to-do has a Due date: `Not today — won’t carry over · due Fri still tracked` |
@@ -105,7 +106,8 @@
 | Due today, Was due Mon, Start today, Due that day, Unscheduled | A `Due soon` or `Not today` row's tag, the web's `taskDateTag` (footnote, secondary colour, one line, at the row's end, or under the words when the two do not fit; the words wrap. At the largest text sizes a tag wider than the strip itself, such as `Not today · Due today`, wraps under the words rather than be cut). None is red: the strip does not mark a passed date, as on the web (a page's row does). A row whose tag is empty shows its words alone |
 | Not today · Due today, Not today | The tag of a `Due soon` row for a to-do he set aside: `Not today · ` then its tag, or `Not today` alone when its tag is empty |
 | Not today · 3 (Not today · N) | The title of the strip's last part, on today when a to-do is set aside: a system `DisclosureGroup`, folded when the page opens, its title in the secondary colour (a quiet control, as the day's ghost buttons; the system draws its chevron in the label colour, which neither the tint nor the foreground changes); the fold is forgotten when he leaves today or the list empties. Each row: its words and tag, then under them `Bring back` (the system's bordered button, its title in the label colour, not the accent) and the `ellipsis` menu in the secondary colour. A disabled control keeps the system's disabled look |
-| Another day, Tomorrow · Fri 11/27, This weekend · Sat 11/28, Next week · Mon 11/30, Pick date… | A `Not today` row's menu: one section titled `Another day`, the web's options for the weekday (`This weekend` Monday to Thursday only), then `Pick date…` |
+| Bring back | A `Not today` row's bordered button, under its words: plans the to-do for today (`plan-task` with today, no `from`), sent and waited for as a row's action is |
+| Another day, Tomorrow · Fri 11/27, This weekend · Sat 11/28, Next week · Mon 11/30, Pick date… | A `Not today` row's menu (the `ellipsis` button, VoiceOver `More for <words>`): one section titled `Another day`, the web's options for the weekday (`This weekend` Monday to Thursday only), then `Pick date…`. A day plans the to-do there (no `from`). `Pick date…` opens the system's calendar a row's `Pick date…` opens (nothing selected, today the first that can be picked) from the menu's button: a popover on a wide screen, a sheet on the phone |
 | File the taxes, Due today | A strip row's VoiceOver label: its words, then its tag (the words alone with no tag); `Bring back` and the menu are elements of their own |
 | More for Fix the bike | A `Not today` row's menu button's VoiceOver label: `More for <words>` |
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
@@ -161,8 +163,8 @@ the day screen, under the title's stack in the page's header, so it scrolls away
   does and goes under the words when the two do not fit. Every change of its height (the fold, a row coming or
   going, the text size) lays the page's header out again on the run loop's next turn, and while a line holds the
   keyboard that line stays where it is on the screen.
-- **While an action is out** (slice 1d.1's next part): every button and menu of the strip is disabled, and the acting
-  row's words are in the tertiary colour. The fold itself stays usable: opening or closing `Not today` sends nothing.
+- **While an action is out** (a row's or the strip's, or an Undo; and while today's page is being made): every button
+  and menu of the strip is disabled, and the acting row's words are in the tertiary colour. The fold itself stays usable: opening or closing `Not today` sends nothing.
 
 The notice (`NoticeView`, in `native/Packages/DaythreadUI`; `native-app.md` §9 rule 3), the one line of words that
 says what a row action did:

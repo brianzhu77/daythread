@@ -345,7 +345,8 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     relay.release()
     try await soon { day.notice != nil }
     #expect(day.notice?.text == "On today")
-    #expect(listed(day) == ["t-shed"])
+    // The screen draws the state on its next update, which may come after the notice.
+    try await soon { listed(day) == ["t-shed"] }
     #expect(day.facts.notToday?.title == "Not today · 1")
     #expect(day.factsModel.acting == nil)
     #expect(day.factsModel.notTodayOpen, "the fold stays open")
