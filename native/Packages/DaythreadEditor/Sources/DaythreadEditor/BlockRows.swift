@@ -6,11 +6,27 @@ public enum BlockRows {
   /// followed by `#2`, `#3` and so on, in document order, so every row's id is unique. A document that
   /// does not parse has no rows.
   public static func rows(for page: Page, in workspace: Workspace) -> [BlockRow] {
-    rows(for: Document.blocks(page.document), in: workspace)
+    rows(for: page, in: workspace, today: nil)
   }
 
-  /// The rows of a page's blocks, as `rows(for:in:)` gives them: the page being edited is drawn from its blocks.
-  static func rows(for blocks: [Block], in workspace: Workspace) -> [BlockRow] {
+  /// As `rows(for:in:)`, each to-do row with its facts read against `today`. `today` nil draws no facts, as before
+  /// 1c. The index is built once per call.
+  public static func rows(for page: Page, in workspace: Workspace, today: LocalDate?) -> [BlockRow] {
+    let facts = today.map { FactsSource(today: $0, pageDate: page.date, index: TodoIndex(workspace)) }
+    return rows(for: Document.blocks(page.document), in: workspace, facts: facts)
+  }
+
+  /// What a to-do row's facts are read with: one index of the workspace for all the rows of a call.
+  struct FactsSource {
+    let today: LocalDate
+    /// The page's own day; nil when it is not a day page.
+    let pageDate: LocalDate?
+    let index: TodoIndex
+  }
+
+  /// The rows of a page's blocks, as `rows(for:in:today:)` gives them: the page being edited is drawn from its blocks.
+  /// `facts` nil draws no facts.
+  static func rows(for blocks: [Block], in workspace: Workspace, facts: FactsSource? = nil) -> [BlockRow] {
     var ids = RowIDs(blocks)
     var rows: [BlockRow] = []
 
@@ -25,7 +41,7 @@ public enum BlockRows {
       let block = item.block
       rows.append(
         BlockRow(
-          id: ids.unique(block.id), kind: kind(of: block, number: item.number, in: workspace),
+          id: ids.unique(block.id), kind: kind(of: block, number: item.number, in: workspace, facts: facts),
           depth: item.depth, content: hasInlineContent(block) ? block.content : nil))
       if hasChildren(block) {
         for child in numbered(block.children).reversed() {
@@ -45,7 +61,7 @@ public enum BlockRows {
     }
   }
 
-  private static func kind(of block: Block, number: Int, in workspace: Workspace) -> BlockRow.Kind {
+  private static func kind(of block: Block, number: Int, in workspace: Workspace, facts: FactsSource?) -> BlockRow.Kind {
     switch block.type {
     case "paragraph": .text(style: .paragraph)
     case "heading": .text(style: .heading(level: level(of: block)))
@@ -54,7 +70,7 @@ public enum BlockRows {
     case "quote": .text(style: .quote)
     case "divider": .separator
     case "task":
-      todo(of: block, in: workspace)
+      todo(of: block, in: workspace, facts: facts)
     default: .placeholder(name: placeholderName(for: block.type))
     }
   }
@@ -65,12 +81,15 @@ public enum BlockRows {
   }
 
   /// The status is the task's, never the block's own.
-  private static func todo(of block: Block, in workspace: Workspace) -> BlockRow.Kind {
+  private static func todo(of block: Block, in workspace: Workspace, facts source: FactsSource?) -> BlockRow.Kind {
     let id = block.props["taskId"]?.stringValue ?? ""
-    guard let task = workspace.task(id) else {
-      return .todo(taskId: id, status: nil, paused: false)
+    let facts = source.flatMap {
+      RowFacts.of(row: block, pageDate: $0.pageDate, in: workspace, index: $0.index, today: $0.today)
     }
-    return .todo(taskId: id, status: task.status, paused: task.paused)
+    guard let task = workspace.task(id) else {
+      return .todo(taskId: id, status: nil, paused: false, facts: facts)
+    }
+    return .todo(taskId: id, status: task.status, paused: task.paused, facts: facts)
   }
 
   private static func placeholderName(for type: String) -> String {

@@ -67,6 +67,15 @@
 | Untitled | A page reference whose page has no title |
 | Undo | The notice's only button (a plain system button, footnote text), and the notice's accessibility action of the same name. The notice's other words are composed by the app from `native-phase-1.md` §11.5's table and are added here by the task that first shows them |
 | Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |
+| Cancelled | A to-do row's marks line, under its words (footnote, secondary colour), on a cancelled to-do's row; the only mark such a row draws besides `Reference` |
+| Due today, Due tomorrow, Due Sun, Due Wed 12/2, Due that day, Start tomorrow, Start Mon · Due Sun 12/6, Unscheduled | The date tag, first on an open to-do's marks line; the web's words (`taskDateTag`), with the day worded against today, or against the row's own plan day for a plan row |
+| Was due Mon | The same tag when the Due date has passed (before today and the row's day), in the system's red; the line's only red |
+| Since Nov 3 (Since Nov 3, 2025) | The same line, on today's plan row of an open to-do carried for a week or more; the year only when it is not this year's |
+| `repeat` symbol | The same line, on an open to-do that repeats: the symbol alone (a text attachment, footnote size, secondary colour); VoiceOver reads the repeat's name, `Repeats every week` (`Repeats every 2 weeks on Mon, Thu`, …) |
+| Reference | The same line, on a reference row (any status, as the web), at regular width only (iPad, Mac); a phone does not draw it |
+| Moved to Fri 11/27 | The same line, on a plan row whose to-do was planned on a later day since, at regular width only |
+| Blocked by Buy paint, Blocked by 2 | A line of its own under the marks (or alone in their place), on an open to-do blocked by open to-dos: the blocker's title for one, the count for more |
+| Due tomorrow, Since Nov 3, Repeats every week, Blocked by Buy paint | The marks line's VoiceOver label: one element after the words, the marks drawn at that width, in order, comma-joined |
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
 | Today, Tasks, Calendar, Pages | The tab bar's tabs, the web's places in its order: the system's tab bar with its default appearance (the floating glass capsule on iOS 26). Symbols: `<day of month>.calendar` for Today (the account's today, `26.calendar` on the 26th; it changes at the account's midnight), `checkmark.square`, `calendar`, `doc.text` |
 | Search | The system's search tab (`UISearchTab`), its own title and symbol, after the four; the system draws it apart, as the round button at the end of the bar |
@@ -84,9 +93,17 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
   row's label, with the system's caret, selection, autocorrection, dictation and input methods; the keyboard is the
   system's default. The line being typed stays above the keyboard, also when the text size changes while it is up.
 - **To-do:** a system button holding an SF Symbol (`circle`, `checkmark.circle.fill`, `xmark.circle`, changed with the
-  symbol replace transition), at least 44 points square, and the text; a finished one in secondary colour, struck
+  symbol replace transition), at least 44 points square, level with the middle of the words' first line at every size
+  (as on the web, whether the words wrap or marks lie under them), and the text; a finished one in secondary colour, struck
   through. It keeps the system's pressed look; one that cannot be ticked keeps its status's colour, not the system's
   disabled grey, since a cancelled to-do's `xmark.circle` is its status, not a control turned off.
+  - **The marks line** (slice 1c) is not a view of ours: it is the list content configuration's secondary text, so
+    the system places it under the words, with its own spacing, margins and wrapping at every text size. Footnote in
+    the secondary label colour, a passed date tag in the system's red, the repeat mark the `repeat` symbol as a text
+    attachment, ` · ` between marks, `Blocked by …` after a line break. The cell picks the marks for its own horizontal
+    size class, so a rotation or a resized window redraws them without new rows. The words keep the first line and
+    their width; a tap on the marks puts the caret in the words. A row with no marks has no secondary text and is
+    drawn as before. VoiceOver reads the row as the circle, the words, then the marks as one element.
 - **Separator:** one hairline in the system's separator colour.
 - **Placeholder:** a `rectangle.dashed` symbol and the block's name in secondary colour.
 
