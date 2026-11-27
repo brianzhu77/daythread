@@ -504,11 +504,13 @@
 
       // MARK: the button's place
 
-      @Test func plan_for_today_ends_at_the_rows_trailing_margin() throws {
-        let long = "A paragraph long enough to wrap, so its words reach the trailing margin of the row on a phone"
+      /// A phone upright, and on its side, where the safe area is at the sides (the Dynamic Island's, the other's).
+      @Test(arguments: [(width: 390.0, safeArea: 0.0), (width: 874.0, safeArea: 62.0)])
+      func plan_for_today_ends_at_the_rows_trailing_margin(width: CGFloat, safeArea: CGFloat) throws {
+        let long = String(repeating: "A paragraph long enough to wrap, so its words reach the trailing margin. ", count: 3)
         let screen = try Screen.editing(
           [taskRow("ref", "k-ref", "Read the lease", reference: true), block("p", "paragraph", text: long)],
-          tasks: [todo("k-ref")], today: today)
+          tasks: [todo("k-ref")], width: width, height: 402, safeArea: safeArea, today: today)
         let reference = try cell(screen, 0)
         let paragraph = try screen.line(1)
         let title = try #require(reference.planButton.titleLabel)
