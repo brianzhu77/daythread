@@ -225,6 +225,17 @@ private struct RowScreen {
     button.sendActions(for: .primaryActionTriggered)
   }
 
+  /// Chooses `title` in the action sheet showing: the sheet goes, then its action's handler runs, as the system does
+  /// on a tap. The handler is read by key: UIKit gives a test no other way to run it.
+  func choose(_ title: String) throws {
+    typealias Handler = @convention(block) (UIAlertAction) -> Void
+    let sheet = try #require(screen.presentedViewController as? UIAlertController, "no sheet")
+    let action = try #require(sheet.actions.first { $0.title == title }, "no \(title)")
+    let handler = try #require(action.value(forKey: "handler") as AnyObject?)
+    sheet.dismiss(animated: false)
+    unsafeBitCast(handler, to: Handler.self)(action)
+  }
+
   /// The notice's `Undo`, tapped.
   func undo() throws {
     let button = try #require(Self.button(in: screen.notice) { $0.configuration?.title == "Undo" }, "no Undo")
@@ -742,6 +753,243 @@ private struct RowScreen {
       await h.server.sent.last
         == Command.planTask(taskId: "t1", date: LocalDate("2026-11-30")!, from: today, today: today))
     try await soon { day.screen.presentedViewController == nil }
+    day.close()
+  }
+
+  @Test func choosing_from_more_sends_its_command_once_and_says_so() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    try day.swipe("Water the plants", "More")
+    try await soon { day.screen.presentedViewController != nil }
+
+    await h.server.add([applied(try changes(from: 1, to: 2))])
+    try day.choose("Next week · Mon 11/30")
+    try await soon { day.notice != nil }
+    #expect(day.notice?.text == "Moved to Mon, Nov 30")
+    try await turns()
+    #expect(
+      await h.server.sent
+        == [Command.planTask(taskId: "t1", date: LocalDate("2026-11-30")!, from: today, today: today)])
+    day.close()
+  }
+
+  // MARK: A menu left open while the row changed
+
+  /// Today's page without `t1`'s row, as another device left it at revision 2.
+  private func rowMovedAway(cancelled: Bool = false) throws -> TestServer.Reply {
+    let pages =
+      cancelled
+      ? [todayPage]
+      : [
+        page(today, [line("a", "Morning"), row("r2", "t2", "Read the lease"), line("b", "Walk")]),
+        page(tomorrow, [row("r1", "t1", "Water the plants", on: tomorrow)]),
+      ]
+    let tasks = [cancelled ? task("t1", "Water the plants", status: "cancelled", version: 2) : water, read]
+    return .workspace(.full(try copy(revision: 2, pages: pages, tasks: tasks), owner: "one"))
+  }
+
+  @Test func a_choice_from_more_after_the_row_moved_away_sends_nothing() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    try day.swipe("Water the plants", "More")
+    try await soon { day.screen.presentedViewController != nil }
+
+    await h.server.add([try rowMovedAway()])
+    await h.model.refresh()
+    try await soon { !day.words.contains("Water the plants") }
+    try day.choose("Next week · Mon 11/30")
+    try await turns()
+
+    #expect(await h.server.sent.isEmpty)
+    #expect(day.notice == nil)
+    #expect(day.screen.presentedViewController == nil)
+    day.close()
+  }
+
+  @Test func a_choice_from_more_after_the_to_do_was_cancelled_elsewhere_sends_nothing() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    try day.swipe("Water the plants", "More")
+    try await soon { day.screen.presentedViewController != nil }
+
+    await h.server.add([try rowMovedAway(cancelled: true)])
+    await h.model.refresh()
+    try await soon { h.model.workspace?.task("t1")?.status == .cancelled }
+    try day.choose("Cancel task")
+    try await turns()
+
+    #expect(await h.server.sent.isEmpty, "the row stays, and no longer offers Cancel task")
+    #expect(day.notice == nil)
+    day.close()
+  }
+
+  @Test func a_day_picked_after_the_row_was_removed_sends_nothing() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    try day.menu("Water the plants", "Pick date…")
+    try await soon { day.screen.presentedViewController != nil }
+    let picker = try #require(day.screen.presentedViewController as? DayPickerViewController)
+    picker.loadViewIfNeeded()
+
+    await h.server.add([try rowMovedAway()])
+    await h.model.refresh()
+    try await soon { !day.words.contains("Water the plants") }
+    let selection = try #require(picker.calendarView.selectionBehavior as? UICalendarSelectionSingleDate)
+    picker.dateSelection(selection, didSelectDate: DateComponents(year: 2026, month: 11, day: 30))
+    try await turns()
+
+    #expect(await h.server.sent.isEmpty)
+    #expect(day.notice == nil)
+    try await soon { day.screen.presentedViewController == nil }
+    day.close()
+  }
+
+  @Test func a_request_while_something_is_presented_does_nothing() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    try day.swipe("Water the plants", "More")
+    try await soon { day.screen.presentedViewController != nil }
+
+    await h.server.add([applied(try changes(from: 1, to: 2))])
+    try day.swipe("Read the lease", "Not today")
+    try await turns()
+    #expect(await h.server.sent.isEmpty)
+    #expect(day.notice == nil)
+    #expect(try !day.dimmed("Read the lease"))
+    day.close()
+  }
+
+  // MARK: Hardening
+
+  @Test func undo_tapped_in_the_turn_after_he_typed_sends_nothing() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    _ = try await moveWithUndo(h, day)
+    let sent = await h.server.sent.count
+
+    // He types, and the button's action runs before the observation's next turn withdraws it.
+    try day.type("!", atEndOf: "Walk")
+    try day.undo()
+    try await turns()
+
+    #expect(await h.server.sent.count == sent, "no undo sent")
+    #expect(!(await h.server.sent.contains { type(of: $0) == "undo" }))
+    #expect(day.notice == Notice(text: "Moved to Fri, Nov 27", kind: .done, undoing: nil))
+    day.close()
+  }
+
+  @Test func a_to_do_typed_and_acted_on_in_the_same_turn_is_saved_then_acted_on() async throws {
+    let h = try await harness(
+      pages: [page(today, [line("a", "Morning"), row("r1", "editor-task:r1", "")])], tasks: [])
+    let day = try RowScreen(h.model)
+    let saved = page(today, [line("a", "Morning"), row("r1", "editor-task:r1", "Buy milk")])
+    await h.server.add([
+      savedAs(try changes(from: 1, to: 2, pages: [saved], tasks: [task("editor-task:r1", "Buy milk")])),
+      applied(try changes(from: 2, to: 3, pages: [page(today, [line("a", "Morning")])])),
+    ])
+
+    // Typed, and the action asked in the same turn: the state holding the new to-do has not arrived.
+    try day.type("Buy milk", atEndOf: "")
+    #expect(h.model.state.workspace?.task("editor-task:r1") == nil)
+    let acted = await h.model.act(
+      .move(tomorrow), taskId: "editor-task:r1", pageId: "day:2026-11-26", pageDate: today, owner: "one")
+
+    guard case .done(let text, _) = acted else {
+      Issue.record("not done: \(acted)")
+      return
+    }
+    #expect(text == "Moved to Fri, Nov 27")
+    #expect(await h.server.sent.map { type(of: $0) } == ["save-editor", "plan-task"])
+    day.close()
+  }
+
+  @Test func the_states_ending_while_an_action_waits_says_not_done_and_frees_the_row() async throws {
+    let relay = StateRelay()
+    let h = try await harness(pages: [todayPage], tasks: [water, read], relay: relay)
+    let day = try RowScreen(h.model)
+    await h.server.hold()
+    try day.swipe("Water the plants", "Tomorrow")
+    try await answerHeld(h) { _ in
+      relay.hold()
+      return applied(try movedToTomorrow(operationId: nil))
+    }
+    await h.engine.settled()
+
+    relay.finish()
+    try await soon { day.notice != nil }
+    #expect(day.notice == Notice(text: "Not done · your text is kept", kind: .failed, undoing: nil))
+    #expect(try !day.dimmed("Water the plants"))
+    #expect(day.editor.actingRow == nil)
+
+    // A later action runs.
+    try day.swipe("Read the lease", "Not today")
+    try await eventually { await h.server.sent.count == 2 }
+    try await soon { day.editor.actingRow == nil }
+    day.close()
+  }
+
+  @Test func an_account_change_while_an_action_waits_shows_nothing_under_the_new_account() async throws {
+    let relay = StateRelay()
+    let h = try await harness(pages: [todayPage], tasks: [water, read], relay: relay)
+    let day = try RowScreen(h.model)
+    await h.server.hold()
+    try day.swipe("Water the plants", "Tomorrow")
+    try await answerHeld(h) { _ in
+      relay.hold()
+      return applied(try movedToTomorrow(operationId: nil))
+    }
+    await h.engine.settled()
+
+    // The states that held the answer never reach the model; the next one is another account's.
+    relay.discardKept()
+    await h.server.add([
+      .workspace(.full(try copy(revision: 7, pages: [todayPage], tasks: [water, read]), owner: "two"))
+    ])
+    await h.model.refresh()
+    relay.release()
+    try await soon { h.model.state.owner == "two" }
+    try await soon { day.editor.actingRow == nil }
+    try await turns()
+    #expect(day.notice == nil, "nothing of the first account's action is said under the second")
+    day.close()
+  }
+
+  @Test func leaving_the_day_while_an_action_is_out_shows_nothing_for_it_there() async throws {
+    let yesterdayPage = page(yesterday, [row("y1", "t3", "Pay the rent", on: yesterday)])
+    let h = try await harness(pages: [todayPage, yesterdayPage], tasks: [water, read, task("t3", "Pay the rent")])
+    let day = try RowScreen(h.model)
+    await h.server.hold()
+    try day.swipe("Water the plants", "Tomorrow")
+    await h.server.callHeld()
+
+    day.screen.open(yesterday)
+    day.drawn()
+    #expect(day.words == ["Pay the rent"])
+    #expect(day.editor.actingRow == nil, "the old row's dimming does not follow him")
+    #expect(try !day.dimmed("Pay the rent"))
+
+    try await answerHeld(h) { _ in applied(try movedToTomorrow(operationId: nil)) }
+    await h.engine.settled()
+    try await turns()
+    #expect(day.notice == nil, "nothing is said on this day for the other")
+
+    // A later action on this day runs.
+    await h.server.add([applied(try changes(from: 2, to: 3))])
+    try day.swipe("Pay the rent", "Bring to today")
+    try await soon { day.notice != nil }
+    #expect(day.notice?.text == "On today")
+    day.close()
+  }
+
+  @Test func leaving_the_day_while_a_notice_shows_takes_it_away() async throws {
+    let yesterdayPage = page(yesterday, [row("y1", "t3", "Pay the rent", on: yesterday)])
+    let h = try await harness(pages: [todayPage, yesterdayPage], tasks: [water, read, task("t3", "Pay the rent")])
+    let day = try RowScreen(h.model)
+    _ = try await moveWithUndo(h, day)
+
+    day.screen.open(yesterday)
+    day.drawn()
+    #expect(day.notice == nil)
     day.close()
   }
 

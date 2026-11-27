@@ -118,6 +118,16 @@ final class StateRelay {
 
   func hold() { held = true }
 
+  /// Forgets the states kept back: the model next gets whatever comes after them, as a reader that subscribes late
+  /// gets only the current state.
+  func discardKept() { kept = [] }
+
+  /// Ends the model's stream, as when the engine is gone.
+  func finish() {
+    forwarding?.cancel()
+    continuation?.finish()
+  }
+
   func release() {
     held = false
     for state in kept { continuation?.yield(state) }
