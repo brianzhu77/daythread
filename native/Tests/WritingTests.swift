@@ -519,6 +519,71 @@ private struct DayScreen {
     day.close()
   }
 
+  /// The model takes another account's state, and he types again before the screen has drawn it: the keystroke is
+  /// made under the account whose page he typed it on, and the engine refuses it. Nothing is stored under the other.
+  @Test func a_keystroke_after_the_model_took_another_accounts_state_is_made_under_the_first() async throws {
+    let h = try await harness()
+    let day = try DayScreen(h.model)
+    await h.server.add([.workspace(.full(try copy(revision: 1, pages: [page(today, base)]), owner: "two"))])
+    // The load holds the store: his first keystroke waits in the engine, his second in the model.
+    await h.store.holdReplace()
+    let refreshing = Task { [model = h.model] in await model.refresh() }
+    await h.store.replaceHeld()
+    let walk = try day.type(" t", atEndOf: "Walk")
+    try await turns()
+    walk.insertText("h")
+    // Taking the new state, the model drops the keystroke it holds; he types once more at that moment, in the same
+    // turn of the main actor, so before the screen can draw that state.
+    let seen = Seen()
+    withObservationTracking {
+      _ = h.model.answeredWrites
+    } onChange: {
+      MainActor.assumeIsolated {
+        seen.owner.withLock { $0 = h.model.state.owner }
+        walk.insertText("e")
+      }
+    }
+    await h.store.releaseReplace()
+    await refreshing.value
+    try await until { h.model.state.owner == "two" }
+    try await until { !h.model.isWriting(todayId) }
+    try await turns()
+
+    #expect(seen.owner.withLock { $0 } == "two", "typed after the model took the other account's state")
+    let puts = await h.store.puts
+    #expect(puts.allSatisfy { $0.owner == "one" }, "stored as two's: \(puts.map { words(of: $0.document) })")
+    #expect(try await h.store.drafts().allSatisfy { $0.owner == "one" })
+    #expect(h.model.state.drafts.isEmpty)
+    day.close()
+  }
+
+  /// He is composing when the screen is given another account's page with the same id: what he composed is committed
+  /// into the page he composed it on, under its account, which the engine refuses; it never goes into the new page.
+  @Test func a_composition_when_another_accounts_page_is_given_never_goes_into_it() async throws {
+    let h = try await harness()
+    let day = try DayScreen(h.model)
+    let walk = try day.line("Walk")
+    #expect(walk.becomeFirstResponder())
+    walk.selectedRange = NSRange(location: 4, length: 0)
+    walk.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
+
+    let theirs = document([line("a", "Morning"), line("b", "Run")])
+    await h.server.add([.workspace(.full(try copy(revision: 1, pages: [page(today, theirs)]), owner: "two"))])
+    await h.model.refresh()
+    try await until { h.model.state.owner == "two" }
+    try await until { day.words == ["Morning", "Run"] }
+    try await until { !h.model.isWriting(todayId) }
+    try await turns()
+
+    #expect(day.words == ["Morning", "Run"], "the other account's page, without what he composed")
+    #expect(!day.screen.replacedDocuments.contains { words(of: $0).contains("Walk今") })
+    let puts = await h.store.puts
+    #expect(!puts.contains { words(of: $0.document).contains("Walk今") }, "stored: \(puts.map(\.owner))")
+    #expect(try await h.store.drafts().isEmpty)
+    #expect(h.model.state.drafts.isEmpty)
+    day.close()
+  }
+
   @Test func a_to_do_typed_offline_can_be_ticked_and_both_arrive_in_order() async throws {
     let h = try await harness([page(today, document([line("a", "Morning"), todoLine("r1", "")]))])
     let day = try DayScreen(h.model)
@@ -1020,6 +1085,11 @@ private struct DayScreen {
 /// Set from an observation's change handler, which may run on any thread.
 private final class Heard: Sendable {
   let value = Mutex(false)
+}
+
+/// The owner the model's state named when an observation's change handler ran.
+private final class Seen: Sendable {
+  let owner = Mutex<String?>(nil)
 }
 
 /// Background time the test owns: each task it begins is 7, and the test says when time is up.
