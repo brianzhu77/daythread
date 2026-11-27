@@ -37,13 +37,11 @@ import Testing
 
       #expect(index.repeatRule(of: taskId)?.markName == marks["repeat"]?.stringValue, "repeat: \(name)")
       #expect(Blockers.words(index.blockers(of: taskId)) == marks["blockedBy"]?.stringValue, "blockedBy: \(name)")
-      // `since` is drawn on a plan row of today's page only (`rowMarks`).
-      var since: String?
-      if let task = workspace.task(taskId), task.status == .open, block.props["role"]?.stringValue == "plan",
-        block.props["planDate"]?.stringValue == today.value, let date = index.carriedSince(task, today: today)
-      {
-        since = "Since " + DayWords.sinceLabel(date, today: today)
-      }
+      // `since` is drawn on a plan row of today's page only: the row's gate is `RowFacts`'s own.
+      let facts = RowFacts.of(row: block, pageDate: page.date, in: workspace, index: index, today: today)
+      let since = facts?.marks.compactMap { mark -> String? in
+        if case .since(let words) = mark { words } else { nil }
+      }.first
       #expect(since == marks["since"]?.stringValue, "since: \(name)")
     }
   }
