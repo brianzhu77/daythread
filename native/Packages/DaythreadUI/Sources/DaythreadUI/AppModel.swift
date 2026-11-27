@@ -300,14 +300,14 @@ public final class AppModel {
 /// A call about a page's words, handed to the engine in the order the screen made it.
 private enum WritingCall {
   case keep(pageId: String, document: String, singleDeleteIds: [String], startedFrom: String)
-  case rebase(pageId: String, baseDocument: String, document: String)
+  case rebase(pageId: String, baseDocument: String, document: String, singleDeleteIds: [String])
   case discard(pageId: String)
   /// Nothing for the engine: answered once every call made before it has been.
   case flush
 
   var pageId: String? {
     switch self {
-    case .keep(let pageId, _, _, _), .rebase(let pageId, _, _), .discard(let pageId): pageId
+    case .keep(let pageId, _, _, _), .rebase(let pageId, _, _, _), .discard(let pageId): pageId
     case .flush: nil
     }
   }
@@ -383,9 +383,11 @@ extension AppModel {
   }
 
   /// Hands the engine the merged page as the draft on the server's page (`SyncEngine.rebaseDraft`), behind the calls
-  /// made before it. The task answers whether the engine took it.
-  func rebase(pageId: String, baseDocument: String, document: String) -> Task<Bool, Never> {
-    let answer = enqueue(.rebase(pageId: pageId, baseDocument: baseDocument, document: document))
+  /// made before it, with the rows he removed one at a time that the list still names. The task answers whether the
+  /// engine took it.
+  func rebase(pageId: String, baseDocument: String, document: String, singleDeleteIds: [String]) -> Task<Bool, Never> {
+    let answer = enqueue(
+      .rebase(pageId: pageId, baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds))
     return Task { await Self.answer(answer) }
   }
 
@@ -481,9 +483,10 @@ extension AppModel {
         }
         return false
       }
-    case .rebase(let pageId, let baseDocument, let document):
+    case .rebase(let pageId, let baseDocument, let document, let singleDeleteIds):
       do {
-        let taken = try await engine.rebaseDraft(pageId: pageId, baseDocument: baseDocument, document: document)
+        let taken = try await engine.rebaseDraft(
+          pageId: pageId, baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds)
         if taken { unstored.remove(pageId) }
         return taken
       } catch {
@@ -521,7 +524,11 @@ extension AppModel {
           return
         }
         let merged = DraftMerging.merged(draft: draft, mine: draft.document, theirs: pair.theirs)
-        _ = self.enqueue(.rebase(pageId: pageId, baseDocument: pair.theirs, document: merged.document))
+        // The stored draft's rows, but for any the merged page holds again.
+        _ = self.enqueue(
+          .rebase(
+            pageId: pageId, baseDocument: pair.theirs, document: merged.document,
+            singleDeleteIds: DraftMerging.rowsStillRemoved(draft.singleDeleteIds, from: merged.document)))
       }
     }
   }

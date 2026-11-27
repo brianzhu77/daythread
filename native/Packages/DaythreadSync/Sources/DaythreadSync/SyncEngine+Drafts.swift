@@ -83,14 +83,19 @@ extension SyncEngine {
   }
 
   /// After the screen merged: the draft now starts from `baseDocument` (the server's page it was merged with),
-  /// holds `document`, has no rows named, and is saved at once. Refused when the copy's page is no longer that one.
+  /// holds `document`, names the rows of `singleDeleteIds` that `document` does not hold, and is saved at once. The
+  /// server settles a row he removed as removed one at a time only when the save that removes it names it, so the
+  /// rows he removed before the merge are named still; a row the merge kept never is. Refused when the copy's page is
+  /// no longer that one.
   ///
   /// Answers false, changing nothing, when the page has no draft (it was saved or discarded while the screen
   /// merged: what it merged must not bring back words just thrown away), when the copy's page is not `baseDocument`
   /// in its stored form (the page moved again while the screen merged), or when a save of the draft is on its way. A
   /// `document` equal to `baseDocument` removes the draft. Throws as `keepDraft` does.
   @discardableResult
-  public func rebaseDraft(pageId: String, baseDocument: String, document: String) async throws -> Bool {
+  public func rebaseDraft(
+    pageId: String, baseDocument: String, document: String, singleDeleteIds: [String]
+  ) async throws -> Bool {
     await acquire()
     defer { release() }
     guard copyShown, phase != .signedOut, !leaving, let copy, let page = copy.workspace.page(pageId) else {
@@ -103,10 +108,12 @@ extension SyncEngine {
       try await store.removeDraft(pageId: page.id, owner: copy.owner)
       forgetDraft(pageId: page.id, owner: copy.owner)
     } else {
+      var named = EditablePage(document: document, pageDate: nil)
+      named.carryRemovedRows(singleDeleteIds)
       try await keep(
         PageDraft(
           pageId: page.id, owner: copy.owner, base: ContentKey.of(baseDocument), baseDocument: baseDocument,
-          document: document, singleDeleteIds: [], sent: nil, changedAt: now()))
+          document: document, singleDeleteIds: named.singleDeleteIds, sent: nil, changedAt: now()))
     }
     stopDraftWait(page.id)
     refusedDrafts[page.id] = nil

@@ -74,6 +74,9 @@
     private struct OpenPage {
       let id: String
       var startedFrom: String
+      /// The rows he removed one at a time that the list names: as it last reported them, carried over each page it
+      /// has been handed since as it carries them (`DraftMerging.rowsStillRemoved`), so what it would report next.
+      var singleDeleteIds: [String] = []
     }
 
     private let document = DocumentViewController()
@@ -293,6 +296,9 @@
     private func replaceList(with page: String, in workspace: Workspace) {
       replacedDocuments.append(page)
       document.replace(document: page, in: workspace)
+      if let ids = openPage?.singleDeleteIds, !ids.isEmpty {
+        openPage?.singleDeleteIds = DraftMerging.rowsStillRemoved(ids, from: page)
+      }
     }
 
     private func closePage() {
@@ -308,6 +314,7 @@
     /// The list's report of a change he made. Not a place to read `document.document`: the list hands it over.
     private func wrote(_ document: String, _ singleDeleteIds: [String]) {
       guard let openPage else { return }
+      self.openPage?.singleDeleteIds = singleDeleteIds
       model.wrote(
         pageId: openPage.id, document: document, singleDeleteIds: singleDeleteIds, startedFrom: openPage.startedFrom)
       if saysMerged {
@@ -356,7 +363,10 @@
           self.saysMerged = true
           self.setNeedsUpdateProperties()
         }
-        _ = await self.model.rebase(pageId: pageId, baseDocument: pair.theirs, document: merged.document).value
+        _ = await self.model.rebase(
+          pageId: pageId, baseDocument: pair.theirs, document: merged.document,
+          singleDeleteIds: self.openPage?.singleDeleteIds ?? []
+        ).value
         self.merging = false
         // Refused, the state says behind again (and this merges again) or says the page is the server's.
         self.setNeedsUpdateProperties()

@@ -15,6 +15,14 @@ enum DraftMerging {
     PageMerge.merge(base: base, mine: mine, theirs: theirs)
   }
 
+  /// The rows of `ids` he removed one at a time that `document` does not hold, each once: what an edited page that
+  /// named `ids` names once `document` replaces it (`EditablePage.carryRemovedRows`), and so what its next save names.
+  static func rowsStillRemoved(_ ids: [String], from document: String) -> [String] {
+    var page = EditablePage(document: document, pageDate: nil)
+    page.carryRemovedRows(ids)
+    return page.singleDeleteIds
+  }
+
   /// A draft's words as plain text, one line per row he can type into, in page order: what "Copy draft" copies.
   static func plainText(of document: String, pageDate: LocalDate?) -> String {
     let page = EditablePage(document: document, pageDate: pageDate)
