@@ -156,6 +156,24 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     day.close()
   }
 
+  @Test func bring_back_after_typing_keeps_the_indexes_the_screen_holds() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    await h.server.add([savedAs(try changes(from: 1, to: 2, pages: [page(today, todayLines(walk: "Walk!"))]))])
+    await h.server.holdCommands()
+    // Typed, and Bring back tapped in the same turn: the workspace with his words is one no state has drawn yet.
+    try day.type("!", atEndOf: "Walk")
+    let cached = day.screen.indexedWorkspaces
+    day.factsModel.bringBack("t-aside")
+    #expect(day.screen.indexedWorkspaces == cached, "the check read the indexes without adding to them")
+
+    try await answerHeld(h) { applied(try broughtBack(from: 2, walk: "Walk!", undo: $0)) }
+    try await soon { day.notice != nil }
+    #expect(day.notice?.text == "On today")
+    day.close()
+  }
+
   @Test func another_day_sends_that_day_and_says_the_short_form() async throws {
     let h = try await harness()
     let day = try RowScreen(h.model)

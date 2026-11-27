@@ -162,6 +162,8 @@
     /// The indexes the last `ListReading`s were read with, newest first, and the workspaces they are of: the list's
     /// workspace and a state's are read again at the next state, at no cost.
     private var readingIndexes: [(workspace: Workspace, index: TodoIndex)] = []
+    /// The workspaces `readingIndexes` holds, newest first (tests read it).
+    var indexedWorkspaces: [Workspace] { readingIndexes.map(\.workspace) }
 
     /// `noticeSleep`: how the notice waits out its time (tests hold it).
     init(model: AppModel, noticeSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep) {
