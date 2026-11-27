@@ -129,6 +129,26 @@
         #expect(line.selectedRange == NSRange(location: 2, length: 0))
       }
 
+      /// A header that grows by more than the space under his line: the line would be pushed below what the list shows,
+      /// where the list holds no cell for its row, and is still kept where it is.
+      @Test(arguments: [700, 1100])
+      func a_header_that_grows_past_the_line_keeps_it_where_it_is(height grown: CGFloat) throws {
+        let (screen, height) = try page(header: 100)
+        let line = try screen.focus(2, at: 2)
+        _ = screen.wait(1) { false }
+        let before = frameInWindow(line)
+        let offset = screen.list.contentOffset.y
+
+        height.constant = grown
+        screen.controller.headerDidChange()
+        _ = screen.list
+
+        #expect(abs(frameInWindow(line).minY - before.minY) < 0.5, "his line stays where it is on the screen")
+        #expect(abs(screen.list.contentOffset.y - (offset + grown - 100)) < 0.5)
+        #expect(line.isFirstResponder)
+        #expect(line.selectedRange == NSRange(location: 2, length: 0))
+      }
+
       /// The header partly on screen above his line: the list moves down by as much as the header shrank.
       @Test func a_header_that_shrinks_on_screen_keeps_the_typed_line_where_it_is() throws {
         let (screen, height) = try page(header: 300)
@@ -199,11 +219,34 @@
         #expect(abs(frameInWindow(try screen.cell(0)).minY - (first.minY + 200)) < 0.5)
       }
 
-      /// In `l30`, with the header off screen, and in `l3`, with it on screen and the list moved under him.
-      @Test(arguments: [29, 2])
-      func a_header_change_while_he_composes_keeps_his_marked_text(item: Int) throws {
-        let (screen, height) = try page(header: 100)
-        let line = try type(in: item, on: screen)
+      /// A header change while he composes in a row: `from` and `to` are the header's heights, `scrolled` how far
+      /// below its top the list is when he starts (nil: the row is brought to the middle of the screen).
+      struct Composing: Sendable, CustomTestStringConvertible {
+        let item: Int
+        let from: CGFloat
+        let to: CGFloat
+        var scrolled: CGFloat? = nil
+        var testDescription: String { "l\(item + 1), header \(Int(from)) to \(Int(to))" }
+      }
+
+      /// In `l30`, with the header off screen; in `l3`, with it on screen and the list moved under him, also by more
+      /// than the space under his line; and in `l3` with the header shrinking while partly on screen.
+      @Test(arguments: [
+        Composing(item: 29, from: 100, to: 300), Composing(item: 2, from: 100, to: 300),
+        Composing(item: 2, from: 100, to: 700), Composing(item: 2, from: 300, to: 100, scrolled: 250),
+      ])
+      func a_header_change_while_he_composes_keeps_his_marked_text(_ change: Composing) throws {
+        let (screen, height) = try page(header: change.from)
+        let line: LineTextView
+        if let scrolled = change.scrolled {
+          let list = screen.list
+          list.setContentOffset(CGPoint(x: 0, y: -list.adjustedContentInset.top + scrolled), animated: false)
+          line = try screen.focus(change.item, at: 2)
+          _ = screen.wait(1) { false }
+        } else {
+          line = try type(in: change.item, on: screen)
+        }
+        let item = change.item
         line.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
         let marked = try #require(line.markedTextRange)
         let markedRange = NSRange(
@@ -212,7 +255,7 @@
         let snapshots = screen.controller.appliedSnapshots
         let before = frameInWindow(line)
 
-        height.constant = 300
+        height.constant = change.to
         screen.controller.headerDidChange()
         _ = screen.list
 
