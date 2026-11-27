@@ -1506,6 +1506,100 @@ private struct DraftHarness {
     #expect(try await h.drafts == [])
   }
 
+  // MARK: A keystroke on its way when a save landed
+
+  @Test func a_keystroke_on_its_way_when_a_save_landed_starts_from_what_was_sent() async throws {
+    let h = try await DraftHarness(
+      opening + [
+        try saved(from: 5, to: 6, document: typed("Walk")), try saved(from: 6, to: 7, document: typed("Walk on")),
+      ])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    await h.engine.saveNow()
+    #expect(try await h.drafts == [], "the answer removed the draft")
+
+    // The screen made this keystroke on the page as it was before the save; it reaches the engine after the answer.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument)
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.baseDocument == typed("Walk"))
+    #expect(draft.base == ContentKey.of(typed("Walk")))
+    #expect(await current(h.engine)?.drafts == waiting())
+    await h.engine.saveNow()
+    let saves = await h.saves
+    #expect(saves.count == 2)
+    #expect(saves.last?.expectedContent == ContentKey.of(typed("Walk")))
+    #expect(saves.last?.document == typed("Walk on"))
+    #expect(try await h.drafts == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_keystroke_on_its_way_when_a_save_landed_that_the_server_changed_is_merged_with_what_was_sent()
+    async throws
+  {
+    let h = try await DraftHarness(
+      opening + [try saved(from: 5, to: 6, document: withTodo(planned: true), tasks: [todo("open")])])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: withTodo(), singleDeleteIds: [], startedFrom: baseDocument)
+    await h.engine.saveNow()
+    #expect(try await h.drafts == [], "the answer removed the draft")
+
+    try await h.engine.keepDraft(
+      pageId: day, document: withTodo(more: "Then call"), singleDeleteIds: [], startedFrom: baseDocument)
+    await h.waits.elapse()
+    await h.engine.saveNow()
+    await h.engine.settled()
+
+    let draft = try #require(try await h.drafts.first)
+    #expect(draft.baseDocument == withTodo())
+    #expect(draft.base == ContentKey.of(withTodo()))
+    #expect(await current(h.engine)?.drafts == behind())
+    #expect(await h.saves.count == 1, "nothing is sent over the server's page")
+    let theirs = try #require(try await h.store.load()?.workspace.page(day)?.document)
+    let merged = PageMerge.merge(base: draft.baseDocument, mine: draft.document, theirs: theirs)
+    #expect(merged.document == withTodo(planned: true, more: "Then call"))
+    #expect(!merged.bothChanged, "his line is not doubled")
+  }
+
+  @Test func a_keystroke_typed_on_neither_the_copys_page_nor_a_landed_saves_base_is_taken_as_given() async throws {
+    let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: typed("Walk"))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    await h.engine.saveNow()
+
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Theirs too"), singleDeleteIds: [], startedFrom: typed("Theirs"))
+    await h.waits.elapse()
+    await h.engine.saveNow()
+    await h.engine.settled()
+
+    #expect(try await h.drafts.first?.baseDocument == typed("Theirs"))
+    #expect(await current(h.engine)?.drafts == behind())
+    #expect(await h.saves.count == 1)
+  }
+
+  @Test func a_discarded_draft_forgets_the_save_that_landed_before_it() async throws {
+    let h = try await DraftHarness(opening + [try saved(from: 5, to: 6, document: typed("Walk"))])
+    await h.engine.start()
+    try await h.engine.keepDraft(pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument)
+    await h.engine.saveNow()
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument)
+    await h.engine.discardDraft(pageId: day)
+
+    // A keystroke on the page as it was before the save, made before the screen drew the server's page again.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk off"), singleDeleteIds: [], startedFrom: baseDocument)
+    await h.waits.elapse()
+    await h.engine.saveNow()
+    await h.engine.settled()
+
+    #expect(try await h.drafts.first?.baseDocument == baseDocument)
+    #expect(await current(h.engine)?.drafts == behind())
+    #expect(await h.saves.count == 1)
+  }
+
   @Test func two_devices() async throws {
     let server = try PageServer()
     let one = try await Device(server)

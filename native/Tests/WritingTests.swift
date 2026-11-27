@@ -512,6 +512,45 @@ private struct DayScreen {
     await saving.value
   }
 
+  @Test func a_keystroke_on_its_way_when_a_save_landed_is_typed_onto_what_was_saved() async throws {
+    let h = try await harness([page(today, base), page(yesterday, base)])
+    let day = try DayScreen(h.model)
+    try day.type(" the dog", atEndOf: "Walk")
+    try await until { !h.model.state.drafts.isEmpty }
+    let saved = document([line("a", "Morning"), line("b", "Walk the dog")])
+    await h.server.add([
+      .saved(
+        .applied(
+          receipt: .object(["revision": .number("2")]),
+          changes: try changes(from: 1, to: 2, pages: [page(today, saved)]), owner: "one"))
+    ])
+    await h.server.holdSaves()
+    let saving = h.model.saveNow()
+    try await eventually { await h.server.waitingCalls == 1 }
+
+    // His next keystroke waits in the model behind words for another day, whose store write is held.
+    await h.store.holdPut()
+    h.model.wrote(
+      pageId: yesterdayId, document: document([line("a", "Morning"), line("b", "Walk on")]), singleDeleteIds: [],
+      startedFrom: base)
+    await h.store.putHeld()
+    try day.type("!", atEndOf: "Walk the dog")
+
+    // The save's answer comes first and removes the draft; then the keystroke reaches the engine.
+    await h.server.release()
+    try await turns()
+    await h.store.releasePut()
+    await saving.value
+    try await until { h.model.state.drafts.contains { $0.id == todayId } }
+    try await turns()
+
+    #expect(day.words == ["Morning", "Walk the dog!"])
+    #expect(day.status == nil)
+    #expect(h.model.state.drafts.first { $0.id == todayId }?.state == .waiting, "nothing to merge")
+    #expect(await saves(h.server).count == 1, "no merged page was saved")
+    day.close()
+  }
+
   @Test func a_state_that_changes_only_his_words_leaves_the_list_alone() async throws {
     let todoRow =
       #"{"id":"t","type":"task","props":{"taskId":"t-open"},"content":[{"type":"text","text":"Water the plants","styles":{}}],"children":[]}"#
