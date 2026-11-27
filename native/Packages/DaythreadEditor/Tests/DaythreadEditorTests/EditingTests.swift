@@ -566,6 +566,9 @@
       /// Words that go in on the run loop's next turn go in while the list is being scrolled too, not once the scroll
       /// has ended.
       @Test func a_deferred_change_goes_in_while_the_list_is_scrolled() throws {
+        // The test host's main run loop has only the default mode; an app's has the tracking mode among its common
+        // ones, as here.
+        CFRunLoopAddCommonMode(CFRunLoopGetMain(), CFRunLoopMode(RunLoop.Mode.tracking.rawValue as CFString))
         let screen = try editing([block("a", "paragraph", text: "one")])
         let line = try focus(screen, 0)
         let end = NSRange(location: 3, length: 0)
