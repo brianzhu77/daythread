@@ -34,22 +34,24 @@ enum EditorFixtures {
 }
 
 /// A page of the given blocks, in a workspace whose tasks are given.
-func makePage(_ blocks: [Block], id: String = "p", date: String? = nil) throws -> Page {
+func makePage(_ blocks: [Block], id: String = "p", date: String? = nil, type: String = "document") throws -> Page {
   let dateValue: JSONValue = date.map { .string($0) } ?? .null
   let json: JSONValue = .object([
-    "id": .string(id), "type": .string("document"), "date": dateValue, "title": .string("A page"),
+    "id": .string(id), "type": .string(type), "date": dateValue, "title": .string("A page"),
     "document": .string(Document.write(blocks)),
   ])
   guard let page = Page(json) else { throw EditorFixtures.Unreadable() }
   return page
 }
 
-func makeWorkspace(pages: [Page] = [], tasks: [JSONValue] = []) throws -> Workspace {
-  let json: JSONValue = .object([
-    "revision": .number("1"), "timezone": .string("UTC"), "pages": .array(pages.map { .object($0.raw) }),
-    "tasks": .array(tasks),
-  ])
-  guard let workspace = Workspace(json) else { throw EditorFixtures.Unreadable() }
+func makeWorkspace(pages: [Page] = [], tasks: [JSONValue] = [], rest: [(String, JSONValue)] = []) throws -> Workspace {
+  var object = JSONObject()
+  object["revision"] = .number("1")
+  object["timezone"] = .string("UTC")
+  object["pages"] = .array(pages.map { .object($0.raw) })
+  object["tasks"] = .array(tasks)
+  for (key, value) in rest { object[key] = value }
+  guard let workspace = Workspace(.object(object)) else { throw EditorFixtures.Unreadable() }
   return workspace
 }
 
