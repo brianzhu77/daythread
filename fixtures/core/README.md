@@ -28,6 +28,16 @@ The to-do row. The script runs in a fixed time zone and never reads the clock; e
 - `notices/fixed.json`: `{ plannedForToday, notDone, undone, cantUndo, couldntUndo }`, the row's five fixed notices (`rowNotices`).
 - `actions/`: one file per row command. `{ before, intent, taskId, day, today, action, receipt, after, plannedAfter, notice }` for one the server takes (`action` is the web's `rowAction`, `after` holds the Undo marker `{ operationId: "cmd-<name>", revision }`; `undo` has no intent and `plan-for-today-from-a-reference-row` the button's own notice), `{ before, operationId, today, action, refused, notice }` for one it refuses.
 
+The morning: the strip above a day's page. Today is Thu 2026-11-26 here too.
+
+- `events/cases.json`: `{ name, workspace, day, events, unreadablePageId? }`, the day's events as `dayEvents` reads them from the pages (`[{ id, title, date, time, line: { pageId, lineId } }]`). `unreadablePageId` names a page holding a node whose `props` is not an object: the web reads that page's chips, the app reads nothing of it.
+- `events/times.json`: `{ time, text }`, `shortTime`, the strip's time.
+- `events/lines.json`: `{ name, events, line }`, the strip's events line (`eventsLine`: `{ text, more }`, `null` for no events).
+- `events/headings.json`: `{ name, document, headingId }`, the page's top-level heading titled Events (`eventsHeading`; `null` for none).
+- `facts/cases.json`: `{ name, workspace, date, today, facts }`, what `dayFacts` says of a day (`null`: no strip): `{ events, dueSoon, notToday }`, each row `{ taskId, words, tag, setAside }` with `tag` `""` for none.
+- `notices/strip.json`: `{ date, today, text }`, the notice `planOnNotice` gives Bring back and Another day.
+- `facts-actions/`: one file per strip command. `{ before, taskId, date, today, action, receipt, after, notice }`: `action` is the web's `planOnAction`, `after` holds the Undo marker `{ operationId: "cmd-<name>", revision }`, `notice` is `planOnNotice`'s.
+
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:
 
 ```sh

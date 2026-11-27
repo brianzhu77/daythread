@@ -7,12 +7,13 @@ import './fixed-time-zone.ts'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { harness, dayId, todo, bullet, para, heading, chip, pageRef, card, text } from '../tests/v2-helpers.ts'
+import { harness, dayId, todo, bullet, para, heading, chip, pageRef, card, text, under as underHeading } from '../tests/v2-helpers.ts'
 import { flatNodes, inlineText, pageContentKey, pageNodes, rowRole, rowTaskId, type EditorNode } from '../src/domain/editor-document.ts'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
 import { forBrowser } from '../src/server/browser-workspace.ts'
 import { strippedWorkspace } from '../src/domain/synced.ts'
-import { applyCommand, DomainError, localDayIn, plannedOn } from '../src/domain/workspace.ts'
+import { applyCommand, DomainError, getDayView, localDayIn, plannedOn } from '../src/domain/workspace.ts'
+import { dayEvents } from '../src/domain/chip-events.ts'
 import { writtenDays } from '../src/domain/page-tree.ts'
 import { draftPageId } from '../src/domain/day-draft.ts'
 import { labelFor } from '../src/components/outbox.ts'
@@ -24,6 +25,9 @@ import { rowNotices, rowNoticeText } from '../src/components/row-notices.ts'
 import { rowMarks, sinceLabel, type RowMarks } from '../src/components/row-marks.ts'
 import { blockedByWords, blockedIn } from '../src/components/blockers-view.ts'
 import { nextDayLabel, repeatMarkName } from '../src/components/todo-repeat-view.ts'
+import { eventsHeading, eventsLine, shortTime } from '../src/components/event-words.ts'
+import { dayFacts } from '../src/components/day-facts.ts'
+import { planOnAction, planOnNotice } from '../src/components/plan-on.ts'
 import type { Action, Command, Page, Task, Workspace } from '../src/domain/types.ts'
 
 // dates.ts words a date in the device's zone; the cases are the same wherever the script runs only if it is fixed.
@@ -955,6 +959,350 @@ const carryIn = (h: World, date: string, taskId: string) => {
   }
 }
 
+// ---- the morning -------------------------------------------------------------------------------------------------------
+// What the strip above a day's page says and does (docs/design/native-phase-1.md §12), made by running the web's own
+// functions (src/components) and the server's own commands. Today is Thu 2026-11-26.
+const YESTERDAY = '2026-11-25'
+const eventsUnder = (h: World, date: string, ...lines: EditorNode[]) => h.save(dayId(date), d => underHeading(d, 'Events', ...lines), { today: TODAY, at: stamped(1) })
+const errands = (h: World) => h.run({ type: 'create-document', title: 'Errands', body: '', pageId: 'errands' }, 'make-errands')
+/** To-do rows on the Errands page: no plan day, so nothing is planned by them. */
+const errandRows = (h: World, ...rows: [id: string, title: string][]) => h.save('errands', d => [...d, ...rows.map(([id, title]) => todo(id, title, 'plan', ''))], { today: TODAY, at: stamped(2) })
+const datesOf = (h: World, id: string, dates: { deadlineOn?: string; attentionOn?: string }) => h.run({ type: 'set-task-dates', taskId: taskOf(id), ...dates })
+const setAside = (h: World, taskId: string) => h.run({ type: 'not-today', taskId, date: TODAY })
+const factsOf = (ws: Workspace, date: string, today = TODAY) => dayFacts(getDayView(ws, date), ws, date, today)
+
+// events/cases.json: the events of a day as dayEvents reads them from the pages.
+{
+  const cases: unknown[] = []
+  const eventsCase = (name: string, h: World, wanted: [title: string, lineId: string][], extra: { unreadablePageId?: string } = {}) => {
+    const ws = forBrowser(h.ws)
+    const events = dayEvents(ws, TODAY).map(e => ({ id: e.id, title: e.title, date: e.date, time: e.time, line: { pageId: e.line!.pageId, lineId: e.line!.lineId } }))
+    expect(`events ${name}`, events.map(e => [e.title, e.line.lineId]), wanted)
+    cases.push({ name, workspace: ws, day: TODAY, events, ...extra })
+  }
+  const line = (id: string, ...content: unknown[]) => bullet(id, ...content)
+  const docPage = (h: World, pageId: string, title: string, ...lines: EditorNode[]) => {
+    h.run({ type: 'create-document', title, body: '', pageId }, `make-${pageId}`)
+    if (lines.length) h.save(pageId, d => [...d, ...lines], { today: TODAY, at: stamped(3) })
+  }
+
+  { const h = rowsWorld(); eventsUnder(h, TODAY, line('l1', text('Standup with Lu '), chip('e1', TODAY, '10:30'))); eventsCase('one chip in a line', h, [['Standup with Lu', 'l1']]) }
+  {
+    const h = rowsWorld()
+    h.run({ type: 'create-template', title: 'My day', pageId: 'tpl-1' }, 'make-template')
+    setDocument(h, 'tpl-1', d => [...d, line('t1', text('Standup '), chip('e1', TODAY, '10:30'))])
+    eventsCase('a chip on the day template', h, [])
+  }
+  {
+    const h = rowsWorld()
+    docPage(h, 'doc-t', 'Old notes', line('t1', text('Standup '), chip('e1', TODAY, '10:30')))
+    h.run({ type: 'delete-page', pageId: 'doc-t', at: stamped(4) }, 'trash-doc-t')
+    eventsCase('a chip on a page in Trash', h, [])
+  }
+  {
+    const h = rowsWorld()
+    saveRows(h, TODAY, plan('r1', 'Write the report'))
+    const anchor = pageNodes(h.page(dayId(TODAY)))[0]!.id
+    h.run({ type: 'set-draft', pageId: dayId(TODAY), status: 'ready', moreOpen: [], allowedTaskIds: [taskOf('r1')], items: [{ id: 'i0', anchor, place: 'after', taskId: taskOf('r1'), source: 'model', state: 'open' }] } as never)
+    const draft = h.ws.pages.find(p => p.type === 'draft')
+    if (!draft) throw new Error('events: the day must have a draft page')
+    setDocument(h, draft.id, d => [...d, line('t1', text('Standup '), chip('e1', TODAY, '10:30'))])
+    eventsCase("a chip on a day's draft page", h, [])
+  }
+  // In these the chosen line is on a later page than the line met first, so "the first holder met wins" fails them.
+  const chosenLaterThanFirstMet = (name: string, eventId: string) => {
+    const c = cases.at(-1) as { workspace: Workspace; events: { id: string; line: { pageId: string } }[] }
+    const holders = c.workspace.pages.filter(p => flatNodes(pageNodes(p)).some(n => JSON.stringify(n.content ?? []).includes(`"eventId":"${eventId}"`)))
+    const order = c.workspace.pages.map(p => p.id)
+    const chosen = c.events.find(e => e.id === eventId)!.line.pageId
+    if (holders.length < 2 || holders[0]!.id === chosen || order.indexOf(chosen) < order.indexOf(holders[0]!.id)) throw new Error(`events ${name}: the chosen line must be on a later page than the line met first`)
+  }
+  {
+    const h = harness(); h.day(YESTERDAY); h.day(TODAY)
+    eventsUnder(h, YESTERDAY, line('y1', text('Yesterday’s words '), chip('same', TODAY)))
+    eventsUnder(h, TODAY, line('t1', text('Today’s words '), chip('same', TODAY)))
+    eventsCase('one eventId in two lines on two day pages', h, [['Today’s words', 't1']])
+    chosenLaterThanFirstMet('one eventId in two lines on two day pages', 'same')
+  }
+  {
+    const h = harness()
+    docPage(h, 'doc-a', 'Trip notes', line('a1', text('From the document '), chip('same', TODAY)))
+    h.day(TODAY)
+    eventsUnder(h, TODAY, line('t1', text('From the day '), chip('same', TODAY)))
+    eventsCase('one eventId on a day page and a document page', h, [['From the day', 't1']])
+    chosenLaterThanFirstMet('one eventId on a day page and a document page', 'same')
+  }
+  { // Yesterday's page, then a document, then today's page: `same` is met first on yesterday's and chosen from today's,
+    // after `other`'s page; at one time the two keep the order their ids were first met.
+    const h = harness(); h.day(YESTERDAY)
+    docPage(h, 'doc-a', 'Between')
+    h.day(TODAY)
+    eventsUnder(h, YESTERDAY, line('y1', text('Planning, as first written '), chip('same', TODAY, '09:00')))
+    h.save('doc-a', d => [...d, line('a1', text('Coffee with Ana '), chip('other', TODAY, '09:00'))], { today: TODAY, at: stamped(3) })
+    eventsUnder(h, TODAY, line('t1', text('Planning '), chip('same', TODAY, '09:00')))
+    const name = 'ties keep the order ids were first met, not where the chosen line is'
+    eventsCase(name, h, [['Planning', 't1'], ['Coffee with Ana', 'a1']])
+    chosenLaterThanFirstMet(name, 'same')
+    const c = cases.at(-1) as { workspace: Workspace; events: { line: { pageId: string } }[] }
+    const order = c.workspace.pages.map(p => p.id)
+    if (order.indexOf(c.events[0]!.line.pageId) < order.indexOf(c.events[1]!.line.pageId)) throw new Error(`events ${name}: the first event's chosen line must be on a later page than the second's`)
+  }
+  {
+    const h = rowsWorld()
+    docPage(h, 'doc-a', 'First', line('a1', text('From the first '), chip('same', TODAY)))
+    docPage(h, 'doc-b', 'Second', line('b1', text('From the second '), chip('same', TODAY)))
+    eventsCase('one eventId on two document pages', h, [['From the first', 'a1']])
+  }
+  {
+    const h = rowsWorld()
+    eventsUnder(h, TODAY, line('l1', text('Dentist '), chip('e1', TODAY, '15:00')), line('l2', text('Lunch with Kathy '), chip('e2', TODAY)), line('l3', text('Standup with Lu '), chip('e3', TODAY, '10:30')))
+    eventsCase('three on one day', h, [['Lunch with Kathy', 'l2'], ['Standup with Lu', 'l3'], ['Dentist', 'l1']])
+  }
+  {
+    const h = rowsWorld()
+    docPage(h, 'doc-a', 'First', line('a1', text('Met first '), chip('e1', TODAY, '09:00')))
+    docPage(h, 'doc-b', 'Second', line('b1', text('Met second '), chip('e2', TODAY, '09:00')))
+    eventsCase('two at the same time on two pages', h, [['Met first', 'a1'], ['Met second', 'b1']])
+  }
+  {
+    const h = rowsWorld()
+    docPage(h, 'doc-live', 'Reading list')
+    docPage(h, 'doc-trashed', 'Old plans')
+    h.run({ type: 'delete-page', pageId: 'doc-trashed', at: stamped(4) }, 'trash-old-plans')
+    const nestedLink = { type: 'link', href: 'https://example.com/plan', content: [text('the plan'), chip('nested', TODAY, '08:00')] }
+    eventsUnder(h, TODAY,
+      line('w1', text('Meet '), chip('e1', TODAY), text(' Sam')),
+      line('w2', text('Read '), pageRef('doc-live', 'ref-1'), chip('e2', TODAY)),
+      line('w3', text('Look at '), pageRef('doc-trashed', 'ref-2'), chip('e3', TODAY)),
+      line('w4', text('See '), pageRef('doc-gone', 'ref-3'), chip('e4', TODAY)),
+      line('w5', text('Read '), nestedLink, text(' today'), chip('e5', TODAY)),
+      line('w6', text('  a\t　b﻿ c '), chip('e6', TODAY)),
+      line('w7', text('a\u0085b​c'), chip('e7', TODAY)),
+    )
+    eventsCase('titles', h, [['Meet Sam', 'w1'], ['Read Reading list', 'w2'], ['Look at Old plans', 'w3'], ['See', 'w4'], ['Read the plan today', 'w5'], ['a b c', 'w6'], ['a\u0085b​c', 'w7']])
+  }
+  {
+    const h = rowsWorld()
+    eventsUnder(h, TODAY, line('l1', text('Swim'), { type: 'dateMention', props: { eventId: '', date: TODAY, time: '' } }, text('lesson'), chip('e1', TODAY)))
+    eventsCase('a chip with no eventId beside a good one', h, [['Swim lesson', 'l1']])
+  }
+  {
+    const h = rowsWorld()
+    eventsUnder(h, TODAY, { ...line('l1', text('Trip')), children: [line('l2', text('Flight '), chip('e1', TODAY, '07:45'))] })
+    eventsCase('a chip on a nested line', h, [['Flight', 'l2']])
+  }
+  {
+    const h = rowsWorld()
+    docPage(h, 'doc-odd', 'Odd page')
+    setDocument(h, 'doc-odd', () => [{ id: 'odd', type: 'paragraph', props: 5, content: [text('Odd')], children: [] } as unknown as EditorNode, line('l1', text('Call Mum '), chip('e1', TODAY))])
+    eventsCase('a page with a node the app cannot read', h, [['Call Mum', 'l1']], { unreadablePageId: 'doc-odd' })
+    const odd = JSON.parse((cases.at(-1) as { workspace: Workspace }).workspace.pages.find(p => p.id === 'doc-odd')!.document) as { props?: unknown }[]
+    if (!odd.some(n => typeof n.props !== 'object' || n.props === null)) throw new Error('events: the unreadable page must hold a node whose props are not an object')
+  }
+  put('events/cases.json', cases)
+}
+
+// events/times.json, events/lines.json, events/headings.json
+{
+  const times = ['00:00', '00:15', '01:05', '09:30', '11:59', '12:00', '12:01', '13:00', '15:00', '23:59'].map(time => ({ time, text: shortTime(time) }))
+  expect('events/times', times.map(t => t.text), ['12 AM', '12:15 AM', '1:05 AM', '9:30 AM', '11:59 AM', '12 PM', '12:01 PM', '1 PM', '3 PM', '11:59 PM'])
+  put('events/times.json', times)
+
+  const ev = (i: number, title: string, time: string | null = null) => ({ id: `e${i}`, title, date: TODAY, time, line: { pageId: dayId(TODAY), lineId: `l${i}` } })
+  const lineCase = (name: string, events: ReturnType<typeof ev>[], wanted: ReturnType<typeof eventsLine>) => {
+    const line = eventsLine(events)
+    expect(`events/lines ${name}`, line, wanted)
+    return { name, events, line }
+  }
+  put('events/lines.json', [
+    lineCase('none', [], null),
+    lineCase('one with no time', [ev(1, 'Lunch with Kathy')], { text: 'Lunch with Kathy · All day', more: null }),
+    lineCase('one at 10:30', [ev(1, 'Standup with Lu', '10:30')], { text: '10:30 AM Standup with Lu', more: null }),
+    lineCase('one untitled with no time', [ev(1, '')], { text: 'Untitled event · All day', more: null }),
+    lineCase('two with no time', [ev(1, 'Lunch with Kathy'), ev(2, 'Pick up the kids')], { text: 'Lunch with Kathy · Pick up the kids', more: null }),
+    lineCase('two timed', [ev(1, 'Standup with Lu', '10:30'), ev(2, 'Dentist', '15:00')], { text: '10:30 AM Standup with Lu · 3 PM Dentist', more: null }),
+    lineCase('three', [ev(1, 'Lunch with Kathy'), ev(2, 'Standup with Lu', '10:30'), ev(3, 'Dentist', '15:00')], { text: 'Lunch with Kathy · 10:30 AM Standup with Lu', more: '+1 more' }),
+    lineCase('five', [ev(1, 'Lunch with Kathy'), ev(2, 'Standup with Lu', '10:30'), ev(3, 'Dentist', '15:00'), ev(4, 'Gym', '18:00'), ev(5, 'Call Mum', '20:30')], { text: 'Lunch with Kathy · 10:30 AM Standup with Lu', more: '+3 more' }),
+  ])
+
+  const head = (id: string, ...content: unknown[]): EditorNode => ({ id, type: 'heading', props: { level: 2 }, content, children: [] })
+  const headingCase = (name: string, nodes: EditorNode[], wanted: string | null) => {
+    const document = JSON.stringify(nodes)
+    const headingId = eventsHeading(JSON.parse(document))?.id ?? null
+    expect(`events/headings ${name}`, headingId, wanted)
+    return { name, document, headingId }
+  }
+  const before = para('p1', text('A line before'))
+  put('events/headings.json', [
+    headingCase('Events', [before, heading('h1', 'Events')], 'h1'),
+    headingCase('lower case with spaces', [before, heading('h1', ' events ')], 'h1'),
+    headingCase('upper case', [before, heading('h1', 'EVENTS')], 'h1'),
+    headingCase('no-break spaces, which trim takes off', [before, heading('h1', ' Events ')], 'h1'),
+    headingCase('a next-line character, which trim keeps', [before, heading('h1', 'Events\u0085')], null),
+    headingCase('a colon', [before, heading('h1', 'Events:')], null),
+    headingCase('a paragraph', [before, para('h1', text('Events'))], null),
+    headingCase('a heading nested under a bullet', [before, { ...bullet('b1', text('A bullet')), children: [heading('h1', 'Events')] }], null),
+    headingCase('two headings', [before, heading('h1', 'Events'), para('p2', text('Between')), heading('h2', 'Events')], 'h1'),
+    headingCase('a heading holding Events and a chip', [before, head('h1', text('Events '), chip('e1', TODAY))], null),
+  ])
+}
+
+// facts/cases.json: what dayFacts gives, from the workspace as the app holds it.
+{
+  const cases: unknown[] = []
+  const factsCase = (name: string, h: World, date: string, check: (facts: ReturnType<typeof factsOf>, ws: Workspace) => void) => {
+    const ws = forBrowser(h.ws)
+    const facts = factsOf(ws, date)
+    check(facts, ws)
+    cases.push({ name, workspace: ws, date, today: TODAY, facts })
+  }
+  const tags = (rows: { words: string; tag: string }[] | undefined) => rows?.map(r => [r.words, r.tag])
+  const eventsHeadingId = (ws: Workspace) => eventsHeading(pageNodes(ws.pages.find(p => p.id === dayId(TODAY))!))!.id
+
+  { // today with all three parts
+    const h = rowsWorld(); h.day(YESTERDAY)
+    eventsUnder(h, TODAY, bullet('ev1', text('Standup with Lu '), chip('e-standup', TODAY, '10:30')), bullet('ev2', text('Dentist '), chip('e-dentist', TODAY, '15:00')))
+    eventsUnder(h, YESTERDAY, bullet('ev3', text('Lunch with Kathy '), chip('e-lunch', TODAY)))
+    errands(h)
+    errandRows(h, ['taxes', 'File the taxes'], ['invoice', 'Send the invoice'], ['report', 'Start the report'], ['bike', 'Fix the bike'], ['tomorrow', 'Order the paint'], ['done', 'Book the flights'], ['cancelled', 'Renew the lease'])
+    datesOf(h, 'taxes', { deadlineOn: TODAY }); datesOf(h, 'invoice', { deadlineOn: '2026-11-23' }); datesOf(h, 'report', { attentionOn: TODAY })
+    datesOf(h, 'bike', { deadlineOn: TODAY }); setAside(h, taskOf('bike'))
+    datesOf(h, 'tomorrow', { deadlineOn: '2026-11-27' })
+    datesOf(h, 'done', { deadlineOn: TODAY }); h.run({ type: 'task-status', taskId: taskOf('done'), status: 'done', today: TODAY })
+    datesOf(h, 'cancelled', { deadlineOn: TODAY }); h.run({ type: 'task-status', taskId: taskOf('cancelled'), status: 'cancelled', today: TODAY })
+    h.day('2026-11-20')
+    h.run({ type: 'add-task', pageId: dayId('2026-11-20'), title: 'Sort the shed', plannedOn: '2026-11-20', attentionOn: '2026-11-20' }, 'add-shed')
+    setAside(h, h.task('Sort the shed').id)
+    errandRows(h, ['fence', 'Mend the fence'])
+    setAside(h, taskOf('fence'))
+    h.run({ type: 'add-task', pageId: dayId(TODAY), title: 'Pay the rent', plannedOn: TODAY, deadlineOn: TODAY }, 'add-rent')
+    h.run({ type: 'add-task', pageId: dayId(YESTERDAY), title: '　 ', plannedOn: YESTERDAY, deadlineOn: TODAY }, 'add-blank')
+    factsCase('today with all three parts', h, TODAY, (f, ws) => {
+      expect('facts today with all three parts: events', f!.events, { text: 'Lunch with Kathy · 10:30 AM Standup with Lu', more: '+1 more', headingId: eventsHeadingId(ws) })
+      expect('facts today with all three parts: Due soon', tags(f!.dueSoon), [['File the taxes', 'Due today'], ['Send the invoice', 'Was due Mon'], ['Start the report', 'Start today'], ['Fix the bike', 'Not today · Due today'], ['Sort the shed', 'Not today']])
+      expect('facts today with all three parts: set aside in Due soon', f!.dueSoon.map(r => r.setAside), [false, false, false, true, true])
+      expect('facts today with all three parts: Not today', [f!.notToday?.title, tags(f!.notToday?.rows)], ['Not today · 3', [['Fix the bike', 'Due today'], ['Sort the shed', ''], ['Mend the fence', 'Unscheduled']]])
+    })
+  }
+  { // the order is the workspace's
+    const h = rowsWorld(); errands(h)
+    errandRows(h, ['bank', 'Call the bank'], ['books', 'Return the books'])
+    datesOf(h, 'bank', { deadlineOn: TODAY }); datesOf(h, 'books', { deadlineOn: '2026-11-24' })
+    factsCase("the order is the workspace's", h, TODAY, f => expect("facts the order is the workspace's", tags(f!.dueSoon), [['Call the bank', 'Due today'], ['Return the books', 'Was due Tue']]))
+  }
+  { // a past day's page
+    const h = rowsWorld(); h.day('2026-11-20'); errands(h)
+    eventsUnder(h, '2026-11-20', bullet('ev1', text('Standup '), chip('e1', '2026-11-20', '10:30')))
+    errandRows(h, ['before', 'Send the forms'], ['that-day', 'Pay the plumber'], ['started', 'Clean the gutters'], ['aside', 'Fix the bike'])
+    datesOf(h, 'before', { deadlineOn: '2026-11-19' }); datesOf(h, 'that-day', { deadlineOn: '2026-11-20' }); datesOf(h, 'started', { attentionOn: '2026-11-20' })
+    setAside(h, taskOf('aside'))
+    factsCase("a past day's page", h, '2026-11-20', f => {
+      expect("facts a past day's page", [f!.events, tags(f!.dueSoon), f!.notToday], [null, [['Send the forms', 'Was due Thu'], ['Pay the plumber', 'Due that day'], ['Clean the gutters', 'Unscheduled']], null])
+    })
+  }
+  { // a later day's page
+    const h = rowsWorld(); h.day('2026-12-03'); errands(h)
+    errandRows(h, ['that-day', 'Pay the plumber'], ['today', 'File the taxes'])
+    datesOf(h, 'that-day', { deadlineOn: '2026-12-03' }); datesOf(h, 'today', { deadlineOn: TODAY })
+    factsCase("a later day's page", h, '2026-12-03', f => expect("facts a later day's page", [f!.events, tags(f!.dueSoon), f!.notToday], [null, [['Pay the plumber', 'Due that day'], ['File the taxes', 'Due today']], null]))
+  }
+  { // a past day without a page
+    const h = rowsWorld(); errands(h)
+    errandRows(h, ['that-day', 'Pay the plumber'], ['before', 'Send the forms'])
+    datesOf(h, 'that-day', { deadlineOn: '2026-11-24' }); datesOf(h, 'before', { deadlineOn: '2026-11-23' })
+    if (h.ws.pages.some(p => p.type === 'daily' && p.date === '2026-11-24')) throw new Error('facts a past day without a page: the day must have no page')
+    factsCase('a past day without a page', h, '2026-11-24', f => expect('facts a past day without a page', tags(f!.dueSoon), [['Pay the plumber', 'Due that day'], ['Send the forms', 'Was due Mon']]))
+  }
+  { // a later day without a page
+    const h = rowsWorld(); errands(h)
+    errandRows(h, ['later', 'Pay the plumber'])
+    datesOf(h, 'later', { deadlineOn: '2026-12-04' })
+    factsCase('a later day without a page', h, '2026-12-04', f => expect('facts a later day without a page', f, null))
+  }
+  { // today in Trash: the chip of yesterday's page is still today's event; the to-do whose row was on today's page is still due
+    const h = rowsWorld(); h.day(YESTERDAY); errands(h)
+    eventsUnder(h, YESTERDAY, bullet('ev1', text('Lunch with Kathy '), chip('e-lunch', TODAY)))
+    eventsUnder(h, TODAY, bullet('ev2', text('Standup with Lu '), chip('e-standup', TODAY, '10:30')))
+    errandRows(h, ['taxes', 'File the taxes'], ['aside', 'Fix the bike'])
+    datesOf(h, 'taxes', { deadlineOn: TODAY }); setAside(h, taskOf('aside'))
+    h.run({ type: 'add-task', pageId: dayId(TODAY), title: 'Pay the rent', plannedOn: TODAY, deadlineOn: TODAY }, 'add-rent')
+    h.run({ type: 'delete-page', pageId: dayId(TODAY), at: stamped(5) }, 'trash-today')
+    factsCase('today in Trash', h, TODAY, (f, ws) => {
+      if (ws.pages.some(p => p.type === 'daily' && p.date === TODAY && !p.trashedAt)) throw new Error('facts today in Trash: today must have no live page')
+      expect('facts today in Trash', [f!.events, tags(f!.dueSoon), f!.notToday?.title], [{ text: 'Lunch with Kathy · All day', more: null, headingId: null }, [['File the taxes', 'Due today'], ['Pay the rent', 'Due today']], 'Not today · 1'])
+    })
+  }
+  { // today with events and no Events heading
+    const h = rowsWorld()
+    h.save(dayId(TODAY), d => [...d.filter(n => !(n.type === 'heading' && inlineText(n.content).trim() === 'Events')), para('ev1', text('Standup with Lu '), chip('e1', TODAY, '10:30'))], { today: TODAY, at: stamped(1) })
+    factsCase('today with events and no Events heading', h, TODAY, f => expect('facts today with events and no Events heading', f!.events, { text: '10:30 AM Standup with Lu', more: null, headingId: null }))
+  }
+  { // nothing to show
+    const h = rowsWorld()
+    factsCase('nothing to show', h, TODAY, f => expect('facts nothing to show', f, { events: null, dueSoon: [], notToday: null }))
+  }
+  put('facts/cases.json', cases)
+}
+
+// notices/strip.json
+{
+  const cases = [TODAY, '2026-11-27', '2026-11-28', '2026-11-30', '2027-01-04'].map(date => ({ date, today: TODAY, text: planOnNotice(date, TODAY) }))
+  expect('notices/strip', cases.map(c => c.text), ['On today', 'Moved to Fri 11/27', 'Moved to Sat 11/28', 'Moved to Mon 11/30', 'Moved to Mon 1/4'])
+  put('notices/strip.json', cases)
+}
+
+// facts-actions/<name>.json: the strip's Bring back and Another day as the server takes them.
+// `{ before, taskId, date, today, action, receipt, after, notice }`: `action` is planOnAction's, applied as is; `after` is
+// as the browser gets it, so it holds the Undo marker `{ operationId: "cmd-<name>", revision }`.
+{
+  const asideWorld = () => { const h = rowsWorld(); errands(h); errandRows(h, ['bike', 'Fix the bike']); setAside(h, taskOf('bike')); return h }
+  const id = taskOf('bike')
+  const inNotToday = (ws: Workspace) => factsOf(ws, TODAY)?.notToday?.rows.some(r => r.taskId === id) ?? false
+  const factsAction = (name: string, h: World, date: string) => {
+    const before = forBrowser(h.ws)
+    const action = planOnAction(id, date, TODAY)
+    const result = applyCommand(h.ws, { operationId: `cmd-${name}`, expectedRevision: h.ws.revision, action })
+    h.ws = result.workspace
+    const after = forBrowser(result.workspace)
+    if (after.undo?.operationId !== `cmd-${name}`) throw new Error(`facts-actions ${name}: the Undo marker is not what the command leaves`)
+    if (!inNotToday(before) || inNotToday(after)) throw new Error(`facts-actions ${name}: the to-do must leave Not today`)
+    expect(`facts-actions ${name}: planned`, plannedOn(after, id), date)
+    put(`facts-actions/${name}.json`, { before, taskId: id, date, today: TODAY, action, receipt: result.receipt, after, notice: planOnNotice(date, TODAY) })
+    return { before, after }
+  }
+  const planRowOn = (ws: Workspace, date: string) => flatNodes(pageNodes(ws.pages.find(p => p.id === dayId(date))!)).find(n => rowTaskId(n) === id && rowRole(n) === 'plan')
+
+  {
+    const h = asideWorld()
+    // A plan row already under TODO, so the new row's place says it goes after the heading's plan rows.
+    h.run({ type: 'add-task', pageId: dayId(TODAY), title: 'Water the plants', plannedOn: TODAY }, 'add-water')
+    const water = h.task('Water the plants').id
+    const { before, after } = factsAction('bring-back-a-to-do-set-aside', h, TODAY)
+    if (flatNodes(pageNodes(before.pages.find(p => p.id === dayId(TODAY))!)).some(n => rowTaskId(n) === id)) throw new Error('facts-actions bring-back-a-to-do-set-aside: no row on today\'s page before')
+    expect('facts-actions bring-back-a-to-do-set-aside', [after.tasks.find(t => t.id === id)!.paused, Boolean(planRowOn(after, TODAY))], [false, true])
+    // Today's insert place: right after the TODO heading's plan rows and before its empty slot.
+    const top = pageNodes(after.pages.find(p => p.id === dayId(TODAY))!).slice(0, 4).map(n => n.type === 'heading' ? `heading ${inlineText(n.content)}` : `${n.type} ${rowRole(n) ?? ''} ${rowTaskId(n) ?? ''} ${inlineText(n.content)}`)
+    expect('facts-actions bring-back-a-to-do-set-aside: the new plan row\'s place', top, ['heading TODO', `task plan ${water} Water the plants`, `task plan ${id} Fix the bike`, `task plan ${taskOf(`${dayId(TODAY)}:r0`)} `])
+  }
+  {
+    const h = asideWorld()
+    saveRows(h, TODAY, reference('f1', id, 'Fix the bike'))
+    if (!flatNodes(pageNodes(h.page(dayId(TODAY)))).some(n => n.id === 'f1' && rowRole(n) === 'reference')) throw new Error('facts-actions bring-back-with-a-reference-row-on-today: the reference row must be on today\'s page')
+    const { after } = factsAction('bring-back-with-a-reference-row-on-today', h, TODAY)
+    expect('facts-actions bring-back-with-a-reference-row-on-today: the plan row keeps the block id', planRowOn(after, TODAY)?.id, 'f1')
+  }
+  {
+    const h = asideWorld(); h.day('2026-11-28')
+    factsAction('another-day-to-a-day-with-a-page', h, '2026-11-28')
+  }
+  {
+    const h = asideWorld()
+    if (h.ws.pages.some(p => p.id === dayId('2026-11-30'))) throw new Error('facts-actions another-day-to-a-day-without-a-page: the day must have no page')
+    const { after } = factsAction('another-day-to-a-day-without-a-page', h, '2026-11-30')
+    if (!after.pages.some(p => p.id === dayId('2026-11-30'))) throw new Error('facts-actions another-day-to-a-day-without-a-page: the new day page must be in `after`')
+  }
+}
+
 // ---- README ------------------------------------------------------------------------------------------------------------
 files.set('README.md', `# Core cases
 
@@ -985,6 +1333,16 @@ The to-do row. The script runs in a fixed time zone and never reads the clock; e
 - \`notices/cases.json\`: \`{ name, intent, task, day, today, receipt, plannedAfter, text }\`, the notice \`rowNoticeText\` gives a row action.
 - \`notices/fixed.json\`: \`{ plannedForToday, notDone, undone, cantUndo, couldntUndo }\`, the row's five fixed notices (\`rowNotices\`).
 - \`actions/\`: one file per row command. \`{ before, intent, taskId, day, today, action, receipt, after, plannedAfter, notice }\` for one the server takes (\`action\` is the web's \`rowAction\`, \`after\` holds the Undo marker \`{ operationId: "cmd-<name>", revision }\`; \`undo\` has no intent and \`plan-for-today-from-a-reference-row\` the button's own notice), \`{ before, operationId, today, action, refused, notice }\` for one it refuses.
+
+The morning: the strip above a day's page. Today is Thu 2026-11-26 here too.
+
+- \`events/cases.json\`: \`{ name, workspace, day, events, unreadablePageId? }\`, the day's events as \`dayEvents\` reads them from the pages (\`[{ id, title, date, time, line: { pageId, lineId } }]\`). \`unreadablePageId\` names a page holding a node whose \`props\` is not an object: the web reads that page's chips, the app reads nothing of it.
+- \`events/times.json\`: \`{ time, text }\`, \`shortTime\`, the strip's time.
+- \`events/lines.json\`: \`{ name, events, line }\`, the strip's events line (\`eventsLine\`: \`{ text, more }\`, \`null\` for no events).
+- \`events/headings.json\`: \`{ name, document, headingId }\`, the page's top-level heading titled Events (\`eventsHeading\`; \`null\` for none).
+- \`facts/cases.json\`: \`{ name, workspace, date, today, facts }\`, what \`dayFacts\` says of a day (\`null\`: no strip): \`{ events, dueSoon, notToday }\`, each row \`{ taskId, words, tag, setAside }\` with \`tag\` \`""\` for none.
+- \`notices/strip.json\`: \`{ date, today, text }\`, the notice \`planOnNotice\` gives Bring back and Another day.
+- \`facts-actions/\`: one file per strip command. \`{ before, taskId, date, today, action, receipt, after, notice }\`: \`action\` is the web's \`planOnAction\`, \`after\` holds the Undo marker \`{ operationId: "cmd-<name>", revision }\`, \`notice\` is \`planOnNotice\`'s.
 
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:
 

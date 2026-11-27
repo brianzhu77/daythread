@@ -1,0 +1,108 @@
+{
+  "before": {
+    "schemaVersion": 2,
+    "revision": 4,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "day:2026-11-26",
+        "type": "daily",
+        "date": "2026-11-26",
+        "title": "2026-11-26",
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+      },
+      {
+        "id": "errands",
+        "type": "document",
+        "date": null,
+        "title": "Errands",
+        "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"bike\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:bike\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Fix the bike\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:02:00.000Z"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "editor-task:bike",
+        "title": "Fix the bike",
+        "status": "open",
+        "version": 2,
+        "paused": true,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "errands"
+      }
+    ],
+    "deletedTasks": [],
+    "receipts": {},
+    "undo": {
+      "operationId": "op-3",
+      "revision": 4
+    }
+  },
+  "taskId": "editor-task:bike",
+  "date": "2026-11-30",
+  "today": "2026-11-26",
+  "action": {
+    "type": "plan-task",
+    "taskId": "editor-task:bike",
+    "date": "2026-11-30",
+    "today": "2026-11-26"
+  },
+  "receipt": {
+    "operationId": "cmd-another-day-to-a-day-without-a-page",
+    "message": "Planned for 2026-11-30",
+    "entityId": "editor-task:bike",
+    "revision": 5,
+    "fingerprint": "c128:e78077f0d41016ef1930d119f7876023"
+  },
+  "after": {
+    "schemaVersion": 2,
+    "revision": 5,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "day:2026-11-26",
+        "type": "daily",
+        "date": "2026-11-26",
+        "title": "2026-11-26",
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+      },
+      {
+        "id": "errands",
+        "type": "document",
+        "date": null,
+        "title": "Errands",
+        "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"bike\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:bike\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Fix the bike\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:02:00.000Z"
+      },
+      {
+        "id": "day:2026-11-30",
+        "type": "daily",
+        "date": "2026-11-30",
+        "title": "2026-11-30",
+        "document": "[{\"id\":\"day:2026-11-30:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"b6faafd0-a859-48d9-b4f9-1e2059984a16\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:bike\",\"role\":\"plan\",\"planDate\":\"2026-11-30\"},\"content\":[{\"type\":\"text\",\"text\":\"Fix the bike\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-30:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-30\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "editor-task:bike",
+        "title": "Fix the bike",
+        "status": "open",
+        "version": 3,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "errands"
+      }
+    ],
+    "deletedTasks": [],
+    "receipts": {},
+    "undo": {
+      "operationId": "cmd-another-day-to-a-day-without-a-page",
+      "revision": 5
+    }
+  },
+  "notice": "Moved to Mon 11/30"
+}

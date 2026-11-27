@@ -1,0 +1,52 @@
+[
+  {
+    "name": "Events",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]}]",
+    "headingId": "h1"
+  },
+  {
+    "name": "lower case with spaces",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\" events \",\"styles\":{}}],\"children\":[]}]",
+    "headingId": "h1"
+  },
+  {
+    "name": "upper case",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"EVENTS\",\"styles\":{}}],\"children\":[]}]",
+    "headingId": "h1"
+  },
+  {
+    "name": "no-break spaces, which trim takes off",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\" Events \",\"styles\":{}}],\"children\":[]}]",
+    "headingId": "h1"
+  },
+  {
+    "name": "a next-line character, which trim keeps",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]}]",
+    "headingId": null
+  },
+  {
+    "name": "a colon",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events:\",\"styles\":{}}],\"children\":[]}]",
+    "headingId": null
+  },
+  {
+    "name": "a paragraph",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"h1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]}]",
+    "headingId": null
+  },
+  {
+    "name": "a heading nested under a bullet",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A bullet\",\"styles\":{}}],\"children\":[{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]}]}]",
+    "headingId": null
+  },
+  {
+    "name": "two headings",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"p2\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Between\",\"styles\":{}}],\"children\":[]},{\"id\":\"h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]}]",
+    "headingId": "h1"
+  },
+  {
+    "name": "a heading holding Events and a chip",
+    "document": "[{\"id\":\"p1\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"A line before\",\"styles\":{}}],\"children\":[]},{\"id\":\"h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"e1\",\"date\":\"2026-11-26\",\"time\":\"\"}}],\"children\":[]}]",
+    "headingId": null
+  }
+]
