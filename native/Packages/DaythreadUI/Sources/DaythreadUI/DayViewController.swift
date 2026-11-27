@@ -148,12 +148,13 @@
     /// The notice showing is of this action; nil when it offers no Undo.
     private var noticeOf: Acted?
     /// The action or Undo out on the screen, and where it came from: no other runs until it is answered (§12.4, one
-    /// at a time for the whole screen). Setting it dims its row (of the page, or of the strip) and disables the strip;
-    /// leaving the day takes the dimming away while it stays out.
+    /// at a time for the whole screen). Setting it dims its row (of the page, or of the strip), disables the strip and
+    /// holds every row's actions on whatever day is shown; leaving the day takes the dimming away while it stays out.
     private var actionOut: ActionOrigin? {
       didSet {
         guard actionOut != oldValue else { return }
         if case .row(let rowID) = actionOut { document.actingRow = rowID } else { document.actingRow = nil }
+        document.pausesRowActions = actionOut != nil
         if case .strip(let taskId) = actionOut { factsModel.acting = taskId } else { factsModel.acting = nil }
         updateStripEnabled()
       }
@@ -360,7 +361,7 @@
           // He left the day: what he wrote there goes now, not after the wait.
           model.saveNow()
           // What a row action of that day says, and its dimmed row, stay with that day; an action still out is
-          // answered, and said nowhere.
+          // answered, and said nowhere, and holds this day's rows' actions until then.
           notice.dismiss()
           noticeOf = nil
           document.actingRow = nil
