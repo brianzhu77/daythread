@@ -241,6 +241,19 @@
     public func commitComposition() {
       guard isComposing else { return }
       for line in lines where line.markedTextRange != nil { line.unmarkText() }
+      // The marked text can end without the line being told (an edit of its text outside the input system): the
+      // composing row's line is read as a commit is. With no line to read, the composition ends with nothing read,
+      // as in `finishEditing`. Either way the host never sends a change over a page still composing.
+      if let id = composingRow, let line = lineView(for: id), line.markedTextRange == nil { read(line) }
+      if composingRow != nil {
+        composingRow = nil
+        // The page already is the latest from outside; drawn again, the row that was pinned is drawn from it.
+        if let held = heldReplace, let pageID = shownPageID {
+          heldReplace = nil
+          redraw(pageID: pageID, pageDate: pageDate, in: held.workspace)
+        }
+        onComposingChange?(false)
+      }
     }
 
     /// Replaces the page from outside (a merge, a load) keeping the caret where its line still exists. When its row is
@@ -248,6 +261,9 @@
     /// line), and the keyboard stays up (`draw`). While he composes, every row but the composing one is drawn from it at once; that row's part waits until the
     /// composition ends, when his composed words and this page are merged (`commitHeld`).
     public func replace(document: String, in workspace: Workspace) {
+      // Words pasted and waiting for the run loop's next turn were pasted into the page as it is: they are read and
+      // reported first, for the host to merge, rather than dropped with the line's old words or its leaving row.
+      if let line = focusedLine, holdingReports({ line.applyPendingReplacement() }) { report() }
       guard let editedPage, let pageID = shownPageID else { return }
       // A line's resign is under way and its merge is drawn once the line has let the keyboard go: drawn now, this
       // page would be drawn over by that draw's older workspace. It is that draw's page and workspace instead.
@@ -377,16 +393,17 @@
       }
     }
 
-    /// Where the caret goes when its row `id` leaves the page: the end of the nearest line above it (on screen before)
-    /// that is still on the page and takes a caret, the last of them in the new page's order; with none, the start of
-    /// the page's first line that takes one; nil when no line takes a caret.
+    /// Where the caret goes when its row `id` leaves the page: the end of the nearest line above it in the order on
+    /// screen before (as for the pinned row in `redraw`) that is still on the page and takes a caret, wherever the new
+    /// page puts it; with none, the start of the new page's first line that takes one; nil when no line takes a caret.
     private static func caret(
       afterLeaving id: String, from before: [String], to after: [String], editable: Set<String>
     ) -> (row: String, selection: NSRange)? {
-      let above = Set(before.prefix { $0 != id })
-      let lines = after.filter(editable.contains)
-      if let line = lines.last(where: above.contains) { return (line, NSRange(location: Int.max, length: 0)) }
-      return lines.first.map { ($0, NSRange(location: 0, length: 0)) }
+      let remaining = Set(after).intersection(editable)
+      if let line = before.prefix(while: { $0 != id }).reversed().first(where: remaining.contains) {
+        return (line, NSRange(location: Int.max, length: 0))
+      }
+      return after.first(where: remaining.contains).map { ($0, NSRange(location: 0, length: 0)) }
     }
 
     /// A text view of the screen's own, out of sight, that holds the keyboard while the row that had it is rebuilt or
