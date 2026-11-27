@@ -26,7 +26,8 @@ import Testing
     for entry in try Fixtures.cases("rows/marks.json") {
       let name = entry["name"]?.stringValue ?? "?"
       let workspace = try #require(entry["workspace"].flatMap(Workspace.init), "workspace: \(name)")
-      let page = try #require(workspace.page(try #require(entry["pageId"]?.stringValue)), "page: \(name)")
+      let pageId = try #require(entry["pageId"]?.stringValue, "pageId: \(name)")
+      let page = try #require(workspace.page(pageId), "page: \(name)")
       let blockId = try #require(entry["blockId"]?.stringValue)
       let block = try #require(Self.find(blockId, in: Document.blocks(page.document)), "block: \(name)")
       let taskId = try #require(block.props["taskId"]?.stringValue, "taskId: \(name)")
