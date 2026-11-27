@@ -35,6 +35,12 @@ extension SyncEngine {
   /// waits for the screen's merge. Once a draft exists, its base stands and `startedFrom` is not read. A draft the
   /// server refused is sent again with these words.
   ///
+  /// One exception for the first call: a `startedFrom` with the content key of the page that the page's last landed
+  /// save was made on, when that save removed its draft. The keystroke was made before the answer reached the screen,
+  /// and his words derive from what the screen last sent, so the draft starts from what that save sent. Saved
+  /// unchanged, that is the copy's page and the draft is free; changed by the server, the draft is behind what was
+  /// sent, and the screen's merge is a real three-way one.
+  ///
   /// A document equal to the draft's base removes the draft and sends nothing, unless a save is on its way: then the
   /// draft stays until its answer. Throws `SyncError.notReady` when no workspace is shown, the copy has no such page,
   /// or a sign-out has begun, and what the store threw when it refuses the draft; either way nothing was kept.
@@ -47,7 +53,7 @@ extension SyncEngine {
       throw SyncError.notReady
     }
     let kept = accountDraft(page.id)
-    let baseDocument = kept?.baseDocument ?? startedFrom
+    let baseDocument = kept?.baseDocument ?? firstBase(of: page.id, owner: copy.owner, startedFrom: startedFrom)
     if kept?.sent == nil, document.utf8.elementsEqual(baseDocument.utf8) {
       stopDraftWait(page.id)
       guard kept != nil else { return }
@@ -65,6 +71,15 @@ extension SyncEngine {
     refusedDrafts[page.id] = nil
     publish()
     waitThenSave(page.id)
+  }
+
+  /// Where a page's first draft starts: `startedFrom`, or what the page's last landed save sent when `startedFrom` is
+  /// the page that save was made on (see `keepDraft`). Runs inside a store section.
+  private func firstBase(of pageId: String, owner: String, startedFrom: String) -> String {
+    guard let landed = landedSaves[pageId], landed.owner == owner,
+      Self.document(startedFrom, hasKey: landed.base, keyOf: landed.baseDocument)
+    else { return startedFrom }
+    return landed.sentDocument
   }
 
   /// After the screen merged: the draft now starts from `baseDocument` (the server's page it was merged with),
@@ -107,9 +122,10 @@ extension SyncEngine {
   public func discardDraft(pageId: String) async {
     await acquire()
     defer { release() }
-    guard copyShown, phase != .signedOut, !leaving, let copy, let kept = accountDraft(pageId) else {
-      return
-    }
+    guard copyShown, phase != .signedOut, !leaving, let copy else { return }
+    // A keystroke made before he discarded is not typed onto what an earlier save sent.
+    landedSaves[pageId] = nil
+    guard let kept = accountDraft(pageId) else { return }
     let stillMade = Set(
       (Self.todosMade(by: kept)
         + accountDrafts.filter { !$0.pageId.utf8.elementsEqual(kept.pageId.utf8) }
@@ -319,6 +335,7 @@ extension SyncEngine {
     cutDraftWaitsShort()
     savesInFlight = []
     refusedDrafts = [:]
+    landedSaves = [:]
   }
 
   // MARK: Saving
@@ -559,7 +576,11 @@ extension SyncEngine {
     if draft.document.utf8.elementsEqual(sent.document.utf8) {
       try await store.removeDraft(pageId: draft.pageId, owner: draft.owner)
       forgetDraft(pageId: draft.pageId, owner: draft.owner)
+      landedSaves[draft.pageId] = LandedSave(
+        owner: draft.owner, base: draft.base, baseDocument: draft.baseDocument, sentDocument: sent.document)
     } else {
+      // His newer words go on from this draft: no keystroke starts from an older landed save's page any more.
+      landedSaves[draft.pageId] = nil
       let page = copy?.workspace.page(draft.pageId)?.document
       if let page, ContentKey.storedDocument(page).utf8.elementsEqual(ContentKey.storedDocument(sent.document).utf8) {
         draft.baseDocument = page
@@ -630,6 +651,15 @@ extension SyncEngine {
       try await store.update(entry)
     }
   }
+}
+
+/// A save that landed and removed its draft: the page it was made on, and what it sent.
+struct LandedSave: Sendable {
+  let owner: String
+  /// The content key of `baseDocument`.
+  let base: String
+  let baseDocument: String
+  let sentDocument: String
 }
 
 /// The wait in progress after his last change to a page; `number` tells a wait that ended after it was replaced.

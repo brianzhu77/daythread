@@ -78,6 +78,10 @@ public actor SyncEngine {
   /// Pages whose document the server refused, with its reason: not sent again until he acts. Kept in memory only, so
   /// such a draft is sent once more at the next launch; everything else that holds a draft is read from the store.
   var refusedDrafts: [String: String] = [:]
+  /// By page, the last save that landed and removed its draft (he had typed nothing more): a keystroke made before
+  /// it was answered starts from what it sent (`keepDraft`). Kept in memory only: after a relaunch no keystroke is on
+  /// its way.
+  var landedSaves: [String: LandedSave] = [:]
 
   // MARK: One pass at a time
 
@@ -548,6 +552,8 @@ public actor SyncEngine {
       }
     case .full(let workspace, let owner):
       try await store.replace(with: workspace, owner: owner)
+      // What one account's saves sent says nothing about another's pages, which have the same ids.
+      if copy?.owner != owner { landedSaves = [:] }
       copy = (workspace, owner)
     }
     try await settleHeldTicks()
