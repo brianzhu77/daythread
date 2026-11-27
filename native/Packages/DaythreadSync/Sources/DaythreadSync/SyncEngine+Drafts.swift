@@ -9,8 +9,8 @@ import Foundation
 ///   takes it out, before the request leaves. Until it is answered, every try sends that document under that
 ///   operation id, however much he typed since, so a save that landed with its answer lost is recognised by the
 ///   server rather than applied twice. His newer words wait for the answer.
-/// - **When.** 450 ms after his last change to the page, through the injected `sleep`; at once on `saveNow` and
-///   `rebaseDraft`; and in any pass, after the outbox entries, for a draft with no wait running (a relaunch, a retry,
+/// - **When.** 450 ms after his last change to the page, through the injected `sleep`; at once on `saveNow`,
+///   `rebaseDraft` and a `perform` told not to overtake the page; and in any pass, after the outbox entries, for a draft with no wait running (a relaunch, a retry,
 ///   the network back).
 /// - **Behind the server's page.** A draft with no save on its way whose page in the copy has another content key
 ///   than the draft's `base` is behind: the server's page changed since the draft started from it. It is never sent
@@ -257,7 +257,7 @@ extension SyncEngine {
     return drafts.filter { $0.owner == owner }
   }
 
-  private func accountDraft(_ pageId: String) -> PageDraft? {
+  func accountDraft(_ pageId: String) -> PageDraft? {
     // Ids compare by code units, as they do in the domain.
     accountDrafts.first { $0.pageId.utf8.elementsEqual(pageId.utf8) }
   }
@@ -392,7 +392,7 @@ extension SyncEngine {
     askForPass(load: false)
   }
 
-  private func stopDraftWait(_ pageId: String) {
+  func stopDraftWait(_ pageId: String) {
     draftWaits.removeValue(forKey: pageId)?.task.cancel()
   }
 

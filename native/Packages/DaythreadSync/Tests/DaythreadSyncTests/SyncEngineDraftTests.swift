@@ -2000,6 +2000,33 @@ private struct DraftHarness {
     #expect(await h.transport.unscripted == [])
   }
 
+  @Test func a_command_asked_while_a_pass_is_past_its_saves_goes_after_the_next_passs_save() async throws {
+    let setAside = Command.notToday(taskId: "editor-task:r1", date: today)
+    let gate = Gate()
+    let h = try await DraftHarness(
+      opening + [
+        .gated(gate), try saved(from: 6, to: 7, document: typed("Walk")),
+        .outcome(.applied(receipt: .object([:]), changes: try changes(from: 7, to: 8), owner: "user-1")),
+      ])
+    await h.engine.start()
+    let engine = h.engine
+    // A pass is sending another command, its saves already done.
+    let first = Task { await engine.perform(action: Command.ensureDay(LocalDate("2026-11-24")!)) }
+    await gate.reached()
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    let requested = await h.engine.passRequests
+    let second = Task { await engine.perform(action: setAside, notOvertaking: day) }
+    await until { await h.engine.passRequests == requested + 1 }
+    await gate.open(.outcome(.applied(receipt: .object([:]), changes: try changes(from: 5, to: 6), owner: "user-1")))
+
+    #expect(await first.value.answer != nil)
+    #expect(await second.value.answer != nil, "not taken by the pass whose saves were done")
+    #expect(await h.transport.calls.dropFirst(opening.count).map(\.isSave) == [false, true, false])
+    #expect(try await h.drafts == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
   @Test func a_command_is_not_sent_while_its_page_has_a_draft_that_could_not_be_saved() async throws {
     let setAside = Command.notToday(taskId: "editor-task:r1", date: today)
 

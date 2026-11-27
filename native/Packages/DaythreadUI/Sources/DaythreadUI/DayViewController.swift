@@ -525,7 +525,7 @@
         let performed = await model.perform(command)
         guard let self else { return }
         self.running = nil
-        if performed != .applied { self.failed = attempt }
+        if case .applied = performed {} else { self.failed = attempt }
         self.setNeedsUpdateProperties()
       }
     }

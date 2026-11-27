@@ -35,11 +35,24 @@ public struct SyncState: Sendable, Equatable {
   /// The calls about a page's words the engine had made when it published this state (`SyncEngine.draftsWritten`);
   /// 0 before the first.
   public var draftsWritten: Int
+  /// The server's Undo slot as the copy has it, when it is of the copy's own revision; nil otherwise, and while no copy
+  /// is shown. A slot of an older revision belongs to a command something later has followed: the server would refuse
+  /// to undo it.
+  public var undoSlot: UndoMarker?
+  /// How many states this engine has published, this one included; 0 for the state a reader gets before the first.
+  /// Set by the engine as it publishes, so a caller holding a number (`Performed.Answer.published`) can wait for the
+  /// state that has it, whichever of the two reaches it first.
+  public var published = 0
+
+  /// Something of his waits to be sent: a draft, or an outbox entry pending, waiting or held. Not the engine's own
+  /// request for a day's page, which `pending` and `held` leave out.
+  public var unsent: Bool { pending > 0 || waiting > 0 || !held.isEmpty || !drafts.isEmpty }
 
   public init(
     phase: Phase = .starting, workspace: Workspace? = nil, offline: Bool = false, held: [HeldChange] = [],
     pending: Int = 0, waiting: Int = 0, failure: SyncFailure? = nil, signedIn: Bool = false, enqueued: Int = 0,
-    address: String? = nil, drafts: [DraftStatus] = [], owner: String? = nil, draftsWritten: Int = 0
+    address: String? = nil, drafts: [DraftStatus] = [], owner: String? = nil, draftsWritten: Int = 0,
+    undoSlot: UndoMarker? = nil
   ) {
     self.phase = phase
     self.workspace = workspace
@@ -54,6 +67,7 @@ public struct SyncState: Sendable, Equatable {
     self.drafts = drafts
     self.owner = owner
     self.draftsWritten = draftsWritten
+    self.undoSlot = undoSlot
   }
 
   static let initial = SyncState()
@@ -139,15 +153,33 @@ public struct HeldChange: Sendable, Equatable, Identifiable {
 
 /// What `SyncEngine.perform` did with a command it sent and waited for.
 public enum Performed: Sendable, Equatable {
-  /// The server applied it; its changes are in the published workspace, unless the whole load needed to bring them
-  /// in failed, in which case the copy catches up at the next load.
-  case applied
+  public struct Answer: Sendable, Equatable {
+    /// The operation id it was sent under (both sends, when it was sent again).
+    public let operationId: String
+    /// The reply's receipt; nil when the server answered `already-applied`.
+    public let receipt: JSONValue?
+    /// `SyncState.published` of the first state that holds what the server did. When the whole load needed to bring
+    /// it in failed, no state holds it yet: this is then the state published last before the answer, and the copy
+    /// catches up at the next load.
+    public let published: Int
+
+    public init(operationId: String, receipt: JSONValue?, published: Int) {
+      self.operationId = operationId
+      self.receipt = receipt
+      self.published = published
+    }
+  }
+
+  /// The server applied it.
+  case applied(Answer)
   /// The server could not be reached, or did not answer.
   case offline
   /// No session, or the account changed before it was answered.
   case signedOut
   /// The server would not apply it; its reason.
   case refused(String)
+  /// The page it was told not to overtake still had a draft after the pass's saves; nothing was sent.
+  case notSent
 }
 
 /// Why a pass ended early, as far as the screens tell it apart.
@@ -207,14 +239,20 @@ final class StateBroadcast: Sendable {
     return stream
   }
 
-  /// Called only from the engine's actor, so publishes never overlap and readers see them in order.
-  func publish(_ state: SyncState) {
+  /// Numbers `state` one past the current one and hands it to every reader, unless it says what the current one says;
+  /// returns the number of the state readers now have, which holds what `state` says either way. Called only from the
+  /// engine's actor, so publishes never overlap and readers see them in order.
+  func publish(_ state: SyncState) -> Int {
+    var state = state
     let streams = readers.withLock { readers -> [AsyncStream<SyncState>.Continuation] in
+      state.published = readers.current.published
       guard readers.current != state else { return [] }
+      state.published += 1
       readers.current = state
       return Array(readers.streams.values)
     }
     for stream in streams { stream.yield(state) }
+    return state.published
   }
 }
 

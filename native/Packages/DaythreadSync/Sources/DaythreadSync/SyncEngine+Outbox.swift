@@ -303,21 +303,28 @@ extension SyncEngine {
 
   // MARK: Commands waited for
 
-  /// A command `perform` waits on: who it was made for, and in which epoch.
+  /// A command `perform` waits on: who it was made for, in which epoch, the page it must not overtake, and its place
+  /// among the commands asked (`performancesAsked`).
   struct Performance: Sendable {
     let action: JSONValue
     let owner: String
     let epoch: Int
+    let notOvertaking: String?
+    let number: Int
     let answer: CheckedContinuation<Performed, Never>
   }
 
-  /// Sends `action` after everything pending, on the copy's revision, `readsBeyond: true`, and returns what the
-  /// server did. When the server holds it because the copy is behind, the workspace is loaded and it is sent once
-  /// more, under the same operation id; any other hold or refusal is answered after a load. Never stored, so a command
-  /// sent as the network drops is not sent again later. On `.applied` the reply's changes are in the published
-  /// workspace before it returns, except when the server's changes did not start from the copy's revision and the
-  /// whole load that follows fails: the server applied it, and the copy catches up at the next load.
-  public func perform(action: JSONValue) async -> Performed {
+  /// Sends `action` after everything pending and the saves of the drafts due, on the copy's revision,
+  /// `readsBeyond: true`, and returns what the server did. When the server holds it because the copy is behind, the
+  /// workspace is loaded and it is sent once more, under the same operation id; any other hold or refusal is answered
+  /// after a load. Never stored, so a command sent as the network drops is not sent again later. On `.applied` the
+  /// answer names the first state that holds the reply's changes (`Performed.Answer.published`): the caller waits for
+  /// that state by its number, not for the order in which the two reach it.
+  ///
+  /// With `notOvertaking`, that page's draft is due at once (as `saveNow`), and the command is sent only when, after
+  /// the pass's saves, the page has no draft of the account; checked again before a second send. Otherwise it answers
+  /// `.notSent`, having sent nothing: a command that rewrites the page must not land under words not on it yet.
+  public func perform(action: JSONValue, notOvertaking pageId: String? = nil) async -> Performed {
     await acquire()
     guard phase != .signedOut, !leaving else {
       release()
@@ -328,18 +335,25 @@ extension SyncEngine {
       release()
       return .offline
     }
+    if let pageId { stopDraftWait(pageId) }
+    performancesAsked += 1
+    let number = performancesAsked
     return await withCheckedContinuation { answer in
-      performances.append(Performance(action: action, owner: owner, epoch: epoch, answer: answer))
+      performances.append(
+        Performance(
+          action: action, owner: owner, epoch: epoch, notOvertaking: pageId, number: number, answer: answer))
       release()
       askForPass(load: false)
     }
   }
 
-  /// Sends the queued commands one at a time; each is answered before the next is taken.
-  func performQueued(_ pass: Pass) async throws {
+  /// Sends the queued commands one at a time, those numbered up to `asked`; each is answered before the next is
+  /// taken. Those queued later are left for the next pass, which their `perform` asked for.
+  func performQueued(_ pass: Pass, askedBy asked: Int) async throws {
     while true {
       try await enter(pass)
-      guard !performances.isEmpty else {
+      // Queued in the order asked, so the first one is the oldest.
+      guard let first = performances.first, first.number <= asked else {
         release()
         return
       }
@@ -371,9 +385,17 @@ extension SyncEngine {
         throw error
       }
       let revision = copy?.workspace.revision
+      // Read in the section the command leaves from: a draft he starts after it is one on the page as it was, merged
+      // onto the page the answer brings (§10.6).
+      let overtaking = performance.notOvertaking.map { accountDraft($0) != nil } ?? false
       release()
       guard let revision else {
         performance.answer.resume(returning: .signedOut)
+        return
+      }
+      guard !overtaking else {
+        SyncLog.logger.notice("Not performed: its page has words not saved yet")
+        performance.answer.resume(returning: .notSent)
         return
       }
       let step: PerformStep
@@ -383,29 +405,33 @@ extension SyncEngine {
         performance.answer.resume(returning: interrupted(error, pass) ?? Performed(error))
         throw error
       }
-      let performed: Performed
+      // The answer, given the number of the state the load published.
+      let answered: (Int) -> Performed
       let have: Int?
       switch step {
-      case .answer(let answered):
-        performance.answer.resume(returning: answered)
+      case .answer(let performed):
+        performance.answer.resume(returning: performed)
         return
-      case .loadWholeThenAnswer(let answered):
-        (performed, have) = (answered, nil)
-      case .loadThenAnswer(let answered):
-        (performed, have) = (answered, revision)
-      case .loadThenSendAgain(let answered):
-        (performed, have) = (answered, revision)
+      case .loadWholeThenAnswerApplied(let receipt):
+        answered = { .applied(Performed.Answer(operationId: operationId, receipt: receipt, published: $0)) }
+        have = nil
+      case .loadWholeThenAnswer(let performed):
+        (answered, have) = ({ _ in performed }, nil)
+      case .loadThenAnswer(let performed), .loadThenSendAgain(let performed):
+        (answered, have) = ({ _ in performed }, revision)
       }
+      let loaded: Int
       do {
-        try await loadWorkspace(pass, have: have)
+        loaded = try await loadWorkspace(pass, have: have)
       } catch {
         // The server's answer stands, only the copy is behind, and the pass's failure says so; unless the account
-        // changed meanwhile, when the answer belongs to an account no longer shown.
-        performance.answer.resume(returning: interrupted(error, pass) ?? performed)
+        // changed meanwhile, when the answer belongs to an account no longer shown. No state holds what it applied:
+        // the last one is named, and its Undo slot is not this command's.
+        performance.answer.resume(returning: interrupted(error, pass) ?? answered(lastPublished))
         throw error
       }
       guard case .loadThenSendAgain = step, !sentAgain, copy?.owner == performance.owner else {
-        performance.answer.resume(returning: performed)
+        performance.answer.resume(returning: answered(loaded))
         return
       }
       sentAgain = true
@@ -421,8 +447,10 @@ extension SyncEngine {
 
   private enum PerformStep {
     case answer(Performed)
-    /// The copy lacks what the server did, or the reply is another account's: the answer is given once the whole
-    /// workspace is loaded.
+    /// The server applied it and the copy lacks what it did: applied, once the whole workspace is loaded, with the
+    /// state that load published.
+    case loadWholeThenAnswerApplied(receipt: JSONValue?)
+    /// The reply is another account's: the answer is given once the whole workspace is loaded.
     case loadWholeThenAnswer(Performed)
     /// The server held or refused it: the copy may be behind, and is loaded before the answer.
     case loadThenAnswer(Performed)
@@ -453,21 +481,21 @@ extension SyncEngine {
       return .loadWholeThenAnswer(.refused("owner-mismatch"))
     }
     switch outcome {
-    case .applied(_, let changes, _):
+    case .applied(let receipt, let changes, _):
       guard let next = copy.workspace.applying(changes) else {
         publish()
-        return .loadWholeThenAnswer(.applied)
+        return .loadWholeThenAnswerApplied(receipt: receipt)
       }
       try await store.write(next, changed: changes)
       self.copy = (next, copy.owner)
       forgetOverwrittenSaves()
       await readOutbox()
-      publish()
-      return .answer(.applied)
+      let published = publish()
+      return .answer(.applied(Performed.Answer(operationId: operationId, receipt: receipt, published: published)))
     case .alreadyApplied:
       // Not expected for an operation id never sent before; the copy is loaded whole to be sure of it.
       publish()
-      return .loadWholeThenAnswer(.applied)
+      return .loadWholeThenAnswerApplied(receipt: nil)
     case .held(let reason, _, let stale, _):
       publish()
       // The server's `stale` says it may be built again on the latest state; `changed-since` is the copy behind.

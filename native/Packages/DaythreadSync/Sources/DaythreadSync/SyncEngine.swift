@@ -16,8 +16,9 @@ import Foundation
 /// - **Epochs.** `signIn` and `signOut` move `epoch` on (and cancel the pass in flight) inside a store section. A pass
 ///   remembers the epoch and session it began with and checks the epoch at the start of each of its sections, so a
 ///   reply that arrives after the account changed is never applied, sent on or shown.
-/// - **Commands waited for.** `perform` queues its command and asks for a pass; the pass sends it after its drain,
-///   under the pass's epoch, and answers it. Every queued command is answered: by its pass, by the failure that ended
+/// - **Commands waited for.** `perform` queues its command and asks for a pass; the pass sends it after its drain
+///   and its saves, under the pass's epoch, and answers it. A pass sends only the commands queued before its saves
+///   began; one queued later goes in the next pass, after that pass's saves. Every queued command is answered: by its pass, by the failure that ended
 ///   that pass, or with `signedOut` by the sign-in or sign-out that moved the epoch on. None is ever stored.
 /// - **Trying again.** A pass that fails with an entry it could send still pending schedules another, after the
 ///   web's waits (`retryWaits`, or a 429's own wait when longer), through the injected `sleep`; the network coming back
@@ -37,6 +38,8 @@ public actor SyncEngine {
   private let reachability: any Reachability
   let sleep: @Sendable (Duration) async throws -> Void
   private let broadcast = StateBroadcast(.initial)
+  /// The number of the state readers last got (`SyncState.published`).
+  private(set) var lastPublished = 0
 
   // MARK: What is shown
 
@@ -47,6 +50,8 @@ public actor SyncEngine {
   var outbox: [OutboxEntry] = []
   /// Commands `perform` is waiting on, in the order asked.
   var performances: [Performance] = []
+  /// Commands `perform` has queued in this engine's lifetime; each `Performance` holds its place among them.
+  var performancesAsked = 0
   /// Ticks the server held that the next load settles, by operation id, with the server's reason. They stay pending
   /// until then, so they stay drawn, and nothing for the same to-do is sent before them.
   var unsettled: [String: String] = [:]
@@ -436,10 +441,13 @@ public actor SyncEngine {
         try await loadWorkspace(pass, have: copy?.workspace.revision)
       }
       let loadedForHolds = try await drain(pass)
+      // A command asked for after this goes in the next pass: the words of its page may be kept after these saves
+      // took the drafts out.
+      let performing = performancesAsked
       let saves = try await saveDrafts(pass, loaded: loadedForHolds)
       // A save that landed may have made the to-do a waiting tick is for.
       if saves.landed { try await drain(pass) }
-      try await performQueued(pass)
+      try await performQueued(pass, askedBy: performing)
       try await enter(pass)
       defer { release() }
       await readOutbox()
@@ -538,19 +546,21 @@ public actor SyncEngine {
   }
 
   /// Loads the workspace; a reply that cannot stand for the copy (unchanged, but under another owner or revision) is
-  /// followed by one load of the whole workspace.
-  func loadWorkspace(_ pass: Pass, have: Int?) async throws {
+  /// followed by one load of the whole workspace. Returns the number of the state published with what it loaded
+  /// (`SyncState.published`); after a whole load that still could not stand, the state published last.
+  @discardableResult
+  func loadWorkspace(_ pass: Pass, have: Int?) async throws -> Int {
     var have = have
     while true {
       let reply = try await transport.workspace(token: pass.session?.token, have: have)
-      let applied = try await apply(reply, pass)
-      guard !applied, have != nil else { return }
+      if let published = try await apply(reply, pass) { return published }
+      guard have != nil else { return lastPublished }
       have = nil
     }
   }
 
-  /// Whether the reply could be applied.
-  private func apply(_ reply: WorkspaceReply, _ pass: Pass) async throws -> Bool {
+  /// The number of the state published with the reply, or nil when it could not be applied.
+  private func apply(_ reply: WorkspaceReply, _ pass: Pass) async throws -> Int? {
     try await enter(pass)
     defer { release() }
     offline = false
@@ -559,16 +569,17 @@ public actor SyncEngine {
     case .unchanged(let revision, let owner):
       guard let copy, copy.owner == owner, copy.workspace.revision == revision else {
         publish()
-        return false
+        return nil
       }
     case .full(let workspace, let owner):
       try await store.replace(with: workspace, owner: owner)
-      // What one account's saves sent, and what the server refused of them, says nothing about another's pages,
-      // which have the same ids.
+      // What one account's saves sent, what the server refused of them and which were being tried again say nothing
+      // about another's pages, which have the same ids.
       if copy?.owner != owner {
         landedSaves = [:]
         draftOrigins = [:]
         refusedDrafts = [:]
+        savesRetrying = []
       }
       copy = (workspace, owner)
       forgetOverwrittenSaves()
@@ -577,8 +588,7 @@ public actor SyncEngine {
     copyShown = true
     await ensureToday()
     await readOutbox()
-    publish()
-    return true
+    return publish()
   }
 
   // MARK: Trying again
@@ -735,17 +745,26 @@ public actor SyncEngine {
     return outbox.lazy.filter { $0.state == .pending }.reduce(typed) { $0.predicting($1.action) }
   }
 
-  /// Held, pending and waiting entries, and drafts, are said only while the copy they belong to is shown.
-  func publish() {
+  /// Held, pending and waiting entries, drafts and the Undo slot are said only while the copy they belong to is shown.
+  /// Returns the number of the state readers now have (`SyncState.published`), which says all this.
+  @discardableResult
+  func publish() -> Int {
     let shown = copyShown && copy != nil
     let behind = outbox.waiting.union(waitingForDrafts(outbox))
     let held = outbox.filter { $0.state == .held && !$0.asksForADay }.map(HeldChange.init)
     // He did not make the engine's own request for today's page: it is sent, but not counted as his.
     let pending = outbox.count { $0.state == .pending && !behind.contains($0.seq) && !$0.asksForADay }
-    broadcast.publish(
+    // The copy's, not what is drawn: a slot is the server's, and nothing drawn ahead of it is.
+    var undoSlot: UndoMarker?
+    if shown, let copy, let marker = copy.workspace.undoMarker, marker.revision == copy.workspace.revision {
+      undoSlot = marker
+    }
+    lastPublished = broadcast.publish(
       SyncState(
         phase: phase, workspace: drawn, offline: offline, held: shown ? held : [], pending: shown ? pending : 0,
         waiting: shown ? behind.count : 0, failure: failure, signedIn: signedIn, enqueued: enqueued,
-        address: address, drafts: draftStatuses(retrying: retry != nil), owner: shownOwner, draftsWritten: draftsWritten))
+        address: address, drafts: draftStatuses(retrying: retry != nil), owner: shownOwner, draftsWritten: draftsWritten,
+        undoSlot: undoSlot))
+    return lastPublished
   }
 }
