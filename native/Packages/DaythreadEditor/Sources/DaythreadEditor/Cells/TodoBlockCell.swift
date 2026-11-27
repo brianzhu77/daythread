@@ -350,9 +350,12 @@
       let room = makeRoomForPlanButton(traits: state.traitCollection)
       if room.trailing > 0 {
         // The list content view keeps the larger of its configuration's margin and the cell's own, so the room is
-        // added to the one the words would end at, or the button would sit past it by the difference.
+        // added to the one the words would end at, or the button would sit past it by the difference. The cell's own
+        // counts the safe area (a phone on its side), which the content view adds to its margins again: it is taken
+        // out, or the button would sit that far in from the other rows' end.
+        let safeArea = effectiveUserInterfaceLayoutDirection == .rightToLeft ? safeAreaInsets.left : safeAreaInsets.right
         content.directionalLayoutMargins.trailing =
-          max(content.directionalLayoutMargins.trailing, directionalLayoutMargins.trailing) + room.trailing
+          max(content.directionalLayoutMargins.trailing, directionalLayoutMargins.trailing - safeArea) + room.trailing
       }
       content.directionalLayoutMargins.bottom += room.bottom
       applyWords(to: &content, traits: state.traitCollection)
