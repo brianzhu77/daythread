@@ -1009,17 +1009,43 @@ const factsOf = (ws: Workspace, date: string, today = TODAY) => dayFacts(getDayV
     setDocument(h, draft.id, d => [...d, line('t1', text('Standup '), chip('e1', TODAY, '10:30'))])
     eventsCase("a chip on a day's draft page", h, [])
   }
+  // In these the chosen line is on a later page than the line met first, so "the first holder met wins" fails them.
+  const chosenLaterThanFirstMet = (name: string, eventId: string) => {
+    const c = cases.at(-1) as { workspace: Workspace; events: { id: string; line: { pageId: string } }[] }
+    const holders = c.workspace.pages.filter(p => flatNodes(pageNodes(p)).some(n => JSON.stringify(n.content ?? []).includes(`"eventId":"${eventId}"`)))
+    const order = c.workspace.pages.map(p => p.id)
+    const chosen = c.events.find(e => e.id === eventId)!.line.pageId
+    if (holders.length < 2 || holders[0]!.id === chosen || order.indexOf(chosen) < order.indexOf(holders[0]!.id)) throw new Error(`events ${name}: the chosen line must be on a later page than the line met first`)
+  }
   {
-    const h = rowsWorld(); h.day(YESTERDAY)
+    const h = harness(); h.day(YESTERDAY); h.day(TODAY)
     eventsUnder(h, YESTERDAY, line('y1', text('Yesterday’s words '), chip('same', TODAY)))
     eventsUnder(h, TODAY, line('t1', text('Today’s words '), chip('same', TODAY)))
     eventsCase('one eventId in two lines on two day pages', h, [['Today’s words', 't1']])
+    chosenLaterThanFirstMet('one eventId in two lines on two day pages', 'same')
   }
   {
-    const h = rowsWorld()
+    const h = harness()
     docPage(h, 'doc-a', 'Trip notes', line('a1', text('From the document '), chip('same', TODAY)))
+    h.day(TODAY)
     eventsUnder(h, TODAY, line('t1', text('From the day '), chip('same', TODAY)))
     eventsCase('one eventId on a day page and a document page', h, [['From the day', 't1']])
+    chosenLaterThanFirstMet('one eventId on a day page and a document page', 'same')
+  }
+  { // Yesterday's page, then a document, then today's page: `same` is met first on yesterday's and chosen from today's,
+    // after `other`'s page; at one time the two keep the order their ids were first met.
+    const h = harness(); h.day(YESTERDAY)
+    docPage(h, 'doc-a', 'Between')
+    h.day(TODAY)
+    eventsUnder(h, YESTERDAY, line('y1', text('Planning, as first written '), chip('same', TODAY, '09:00')))
+    h.save('doc-a', d => [...d, line('a1', text('Coffee with Ana '), chip('other', TODAY, '09:00'))], { today: TODAY, at: stamped(3) })
+    eventsUnder(h, TODAY, line('t1', text('Planning '), chip('same', TODAY, '09:00')))
+    const name = 'ties keep the order ids were first met, not where the chosen line is'
+    eventsCase(name, h, [['Planning', 't1'], ['Coffee with Ana', 'a1']])
+    chosenLaterThanFirstMet(name, 'same')
+    const c = cases.at(-1) as { workspace: Workspace; events: { line: { pageId: string } }[] }
+    const order = c.workspace.pages.map(p => p.id)
+    if (order.indexOf(c.events[0]!.line.pageId) < order.indexOf(c.events[1]!.line.pageId)) throw new Error(`events ${name}: the first event's chosen line must be on a later page than the second's`)
   }
   {
     const h = rowsWorld()
@@ -1248,9 +1274,15 @@ const factsOf = (ws: Workspace, date: string, today = TODAY) => dayFacts(getDayV
 
   {
     const h = asideWorld()
+    // A plan row already under TODO, so the new row's place says it goes after the heading's plan rows.
+    h.run({ type: 'add-task', pageId: dayId(TODAY), title: 'Water the plants', plannedOn: TODAY }, 'add-water')
+    const water = h.task('Water the plants').id
     const { before, after } = factsAction('bring-back-a-to-do-set-aside', h, TODAY)
     if (flatNodes(pageNodes(before.pages.find(p => p.id === dayId(TODAY))!)).some(n => rowTaskId(n) === id)) throw new Error('facts-actions bring-back-a-to-do-set-aside: no row on today\'s page before')
     expect('facts-actions bring-back-a-to-do-set-aside', [after.tasks.find(t => t.id === id)!.paused, Boolean(planRowOn(after, TODAY))], [false, true])
+    // Today's insert place: right after the TODO heading's plan rows and before its empty slot.
+    const top = pageNodes(after.pages.find(p => p.id === dayId(TODAY))!).slice(0, 4).map(n => n.type === 'heading' ? `heading ${inlineText(n.content)}` : `${n.type} ${rowRole(n) ?? ''} ${rowTaskId(n) ?? ''} ${inlineText(n.content)}`)
+    expect('facts-actions bring-back-a-to-do-set-aside: the new plan row\'s place', top, ['heading TODO', `task plan ${water} Water the plants`, `task plan ${id} Fix the bike`, `task plan ${taskOf(`${dayId(TODAY)}:r0`)} `])
   }
   {
     const h = asideWorld()
