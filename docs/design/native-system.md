@@ -141,9 +141,12 @@ says what a row action did:
   The words are footnote text in the label colour, they wrap at any text size (the button goes under them from the
   accessibility sizes), and `Undo` is a plain system button at least 44 points high. No colour, font, shadow or
   radius of its own.
-- **Place:** at the top, one system spacing under the safe area's top (so under the navigation bar, never over its
-  items), above the page: while it shows it floats over the page's first rows (with the page at its top, over the
-  day's header). Only its surface takes touches; the rest of the screen is the page's. It never becomes first
+- **Place:** on a phone (compact width, or compact height on its side), directly under the status bar, as the web's
+  phone notice sits: its top 8 points under the window's top safe-area inset (the status bar or the island), over the
+  navigation bar's band, whose previous and next-day buttons it covers while it shows; the day's title and the
+  first rows of a page at its top stay uncovered. The day screen holds it above its navigation bar for that. At
+  regular width (iPad, Mac) one system spacing under the navigation bar, never over its items. Only its surface takes
+  touches; the rest of the screen is the page's. It never becomes first
   responder, so the keyboard and the caret stay as they were.
 - **Time:** one at a time, a new one replaces the one showing. It leaves after 8 seconds, `Undone` after 4, a failure
   after 6, or when swiped up (also VoiceOver's escape gesture). A tap on the words does nothing.

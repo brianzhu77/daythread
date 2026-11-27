@@ -90,6 +90,10 @@ and offers Undo by §11.5's rule. Nothing is drawn ahead: a row action is sent a
 - **A paste still waiting for the run loop's next turn when the page is replaced is dropped, as in slice 1b**
   (decided in Task 8's review): reporting it from inside `replace` made a draft that could undo the server's
   change. Merging it into the incoming page inside the editor, as a held composition is, is left for a later slice.
+- **On a phone the notice sits directly under the status bar** (ruled in Task 11's review): its top 8 points under
+  the window's top safe-area inset, over the navigation bar's band, as the web's phone notice does
+  (`.app-toasts.toast-region--top` in `src/styles.css`). Under the navigation bar, as §11.5 places it, it half-covered
+  the day's title with the page at its top. At regular width it stays under the navigation bar.
 - A correction found while building is written here with its reason before the code that follows it.
 
 ## Review Focus

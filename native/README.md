@@ -56,7 +56,8 @@ plants" is only read by the tests; each test that ticks has a to-do of its own (
 return" due three days ago, "Book the venue" with a Start and a Due date, "Water the fern" repeating weekly, "Paint
 the fence" blocked by "Buy paint", "Return the parcel" cancelled, "Renew the passport" carried from eight days ago by
 today's draft, so it reads `Since`) and one to-do for each test that acts on a row ("Move me", "Set me aside",
-"Cancel me", "Undo me", "Pick a day for me"). The row tests (`UITests/RowUITests.swift`) keep their screenshots as
+"Cancel me", "Undo me", "Pick a day for me", and "Show the notice", added first so its row is on the screen with the
+page at its top). The row tests (`UITests/RowUITests.swift`) keep their screenshots as
 attachments in the test results (`-resultBundlePath`, then `xcrun xcresulttool export attachments`); the ones in
 `tests/evidence/native-phase-1c/` came from there. It passes the
 addresses and the seeded day to the UI tests (`TEST_RUNNER_DAYTHREAD_SERVER_URL`,
