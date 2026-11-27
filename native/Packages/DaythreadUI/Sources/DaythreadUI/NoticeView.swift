@@ -110,6 +110,9 @@ final class NoticeView: UIView {
     timer = nil
     generation += 1
     shown = nil
+    // Gone for VoiceOver at once, not when the fade ends: its words and their action would otherwise still be read.
+    surface.accessibilityElements = []
+    label.accessibilityCustomActions = nil
     UIView.animate(
       withDuration: 0.2,
       animations: { self.surface.alpha = 0 },
