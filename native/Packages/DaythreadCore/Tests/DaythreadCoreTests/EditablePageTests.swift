@@ -187,4 +187,38 @@ enum Lines {
 
     #expect(page.document == Lines.document(Lines.line("a", "First!"), Lines.line("a", "Second")))
   }
+
+  /// The page that replaces an edited one (a redraw from outside) still names the rows he removed one at a time,
+  /// while they are not in it; a row that is back, anywhere, is no longer named.
+  @Test func rows_removed_one_at_a_time_are_carried_to_the_page_that_replaces_it() {
+    var page = Lines.editable(
+      Lines.document(
+        Lines.line("a", "One"),
+        Lines.block("db", "database", props: #"{"databaseId":"x"}"#, children: [Lines.line("t2", "Inside")])))
+
+    page.carryRemovedRows(["t", "t2", "t3", "t"])
+
+    #expect(page.singleDeleteIds == ["t", "t3"])
+    #expect(page.document == Lines.document(
+      Lines.line("a", "One"),
+      Lines.block("db", "database", props: #"{"databaseId":"x"}"#, children: [Lines.line("t2", "Inside")])))
+  }
+
+  /// A tap under a page that ends with a block holding no words: an empty paragraph after it, with the web's props.
+  @Test func a_paragraph_is_added_at_the_end_of_the_page() {
+    let divider = Lines.block("d", "divider", props: "{}")
+    let database = Lines.block("db", "database", props: #"{"databaseId":"x"}"#, children: [Lines.line("in", "Hidden")])
+    var page = Lines.editable(Lines.document(Lines.line("a", "One"), divider, database))
+
+    #expect(page.appendParagraph() == EditablePage.Caret(block: "n1", offset: 0))
+
+    #expect(
+      page.document
+        == Lines.document(Lines.line("a", "One"), divider, database, Lines.block("n1", words: [])))
+    #expect(page.textBlocks.last == "n1")
+
+    var unreadable = Lines.editable("not a page")
+    #expect(unreadable.appendParagraph() == nil)
+    #expect(unreadable.document == "not a page")
+  }
 }
