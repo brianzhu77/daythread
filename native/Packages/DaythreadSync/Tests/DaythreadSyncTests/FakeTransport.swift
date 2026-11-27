@@ -175,3 +175,19 @@ actor Gate {
     return await withCheckedContinuation { waiting = $0 }
   }
 }
+
+extension Performed {
+  /// The server's answer, when it applied the command; nil for every other outcome.
+  var answer: Answer? {
+    if case .applied(let answer) = self { answer } else { nil }
+  }
+}
+
+extension SyncState {
+  /// The state without its number, to compare what it says with a state a test builds.
+  var unnumbered: SyncState {
+    var state = self
+    state.published = 0
+    return state
+  }
+}

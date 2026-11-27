@@ -1967,6 +1967,272 @@ private struct DraftHarness {
     }
     #expect(lines.count == 5)
   }
+
+  // MARK: A row action and the page's words not yet saved
+
+  @Test func a_command_told_not_to_overtake_a_page_is_sent_after_that_pages_save_in_the_same_pass() async throws {
+    let setAside = Command.notToday(taskId: "editor-task:r1", date: today)
+    let answer = try changes(from: 6, to: 7, document: typed("Walk"))
+    let h = try await DraftHarness(
+      opening + [
+        try saved(from: 5, to: 6, document: typed("Walk")),
+        .outcome(.applied(receipt: .object([:]), changes: answer, owner: "user-1")),
+      ])
+    await h.engine.start()
+    let requested = await h.engine.passRequests
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+
+    let performed = await h.engine.perform(action: setAside, notOvertaking: day)
+
+    #expect(performed.answer != nil, "applied")
+    let calls = await h.transport.calls.dropFirst(opening.count)
+    #expect(calls.map(\.isSave) == [true, false], "the save, then the command")
+    guard case .send(_, _, let action, _, let basis)? = calls.last else {
+      Issue.record("the command was not sent")
+      return
+    }
+    #expect(action == setAside)
+    #expect(basis.baseRevision == 6, "on the revision the save made")
+    #expect(await h.engine.passRequests == requested + 1, "in one pass")
+    #expect(await h.waits.inProgress == 0, "the wait after his change was not waited out")
+    #expect(try await h.drafts == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_command_asked_while_a_pass_is_past_its_saves_goes_after_the_next_passs_save() async throws {
+    let setAside = Command.notToday(taskId: "editor-task:r1", date: today)
+    let gate = Gate()
+    let h = try await DraftHarness(
+      opening + [
+        .gated(gate), try saved(from: 6, to: 7, document: typed("Walk")),
+        .outcome(.applied(receipt: .object([:]), changes: try changes(from: 7, to: 8), owner: "user-1")),
+      ])
+    await h.engine.start()
+    let engine = h.engine
+    // A pass is sending another command, its saves already done.
+    let first = Task { await engine.perform(action: Command.ensureDay(LocalDate("2026-11-24")!)) }
+    await gate.reached()
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    let requested = await h.engine.passRequests
+    let second = Task { await engine.perform(action: setAside, notOvertaking: day) }
+    await until { await h.engine.passRequests == requested + 1 }
+    await gate.open(.outcome(.applied(receipt: .object([:]), changes: try changes(from: 5, to: 6), owner: "user-1")))
+
+    #expect(await first.value.answer != nil)
+    #expect(await second.value.answer != nil, "not taken by the pass whose saves were done")
+    #expect(await h.transport.calls.dropFirst(opening.count).map(\.isSave) == [false, true, false])
+    #expect(try await h.drafts == [])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_command_is_not_sent_while_its_page_has_a_draft_that_could_not_be_saved() async throws {
+    let setAside = Command.notToday(taskId: "editor-task:r1", date: today)
+
+    // Offline: its save is tried first, fails, and the command is never sent.
+    let away = try await DraftHarness(opening)
+    await away.engine.start()
+    try await away.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await away.transport.goOffline()
+    #expect(await away.engine.perform(action: setAside, notOvertaking: day) == .offline)
+    #expect(await away.transport.sends == [])
+    #expect(await away.saves.count == 1)
+    #expect(try await away.drafts.map(\.document) == [typed("Walk")])
+
+    // Behind the server's page: waits for the screen's merge, so the command is not sent.
+    let behindIt = try await DraftHarness(
+      opening + [.workspace(.full(served(6, document: typed("Theirs")), owner: "user-1"))])
+    await behindIt.engine.start()
+    try await behindIt.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await behindIt.engine.refresh()
+    #expect(await current(behindIt.engine)?.drafts == behind())
+    #expect(await behindIt.engine.perform(action: setAside, notOvertaking: day) == .notSent)
+    #expect(await behindIt.transport.sends == [])
+    #expect(await behindIt.saves == [])
+    #expect(try await behindIt.drafts.map(\.document) == [typed("Walk")])
+    #expect(await behindIt.transport.unscripted == [])
+
+    // Stuck: the page is in Trash.
+    let trashed = try await DraftHarness(
+      opening + [.workspace(.full(served(6, trashedAt: "2026-11-25T12:00:00.000Z"), owner: "user-1"))])
+    await trashed.engine.start()
+    try await trashed.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await trashed.engine.refresh()
+    #expect(await current(trashed.engine)?.drafts == stuck("This page is in Trash"))
+    #expect(await trashed.engine.perform(action: setAside, notOvertaking: day) == .notSent)
+    #expect(await trashed.transport.sends == [])
+    #expect(await trashed.saves == [])
+    #expect(try await trashed.drafts.map(\.document) == [typed("Walk")])
+    #expect(await trashed.transport.unscripted == [])
+  }
+
+  @Test func a_draft_on_another_page_does_not_hold_the_command() async throws {
+    let setAside = Command.notToday(taskId: "editor-task:r1", date: today)
+    let answer = try changes(from: 5, to: 6)
+    let h = try await DraftHarness(
+      opening + [.outcome(.applied(receipt: .object([:]), changes: answer, owner: "user-1"))],
+      copy: servedWithNotes(5, notesPage(baseDocument)))
+    await h.engine.start()
+    try await h.engine.keepDraft(
+      pageId: notes, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+
+    let performed = await h.engine.perform(action: setAside, notOvertaking: day)
+
+    #expect(performed.answer != nil, "applied")
+    #expect(await h.transport.sends.count == 1)
+    #expect(await h.saves == [], "the other page's wait after his change goes on")
+    #expect(try await h.drafts.map(\.pageId) == [notes])
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func words_typed_after_the_tap_while_a_pass_is_out_are_saved_before_the_command() async throws {
+    let setAside = Command.notToday(taskId: "editor-task:r1", date: today)
+    let gate = Gate()
+    let ticked = try changes(from: 5, to: 6, tasks: [otherTask])
+    let h = try await DraftHarness(
+      opening + [
+        .gated(gate), try saved(from: 6, to: 7, document: typed("Walk on")),
+        .outcome(.applied(receipt: .object([:]), changes: try changes(from: 7, to: 8), owner: "user-1")),
+      ], copy: served(5, tasks: [otherTask]))
+    await h.engine.start()
+    let engine = h.engine
+    // A tick is on its way, slowly.
+    try await h.engine.enqueue(action: tick("other"), label: "Tick other")
+    await gate.reached()
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    let requested = await h.engine.passRequests
+    let performing = Task { await engine.perform(action: setAside, notOvertaking: day) }
+    await until { await h.engine.passRequests == requested + 1 }
+    // He goes on typing, which starts the wait after a change again.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await gate.open(.outcome(.applied(receipt: .object([:]), changes: ticked, owner: "user-1")))
+
+    #expect(await performing.value.answer != nil, "applied")
+    #expect(await h.saves.map(\.document) == [typed("Walk on")])
+    #expect(await h.transport.calls.dropFirst(opening.count).map(\.isSave) == [false, true, false])
+    await h.engine.settled()
+    #expect(try await h.drafts == [])
+    #expect(await h.waits.inProgress == 0, "no wait after a change is left running")
+    #expect(await h.transport.unscripted == [])
+
+    // Words typed after the answer wait out their 450 ms again.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk on by"), singleDeleteIds: [], startedFrom: typed("Walk on"),
+      expectedOwner: "user-1")
+    await until { await h.waits.inProgress == 1 }
+    await h.engine.settled()
+    #expect(await h.saves.count == 1)
+  }
+
+  @Test func words_typed_after_the_tap_before_the_pass_reaches_its_saves_are_saved_first() async throws {
+    let setAside = Command.notToday(taskId: "editor-task:r1", date: today)
+    let h = try await DraftHarness(
+      opening + [
+        try saved(from: 5, to: 6, document: typed("Walk")),
+        .outcome(.applied(receipt: .object([:]), changes: try changes(from: 6, to: 7), owner: "user-1")),
+      ])
+    await h.engine.start()
+    let engine = h.engine
+    // The pass holds the store section while its drain reads the outbox.
+    await h.store.hold("entries")
+    let performing = Task { await engine.perform(action: setAside, notOvertaking: day) }
+    await h.store.arrived("entries")
+    let typing = Task {
+      try await engine.keepDraft(
+        pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    }
+    // His keystroke waits for the section the pass holds.
+    await until { await engine.sectionWaiters == 1 }
+    await h.store.letGo("entries")
+    try await typing.value
+
+    #expect(await performing.value.answer != nil, "applied")
+    #expect(await h.saves.map(\.document) == [typed("Walk")])
+    #expect(await h.transport.calls.dropFirst(opening.count).map(\.isSave) == [true, false])
+    #expect(try await h.drafts == [])
+    #expect(await h.waits.inProgress == 0)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_wait_left_by_one_account_does_not_hold_anothers_draft_of_the_same_page() async throws {
+    let theirs = typed("Theirs")
+    let saveTheirs = FakeTransport.Reply.saved(
+      .applied(
+        receipt: .object(["revision": .number("2")]),
+        changes: try changes(from: 1, to: 2, document: typed("Theirs too")), owner: "user-2"))
+    let h = try await DraftHarness(
+      opening + [.workspace(.full(served(1, document: theirs), owner: "user-2")), saveTheirs])
+    try await h.store.put(
+      PageDraft(
+        pageId: day, owner: "user-2", base: ContentKey.of(theirs), baseDocument: theirs,
+        document: typed("Theirs too"), singleDeleteIds: [], sent: nil, changedAt: noon))
+    await h.engine.start()
+    // His wait after a change runs when the server answers as the other account.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await until { await h.waits.inProgress == 1 }
+
+    await h.engine.refresh()
+
+    #expect(await h.saves.map(\.expectedOwner) == ["user-2"], "their draft is saved in the load's pass")
+    #expect(await h.waits.inProgress == 0, "the first account's wait was cut")
+
+    // A keep under the new account waits out a wait of its own.
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Theirs again"), singleDeleteIds: [], startedFrom: typed("Theirs too"),
+      expectedOwner: "user-2")
+    await until { await h.waits.inProgress == 1 }
+    await h.engine.settled()
+    #expect(await h.saves.count == 1, "not sent before its wait ends")
+    await h.transport.add([
+      .saved(
+        .applied(
+          receipt: .object(["revision": .number("3")]),
+          changes: try changes(from: 2, to: 3, document: typed("Theirs again")), owner: "user-2"))
+    ])
+    await h.waits.elapse()
+    await until { await h.saves.count == 2 }
+    await h.engine.settled()
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func the_retry_mark_is_forgotten_when_a_load_brings_another_owner() async throws {
+    let theirs = typed("Theirs")
+    let gate = Gate()
+    let h = try await DraftHarness(opening + [.failure(TransportError.server(status: 500))])
+    // The other account's draft of the same day page, free to be saved on the page their copy has.
+    try await h.store.put(
+      PageDraft(
+        pageId: day, owner: "user-2", base: ContentKey.of(theirs), baseDocument: theirs,
+        document: typed("Theirs too"), singleDeleteIds: [], sent: nil, changedAt: noon))
+    await h.engine.start()
+    try await h.engine.keepDraft(
+      pageId: day, document: typed("Walk"), singleDeleteIds: [], startedFrom: baseDocument, expectedOwner: "user-1")
+    await h.engine.saveNow()
+    #expect(await current(h.engine)?.drafts == [DraftStatus(id: day, state: .retrying)])
+
+    let seen = Seen()
+    let states = h.engine.states
+    let reading = Task { for await state in states { await seen.add(state) } }
+    // The server answers as the other account; the save of their draft waits at the gate.
+    await h.transport.add([.workspace(.full(served(1, document: theirs), owner: "user-2")), .gated(gate)])
+    let refreshing = Task { await h.engine.refresh() }
+    await gate.reached()
+    await until { await seen.all.contains { $0.owner == "user-2" } }
+
+    let loaded = await seen.all.first { $0.owner == "user-2" }
+    #expect(loaded?.drafts == waiting(), "their draft is not said to be tried again")
+    await gate.open(.failure(TransportError.offline))
+    await refreshing.value
+    reading.cancel()
+    #expect(await h.transport.unscripted == [])
+  }
 }
 
 /// Another device's to-do, written elsewhere.
