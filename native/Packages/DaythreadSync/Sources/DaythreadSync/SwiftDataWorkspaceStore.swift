@@ -238,6 +238,8 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
   private(set) var rowWrites = 0
   /// Saves since the store was opened; tests read it to see that a call is one transaction.
   private(set) var saves = 0
+  /// The draft rows found unreadable, by key, so each is logged once.
+  private var unreadableDrafts: Set<String> = []
 
   /// Opens the store at `url`, creating its folder if needed; nil keeps it in memory only.
   public static func open(at url: URL?) throws -> SwiftDataWorkspaceStore {
@@ -436,8 +438,19 @@ public actor SwiftDataWorkspaceStore: WorkspaceStore {
 
   // MARK: Drafts
 
+  /// A row that cannot be read is left out: one damaged row must not hide every other draft. It stays in the store
+  /// until a `put` of its page replaces it.
   public func drafts() async throws -> [PageDraft] {
-    try modelContext.fetch(FetchDescriptor<DraftRow>()).map(Self.draft).sorted(by: PageDraft.inStoreOrder)
+    try modelContext.fetch(FetchDescriptor<DraftRow>()).compactMap { row in
+      do {
+        return try Self.draft(row)
+      } catch {
+        if unreadableDrafts.insert(row.key).inserted {
+          SyncLog.logger.error("A draft could not be read; left out")
+        }
+        return nil
+      }
+    }.sorted(by: PageDraft.inStoreOrder)
   }
 
   public func put(_ draft: PageDraft) async throws {
