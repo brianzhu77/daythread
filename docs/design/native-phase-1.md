@@ -618,8 +618,13 @@ are the web's words.
   relaunch, see it, come back, see it saved; Return and Backspace; a to-do typed and then ticked; a page changed
   on the server while he typed is merged. Chinese is typed with the simulator's Pinyin keyboard if a UI test can
   drive it; if it cannot, that check is his, by hand, and the plan says so.
-- **Feel:** the time from a keystroke to the next frame on a page of 300 lines, measured with XCTest's metrics.
-  The first measurement sets the budget, which is then written here.
+- **Feel:** the time from a keystroke to the list laid out again, on a page of 300 lines and, for comparison, of
+  10. Measured on 2026-11-26 on the iPhone 17 simulator (the median of five runs of 50 keystrokes each):
+  **7.0 ms on 300 lines, 2.7 ms on 10**. The budget is one and a half times each (10.6 ms and 4.0 ms), enforced
+  where the machine is known (`DAYTHREAD_FEEL_BUDGET=1`; CI only measures). What grows with the page, from a
+  profile: the page is written out whole on every keystroke for `onChange`, and parsed again by the screen and by
+  the engine when they draw the draft. It is well inside a frame today; these are the places to work on if a
+  longer page ever is not.
 - **His data:** as before, by him: a line typed in the app is on the web, and one typed on the web is in the app.
 
 ### 10.8 Not in 1b, recorded
