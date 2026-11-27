@@ -82,8 +82,8 @@ public actor SyncEngine {
   /// it was answered starts from what it sent (`keepDraft`). Kept in memory only: after a relaunch no keystroke is on
   /// its way.
   var landedSaves: [String: LandedSave] = [:]
-  /// By page, the content keys of the pages the screen typed the draft's words onto: the one it was created on, and
-  /// each merge it was handed. A keystroke on its way still carries one of them after the draft's last save (see
+  /// By page, the content keys of the pages the screen typed the draft's words onto: the one each keep names, and each
+  /// merge it was handed. A keystroke on its way still carries one of them after the draft's last save (see
   /// `landedSaves`). Kept in memory only, beside the draft, and dropped with it.
   var draftOrigins: [String: DraftOrigin] = [:]
   /// The calls about a page's words (`keepDraft`, `rebaseDraft`, `discardDraft`) that changed what is drawn, in this

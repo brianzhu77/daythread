@@ -32,8 +32,8 @@ extension SyncEngine {
   /// `startedFrom` is the page the screen typed onto. The first call for a page records it as the draft's base, never
   /// the copy's page now: a load may have changed that page between his keystroke and this call, and his document
   /// would then replace another device's lines. When the copy's page is not `startedFrom`, the draft is behind and
-  /// waits for the screen's merge. Once a draft exists, its base stands and `startedFrom` is not read. A draft the
-  /// server refused is sent again with these words.
+  /// waits for the screen's merge. Once a draft exists, its base stands and `startedFrom` is only kept among the
+  /// draft's origins (see `firstBase`). A draft the server refused is sent again with these words.
   ///
   /// One exception for the first call: a `startedFrom` with the content key of the page that the page's last landed
   /// save was made on, when that save removed its draft. The keystroke was made before the answer reached the screen,
@@ -70,18 +70,33 @@ extension SyncEngine {
         pageId: page.id, owner: copy.owner, base: kept?.base ?? ContentKey.of(baseDocument),
         baseDocument: baseDocument, document: document, singleDeleteIds: singleDeleteIds, sent: kept?.sent,
         changedAt: now()))
-    if kept == nil { draftOrigins[page.id] = DraftOrigin(owner: copy.owner, keys: [ContentKey.of(startedFrom)]) }
+    recordOrigin(startedFrom, of: page.id, owner: copy.owner)
     refusedDrafts[page.id] = nil
     publishDrafts()
     waitThenSave(page.id)
   }
 
+  /// Adds the page the screen typed onto to the draft's origins, on every keep: the screen can open a page whose draft
+  /// this engine did not create (after a relaunch, after he left the day and came back, after a merge it refused) and
+  /// type onto the draft as drawn. The text is compared first, so a keystroke on the same page costs no hash. Runs
+  /// inside a store section.
+  private func recordOrigin(_ startedFrom: String, of pageId: String, owner: String) {
+    var origin = draftOrigins[pageId].flatMap { $0.owner == owner ? $0 : nil } ?? DraftOrigin(owner: owner, keys: [])
+    if let last = origin.lastText, last.utf8.elementsEqual(startedFrom.utf8) { return }
+    origin.keys.append(ContentKey.of(startedFrom))
+    origin.lastText = startedFrom
+    draftOrigins[pageId] = origin
+  }
+
   /// Where a page's first draft starts: `startedFrom`, or what the page's last landed save sent when `startedFrom` is
   /// the page that save was made on, or a page the screen typed that save's draft onto (see `keepDraft`): the screen
   /// moves its `startedFrom` on only while the page has no draft, so a draft that lived through several saves still
-  /// carries the page it was created on. Runs inside a store section.
+  /// carries the page it was created on. A `startedFrom` that is the page as the save left it was typed after the
+  /// answer reached the screen: nothing to translate, even when it is also one of those pages (a server that wrote
+  /// the page back to an earlier version). Runs inside a store section.
   private func firstBase(of pageId: String, owner: String, startedFrom: String) -> String {
     guard let landed = landedSaves[pageId], landed.owner == owner else { return startedFrom }
+    if ContentKey.storedDocument(startedFrom).utf8.elementsEqual(landed.pageAfter.utf8) { return startedFrom }
     guard
       Self.document(startedFrom, hasKey: landed.base, keyOf: landed.baseDocument)
         || landed.origins.contains(ContentKey.of(startedFrom))
@@ -138,6 +153,7 @@ extension SyncEngine {
       var origin = draftOrigins[page.id].flatMap { $0.owner == copy.owner ? $0 : nil }
         ?? DraftOrigin(owner: copy.owner, keys: [])
       origin.keys.append(ContentKey.of(document))
+      origin.lastText = document
       draftOrigins[page.id] = origin
     }
     stopDraftWait(page.id)
@@ -726,6 +742,8 @@ struct LandedSave: Sendable {
 struct DraftOrigin: Sendable {
   let owner: String
   var keys: [String]
+  /// The page last added, as text, so the same page given again is told without a hash.
+  var lastText: String?
 }
 
 /// The wait in progress after his last change to a page; `number` tells a wait that ended after it was replaced.
