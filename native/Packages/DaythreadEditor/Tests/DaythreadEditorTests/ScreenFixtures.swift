@@ -39,10 +39,11 @@
     /// A page of `blocks` shown for editing in a window of its own.
     ///
     /// With `today`, the page is that day's page and is in the workspace, beside `pages`, so its to-dos' rows draw
-    /// their facts; `rest` adds the workspace's other top-level fields (`todoRepeats`, `links`).
+    /// their facts; `day` makes it another day's page instead; `rest` adds the workspace's other top-level fields
+    /// (`todoRepeats`, `links`).
     static func editing(
       _ blocks: [Block], tasks: [JSONValue] = [], width: CGFloat = 390, height: CGFloat = 844, safeArea: CGFloat = 0,
-      category: UIContentSizeCategory = .large, today: String? = nil, pages: [Page] = [],
+      category: UIContentSizeCategory = .large, today: String? = nil, day: String? = nil, pages: [Page] = [],
       rest: [(String, JSONValue)] = []
     ) throws -> Screen {
       let controller = DocumentViewController()
@@ -53,7 +54,8 @@
       controller.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: safeArea, bottom: 0, right: safeArea)
       controller.view.layoutIfNeeded()
       if let today {
-        let page = try makePage(blocks, id: "day:\(today)", date: today, type: "daily")
+        let date = day ?? today
+        let page = try makePage(blocks, id: "day:\(date)", date: date, type: "daily")
         controller.today = LocalDate(today)
         controller.edit(page: page, in: try makeWorkspace(pages: [page] + pages, tasks: tasks, rest: rest))
       } else {
