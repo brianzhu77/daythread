@@ -18,6 +18,7 @@ actor TestServer: ServerTransport {
   private var script: [Reply]
   private var holding = false
   private var holdingSaves = false
+  private var holdingCommands = false
   private var held: [CheckedContinuation<Void, Never>] = []
   private var arrivals: [CheckedContinuation<Void, Never>] = []
   /// The actions sent, in the order they were sent.
@@ -46,6 +47,11 @@ actor TestServer: ServerTransport {
     holdingSaves = true
   }
 
+  /// Every command sent from now on waits for `release`; page saves and other calls are answered.
+  func holdCommands() {
+    holdingCommands = true
+  }
+
   /// The calls waiting to be released.
   var waitingCalls: Int { held.count }
 
@@ -53,6 +59,7 @@ actor TestServer: ServerTransport {
   func release() {
     holding = false
     holdingSaves = false
+    holdingCommands = false
     let waiting = held
     held = []
     for call in waiting { call.resume() }
@@ -91,7 +98,7 @@ actor TestServer: ServerTransport {
   ) async throws -> CommandOutcome {
     sent.append(action)
     operationIds.append(operationId)
-    guard case .outcome(let outcome) = try await answer() else { throw TransportError.unreadable }
+    guard case .outcome(let outcome) = try await answer(isCommand: true) else { throw TransportError.unreadable }
     return outcome
   }
 
@@ -104,8 +111,8 @@ actor TestServer: ServerTransport {
     return outcome
   }
 
-  private func answer(isSave: Bool = false) async throws -> Reply {
-    if holding || (isSave && holdingSaves) {
+  private func answer(isSave: Bool = false, isCommand: Bool = false) async throws -> Reply {
+    if holding || (isSave && holdingSaves) || (isCommand && holdingCommands) {
       await withCheckedContinuation { call in
         held.append(call)
         let waiting = arrivals
