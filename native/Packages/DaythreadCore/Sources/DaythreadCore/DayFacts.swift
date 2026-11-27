@@ -12,6 +12,12 @@ public struct DayFacts: Hashable, Sendable {
 
     /// The row's menu button, for VoiceOver.
     public var menuLabel: String { "More for \(words)" }
+
+    /// A `Not today` row's `Bring back`, for VoiceOver: `Bring back <words>`, so each row's button says whose it is.
+    public var bringBackLabel: String { "Bring back \(words)" }
+
+    /// The names Voice Control answers to for `Bring back`: the title on screen first, so "Bring back" still works.
+    public var bringBackInputLabels: [String] { ["Bring back", bringBackLabel] }
   }
 
   public struct NotToday: Hashable, Sendable {

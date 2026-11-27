@@ -257,7 +257,9 @@
     let model: DayFactsModel
 
     var body: some View {
-      VStack(alignment: .leading) {
+      // The words and the tag's line have no gap of their own to copy: 8 points keep the tag off the button's box
+      // when, at the accessibility sizes, the tag goes under the words.
+      VStack(alignment: .leading, spacing: 8) {
         FactRowView(row: row, acting: model.acting == row.taskId)
         HStack {
           // Quiet controls, as the web's: the system's bordered button with its title in the label colour, the menu's
@@ -265,6 +267,8 @@
           Button("Bring back") { model.bringBack(row.taskId) }
             .buttonStyle(.bordered)
             .tint(.primary)
+            .accessibilityLabel(row.bringBackLabel)
+            .accessibilityInputLabels(row.bringBackInputLabels)
           Menu {
             Section(menu.title ?? "") {
               ForEach(menu.items, id: \.self) { item in

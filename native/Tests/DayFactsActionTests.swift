@@ -156,6 +156,24 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     day.close()
   }
 
+  @Test func bring_back_after_typing_keeps_the_indexes_the_screen_holds() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    await h.server.add([savedAs(try changes(from: 1, to: 2, pages: [page(today, todayLines(walk: "Walk!"))]))])
+    await h.server.holdCommands()
+    // Typed, and Bring back tapped in the same turn: the workspace with his words is one no state has drawn yet.
+    try day.type("!", atEndOf: "Walk")
+    let cached = day.screen.indexedWorkspaces
+    day.factsModel.bringBack("t-aside")
+    #expect(day.screen.indexedWorkspaces == cached, "the check read the indexes without adding to them")
+
+    try await answerHeld(h) { applied(try broughtBack(from: 2, walk: "Walk!", undo: $0)) }
+    try await soon { day.notice != nil }
+    #expect(day.notice?.text == "On today")
+    day.close()
+  }
+
   @Test func another_day_sends_that_day_and_says_the_short_form() async throws {
     let h = try await harness()
     let day = try RowScreen(h.model)
@@ -411,6 +429,28 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     day.close()
   }
 
+  @Test func undo_with_todays_page_in_trash_is_sent_once_and_said() async throws {
+    let h = try await harness(pages: [trashed(todayPage)])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    await h.server.hold()
+    day.factsModel.bringBack("t-aside")
+    let operationId = try await answerHeld(h) {
+      applied(try changes(from: 1, to: 2, tasks: [task("t-aside", "Fix the bike", version: 2)], undo: $0))
+    }
+    try await soon { day.notice != nil }
+    #expect(day.notice == Notice(text: "On today", kind: .done, undoing: operationId))
+
+    // No page to wait for: the Undo goes at once.
+    await h.server.hold()
+    try day.undo()
+    try await answerHeld(h) { _ in applied(try changes(from: 2, to: 3, tasks: [bike])) }
+    try await soon { day.notice?.kind == .undone }
+    #expect(day.notice == Notice(text: "Undone", kind: .undone, undoing: nil))
+    #expect(await h.server.sent.filter { $0 == Command.undo(targetOperationId: operationId) }.count == 1)
+    day.close()
+  }
+
   @Test func undo_leaves_the_notice_when_he_types() async throws {
     let h = try await harness()
     let day = try RowScreen(h.model)
@@ -426,7 +466,9 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
   // MARK: One at a time
 
   @Test func one_action_at_a_time_across_the_strip_and_the_rows() async throws {
-    let h = try await harness()
+    let bank = task("t2", "Call the bank")
+    let h = try await harness(
+      pages: [page(today, todayLines() + [row("r2", "t2", "Call the bank")])], tasks: [water, bike, bank])
     let day = try RowScreen(h.model)
     try await settled(day)
 
@@ -451,13 +493,15 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     #expect(day.factsModel.acting == "t-aside")
     #expect(!day.factsModel.enabled)
     #expect(day.editor.actingRow == nil, "no row of the page is dimmed")
-    try day.swipe("Water the plants", "Tomorrow")
+    #expect(try day.swipe("Water the plants") == nil, "the page's rows offer no swipe")
+    #expect(try day.swipe("Call the bank") == nil)
+    try day.menu("Water the plants", "Not today")
     try await turns()
     #expect(await h.server.sent.count == 2, "a row's action sends nothing")
 
     // Typing and ticking go on.
     try day.type(" the dog", atEndOf: "Walk")
-    #expect(day.words.last == "Walk the dog")
+    #expect(day.words.contains("Walk the dog"))
     try day.tick("Water the plants")
     #expect(h.status("t1") == .done)
 
@@ -465,7 +509,30 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     try await soon { day.notice?.text == "On today" }
     #expect(day.factsModel.acting == nil)
     #expect(day.factsModel.enabled)
+    #expect(try day.swipeTitles("Call the bank") == ["Tomorrow", "Not today", "More"], "the rows' swipe is back")
     #expect(await h.server.sent.filter { type(of: $0) == "plan-task" }.count == 2)
+    day.close()
+  }
+
+  @Test func a_row_action_out_on_today_holds_the_rows_of_another_day() async throws {
+    let bank = task("t2", "Call the bank")
+    let h = try await harness(
+      pages: [todayPage, page(saturday, [row("s1", "t2", "Call the bank", on: saturday)])], tasks: [water, bike, bank])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    await h.server.hold()
+    try day.swipe("Water the plants", "Tomorrow")
+    try await held(h)
+
+    day.screen.open(saturday)
+    try await settled(day)
+    #expect(day.words == ["Call the bank"])
+    #expect(try day.swipe("Call the bank") == nil, "no swipe while today's action is out")
+
+    try await answerHeld(h) { _ in applied(try changes(from: 1, to: 2)) }
+    await h.engine.settled()
+    try await soon { (try? day.swipe("Call the bank")) != nil }
+    #expect(day.notice == nil, "nothing is said on this day for today's row")
     day.close()
   }
 
@@ -558,6 +625,63 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     try await turns()
     #expect(day.notice == nil, "nothing is said on this day for today")
     try await soon { day.factsModel.enabled }
+    day.close()
+  }
+
+  @Test func leaving_today_while_a_strip_actions_undo_is_out_says_nothing_there() async throws {
+    let h = try await harness(pages: [todayPage, page(yesterday, [line("y", "Before")])])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let operationId = try await bringBackWithUndo(h, day)
+    try await soon { listed(day).isEmpty }
+
+    await h.server.hold()
+    try day.undo()
+    try await held(h)
+    day.screen.open(yesterday)
+    try await settled(day)
+    #expect(day.words == ["Before"])
+
+    try await answerHeld(h) { _ in applied(try changes(from: 2, to: 3, pages: [todayPage], tasks: [bike])) }
+    await h.engine.settled()
+    try await turns()
+    #expect(day.notice == nil, "the Undo's answer is said only on today")
+    #expect(await h.server.sent.last == Command.undo(targetOperationId: operationId))
+    try await soon { day.factsModel.enabled }
+    day.close()
+  }
+
+  @Test func the_typed_line_stays_when_bring_back_takes_the_fold_away() async throws {
+    let lines = todayLines() + (1...30).map { line("f\($0)", "Line \($0)") }
+    let h = try await harness(pages: [page(today, lines)])
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    day.factsModel.notTodayOpen = true
+    try await settled(day)
+    // Scrolled so his line is at the top under the bar: the header is off screen above, so the list can move by
+    // whatever the strip loses (at the list's top a shorter header can only pull the rows up).
+    #expect(day.editor.scroll(toRow: "b", animated: false))
+    try await settled(day)
+    let walk = try day.line("Walk")
+    #expect(walk.becomeFirstResponder())
+    try await settled(day)
+    let before = walk.convert(walk.bounds, to: nil)
+
+    // The only row of Not today: once it is brought back the strip has nothing, and takes no room.
+    await h.server.hold()
+    day.factsModel.bringBack("t-aside")
+    try await answerHeld(h) { _ in
+      applied(
+        try changes(
+          from: 1, to: 2, pages: [page(today, lines + [row("r9", "t-aside", "Fix the bike")])],
+          tasks: [task("t-aside", "Fix the bike", version: 2)]))
+    }
+    try await soon { day.facts.notToday == nil }
+    try await settled(day)
+    #expect(day.factsView.isHidden, "the strip went with its fold")
+    #expect(walk.isFirstResponder, "the keyboard stays up")
+    let after = walk.convert(walk.bounds, to: nil)
+    #expect(abs(after.minY - before.minY) <= 0.5, "the line was at \(before.minY), now \(after.minY)")
     day.close()
   }
 

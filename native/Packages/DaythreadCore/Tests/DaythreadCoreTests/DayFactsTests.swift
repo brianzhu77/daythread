@@ -162,7 +162,7 @@ import Testing
 
   @Test func the_another_day_menu_on_each_weekday() throws {
     let cases = try Fixtures.cases("rows/another-day.json")
-    #expect(!cases.isEmpty)
+    #expect(cases.count == 7)
     for entry in cases {
       let today = try #require(entry["today"]?.stringValue)
       let workspace = try TestWorkspace.make(

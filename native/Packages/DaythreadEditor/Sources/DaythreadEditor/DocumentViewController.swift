@@ -56,6 +56,14 @@
       }
     }
 
+    /// While true (the host has an action out that is not a row's), no row offers its swipe and no row's action is
+    /// reported, as while `actingRow` is set; no row is dimmed. Typing and ticking go on. Setting it reconfigures no
+    /// cell: the swipe is asked for when it begins, and a row being composed in must not be touched.
+    public var pausesRowActions = false
+
+    /// Every row's actions are held: one is out for a row, or the host paused them.
+    private var actionsHeld: Bool { actingRow != nil || pausesRowActions }
+
     /// The row's frame in the list's coordinates, for a popover; nil when it is not drawn.
     public func sourceRect(ofRow rowID: String) -> CGRect? {
       cell(for: rowID)?.frame
@@ -1121,7 +1129,7 @@
     /// made with after the row is redrawn, so the row must still be there with that to-do and still offer the action
     /// (`More` while its menu holds more, the button while the row shows it). True when it was handed on.
     private func reportRowAction(_ kind: RowRequest.Kind, row id: String, taskId: String) -> Bool {
-      guard actingRow == nil, let onRowAction, let row = rowsByID[id],
+      guard !actionsHeld, let onRowAction, let row = rowsByID[id],
         case .todo(let current, _, _, let facts?) = row.kind, current == taskId, let menu = facts.menu
       else { return false }
       let offered =
@@ -1141,7 +1149,7 @@
     /// none anywhere while words are selected (a handle dragged sideways would open one), and none while an action is
     /// out.
     fileprivate func trailingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-      guard actingRow == nil, orderedIDs.indices.contains(indexPath.item) else { return nil }
+      guard !actionsHeld, orderedIDs.indices.contains(indexPath.item) else { return nil }
       let id = orderedIDs[indexPath.item]
       guard let row = rowsByID[id], case .todo(let taskId, _, _, let facts) = row.kind, let menu = facts?.menu else {
         return nil

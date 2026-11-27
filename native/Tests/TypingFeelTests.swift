@@ -183,7 +183,8 @@ final class TypingFeelTests: XCTestCase {
   /// has taken more than two seconds to be drawn on the 300-line page, which failed the run without any defect.
   ///
   /// A failure says what the model held when it gave up (`held`), then waits a further two minutes and reads again, so
-  /// the log tells a state that came late from one that did not come.
+  /// the log tells a state that came late from one that did not come. A failed wait records the failure and throws,
+  /// which ends the test: the keystrokes after it are not measured.
   private func until(_ what: String, held: () -> String = { "" }, _ condition: () -> Bool) async throws {
     let clock = ContinuousClock()
     let started = clock.now

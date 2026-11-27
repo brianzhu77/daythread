@@ -148,12 +148,13 @@
     /// The notice showing is of this action; nil when it offers no Undo.
     private var noticeOf: Acted?
     /// The action or Undo out on the screen, and where it came from: no other runs until it is answered (§12.4, one
-    /// at a time for the whole screen). Setting it dims its row (of the page, or of the strip) and disables the strip;
-    /// leaving the day takes the dimming away while it stays out.
+    /// at a time for the whole screen). Setting it dims its row (of the page, or of the strip), disables the strip and
+    /// holds every row's actions on whatever day is shown; leaving the day takes the dimming away while it stays out.
     private var actionOut: ActionOrigin? {
       didSet {
         guard actionOut != oldValue else { return }
         if case .row(let rowID) = actionOut { document.actingRow = rowID } else { document.actingRow = nil }
+        document.pausesRowActions = actionOut != nil
         if case .strip(let taskId) = actionOut { factsModel.acting = taskId } else { factsModel.acting = nil }
         updateStripEnabled()
       }
@@ -161,6 +162,8 @@
     /// The indexes the last `ListReading`s were read with, newest first, and the workspaces they are of: the list's
     /// workspace and a state's are read again at the next state, at no cost.
     private var readingIndexes: [(workspace: Workspace, index: TodoIndex)] = []
+    /// The workspaces `readingIndexes` holds, newest first (tests read it).
+    var indexedWorkspaces: [Workspace] { readingIndexes.map(\.workspace) }
 
     /// `noticeSleep`: how the notice waits out its time (tests hold it).
     init(model: AppModel, noticeSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep) {
@@ -360,7 +363,7 @@
           // He left the day: what he wrote there goes now, not after the wait.
           model.saveNow()
           // What a row action of that day says, and its dimmed row, stay with that day; an action still out is
-          // answered, and said nowhere.
+          // answered, and said nowhere, and holds this day's rows' actions until then.
           notice.dismiss()
           noticeOf = nil
           document.actingRow = nil
@@ -807,7 +810,10 @@
       {
         drawn = workspace.drawing(draft: mine, of: page.id)
       }
-      return DayFacts.of(day: today, in: drawn, index: todoIndex(of: drawn), today: today).lists(taskId)
+      // A workspace with words typed since the last state is in no cache: its index is built here and let go, so a tap
+      // does not evict the list's.
+      let index = readingIndexes.first { $0.workspace == drawn }?.index ?? TodoIndex(drawn)
+      return DayFacts.of(day: today, in: drawn, index: index, today: today).lists(taskId)
     }
 
     /// §12.4: plans `taskId` on `day` from the strip, on today's screen only, sent and waited for as a row's action

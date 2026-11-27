@@ -110,6 +110,7 @@
 | Another day, Tomorrow · Fri 11/27, This weekend · Sat 11/28, Next week · Mon 11/30, Pick date… | A `Not today` row's menu (the `ellipsis` button, VoiceOver `More for <words>`): one section titled `Another day`, the web's options for the weekday (`This weekend` Monday to Thursday only), then `Pick date…`. A day plans the to-do there (no `from`). `Pick date…` opens the system's calendar a row's `Pick date…` opens (nothing selected, today the first that can be picked) from the menu's button: a popover on a wide screen, a sheet on the phone |
 | File the taxes, Due today | A strip row's VoiceOver label: its words, then its tag (the words alone with no tag); `Bring back` and the menu are elements of their own |
 | More for Fix the bike | A `Not today` row's menu button's VoiceOver label: `More for <words>` |
+| Bring back Fix the bike | A `Not today` row's `Bring back` button's VoiceOver label: `Bring back <words>` (the words without the tag); the title on screen stays `Bring back`, and Voice Control answers to `Bring back` first, then `Bring back <words>` |
 | Database, Page, Image, File, Button, Smart note, Synced block, Table, Code, Block | The names of placeholder rows |
 | Today, Tasks, Calendar, Pages | The tab bar's tabs, the web's places in its order: the system's tab bar with its default appearance (the floating glass capsule on iOS 26). Symbols: `<day of month>.calendar` for Today (the account's today, `26.calendar` on the 26th; it changes at the account's midnight), `checkmark.square`, `calendar`, `doc.text` |
 | Search | The system's search tab (`UISearchTab`), its own title and symbol, after the four; the system draws it apart, as the round button at the end of the bar |
@@ -164,7 +165,9 @@ the day screen, under the title's stack in the page's header, so it scrolls away
   going, the text size) lays the page's header out again on the run loop's next turn, and while a line holds the
   keyboard that line stays where it is on the screen.
 - **While an action is out** (a row's or the strip's, or an Undo; and while today's page is being made): every button
-  and menu of the strip is disabled, and the acting row's words are in the tertiary colour. The fold itself stays usable: opening or closing `Not today` sends nothing.
+  and menu of the strip is disabled, and the acting row's words are in the tertiary colour. While any action is out,
+  on whatever day is shown, the page's rows offer no swipe. The fold itself stays usable: opening or closing
+  `Not today` sends nothing.
 
 The notice (`NoticeView`, in `native/Packages/DaythreadUI`; `native-app.md` §9 rule 3), the one line of words that
 says what a row action did:
