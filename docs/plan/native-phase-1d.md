@@ -875,11 +875,17 @@ rows, 200 chips, 100 set aside, 100 due with no row today), milliseconds, five i
 | `TodoIndex(workspace)` | 56.905, 57.162, 54.225, 55.450, 53.773 | 53.8 to 57.2 |
 | `DayFacts.of(day: today, ...)` | 3.617, 3.403, 3.426, 3.382, 3.278 | 3.3 to 3.6 |
 
-The index is built once for each state the day screen draws, and the facts read it once: about 60 ms a state on a
-workspace of this size (300 pages), nearly all of it the index, which parses every page's document. That index is not
-the strip's addition: the screen's rows read the same index before the strip existed. What the strip adds is
-`DayFacts.of` itself, about 3.4 ms on this workspace, and the strip's drawing (below). The typing fixture is not this
-workspace: it holds the same 3,000 to-dos on about 30 pages.
+The index is about 55 ms on a workspace of this size (300 pages), nearly all of a state's cost for the facts: it parses
+every page's document. Whether the strip adds it depends on the path the state takes in the day screen (`showDay`,
+`drawnWith`, `DayViewController.todoIndex(of:)`). While his words stay on the page (the typing path), the screen's
+`ListReading` of the drawn workspace has already built its index, and the facts take it from the screen's two-slot
+cache: there the index is not the strip's addition, and what the strip adds is `DayFacts.of` itself, about 3.4 ms, and
+the strip's drawing (below). When the list takes the page as the server has it, when another page is opened, and on a
+day with no page, nothing on the screen has read that workspace yet: the facts build a whole index for it, about 55 ms a
+state on this workspace in Debug, which the typing figures below do not show. The editor builds its own index of the
+same workspace for the rows it draws (`DocumentViewController`'s `TodoIndex`); sharing one index between the editor and
+the screen is a follow-up for slice 1d.2. The typing fixture is not this workspace: it holds the same 3,000 to-dos on
+about 30 pages.
 
 Typing with the strip on screen (100 set aside, 100 due, 200 chips on the past pages), milliseconds per keystroke to
 the list laid out, five invocations (the budget's figures, 7.040 and 2.671, were measured before slice 1c made the
@@ -903,7 +909,8 @@ Per keystroke to the engine's state drawn (not budgeted), where the strip's cost
 So the strip costs about 14 ms a state on the 300-line page (about 160 to about 173) and about 6 ms on the 10-line one
 (about 84 to about 89): the facts' 3.4 ms, the index now holding 200 chips, and the strip's rows being drawn. Both
 typing tests held their budget (the 300-line median is about 89 percent of its limit, the 10-line one 82 percent). The remedy
-of §12.6 (keeping each page's part of the index between states) was not needed.
+of §12.6 (keeping each page's part of the index between states) was not needed on the typing path; that is a conclusion
+about the typing path only, not about the paths above where the facts build an index of their own.
 
 A reading for the budget: on this machine the 300-line median is 9.27 to 9.47 ms against a limit of 10.56 ms derived
 from a fixture that was lighter, so the margin is about 10 to 12 percent; runs on the same machine while other builds ran
