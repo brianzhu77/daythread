@@ -421,6 +421,54 @@
         #expect(reports == 1)
       }
 
+      /// A merge that leaves no row for his words and no line that takes a caret: the keyboard is given up before his
+      /// row leaves the list, rather than taken away with it.
+      @Test func a_merge_that_leaves_no_line_gives_the_keyboard_up_first() throws {
+        let screen = try Screen.editing([
+          block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two"), block("d", "divider"),
+        ])
+        var reports = 0
+        screen.controller.onChange = { _, _ in reports += 1 }
+        // No merge the app makes drops his words; this stands in for one that did.
+        let onlyADivider = Document.write([block("d", "divider")])
+        screen.controller.mergeAfterComposing = { _, _, _ in onlyADivider }
+        let line = try screen.focus(1)
+        compose("今天", in: line)
+        screen.controller.replace(document: onlyADivider, in: try makeWorkspace())
+        line.unmarkText()
+        _ = screen.wait(0.3) { false }
+
+        #expect(screen.controller.itemCount == 1)
+        #expect(screen.controller.focusedLine == nil)
+        #expect(!screen.holdsKeyboard)
+        #expect(reports == 1)
+      }
+
+      /// The system ended the marked text without telling the line (as it does at a resign): the host's commit still
+      /// reads his words and ends the composition, so it never returns with the page still composing.
+      @Test func commit_composition_ends_a_composition_the_system_ended_silently() throws {
+        let screen = try Screen.editing([block("a", "paragraph", text: "one"), block("b", "paragraph", text: "two")])
+        var events: [String] = []
+        var reports: [String] = []
+        screen.controller.onChange = { document, _ in
+          events.append("change")
+          reports.append(document)
+        }
+        screen.controller.onComposingChange = { events.append($0 ? "composing" : "done") }
+        let line = try screen.focus(1)
+        compose("今天", in: line)
+        // An edit of the text storage outside the input system takes the marked text away, and nothing is told.
+        line.textStorage.replaceCharacters(in: NSRange(location: 0, length: 0), with: "")
+        try #require(line.markedTextRange == nil && screen.controller.isComposing, "the seam no longer reaches the state")
+
+        screen.controller.commitComposition()
+
+        #expect(!screen.controller.isComposing)
+        #expect(events == ["composing", "change", "done"])
+        let reported = Document.blocks(try #require(reports.last)).map { InlineContent($0.content).plain }
+        #expect(reported == ["one", "two今天"])
+      }
+
       /// The server's page leaves out the to-do he is composing in (it was moved to another day): the row waits while
       /// he composes (§10.4), his words are reported when the composition ends, and when the row is then removed the
       /// caret goes to the end of the line above with the keyboard up.
