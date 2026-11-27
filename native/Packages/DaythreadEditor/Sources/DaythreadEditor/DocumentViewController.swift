@@ -261,9 +261,6 @@
     /// line), and the keyboard stays up (`draw`). While he composes, every row but the composing one is drawn from it at once; that row's part waits until the
     /// composition ends, when his composed words and this page are merged (`commitHeld`).
     public func replace(document: String, in workspace: Workspace) {
-      // Words pasted and waiting for the run loop's next turn were pasted into the page as it is: they are read and
-      // reported first, for the host to merge, rather than dropped with the line's old words or its leaving row.
-      if let line = focusedLine, holdingReports({ line.applyPendingReplacement() }) { report() }
       guard let editedPage, let pageID = shownPageID else { return }
       // A line's resign is under way and its merge is drawn once the line has let the keyboard go: drawn now, this
       // page would be drawn over by that draw's older workspace. It is that draw's page and workspace instead.
