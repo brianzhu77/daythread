@@ -200,7 +200,8 @@ import Testing
 
   @Test func a_to_do_reads_the_day_it_was_made_and_its_page() throws {
     let marks = try Fixtures.cases("rows/marks.json")
-    let workspace = try #require(Workspace(try #require(marks.first?["workspace"])))
+    let json = try #require(marks.first?["workspace"])
+    let workspace = try #require(Workspace(json))
     let task = try #require(workspace.tasks.first)
     #expect(task.createdOn == LocalDate("2026-11-26"))
     #expect(task.sourcePageId == "day:2026-11-26")
