@@ -87,7 +87,7 @@ final class TypingFeelTests: XCTestCase {
     var typed = words
     var stored = try XCTUnwrap(model.workspace?.dayPage(Self.today)?.document.utf8.count)
     let clock = ContinuousClock()
-    for _ in 0..<Self.runs {
+    for runIndex in 0..<Self.runs {
       line.selectedRange = NSRange(location: (line.text as NSString).length, length: 0)
       var laidOut = Duration.zero
       var drawn = Duration.zero
@@ -103,7 +103,16 @@ final class TypingFeelTests: XCTestCase {
         // nothing that would be counted against the app.
         stored += 1
         let expected = stored
-        try await until { model.workspace?.dayPage(Self.today)?.document.utf8.count == expected }
+        try await until(
+          "the engine's state reached the screen",
+          held: {
+            let length = model.workspace?.dayPage(Self.today)?.document.utf8.count
+            let state = model.state
+            return "the page's document \(length.map(String.init) ?? "absent") bytes long, \(expected) expected; "
+              + "state number \(state.published), \(state.drafts.count) drafts \(state.drafts.map { "\($0.state)" }); "
+              + "keystroke \(index + 1) of run \(runIndex + 1)"
+          }
+        ) { model.workspace?.dayPage(Self.today)?.document.utf8.count == expected }
         window.layoutIfNeeded()
         drawn += clock.now - start
       }
@@ -130,13 +139,32 @@ final class TypingFeelTests: XCTestCase {
   /// Waits, a millisecond at a time, for `condition`, the main actor's other work running meanwhile; fails after
   /// thirty seconds. The wait is long because it is not what is measured: on CI's machines one keystroke's state
   /// has taken more than two seconds to be drawn on the 300-line page, which failed the run without any defect.
-  private func until(_ condition: () -> Bool) async throws {
+  ///
+  /// A failure says what the model held when it gave up (`held`), then waits a further two minutes and reads again, so
+  /// the log tells a state that came late from one that did not come.
+  private func until(_ what: String, held: () -> String = { "" }, _ condition: () -> Bool) async throws {
     let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(30))
+    let started = clock.now
+    let deadline = started.advanced(by: .seconds(30))
     while !condition(), clock.now < deadline {
       try await Task.sleep(nanoseconds: 1_000_000)
     }
-    XCTAssertTrue(condition(), "the engine's state reached the screen")
+    guard !condition() else { return }
+    let gaveUp = clock.now
+    let heldThen = held()
+    let furtherDeadline = gaveUp.advanced(by: .seconds(120))
+    while !condition(), clock.now < furtherDeadline {
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+    let outcome =
+      condition()
+      ? "it arrived late, \(Self.seconds(clock.now - gaveUp)) s after the first wait ended"
+      : "it had still not arrived after a further \(Self.seconds(clock.now - gaveUp)) s; the model then held \(held())"
+    XCTFail("\(what): not there after \(Self.seconds(gaveUp - started)) s; the model held \(heldThen); \(outcome)")
+  }
+
+  private static func seconds(_ duration: Duration) -> String {
+    String(format: "%.1f", duration / .milliseconds(1) / 1_000)
   }
 
   // MARK: The page
@@ -203,7 +231,10 @@ final class TypingFeelTests: XCTestCase {
     let engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: SyncEngine.sleep, now: { noon })
     let model = AppModel(engine: engine, now: { noon })
     model.start()
-    try await until { model.state.phase == .ready && model.workspace != nil }
+    try await until(
+      "the model signed in and showed the copy",
+      held: { "phase \(model.state.phase), \(model.workspace == nil ? "no copy" : "a copy")" }
+    ) { model.state.phase == .ready && model.workspace != nil }
     await engine.settled()
     await server.hold()
     return model
