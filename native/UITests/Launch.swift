@@ -207,6 +207,65 @@ struct SeededServer {
     XCTFail("the server has \"\(title)\" \(last ?? "missing"), not \(status)", file: file, line: line)
   }
 
+  /// The to-do with these words on the server now.
+  func task(_ title: String) async throws -> [String: Any] {
+    let workspace = try await workspace().workspace
+    let tasks = try XCTUnwrap(workspace["tasks"] as? [[String: Any]])
+    return try XCTUnwrap(tasks.first { $0["title"] as? String == title }, "the server has no to-do \"\(title)\"")
+  }
+
+  /// The day the to-do with these words is planned on, as the server has it now (the web's `plannedOn`): the newest day
+  /// page holding a plan row of it. Nil when none does.
+  func plannedDay(of title: String) async throws -> String? {
+    let task = try await task(title)
+    let taskId = try XCTUnwrap(task["id"] as? String)
+    let workspace = try await workspace().workspace
+    let pages = try XCTUnwrap(workspace["pages"] as? [[String: Any]])
+    func holdsPlanRow(_ blocks: [[String: Any]]) -> Bool {
+      blocks.contains { block in
+        let props = block["props"] as? [String: Any]
+        if block["type"] as? String == "task", props?["taskId"] as? String == taskId, props?["role"] as? String == "plan" {
+          return true
+        }
+        return holdsPlanRow(block["children"] as? [[String: Any]] ?? [])
+      }
+    }
+    let days = try pages.compactMap { page -> String? in
+      guard page["type"] as? String == "daily", page["trashedAt"] == nil || page["trashedAt"] is NSNull,
+        let date = page["date"] as? String, let document = page["document"] as? String
+      else { return nil }
+      let blocks = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(document.utf8)) as? [[String: Any]])
+      return holdsPlanRow(blocks) ? date : nil
+    }
+    return days.max()
+  }
+
+  /// Waits up to `timeout` seconds for the server to plan the to-do with these words on `day` (nil: on no day).
+  func waitForPlannedDay(
+    of title: String, _ day: String?, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line
+  ) async throws {
+    let deadline = Date().addingTimeInterval(timeout)
+    var last: String?
+    repeat {
+      last = try await plannedDay(of: title)
+      if last == day { return }
+      try await Task.sleep(nanoseconds: 200_000_000)
+    } while Date() < deadline
+    XCTFail("the server plans \"\(title)\" on \(last ?? "no day"), not \(day ?? "no day")", file: file, line: line)
+  }
+
+  /// Waits up to `timeout` seconds for the server to hold the to-do with these words set aside (`paused`).
+  func waitForPaused(
+    _ title: String, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line
+  ) async throws {
+    let deadline = Date().addingTimeInterval(timeout)
+    repeat {
+      if try await task(title)["paused"] as? Bool == true { return }
+      try await Task.sleep(nanoseconds: 200_000_000)
+    } while Date() < deadline
+    XCTFail("the server does not hold \"\(title)\" set aside", file: file, line: line)
+  }
+
   /// A line of a page as the server stores it: the block's id, its type and its words.
   struct Line: Equatable, Sendable, CustomStringConvertible {
     let id: String
