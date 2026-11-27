@@ -128,10 +128,10 @@
     }
   }
 
-  /// Today's events in one line, cut at its tail (up to three lines at the accessibility text sizes, where one line
-  /// holds a letter or two); `+N more` and the chevron are never cut, at the end of the first line. Quieter and a
-  /// little smaller than the page's text, as on the web. A button only when the page has an `Events` heading to
-  /// scroll to.
+  /// Today's events in one line, cut at its tail, `+N more` and the chevron never cut at its end. At the accessibility
+  /// text sizes the words take up to three lines, the whole width after the symbol, and `+N more` and the chevron go
+  /// on a line of their own under them. Quieter and a little smaller than the page's text, as on the web. A button
+  /// only when the page has an `Events` heading to scroll to.
   private struct EventsLineView: View {
     let events: EventsLine
     let isButton: Bool
@@ -154,26 +154,48 @@
       }
     }
 
-    private func line(chevron: Bool) -> some View {
-      HStack(alignment: .firstTextBaseline) {
-        Label {
-          Text(events.text).lineLimit(typeSize.isAccessibilitySize ? 3 : 1).truncationMode(.tail)
-        } icon: {
-          Image(systemName: "calendar")
-        }
-        if let more = events.more {
-          Text(more).fixedSize()
-        }
-        if chevron {
-          Image(systemName: "chevron.right")
-            .imageScale(.small)
-            .foregroundStyle(.secondary)
-            .fixedSize()
+    @ViewBuilder private func line(chevron: Bool) -> some View {
+      Group {
+        if typeSize.isAccessibilitySize {
+          // The words take the whole width after the symbol, so no word is broken; `+N more` and the chevron go on a
+          // line of their own under them.
+          Label {
+            VStack(alignment: .leading) {
+              Text(events.text).lineLimit(3).truncationMode(.tail)
+              if events.more != nil || chevron {
+                HStack(alignment: .firstTextBaseline) { trailing(chevron: chevron) }
+              }
+            }
+          } icon: {
+            Image(systemName: "calendar")
+          }
+        } else {
+          HStack(alignment: .firstTextBaseline) {
+            Label {
+              Text(events.text).lineLimit(1).truncationMode(.tail)
+            } icon: {
+              Image(systemName: "calendar")
+            }
+            trailing(chevron: chevron)
+          }
         }
       }
       .font(.subheadline)
       .foregroundStyle(.secondary)
       .contentShape(Rectangle())
+    }
+
+    /// `+N more` and the chevron, never cut.
+    @ViewBuilder private func trailing(chevron: Bool) -> some View {
+      if let more = events.more {
+        Text(more).fixedSize()
+      }
+      if chevron {
+        Image(systemName: "chevron.right")
+          .imageScale(.small)
+          .foregroundStyle(.secondary)
+          .fixedSize()
+      }
     }
   }
 
