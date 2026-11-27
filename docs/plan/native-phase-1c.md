@@ -82,6 +82,13 @@ and offers Undo by §11.5's rule. Nothing is drawn ahead: a row action is sent a
   reference row planned today" has it (`planForToday: 'active'`). Only the swipe's and the menu's `Plan for today`
   are left out when the to-do is planned today (`rowMenu`). Where a task below says the button is "not shown when
   planned today", the shared case wins. The design's §11.2 says the same now.
+- **From the accessibility text sizes, `Plan for today` sits under the row's words and marks** (found in Task 7):
+  beside the words it left them one word per line and its own title was cut. Below those sizes it is at the
+  trailing end, level with the words' first line, as §11.2 says. The web also drops the button under a title that
+  would get too narrow, and the notice puts `Undo` under its words from the same sizes.
+- **A paste still waiting for the run loop's next turn when the page is replaced is dropped, as in slice 1b**
+  (decided in Task 8's review): reporting it from inside `replace` made a draft that could undo the server's
+  change. Merging it into the incoming page inside the editor, as a held composition is, is left for a later slice.
 - A correction found while building is written here with its reason before the code that follows it.
 
 ## Review Focus
