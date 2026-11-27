@@ -1,0 +1,663 @@
+[
+  {
+    "name": "one in force",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 3,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Get the numbers\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the room\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:a",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:b",
+          "title": "Get the numbers",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:c",
+          "title": "Book the room",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "links": [
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:b",
+          "createdAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-3",
+        "revision": 3
+      }
+    },
+    "blocked": {
+      "editor-task:a": [
+        "editor-task:b"
+      ]
+    },
+    "words": {
+      "editor-task:a": "Blocked by Get the numbers"
+    }
+  },
+  {
+    "name": "the blocker done",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Get the numbers\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the room\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:a",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:b",
+          "title": "Get the numbers",
+          "status": "done",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26",
+          "doneOn": "2026-11-26"
+        },
+        {
+          "id": "editor-task:c",
+          "title": "Book the room",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "links": [
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:b",
+          "createdAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-4",
+        "revision": 4
+      }
+    },
+    "blocked": {},
+    "words": {}
+  },
+  {
+    "name": "the blocker cancelled",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Get the numbers\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the room\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:a",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:b",
+          "title": "Get the numbers",
+          "status": "cancelled",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26",
+          "doneOn": null
+        },
+        {
+          "id": "editor-task:c",
+          "title": "Book the room",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "links": [
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:b",
+          "createdAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-4",
+        "revision": 4
+      }
+    },
+    "blocked": {},
+    "words": {}
+  },
+  {
+    "name": "the blocker paused still holds",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the room\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "day:2026-11-30",
+          "type": "daily",
+          "date": "2026-11-30",
+          "title": "2026-11-30",
+          "document": "[{\"id\":\"day:2026-11-30:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-30:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-30\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-30:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-30:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"r\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Get the numbers\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:a",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:b",
+          "title": "Get the numbers",
+          "status": "open",
+          "version": 2,
+          "paused": true,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:c",
+          "title": "Book the room",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "links": [
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:b",
+          "createdAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-6",
+        "revision": 6
+      }
+    },
+    "blocked": {
+      "editor-task:a": [
+        "editor-task:b"
+      ]
+    },
+    "words": {
+      "editor-task:a": "Blocked by Get the numbers"
+    }
+  },
+  {
+    "name": "the blocked to-do done",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Get the numbers\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the room\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:a",
+          "title": "Write the report",
+          "status": "done",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26",
+          "doneOn": "2026-11-26"
+        },
+        {
+          "id": "editor-task:b",
+          "title": "Get the numbers",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:c",
+          "title": "Book the room",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "links": [
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:b",
+          "createdAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-4",
+        "revision": 4
+      }
+    },
+    "blocked": {},
+    "words": {}
+  },
+  {
+    "name": "an end whose only row is in Trash",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "doc-n",
+          "type": "document",
+          "date": null,
+          "title": "Notes",
+          "document": "[{\"id\":\"a3065240-d4d8-448f-bb95-14f3d5b0de58\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"b\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Get the numbers\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z",
+          "trashedAt": "2026-11-26T09:03:00.000Z",
+          "trashId": "op-5"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:a",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:b",
+          "title": "Get the numbers",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "doc-n"
+        }
+      ],
+      "deletedTasks": [],
+      "links": [
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:b",
+          "createdAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-5",
+        "revision": 6
+      }
+    },
+    "blocked": {},
+    "words": {}
+  },
+  {
+    "name": "an end whose only row is on a template",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the room\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "tpl-1",
+          "type": "template",
+          "date": null,
+          "title": "A template",
+          "document": "[{\"id\":\"b98df8e9-d7e9-4830-a4db-89fa654ca2e2\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"b\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Get the numbers\",\"styles\":{}}],\"children\":[]}]"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:a",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:b",
+          "title": "Get the numbers",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:c",
+          "title": "Book the room",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "links": [
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:b",
+          "createdAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "receipts": {},
+      "undo": {
+        "operationId": "make-template",
+        "revision": 4
+      }
+    },
+    "blocked": {},
+    "words": {}
+  },
+  {
+    "name": "an end whose only row is on a day's draft",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the room\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "draft:day:2026-11-26",
+          "type": "draft",
+          "date": null,
+          "title": "",
+          "parentId": "day:2026-11-26",
+          "document": "[{\"id\":\"b\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Get the numbers\",\"styles\":{}}],\"children\":[]}]"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:a",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:b",
+          "title": "Get the numbers",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:c",
+          "title": "Book the room",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "links": [
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:b",
+          "createdAt": "2026-11-26T09:02:00.000Z"
+        }
+      ],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-4",
+        "revision": 4
+      }
+    },
+    "blocked": {},
+    "words": {}
+  },
+  {
+    "name": "two blockers",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Get the numbers\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the room\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:a",
+          "title": "Write the report",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:b",
+          "title": "Get the numbers",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        },
+        {
+          "id": "editor-task:c",
+          "title": "Book the room",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-26",
+          "sourcePageId": "day:2026-11-26"
+        }
+      ],
+      "deletedTasks": [],
+      "links": [
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:b",
+          "createdAt": "2026-11-26T09:02:00.000Z"
+        },
+        {
+          "blockedId": "editor-task:a",
+          "blockerId": "editor-task:c",
+          "createdAt": "2026-11-26T09:03:00.000Z"
+        }
+      ],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-4",
+        "revision": 4
+      }
+    },
+    "blocked": {
+      "editor-task:a": [
+        "editor-task:b",
+        "editor-task:c"
+      ]
+    },
+    "words": {
+      "editor-task:a": "Blocked by 2"
+    }
+  }
+]

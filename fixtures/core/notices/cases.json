@@ -1,0 +1,363 @@
+[
+  {
+    "name": "a move to tomorrow",
+    "intent": {
+      "kind": "move",
+      "date": "2026-11-27"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-26",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task moved"
+    },
+    "plannedAfter": "2026-11-27",
+    "text": "Moved to Fri, Nov 27"
+  },
+  {
+    "name": "a move to a day next year",
+    "intent": {
+      "kind": "move",
+      "date": "2027-01-04"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-26",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task moved"
+    },
+    "plannedAfter": "2027-01-04",
+    "text": "Moved to Mon, Jan 4"
+  },
+  {
+    "name": "a move to today by Pick date",
+    "intent": {
+      "kind": "move",
+      "date": "2026-11-26"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-27",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task moved"
+    },
+    "plannedAfter": "2026-11-26",
+    "text": "Moved to Thu, Nov 26"
+  },
+  {
+    "name": "bring to today",
+    "intent": {
+      "kind": "bring-today"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-20",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task moved"
+    },
+    "plannedAfter": "2026-11-26",
+    "text": "On today"
+  },
+  {
+    "name": "not today on today's page",
+    "intent": {
+      "kind": "not-today"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-26",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task set aside"
+    },
+    "plannedAfter": null,
+    "text": "Not today — won’t carry over"
+  },
+  {
+    "name": "not today on today's page with a Due date",
+    "intent": {
+      "kind": "not-today"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": "2026-11-27",
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-26",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task set aside"
+    },
+    "plannedAfter": null,
+    "text": "Not today — won’t carry over · due Fri still tracked"
+  },
+  {
+    "name": "not today on another day",
+    "intent": {
+      "kind": "not-today"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-27",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task set aside"
+    },
+    "plannedAfter": null,
+    "text": "Not on Fri 11/27"
+  },
+  {
+    "name": "not today on another day with a Due date",
+    "intent": {
+      "kind": "not-today"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": "2026-11-27",
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-27",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task set aside"
+    },
+    "plannedAfter": null,
+    "text": "Not on Fri 11/27 · due Fri still tracked"
+  },
+  {
+    "name": "a stale row",
+    "intent": {
+      "kind": "not-today"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-27",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Removed from the day"
+    },
+    "plannedAfter": "2026-11-30",
+    "text": "Removed from Fri · still planned for Mon"
+  },
+  {
+    "name": "cancel with one next to-do this year",
+    "intent": {
+      "kind": "cancel"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-26",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task cancelled",
+      "nextTodos": [
+        {
+          "taskId": "next",
+          "on": "2026-12-07"
+        }
+      ]
+    },
+    "plannedAfter": "2026-11-26",
+    "text": "Cancelled · Next Mon, Dec 7"
+  },
+  {
+    "name": "cancel with one next to-do next year",
+    "intent": {
+      "kind": "cancel"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-26",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task cancelled",
+      "nextTodos": [
+        {
+          "taskId": "next",
+          "on": "2027-11-24"
+        }
+      ]
+    },
+    "plannedAfter": "2026-11-26",
+    "text": "Cancelled · Next Wed, Nov 24, 2027"
+  },
+  {
+    "name": "cancel with no next to-do",
+    "intent": {
+      "kind": "cancel"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-26",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task cancelled"
+    },
+    "plannedAfter": "2026-11-26",
+    "text": "Cancelled"
+  },
+  {
+    "name": "cancel with two next to-dos",
+    "intent": {
+      "kind": "cancel"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-26",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task cancelled",
+      "nextTodos": [
+        {
+          "taskId": "next",
+          "on": "2026-12-07"
+        },
+        {
+          "taskId": "next",
+          "on": "2026-12-14"
+        }
+      ]
+    },
+    "plannedAfter": "2026-11-26",
+    "text": "Cancelled"
+  },
+  {
+    "name": "restore",
+    "intent": {
+      "kind": "restore"
+    },
+    "task": {
+      "id": "t1",
+      "title": "A to-do",
+      "status": "open",
+      "version": 1,
+      "paused": false,
+      "deadlineOn": null,
+      "attentionOn": null,
+      "createdOn": "2026-11-01",
+      "sourcePageId": "p"
+    },
+    "day": "2026-11-26",
+    "today": "2026-11-26",
+    "receipt": {
+      "message": "Task reopened"
+    },
+    "plannedAfter": "2026-11-26",
+    "text": "Restored"
+  }
+]

@@ -1,0 +1,79 @@
+[
+  {
+    "rule": {
+      "every": "day",
+      "interval": 1,
+      "from": "schedule"
+    },
+    "words": "every day",
+    "markName": "Repeats every day"
+  },
+  {
+    "rule": {
+      "every": "day",
+      "interval": 3,
+      "from": "schedule"
+    },
+    "words": "every 3 days",
+    "markName": "Repeats every 3 days"
+  },
+  {
+    "rule": {
+      "every": "week",
+      "interval": 1,
+      "from": "schedule"
+    },
+    "words": "every week",
+    "markName": "Repeats every week"
+  },
+  {
+    "rule": {
+      "every": "week",
+      "interval": 2,
+      "weekdays": [
+        1,
+        4
+      ],
+      "from": "schedule"
+    },
+    "words": "every 2 weeks on Mon, Thu",
+    "markName": "Repeats every 2 weeks on Mon, Thu"
+  },
+  {
+    "rule": {
+      "every": "month",
+      "interval": 1,
+      "from": "schedule"
+    },
+    "words": "every month",
+    "markName": "Repeats every month"
+  },
+  {
+    "rule": {
+      "every": "year",
+      "interval": 1,
+      "from": "schedule"
+    },
+    "words": "every year",
+    "markName": "Repeats every year"
+  },
+  {
+    "rule": {
+      "every": "day",
+      "interval": 5,
+      "from": "done"
+    },
+    "words": "every 5 days, from when it's done",
+    "markName": "Repeats every 5 days, from when it's done"
+  },
+  {
+    "rule": {
+      "every": "week",
+      "interval": 1,
+      "from": "schedule",
+      "until": "2026-12-31"
+    },
+    "words": "every week",
+    "markName": "Repeats every week"
+  }
+]

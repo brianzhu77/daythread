@@ -1,0 +1,166 @@
+{
+  "before": {
+    "schemaVersion": 2,
+    "revision": 3,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "day:2026-11-26",
+        "type": "daily",
+        "date": "2026-11-26",
+        "title": "2026-11-26",
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:01:00.000Z"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "editor-task:r1",
+        "title": "Write the report",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "day:2026-11-26"
+      },
+      {
+        "id": "editor-task:r2",
+        "title": "Call the dentist",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "day:2026-11-26"
+      }
+    ],
+    "deletedTasks": [],
+    "todoRepeats": [
+      {
+        "id": "83ddcf97-2207-43d7-a0d8-7c0929fb4212",
+        "taskId": "editor-task:r1",
+        "slot": "2026-11-26",
+        "start": "2026-11-26",
+        "every": "day",
+        "interval": 1,
+        "from": "schedule",
+        "createdAt": "2026-11-26T09:02:00.000Z"
+      }
+    ],
+    "receipts": {},
+    "undo": {
+      "operationId": "op-3",
+      "revision": 3
+    }
+  },
+  "intent": {
+    "kind": "cancel"
+  },
+  "taskId": "editor-task:r1",
+  "day": "2026-11-26",
+  "today": "2026-11-26",
+  "action": {
+    "type": "task-status",
+    "taskId": "editor-task:r1",
+    "status": "cancelled",
+    "today": "2026-11-26"
+  },
+  "receipt": {
+    "operationId": "cmd-cancel-a-repeating-to-do",
+    "message": "Cancelled",
+    "entityId": "editor-task:r1",
+    "nextTodos": [
+      {
+        "taskId": "83ddcf97-2207-43d7-a0d8-7c0929fb4212.2026-11-27",
+        "on": "2026-11-27"
+      }
+    ],
+    "revision": 4,
+    "fingerprint": "c128:5c18d7841acf743ef461a6bfabc0af9c"
+  },
+  "after": {
+    "schemaVersion": 2,
+    "revision": 4,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "day:2026-11-26",
+        "type": "daily",
+        "date": "2026-11-26",
+        "title": "2026-11-26",
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"r1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r1\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"r2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:r2\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the dentist\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:01:00.000Z"
+      },
+      {
+        "id": "day:2026-11-27",
+        "type": "daily",
+        "date": "2026-11-27",
+        "title": "2026-11-27",
+        "document": "[{\"id\":\"day:2026-11-27:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"b7017bd2-b379-476d-a182-138e7006fdce\",\"type\":\"task\",\"props\":{\"taskId\":\"83ddcf97-2207-43d7-a0d8-7c0929fb4212.2026-11-27\",\"role\":\"plan\",\"planDate\":\"2026-11-27\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-27:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-27:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-27\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-27:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-27:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-27:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-27:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-27:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-27:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "editor-task:r1",
+        "title": "Write the report",
+        "status": "cancelled",
+        "version": 2,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "day:2026-11-26",
+        "doneOn": null
+      },
+      {
+        "id": "editor-task:r2",
+        "title": "Call the dentist",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "day:2026-11-26"
+      },
+      {
+        "id": "83ddcf97-2207-43d7-a0d8-7c0929fb4212.2026-11-27",
+        "title": "Write the report",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "day:2026-11-27"
+      }
+    ],
+    "deletedTasks": [],
+    "todoRepeats": [
+      {
+        "id": "83ddcf97-2207-43d7-a0d8-7c0929fb4212",
+        "taskId": "83ddcf97-2207-43d7-a0d8-7c0929fb4212.2026-11-27",
+        "slot": "2026-11-27",
+        "start": "2026-11-26",
+        "every": "day",
+        "interval": 1,
+        "from": "schedule",
+        "createdAt": "2026-11-26T09:02:00.000Z",
+        "previous": {
+          "taskId": "editor-task:r1",
+          "slot": "2026-11-26"
+        }
+      }
+    ],
+    "receipts": {},
+    "undo": {
+      "operationId": "cmd-cancel-a-repeating-to-do",
+      "revision": 4
+    }
+  },
+  "plannedAfter": "2026-11-26",
+  "notice": "Cancelled · Next Fri, Nov 27"
+}

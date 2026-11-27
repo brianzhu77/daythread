@@ -1,0 +1,105 @@
+[
+  {
+    "today": "2026-11-22",
+    "options": [
+      {
+        "label": "Tomorrow",
+        "date": "2026-11-23"
+      }
+    ]
+  },
+  {
+    "today": "2026-11-23",
+    "options": [
+      {
+        "label": "Tomorrow",
+        "date": "2026-11-24"
+      },
+      {
+        "label": "This weekend",
+        "date": "2026-11-28"
+      },
+      {
+        "label": "Next week",
+        "date": "2026-11-30"
+      }
+    ]
+  },
+  {
+    "today": "2026-11-24",
+    "options": [
+      {
+        "label": "Tomorrow",
+        "date": "2026-11-25"
+      },
+      {
+        "label": "This weekend",
+        "date": "2026-11-28"
+      },
+      {
+        "label": "Next week",
+        "date": "2026-11-30"
+      }
+    ]
+  },
+  {
+    "today": "2026-11-25",
+    "options": [
+      {
+        "label": "Tomorrow",
+        "date": "2026-11-26"
+      },
+      {
+        "label": "This weekend",
+        "date": "2026-11-28"
+      },
+      {
+        "label": "Next week",
+        "date": "2026-11-30"
+      }
+    ]
+  },
+  {
+    "today": "2026-11-26",
+    "options": [
+      {
+        "label": "Tomorrow",
+        "date": "2026-11-27"
+      },
+      {
+        "label": "This weekend",
+        "date": "2026-11-28"
+      },
+      {
+        "label": "Next week",
+        "date": "2026-11-30"
+      }
+    ]
+  },
+  {
+    "today": "2026-11-27",
+    "options": [
+      {
+        "label": "Tomorrow",
+        "date": "2026-11-28"
+      },
+      {
+        "label": "Next week",
+        "date": "2026-11-30"
+      }
+    ]
+  },
+  {
+    "today": "2026-11-28",
+    "options": [
+      {
+        "label": "Tomorrow",
+        "date": "2026-11-29"
+      },
+      {
+        "label": "Next week",
+        "date": "2026-11-30"
+      }
+    ]
+  }
+]
