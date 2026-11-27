@@ -22,7 +22,11 @@ extension XCUIApplication {
 
   /// The page's lines (each a text view, its value the line's words), top to bottom as they are on screen.
   var lines: [XCUIElement] {
-    textViews.allElementsBoundByIndex.filter(\.exists).sorted { $0.frame.minY < $1.frame.minY }
+    // The list keeps some rows it has scrolled past or made ahead of time; only those on the screen count.
+    let screen = windows.firstMatch.frame
+    return textViews.allElementsBoundByIndex
+      .filter { $0.exists && screen.intersects($0.frame) }
+      .sorted { $0.frame.minY < $1.frame.minY }
   }
 
   /// The line with these words.
