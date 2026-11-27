@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs the app's tests (unit and UI) on the one simulator this machine gives to this work, against two throwaway
+# Runs the app's tests (unit and UI) on the one simulator this machine gives to this work, against three throwaway
 # servers started from this checkout:
 #   3741  sign-in off, seeded with today's page and its to-dos: "Water the plants", which tests only read, and one for
 #         each test that ticks ("Tick me", "Tick me offline", "Tick me twice"); for the to-do row, rows with each

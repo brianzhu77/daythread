@@ -923,3 +923,39 @@ about the typing path only, not about the paths above where the facts build an i
 A reading for the budget: on this machine the 300-line median is 9.27 to 9.47 ms against a limit of 10.56 ms derived
 from a fixture that was lighter, so the margin is about 10 to 12 percent; runs on the same machine while other builds ran
 have read up to 10.3. The limit was not changed.
+
+## Decisions made while building (2026-11-27)
+
+The calls I made on Brian's behalf while the plan ran, in the order they were made, each with what it costs if
+it is wrong. The design (`native-phase-1.md` §12) and this plan's Corrections hold the ones that changed what
+the app does.
+
+| Decision | Why | If it is wrong |
+|---|---|---|
+| Slice 1d is built and merged in two parts: 1d.1 "above the page", then 1d.2 "the day draft" | The two differ greatly in size and risk, and each is usable alone | The draft, the heart of the morning, arrives one pull request later |
+| The strip is a SwiftUI view hosted in the day's header (`Label`, `GroupBox`, `DisclosureGroup`, `Menu`), not new sections of the page's list | The list's index assumptions and the typing feel stay untouched; the parts are the system's own | One view is rewritten in UIKit |
+| `Bring back` and `Another day` are sent and waited for, like a row's actions (the web draws them ahead) | Nothing but a tick is predicted | They need a connection |
+| The events rows under the `Events` heading wait for 1d.2; the events line scrolls to the heading only | Those rows are not lines of the page, which 1d.2 brings | An event written on another page is named in the line but not listed in the page until 1d.2 |
+| "Today" for the strip is the app's today (the workspace's zone), not the device's clock as on the web | One notion of today in the app | A device in another zone than the account disagrees with the web around midnight |
+| Nothing in the strip is red | The web's strip marks no passed date | One colour |
+| A set-aside to-do with an empty tag reads `Not today` in `Due soon`; the web's trailing separator is corrected in this slice's web pull request | `Not today · ` with nothing after it is a defect on the web | One line reverted on the web |
+| The strip shows wherever the web shows it; a later day without a page shows none | The rule is the web's | One condition |
+| With no `Events` heading the events line is words, not a button | The web's button does nothing then | One condition |
+| While a line holds the keyboard, a change of the strip's height moves the list so the typed line stays put | A row that moves while he types is slice 1c's anti-goal | A few lines in the editor |
+| One action at a time for the whole screen (rows and strip), held as one state with the action's origin | Two commands in flight could each overtake the other's Undo | A second action waits for the first's answer |
+| Events are collected in the index's one pass; their cost is measured, not budgeted | No second read of the documents | A slow strip on a very large workspace until each page's part is kept between states |
+| `Pick date…` from the strip allows today (then `On today`) | The web does | One condition |
+| A third seeded server (port 3743) for the morning's UI tests | The earlier UI tests' worlds do not move | One more server start for each run |
+| VoiceOver reads the events line as its words then `, +N more`; a row as `<words>, <tag>`; the menu as `More for <words>`; the button as `Bring back <words>` | Rows' controls could not be told apart otherwise | A string each |
+| `Due soon` has no fold | The web has none | A long list pushes the page down (a screenshot with twenty rows is in the evidence) |
+| Every row of `Due soon` and `Not today` is at least 44 points tall | The web's rhythm; legible at large sizes | One number |
+| The strip's controls are quiet: secondary colours, a bordered `Bring back` with a primary-colour title | The web's strip is quiet; the system's accent made four blue controls a row | One tint |
+| At the accessibility text sizes the events line's words take the whole width (up to three lines), `+N more` and the chevron under them | Beside them the words had about 100 points and broke mid-word | A layout branch |
+| The fold's chevron stays as the system draws it | A custom disclosure style would be a control of our own | Nothing |
+| The typing budget's limit stays (10.56 / 4.01 ms) | Run alone the test holds it with 10 to 12 percent to spare; it is enforced only when asked for | A regression under that margin on the 300-line page goes unseen; re-basing is Brian's call |
+| While any action is out the page's rows offer no swipe; the circle's menu is not disabled | Reconfiguring cells while he composes breaks the input-method rule | A circle-menu choice made during another action is dropped silently, as in 1c |
+| The second index build a state when a server state replaces the list, or on a day with no page, is left for 1d.2 | About 55 ms on 3,000 to-dos in Debug, off the typing path; sharing one index crosses the editor's interface | A slow strip on a very large workspace on those paths |
+| The whole-branch review ran on the sources while the simulator pass was still being built | The simulator pass changes tests and documents; waiting cost an hour | A source change made by the simulator pass is seen by its own review only |
+| Each `Not today` row's menu is a 44-point target around its ellipsis | On the simulator a tap 12 points off the symbol hit `Bring back` beside it | Each `Not today` row is about 10 points taller |
+| When the list is at its top and the strip gets shorter, the rows move up with it | A list cannot scroll above its top, and the change follows his own tap | An inset that holds the line, at the price of a gap under the header |
+| No landscape screenshot of the strip | The simulator did not turn the app in any run; the test skips and names the unit test that holds the width | A landscape fault in the strip is seen first in Brian's hand check |

@@ -121,7 +121,8 @@ today's facts read from it. A median is the middle of five runs; read the runs b
 other work on the machine (another build, a simulator in use) reads high. The measurement must be run alone: check
 `pgrep -fl xcodebuild` first, and discard and repeat a run that overlapped another. The medians measured are written at
 the end of `docs/plan/native-phase-1d.md` ("Cost, measured"); in short, on an M4 Mac: the index of 3,000 to-dos on 300
-pages about 55 ms a state (the rows read it before the strip existed), today's facts from it about 3.4 ms, the strip
+pages about 55 ms a state (on the typing path the rows already read it; where the list takes the page, another page is
+opened or the day has no page, the strip's facts build one of their own), today's facts from it about 3.4 ms, the strip
 about 14 ms a state on the 300-line page in all, and a keystroke 9.3 ms (300 lines) and 3.3 ms (10 lines) against
 limits of 10.56 and 4.01, unchanged by the strip. A wait for the engine's state that fails says what the
 model held when it gave up and, after a further two minutes, whether the state came late or not at all.

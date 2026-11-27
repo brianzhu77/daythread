@@ -33,7 +33,7 @@ final class MorningUITests: XCTestCase {
       "a to-do with a row on today's page is not in today's Due soon")
     let notToday = app.buttons["Not today · 3"]
     XCTAssertTrue(notToday.exists, "Not today, folded")
-    XCTAssertFalse(app.buttons["Bring back"].exists, "folded when the page opens")
+    XCTAssertEqual(bringBacks(in: app).count, 0, "folded when the page opens")
     keepScreenshot("today", of: app)
 
     notToday.tap()
@@ -44,7 +44,7 @@ final class MorningUITests: XCTestCase {
       // A target of its own: a tap that misses its small symbol by a few points must not land on `Bring back`.
       XCTAssertGreaterThanOrEqual(min(menu.frame.width, menu.frame.height), 43.99, "\(title)'s menu: \(menu.frame.size)")
     }
-    XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "Bring back")).count, 3)
+    XCTAssertEqual(bringBacks(in: app).count, 3)
     keepScreenshot("not today, open", of: app)
     app.terminate()
   }
@@ -328,15 +328,22 @@ final class MorningUITests: XCTestCase {
     }
   }
 
-  /// The `Bring back` button of the `Not today` row with these words: the first under its words.
+  /// Every `Bring back` button on screen. Each is read as `Bring back <words>`, so that VoiceOver can tell the rows'
+  /// buttons apart; its title on screen is `Bring back`.
+  @MainActor
+  private func bringBacks(in app: XCUIApplication) -> XCUIElementQuery {
+    app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Bring back "))
+  }
+
+  /// The `Bring back` button of the `Not today` row with these words: the one that names them, under its words.
   @MainActor
   private func bringBack(_ title: String, in app: XCUIApplication) throws -> XCUIElement {
     let row = app.element("\(title), Unscheduled")
     XCTAssertTrue(row.waitForExistence(timeout: 10), "the Not today row \(title)")
-    let buttons = app.buttons.matching(NSPredicate(format: "label == %@", "Bring back")).allElementsBoundByIndex
-    return try XCTUnwrap(
-      buttons.filter { $0.frame.minY >= row.frame.maxY - 1 }.min { $0.frame.minY < $1.frame.minY },
-      "the row's Bring back")
+    let button = app.buttons["Bring back \(title)"]
+    XCTAssertTrue(button.exists, "the row's Bring back")
+    XCTAssertGreaterThanOrEqual(button.frame.minY, row.frame.maxY - 1, "Bring back is under its row's words")
+    return button
   }
 
   /// The screen as it is now, kept in the test's results under `name` (the evidence of `tests/evidence/`).
