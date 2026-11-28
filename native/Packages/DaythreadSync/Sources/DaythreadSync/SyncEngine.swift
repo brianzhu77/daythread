@@ -771,3 +771,64 @@ public actor SyncEngine {
     return lastPublished
   }
 }
+
+// MARK: - The day's draft
+
+/// What `SyncEngine.dayDraft(for:)` came to.
+public enum DayDraftAnswer: Sendable, Equatable {
+  case reply(DayDraftReply)
+  /// The day has no live page on the server.
+  case notFound
+  case offline
+  /// Signed out, signing out, or no copy shown.
+  case signedOut
+  /// Any other failure: a server error, a refusal, a reply this client cannot read.
+  case failed
+}
+
+extension SyncEngine {
+  /// Asks the server for `date`'s draft with the session's token, outside passes and the outbox: it waits for no
+  /// pass, is never stored, and changes neither the state's `offline` nor its `failure`. The model compares the
+  /// reply's owner with the account it asked under; the `set-draft` it holds is sent with `perform`, unchanged.
+  ///
+  /// The session, the account shown and the epoch are read in a store section, which is released before the request
+  /// and taken again for its answer: an answer that returns after a sign-in or sign-out began, or once the copy shown
+  /// is another account's, is `.signedOut`, not a reply.
+  public func dayDraft(for date: LocalDate) async -> DayDraftAnswer {
+    await acquire()
+    guard phase != .signedOut, !leaving, let owner = shownOwner else {
+      release()
+      return .signedOut
+    }
+    let asked = epoch
+    let token = (try? tokens.read())?.token
+    release()
+
+    let answer: DayDraftAnswer
+    do {
+      // Only logged by the server: each ask is its own.
+      let operationId = UUID().uuidString.lowercased()
+      answer = .reply(try await transport.dayDraft(token: token, date: date, operationId: operationId))
+    } catch let error as TransportError {
+      answer = Self.dayDraftAnswer(of: error)
+    } catch {
+      // Cancelled, or a failure below HTTP other than lack of network.
+      answer = error is CancellationError ? .offline : .failed
+    }
+
+    await acquire()
+    defer { release() }
+    let sameAccount = shownOwner.map { $0.utf8.elementsEqual(owner.utf8) } ?? false
+    guard epoch == asked, !leaving, phase != .signedOut, sameAccount else { return .signedOut }
+    return answer
+  }
+
+  private static func dayDraftAnswer(of error: TransportError) -> DayDraftAnswer {
+    switch error {
+    case .offline: .offline
+    case .signedOut: .signedOut
+    case .refused(status: 404, reason: "not-found"): .notFound
+    case .refused, .wait, .server, .unreadable: .failed
+    }
+  }
+}

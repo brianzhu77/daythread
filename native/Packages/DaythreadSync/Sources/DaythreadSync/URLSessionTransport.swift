@@ -114,7 +114,35 @@ public struct URLSessionTransport: ServerTransport {
     return outcome
   }
 
+  public func dayDraft(token: String?, date: LocalDate, operationId: String) async throws -> DayDraftReply {
+    let body: JSONValue = .object(["date": .string(date.value), "operationId": .string(operationId)])
+    let reply = try await perform(.post, "day-draft", token: token, body: body)
+    guard let reply = Self.dayDraftReply(of: reply) else { throw TransportError.unreadable }
+    return reply
+  }
+
   // MARK: Replies
+
+  private static func dayDraftReply(of reply: JSONValue) -> DayDraftReply? {
+    guard let object = reply.objectValue, let owner = object["owner"]?.stringValue,
+      let modelOn = flag(object["modelOn"]), let remakeFailed = flag(object["remakeFailed"])
+    else { return nil }
+    let setDraft: String?
+    switch object["setDraft"] {
+    case .null?: setDraft = nil
+    case let value?:
+      guard let text = value.stringValue else { return nil }
+      setDraft = text
+    case nil: return nil
+    }
+    return DayDraftReply(setDraft: setDraft, owner: owner, modelOn: modelOn, remakeFailed: remakeFailed)
+  }
+
+  /// A flag the reply may leave out, which then reads as false; nil when it is there but not a boolean.
+  private static func flag(_ value: JSONValue?) -> Bool? {
+    guard let value else { return false }
+    return value.boolValue
+  }
 
   /// A save's 200 is the command's applied reply without its `status`; its refusals are 409s told apart by `error`.
   private static func saveOutcome(status: Int, of reply: JSONValue) -> SaveOutcome? {
