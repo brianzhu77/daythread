@@ -99,6 +99,34 @@
         #expect(screen.controller.indexesBuilt == 0, "a new today builds no index")
       }
 
+      @Test func a_workspace_handed_with_no_index_after_one_with_an_index_builds_its_own() throws {
+        let page = try makePage([row("r", "k")], id: "day:\(today)", date: today, type: "daily")
+        let first = try workspace(page: page, repeating: false, deadlineOn: today)
+        let screen = emptyScreen()
+        screen.controller.edit(page: page, in: first, index: TodoIndex(first))
+        #expect(try marks(screen) == "Due today")
+
+        // The index kept is of the first workspace: the second's rows are read with one of the second's own.
+        let second = try workspace(page: page, repeating: false, deadlineOn: "2026-11-27")
+        screen.controller.replace(document: page.document, in: second)
+        #expect(screen.controller.indexesBuilt == 1)
+        #expect(try marks(screen) == "Due tomorrow")
+      }
+
+      @Test func an_index_handed_before_there_is_a_today_is_read_once_today_is_set() throws {
+        let page = try makePage([row("r", "k")], id: "day:\(today)", date: today, type: "daily")
+        let now = try workspace(page: page, repeating: false, deadlineOn: today)
+        let screen = emptyScreen()
+        screen.controller.today = nil
+        screen.controller.show(page: page, in: now, index: TodoIndex(now))
+        #expect(try marks(screen) == nil, "no today, no facts")
+
+        screen.controller.today = LocalDate(today)
+        screen.window.layoutIfNeeded()
+        #expect(try marks(screen) == "Due today")
+        #expect(screen.controller.indexesBuilt == 0, "the index handed is the one read")
+      }
+
       @Test func without_an_index_the_list_builds_one_as_before() throws {
         let page = try makePage([row("r", "k")], id: "day:\(today)", date: today, type: "daily")
         let now = try workspace(page: page, repeating: false, deadlineOn: today)
