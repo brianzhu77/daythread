@@ -372,7 +372,9 @@ enum SuggestionArrival: String, CaseIterable, Sendable {
       await h.server.holdCommands()
       day.screen.suggestionTapped("i2", .apply)
       try await held(h)
-      // The tap committed what he composed; he composes again while the answer is on its way.
+      // A tap commits any composition first, so here he starts composing after it, while the answer is on its way:
+      // the answer's state takes the suggestion out above his line and brings its row there. (That a composition in
+      // progress at a state's arrival is kept is shown by the other two arrivals.)
       compose()
       try await answerHeld(h) { try appliedI2(undo: $0) }
       try await soon { day.notice != nil }
@@ -449,6 +451,127 @@ enum SuggestionArrival: String, CaseIterable, Sendable {
     // The planning part's end: right after `TODO`, as the slot is no to-do of the workspace.
     #expect(Array(items(day).prefix(3)) == ["h0", "+i5", slotId], "\(items(day).prefix(3))")
     day.close()
+  }
+
+  /// §13.5: a suggestion leaves in the update that brings its row, also when he typed while its apply was out. The
+  /// answer's state finds his draft behind the server's page; his words do not hold the row until the merge, so the
+  /// suggestion stays until then. The merge waits while he composes, which holds the moment between the two still.
+  @Test func typing_while_an_apply_is_out_takes_the_suggestion_out_with_its_row() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+
+    await h.server.holdCommands()
+    day.screen.suggestionTapped("i2", .apply)
+    try await held(h)
+    let walk = try day.type("!", atEndOf: "Walk")
+    try await soon { !h.model.state.drafts.isEmpty }
+    walk.setMarkedText("今", selectedRange: NSRange(location: 1, length: 0))
+    await h.server.holdSaves()
+    try await answerHeld(h) { try appliedI2(undo: $0) }
+    try await soon { day.notice != nil }
+    try await soon { h.model.state.drafts.first?.state == .behind }
+    try await settled(day)
+    #expect(items(day).contains("+i2"), "the suggestion stays while his words do not hold its row: \(items(day))")
+    #expect(!items(day).contains("d-i2"))
+
+    walk.unmarkText()
+    try await soon { items(day).contains("d-i2") }
+    try await settled(day)
+    #expect(!items(day).contains("+i2"), "\(items(day))")
+    #expect(day.words.contains("Walk!今"))
+    day.close()
+    await h.server.release()
+  }
+
+  // MARK: The account
+
+  /// Their words for today wait on the device, so the sign-in's pass saves them after it has loaded and published
+  /// their copy: with the save held, the screen draws their today and asks while `signIn` has not returned. A tick is
+  /// made in that window, and the states after it are held back, so only the model's own record draws it when
+  /// `signIn` returns.
+  @Test func a_sign_in_whose_state_is_drawn_before_it_returns_asks_once_and_keeps_his_tick() async throws {
+    let relay = StateRelay()
+    let h = try await harness(asksForDayDrafts: true, relay: relay)
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    try await signOutForTwo(h, day, withTheirWords: true)
+
+    await h.server.add([.session(two), .workspace(.full(try theirCopy, owner: "two"))])
+    await h.server.addDrafts([.success(DayDraftReply(setDraft: nil, owner: "two", modelOn: true, remakeFailed: false))])
+    await h.server.holdSaves()
+    let signedIn = Task { await h.model.signIn(email: "two@example.com", password: "secret") }
+    try await soon { h.model.state.owner == "two" && h.model.workspace != nil }
+    try await settled(day)
+    // The request is answered; its outcome waits for the engine, which the pass holds.
+    try await eventually { await h.server.draftDates.count == 1 }
+    #expect(await h.server.waitingCalls == 1, "signIn has not returned: its pass's save waits")
+
+    relay.hold()
+    try day.tick("Feed the cat")
+    #expect(h.status("t9") == .done)
+    await h.server.release()
+    #expect(await signedIn.value == nil)
+    #expect(h.status("t9") == .done, "the tick made while signIn was out is kept")
+    try await settled(day)
+
+    relay.release()
+    try await soon { h.model.draftAsk(of: todayId) == .done }
+    try await settled(day)
+    try await turns()
+    #expect(await h.server.draftDates.count == 1, "one request for the new account")
+    #expect(h.model.draftAsk(of: todayId) == .done, "its answer written")
+    #expect(h.status("t9") == .done)
+    day.close()
+  }
+
+  /// The opposite order: the states are held back until `signIn` has returned.
+  @Test func a_sign_in_that_returns_before_its_state_asks_once() async throws {
+    let relay = StateRelay()
+    let h = try await harness(asksForDayDrafts: true, relay: relay)
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    try await signOutForTwo(h, day, withTheirWords: false)
+
+    await h.server.add([.session(two), .workspace(.full(try theirCopy, owner: "two"))])
+    await h.server.addDrafts([.success(DayDraftReply(setDraft: nil, owner: "two", modelOn: true, remakeFailed: false))])
+    relay.hold()
+    #expect(await h.model.signIn(email: "two@example.com", password: "secret") == nil)
+    #expect(h.model.state.owner == nil, "no state of theirs has reached the model")
+    relay.release()
+    try await soon { h.model.state.owner == "two" && h.model.workspace != nil }
+    try await settled(day)
+    try await eventually { await h.server.draftDates.count == 1 }
+    try await soon { h.model.draftAsk(of: todayId) == .done }
+    try await settled(day)
+    try await turns()
+    #expect(await h.server.draftDates.count == 1, "one request for the new account")
+    day.close()
+  }
+
+  private var theirCopy: Workspace {
+    get throws {
+      try copy(revision: 5, pages: [page(today, theirLines)], tasks: [task("t9", "Feed the cat")])
+    }
+  }
+
+  /// The second account's today: `Feed the cat`, then a line.
+  private var theirLines: [String] { [row("r9", "t9", "Feed the cat"), line("m", "Morning")] }
+
+  /// Signs the first account out; `withTheirWords`, words of the second account's for today wait on the device.
+  private func signOutForTwo(_ h: Harness, _ day: RowScreen, withTheirWords: Bool) async throws {
+    #expect(await h.server.draftDates.isEmpty, "the first account's draft stands")
+    await h.server.add([.done])
+    #expect(await h.model.signOut(discardingUnsent: true) == .signedOut)
+    try await soon { h.model.state.workspace == nil }
+    try await settled(day)
+    guard withTheirWords else { return }
+    let base = "[\(theirLines.joined(separator: ","))]"
+    let words = "[\((theirLines + [line("n", "Noon")]).joined(separator: ","))]"
+    try await h.store.put(
+      PageDraft(
+        pageId: todayId, owner: "two", base: ContentKey.of(base), baseDocument: base, document: words,
+        singleDeleteIds: [], sent: nil, changedAt: thursdayNoon))
   }
 
   // MARK: While one is acting
