@@ -11,7 +11,8 @@ import Testing
     for entry in cases {
       let name = entry["name"]?.stringValue ?? "?"
       let workspace = try Fixtures.workspace(of: entry, name)
-      let page = try #require(workspace.page(try #require(entry["pageId"]?.stringValue)), "page: \(name)")
+      let pageId = try #require(entry["pageId"]?.stringValue, "pageId: \(name)")
+      let page = try #require(workspace.page(pageId), "page: \(name)")
       let view = DraftView.of(page: page, in: workspace, index: TodoIndex(workspace))
       guard let expected = entry["view"]?.objectValue else {
         #expect(view == nil, "no view: \(name)")
@@ -139,8 +140,8 @@ import Testing
         TestWorkspace.page("draft:\(today)", type: "draft", parentId: today, document: items),
       ],
       tasks: [TestWorkspace.task("t", title: "Call the bank", createdOn: "2026-11-20")])
-    let stored = try #require(
-      DraftView.of(page: try #require(workspace.page(today)), in: workspace, index: TodoIndex(workspace)))
+    let storedPage = try #require(workspace.page(today))
+    let stored = try #require(DraftView.of(page: storedPage, in: workspace, index: TodoIndex(workspace)))
     #expect(stored.suggestions.map(\.id) == ["a", "b"])
 
     let typedLine = Block(id: "typed", type: "paragraph", content: .array([.object(textRun("Coffee"))]))
@@ -148,8 +149,8 @@ import Testing
       id: "row", type: "task", props: ["taskId": .string("t"), "role": .string("plan")],
       content: .array([.object(textRun("Call the bank"))]))
     let drawn = workspace.drawing(draft: Document.write([Self.heading("h"), typedLine, anchor, typedRow]), of: today)
-    let view = try #require(
-      DraftView.of(page: try #require(drawn.page(today)), in: drawn, index: TodoIndex(drawn)))
+    let drawnPage = try #require(drawn.page(today))
+    let view = try #require(DraftView.of(page: drawnPage, in: drawn, index: TodoIndex(drawn)))
     #expect(view.suggestions.map(\.id) == ["b"], "the to-do he typed a row of is not suggested")
     #expect(view.suggestions.first?.kind == .after)
     #expect(view.suggestions.first?.anchorId == "anchor", "a typed line above the anchor moves nothing else")

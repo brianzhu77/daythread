@@ -13,8 +13,8 @@ import Testing
       let name = entry["name"]?.stringValue ?? "?"
       let view = try entry["view"]?.objectValue.map { try Self.view($0, name) }
       let ask = try Self.ask(entry["ask"], name)
-      let offline = try #require(entry["offline"]?.boolValue, "offline: \(name)")
-      let held = try #require(entry["held"]?.boolValue, "held: \(name)")
+      let offline = try #require(entry["offline"]?.boolValue as Bool?, "offline: \(name)")
+      let held = try #require(entry["held"]?.boolValue as Bool?, "held: \(name)")
       let state = DraftLine.state(view: view, ask: ask, offline: offline, at: Self.now)
       #expect(state == Self.state(entry["state"]), "state: \(name)")
       let line = DraftLine.of(state, shown: view?.suggestions.count ?? 0, held: held)
