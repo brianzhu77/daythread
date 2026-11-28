@@ -779,8 +779,10 @@ public enum DayDraftAnswer: Sendable, Equatable {
   case reply(DayDraftReply)
   /// The day has no live page on the server.
   case notFound
+  /// The server could not be reached. A timeout and a cancelled call read so too: a caller that was cancelled
+  /// discards the answer, and a timeout is a failed ask, to be asked again.
   case offline
-  /// Signed out, signing out, or no copy shown.
+  /// Signed out, signing out, or no copy shown; or the server no longer knows the session, which a pass then ends.
   case signedOut
   /// Any other failure: a server error, a refusal, a reply this client cannot read.
   case failed
@@ -793,7 +795,8 @@ extension SyncEngine {
   ///
   /// The session, the account shown and the epoch are read in a store section, which is released before the request
   /// and taken again for its answer: an answer that returns after a sign-in or sign-out began, or once the copy shown
-  /// is another account's, is `.signedOut`, not a reply.
+  /// is another account's, is `.signedOut`, not a reply. A 401 asks for a pass that loads, without waiting for it, so
+  /// the session ends the way any other call's 401 ends it.
   public func dayDraft(for date: LocalDate) async -> DayDraftAnswer {
     await acquire()
     guard phase != .signedOut, !leaving, let owner = shownOwner else {
@@ -805,11 +808,13 @@ extension SyncEngine {
     release()
 
     let answer: DayDraftAnswer
+    var sessionRefused = false
     do {
       // Only logged by the server: each ask is its own.
       let operationId = UUID().uuidString.lowercased()
       answer = .reply(try await transport.dayDraft(token: token, date: date, operationId: operationId))
     } catch let error as TransportError {
+      sessionRefused = error == .signedOut
       answer = Self.dayDraftAnswer(of: error)
     } catch {
       // Cancelled, or a failure below HTTP other than lack of network.
@@ -818,8 +823,8 @@ extension SyncEngine {
 
     await acquire()
     defer { release() }
-    let sameAccount = shownOwner.map { $0.utf8.elementsEqual(owner.utf8) } ?? false
-    guard epoch == asked, !leaving, phase != .signedOut, sameAccount else { return .signedOut }
+    guard epoch == asked, !leaving, phase != .signedOut, isShown(owner) else { return .signedOut }
+    if sessionRefused { askForPass(load: true) }
     return answer
   }
 
