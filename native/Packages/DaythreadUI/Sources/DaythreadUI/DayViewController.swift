@@ -121,6 +121,8 @@
     var factsView: UIView { factsHost.view }
     /// How many times the facts were worked out (tests read it).
     private(set) var factsReads = 0
+    /// How many indexes the screen built (tests read it).
+    private(set) var indexesBuilt = 0
     private let heldButton = UIBarButtonItem(image: UIImage(systemName: "exclamationmark.triangle"))
     private let moreButton = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
     private lazy var previousButton = symbolButton("chevron.left", label: "Previous day") { $0.step(by: -1) }
@@ -347,7 +349,7 @@
       } else {
         // Until the engine has made today's page, an empty one stands in for it. Shown first: what he was composing
         // on the page before is reported for that page.
-        if let page = Self.emptyPage(on: date) { document.show(page: page, in: workspace) }
+        if let page = Self.emptyPage(on: date) { document.show(page: page, in: workspace, index: todoIndex(of: workspace)) }
         closePage()
         drawnWith = workspace
       }
@@ -393,7 +395,7 @@
       else {
         let previous = openPage?.id
         // Another page: what he was composing on the one before is reported for that one, so `openPage` moves after.
-        document.edit(page: page, in: workspace, afresh: openPage != nil)
+        document.edit(page: page, in: workspace, index: todoIndex(of: workspace), afresh: openPage != nil)
         if let previous { model.closed(previous) }
         model.opened(page.id)
         openPage = OpenPage(id: page.id, owner: owner, startedFrom: page.document)
@@ -478,9 +480,12 @@
     }
 
     /// The index of `workspace`, built again only for another workspace than the last two read.
+    ///
+    /// The only place the screen and its list get an index from: the list is handed it with the workspace it is of.
     private func todoIndex(of workspace: Workspace) -> TodoIndex {
       if let cached = readingIndexes.first(where: { $0.workspace == workspace }) { return cached.index }
       let index = TodoIndex(workspace)
+      indexesBuilt += 1
       // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time.
       readingIndexes = Array(([(workspace, index)] + readingIndexes).prefix(2))
       return index
@@ -489,7 +494,7 @@
     /// Every page replace hands the list, so tests can tell a replace that happened from one that did not.
     private func replaceList(with page: String, in workspace: Workspace) {
       replacedDocuments.append(page)
-      document.replace(document: page, in: workspace)
+      document.replace(document: page, in: workspace, index: todoIndex(of: workspace))
       if let ids = openPage?.singleDeleteIds, !ids.isEmpty {
         openPage?.singleDeleteIds = DraftMerging.rowsStillRemoved(ids, from: page)
       }
