@@ -16,6 +16,15 @@ struct DraftCostTests {
 
     print("index, 3,000 to-dos on 300 pages: \(Self.median { _ = TodoIndex(plain) }) ms")
     print("index, the same with 365 drafts of 20 items: \(Self.median { _ = TodoIndex(withDrafts) }) ms")
+    let previous = TodoIndex(withDrafts)
+    print("index, 365 drafts, reusing, none changed: \(Self.median { _ = TodoIndex(withDrafts, reusing: previous) }) ms")
+    // One stored draft's document changes, as an apply would; the other pages are the same values.
+    var oneChanged = withDrafts
+    let position = try #require(oneChanged.pages.firstIndex { $0.id == "draft:day:2026-11-25" })
+    var raw = oneChanged.pages[position].raw
+    raw["document"] = .string(oneChanged.pages[position].document.replacingOccurrences(of: "skipped", with: "applied"))
+    oneChanged.pages[position] = try #require(Page(.object(raw)))
+    print("index, 365 drafts, reusing, one changed: \(Self.median { _ = TodoIndex(oneChanged, reusing: previous) }) ms")
     for (name, workspace) in [("one open line", withDrafts), ("no open line", withoutLine)] {
       let index = TodoIndex(workspace)
       let page = try #require(workspace.page("day:2026-11-26"))
