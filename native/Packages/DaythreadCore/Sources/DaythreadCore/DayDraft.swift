@@ -33,10 +33,9 @@ public struct DayDraft: Hashable, Sendable {
     /// Nil for "".
     public let row: String?
 
-    /// `sameWords(inlineText(block.content))`; nil without a block.
-    var words: String? {
-      block.map { sameWords(InlineText.plain($0.content, pageDate: nil)) }
-    }
+    /// `sameWords(inlineText(block.content))`; nil without a block. Worked out once, as the item is read: an index
+    /// that reuses the draft reuses it too.
+    let words: String?
 
     init(_ object: JSONObject) {
       id = object["id"]?.stringValue ?? ""
@@ -44,6 +43,7 @@ public struct DayDraft: Hashable, Sendable {
       place = object["place"]?.stringValue?.hasSameCodeUnits(as: "fill") == true ? .fill : .after
       taskId = object["taskId"]?.stringValue
       block = object["block"].flatMap(Block.init)
+      words = block.map { sameWords(InlineText.plain($0.content, pageDate: nil)) }
       state = Self.state(object["state"]?.stringValue)
       until = object["until"]?.stringValue.flatMap(LocalDate.init)
       by = object["by"]?.stringValue

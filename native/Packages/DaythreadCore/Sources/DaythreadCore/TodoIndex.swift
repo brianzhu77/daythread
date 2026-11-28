@@ -1,3 +1,5 @@
+import Foundation
+
 /// An id as the web compares it: by code units (`===`), not by canonical equivalence as a Swift `String` does.
 struct CodeUnitKey: Hashable, Sendable {
   let units: [UInt8]
@@ -36,18 +38,26 @@ public struct TodoIndex: Sendable {
   private var blockersByTask: [CodeUnitKey: [TodoTask]] = [:]
   /// Every draft page not in Trash that reads, in the workspace's order (`takenOver`, `decidedElsewhere`,
   /// `skippedDays` walk them).
-  private(set) var dayDrafts: [(pageId: String, parentId: String?, draft: DayDraft)] = []
+  /// `document` is the page's stored text the draft was read from, kept so the next index can tell it unchanged.
+  private(set) var dayDrafts: [(pageId: String, parentId: String?, document: String, draft: DayDraft)] = []
   /// By draft page id: `draftOf`'s answer, the first draft page of an id that is not in Trash.
   private var draftsByPageId: [CodeUnitKey: DayDraft] = [:]
+  /// The draft pages this index parsed rather than took from the index it reused.
+  private(set) var draftsParsed = 0
+  /// Draft pages not in Trash whose document is no draft, kept so the next index does not parse them again.
+  private var unreadableDrafts: [(pageId: String, document: String)] = []
 
   /// Every chip event, in the order each id was first met; see `events(on:)`.
   private(set) var eventsInFirstMetOrder: [DayEvent] = []
   /// Where the lines the stored drafts' items say they came from (`from`) first sit on a live page.
   private var sources = BlockSources(sought: [])
 
-  public init(_ workspace: Workspace) {
+  /// `previous`, an index of an earlier workspace, lends the drafts it read: a draft page whose document is the same
+  /// text, code unit for code unit, as one `previous` read from a page of that id is not parsed again. Nothing else is
+  /// taken from it, so any index gives the same answers as none; one of the same workspace's line spares the most.
+  public init(_ workspace: Workspace, reusing previous: TodoIndex? = nil) {
     // The drafts first, so the walk over the pages knows which lines' places to note.
-    readDrafts(in: workspace)
+    readDrafts(in: workspace, reusing: previous)
     sources = BlockSources(sought: Set(dayDrafts.lazy.flatMap { $0.draft.items.lazy.compactMap(\.from) }))
     var chips = EventCollector()
     for (position, page) in workspace.pages.enumerated() where Self.isLive(page) {
@@ -95,14 +105,41 @@ public struct TodoIndex: Sendable {
   /// Each draft page is parsed here and nowhere else: a page of an id already met is not read (`draftOf` takes the
   /// first, and a first that does not parse is no draft, not a reason to take the second), but it is still one of
   /// `dayDrafts` when it reads, as `takenOver` walks every page.
-  private mutating func readDrafts(in workspace: Workspace) {
+  private mutating func readDrafts(in workspace: Workspace, reusing previous: TodoIndex?) {
+    // What `previous` read, by page id: usually one document an id, more only for pages sharing an id.
+    // A document that did not read is remembered too (as nil), so it is not parsed again either.
+    var read: [CodeUnitKey: [(document: String, draft: DayDraft?)]] = [:]
+    for stored in previous?.dayDrafts ?? [] {
+      read[CodeUnitKey(stored.pageId), default: []].append((stored.document, stored.draft))
+    }
+    for stored in previous?.unreadableDrafts ?? [] {
+      read[CodeUnitKey(stored.pageId), default: []].append((stored.document, nil))
+    }
     var met = Set<CodeUnitKey>()
     for page in workspace.pages where page.isDraft && (page.trashedAt?.isEmpty ?? true) {
       let key = CodeUnitKey(page.id)
       let first = met.insert(key).inserted
-      guard let draft = DayDraft(document: page.document) else { continue }
-      dayDrafts.append((page.id, page.parentId, draft))
+      let kept = read[key]?.first(where: { Self.sameText($0.document, page.document) })
+      if kept == nil { draftsParsed += 1 }
+      guard let draft = kept.map(\.draft) ?? DayDraft(document: page.document) else {
+        unreadableDrafts.append((page.id, page.document))
+        continue
+      }
+      dayDrafts.append((page.id, page.parentId, page.document, draft))
       if first { draftsByPageId[key] = draft }
+    }
+  }
+
+  /// The same text, code unit for code unit (not Swift's canonical equivalence). A string that shares its storage with
+  /// the other, as an unchanged page's document does from one workspace value to the next, is known at once.
+  private static func sameText(_ a: String, _ b: String) -> Bool {
+    var a = a, b = b
+    return a.withUTF8 { x in
+      b.withUTF8 { y in
+        guard x.count == y.count else { return false }
+        guard let first = x.baseAddress, let second = y.baseAddress, first != second else { return true }
+        return memcmp(first, second, x.count) == 0
+      }
     }
   }
 
