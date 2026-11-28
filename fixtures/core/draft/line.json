@@ -1,0 +1,263 @@
+[
+  {
+    "name": "nothing: no draft stored and never asked",
+    "view": null,
+    "ask": null,
+    "offline": false,
+    "held": false,
+    "state": "none",
+    "words": null
+  },
+  {
+    "name": "nothing: asked, and the answer stored nothing",
+    "view": null,
+    "ask": "done",
+    "offline": false,
+    "held": false,
+    "state": "none",
+    "words": null
+  },
+  {
+    "name": "nothing: a ready draft with no open suggestion",
+    "view": {
+      "status": "ready",
+      "items": 0
+    },
+    "ask": "done",
+    "offline": false,
+    "held": false,
+    "state": "ready",
+    "words": null
+  },
+  {
+    "name": "preparing: an ask in flight, nothing stored",
+    "view": null,
+    "ask": "in-flight",
+    "offline": false,
+    "held": false,
+    "state": "preparing",
+    "words": {
+      "kind": "preparing"
+    }
+  },
+  {
+    "name": "preparing: an older draft with nothing to show while it is asked for again",
+    "view": {
+      "status": "ready",
+      "items": 0
+    },
+    "ask": "in-flight",
+    "offline": false,
+    "held": false,
+    "state": "preparing",
+    "words": {
+      "kind": "preparing"
+    }
+  },
+  {
+    "name": "held: suggestions arrived while he was typing",
+    "view": {
+      "status": "ready",
+      "items": 3
+    },
+    "ask": "done",
+    "offline": false,
+    "held": true,
+    "state": "ready",
+    "words": {
+      "kind": "held"
+    }
+  },
+  {
+    "name": "open: three suggestions",
+    "view": {
+      "status": "ready",
+      "items": 3
+    },
+    "ask": "done",
+    "offline": false,
+    "held": false,
+    "state": "ready",
+    "words": {
+      "kind": "segments",
+      "count": "3 suggestions",
+      "failed": false,
+      "offline": false
+    }
+  },
+  {
+    "name": "open: one suggestion",
+    "view": {
+      "status": "ready",
+      "items": 1
+    },
+    "ask": null,
+    "offline": false,
+    "held": false,
+    "state": "ready",
+    "words": {
+      "kind": "segments",
+      "count": "1 suggestion",
+      "failed": false,
+      "offline": false
+    }
+  },
+  {
+    "name": "open: in flight with suggestions already shown",
+    "view": {
+      "status": "ready",
+      "items": 2
+    },
+    "ask": "in-flight",
+    "offline": false,
+    "held": false,
+    "state": "ready",
+    "words": {
+      "kind": "segments",
+      "count": "2 suggestions",
+      "failed": false,
+      "offline": false
+    }
+  },
+  {
+    "name": "failed: the ask failed, nothing stored",
+    "view": null,
+    "ask": "failed",
+    "offline": false,
+    "held": false,
+    "state": "failed",
+    "words": {
+      "kind": "segments",
+      "count": null,
+      "failed": true,
+      "offline": false
+    }
+  },
+  {
+    "name": "failed: the ask was lost, nothing stored",
+    "view": null,
+    "ask": "lost",
+    "offline": false,
+    "held": false,
+    "state": "failed",
+    "words": {
+      "kind": "segments",
+      "count": null,
+      "failed": true,
+      "offline": false
+    }
+  },
+  {
+    "name": "failed: a stored draft marked failed, none decided, with suggestions",
+    "view": {
+      "status": "failed",
+      "items": 2
+    },
+    "ask": "done",
+    "offline": false,
+    "held": false,
+    "state": "failed",
+    "words": {
+      "kind": "segments",
+      "count": "2 suggestions",
+      "failed": true,
+      "offline": false
+    }
+  },
+  {
+    "name": "failed: a stored draft marked failed with no suggestion shown",
+    "view": {
+      "status": "failed",
+      "items": 0
+    },
+    "ask": null,
+    "offline": false,
+    "held": false,
+    "state": "failed",
+    "words": {
+      "kind": "segments",
+      "count": null,
+      "failed": true,
+      "offline": false
+    }
+  },
+  {
+    "name": "the ask failed but a ready draft is stored: the draft's state",
+    "view": {
+      "status": "ready",
+      "items": 1
+    },
+    "ask": "failed",
+    "offline": false,
+    "held": false,
+    "state": "ready",
+    "words": {
+      "kind": "segments",
+      "count": "1 suggestion",
+      "failed": false,
+      "offline": false
+    }
+  },
+  {
+    "name": "offline: no draft stored",
+    "view": null,
+    "ask": null,
+    "offline": true,
+    "held": false,
+    "state": "offline",
+    "words": {
+      "kind": "segments",
+      "count": null,
+      "failed": false,
+      "offline": true
+    }
+  },
+  {
+    "name": "offline: an ask in flight and nothing stored",
+    "view": null,
+    "ask": "in-flight",
+    "offline": true,
+    "held": false,
+    "state": "offline",
+    "words": {
+      "kind": "segments",
+      "count": null,
+      "failed": false,
+      "offline": true
+    }
+  },
+  {
+    "name": "offline with a stored draft: the draft's state",
+    "view": {
+      "status": "ready",
+      "items": 2
+    },
+    "ask": null,
+    "offline": true,
+    "held": false,
+    "state": "ready",
+    "words": {
+      "kind": "segments",
+      "count": "2 suggestions",
+      "failed": false,
+      "offline": false
+    }
+  },
+  {
+    "name": "a stored draft still preparing reads as ready",
+    "view": {
+      "status": "preparing",
+      "items": 1
+    },
+    "ask": null,
+    "offline": false,
+    "held": false,
+    "state": "ready",
+    "words": {
+      "kind": "segments",
+      "count": "1 suggestion",
+      "failed": false,
+      "offline": false
+    }
+  }
+]

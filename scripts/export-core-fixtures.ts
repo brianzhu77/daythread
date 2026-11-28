@@ -7,7 +7,7 @@ import './fixed-time-zone.ts'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { harness, dayId, todo, bullet, para, heading, chip, pageRef, card, text, under as underHeading } from '../tests/v2-helpers.ts'
+import { harness, dayId, todo, bullet, para, heading, chip, pageRef, card, text, under as underHeading, today as webToday, yesterday as webYesterday, tomorrow as webTomorrow, twoDaysAgo as webTwoDaysAgo } from '../tests/v2-helpers.ts'
 import { flatNodes, inlineText, pageContentKey, pageNodes, rowRole, rowTaskId, type EditorNode } from '../src/domain/editor-document.ts'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
 import { forBrowser } from '../src/server/browser-workspace.ts'
@@ -15,7 +15,10 @@ import { strippedWorkspace } from '../src/domain/synced.ts'
 import { applyCommand, DomainError, getDayView, localDayIn, plannedOn } from '../src/domain/workspace.ts'
 import { dayEvents } from '../src/domain/chip-events.ts'
 import { writtenDays } from '../src/domain/page-tree.ts'
-import { draftPageId } from '../src/domain/day-draft.ts'
+import { DRAFT_RECIPE, draftOf, draftPageId, draftSettled, draftStale, draftView, moreOpenAfterIndex, planningEndIndex, planningRange, sameWords, skippedDays, type DraftItem, type DraftItemView } from '../src/domain/day-draft.ts'
+import { buildDayDraftRequest, itemsFromModel, withSkippedPlan, type ModelSuggestion } from '../src/server/model/day-draft.ts'
+import { appliedNotice, draftLineState, draftLineWords, draftWords, skippedLabel, skippedNotice, type DraftAskSummary } from '../src/components/draft-words.ts'
+import { applyDraftAction, draftTicket, reopenDraftAction, skipDraftAction, type DraftTicket } from '../src/components/draft-actions.ts'
 import { labelFor } from '../src/components/outbox.ts'
 import { carriedSince } from '../src/domain/carried.ts'
 import { repeatWords, type TodoRepeatRule } from '../src/domain/todo-repeats.ts'
@@ -32,6 +35,9 @@ import type { Action, Command, Page, Task, Workspace } from '../src/domain/types
 
 // dates.ts words a date in the device's zone; the cases are the same wherever the script runs only if it is fixed.
 if (Intl.DateTimeFormat().resolvedOptions().timeZone !== 'UTC') throw new Error('the time zone is not fixed: scripts/fixed-time-zone.ts must be the first import')
+// sameWords lowercases in the host's locale (toLocaleLowerCase); the app lowercases as JavaScript does in English, so the
+// cases are made only in an English one.
+if (!Intl.DateTimeFormat().resolvedOptions().locale.startsWith('en')) throw new Error(`the locale is ${Intl.DateTimeFormat().resolvedOptions().locale}: the draft's cases are made in an English one. Run with LANG=en_US.UTF-8, and unset LC_ALL if it is set (set but empty, it resolves to "und")`)
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dir = join(root, 'fixtures', 'core')
@@ -299,7 +305,7 @@ const plain = (name: string, h: ReturnType<typeof harness>, action: Action, rows
     // No command makes a draft page without the model's answer, so this one page is built by hand (day-draft.ts).
     build('empty-day-with-only-its-draft', (h, a, b) => {
       doc(h, a, para('p1', text('Words')))
-      h.ws.pages.push({ id: draftPageId(b), type: 'draft', date: null, title: '', parentId: b, document: JSON.stringify({ status: 'ready', items: [], moreOpen: false }) })
+      h.ws.pages.push({ id: draftPageId(b), type: 'draft', date: null, title: '', parentId: b, document: JSON.stringify({ status: 'ready', items: [], moreOpen: [] }) })
     }),
   ]
   put('written-days/cases.json', cases)
@@ -1303,6 +1309,803 @@ const factsOf = (ws: Workspace, date: string, today = TODAY) => dayFacts(getDayV
   }
 }
 
+// ---- the day draft -----------------------------------------------------------------------------------------------------
+// The day's draft (docs/design/native-phase-1.md §13): its document, the planning part of a page, what a page shows of it,
+// the line above the page, its notices and its commands, made by running the web's own functions (src/domain,
+// src/components, the server's carry in src/server/model) and the server's own commands. A case that mirrors a web test
+// names it as `test` and builds its world as that test does, on that test's days (its today is Thu 2026-10-22); the
+// others are on Thu 2026-11-26. Every save states its `at`, so no page's edit time is the clock's.
+{
+  const todayPage = dayId(TODAY)
+  const when = (date: string, hm = '09:00') => `${date}T${hm}:00.000Z`
+  const lineBlock = (id: string, type: string, words: string): EditorNode => ({ id, type, props: {}, content: [text(words)], children: [] })
+  const draftItem = (id: string, extra: Partial<DraftItem>): DraftItem => ({ id, anchor: '', place: 'after', source: 'model', state: 'open', ...extra })
+  const setDraft = (h: World, pageId: string, status: 'preparing' | 'ready' | 'failed', items: DraftItem[], extra: { recipe?: number; moreOpen?: string[]; allowedTaskIds?: string[] } = {}) =>
+    h.run({ type: 'set-draft', pageId, status, moreOpen: extra.moreOpen ?? [], allowedTaskIds: extra.allowedTaskIds ?? [], items, ...(extra.recipe ? { recipe: extra.recipe } : {}) })
+  /** For what no command makes: a draft page's stored string as an older build or a hand edit left it. */
+  const setRaw = (h: World, pageId: string, edit: (p: Page) => Page) => { h.ws = { ...h.ws, pages: h.ws.pages.map(p => (p.id === pageId ? edit(p) : p)) } }
+
+  /** Every test name of the web's tests, a template literal's `${a ? 'x' : 'y'}` read both ways. */
+  const webTestNames = (() => {
+    const names = new Set<string>()
+    const expand = (s: string): string[] => { const m = /\$\{[^}]*\?\s*'([^']*)'\s*:\s*'([^']*)'\s*\}/.exec(s); return m ? [...expand(s.replace(m[0], m[1]!)), ...expand(s.replace(m[0], m[2]!))] : [s] }
+    for (const file of readdirSync(join(root, 'tests')).filter(f => f.endsWith('.test.ts'))) {
+      const source = readFileSync(join(root, 'tests', file), 'utf8')
+      for (const m of source.matchAll(/\btest\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)) for (const name of expand(m[2]!)) names.add(name.replace(/\\(.)/g, '$1'))
+    }
+    return names
+  })()
+  const knownTest = (where: string, name: string) => { if (!webTestNames.has(name)) throw new Error(`${where}: no web test is named "${name}"`) }
+
+  put('draft/recipe.json', { recipe: DRAFT_RECIPE })
+
+  // draft/documents.json: a draft page's stored string as draftOf reads it. Those a command makes are the server's own.
+  {
+    const cases: unknown[] = []
+    const docCase = (name: string, document: string, wanted: { parses: boolean; settled?: boolean; stale?: boolean }) => {
+      const ws = { pages: [{ id: draftPageId(todayPage), type: 'draft', date: null, title: '', parentId: todayPage, document }] } as unknown as Workspace
+      const draft = draftOf(ws, todayPage)
+      const read = draft ? { settled: draftSettled(draft), stale: draftStale(draft) } : {}
+      expect(`draft/documents ${name}`, { parses: draft !== null, ...read }, wanted)
+      cases.push({ name, document, draft, ...read })
+    }
+    const stored = (steps: (h: World, heading: string) => void) => {
+      const h = rowsWorld()
+      steps(h, pageNodes(h.page(todayPage))[0]!.id)
+      return h.ws.pages.find(p => p.id === draftPageId(todayPage))!.document
+    }
+    const two = (anchor: string) => [draftItem('i1', { anchor, block: lineBlock('b1', 'bulletListItem', 'Stretch') }), draftItem('i2', { anchor, block: lineBlock('b2', 'task', 'Call the vet') })]
+    docCase('ready with items', stored((h, a) => setDraft(h, todayPage, 'ready', two(a), { recipe: DRAFT_RECIPE })), { parses: true, settled: true, stale: false })
+    docCase('failed with every item open', stored((h, a) => setDraft(h, todayPage, 'failed', two(a), { recipe: DRAFT_RECIPE })), { parses: true, settled: false, stale: false })
+    docCase('failed with one skipped', stored((h, a) => { setDraft(h, todayPage, 'failed', two(a), { recipe: DRAFT_RECIPE }); h.run({ type: 'skip-draft', pageId: todayPage, itemIds: ['i1'] }) }), { parses: true, settled: true, stale: false })
+    docCase('preparing', stored(h => setDraft(h, todayPage, 'preparing', [], { recipe: DRAFT_RECIPE })), { parses: true, settled: false, stale: false })
+    docCase('ready with no recipe (recipe 1)', stored((h, a) => setDraft(h, todayPage, 'ready', two(a))), { parses: true, settled: true, stale: true })
+    docCase('recipe 4 ready', stored((h, a) => setDraft(h, todayPage, 'ready', two(a), { recipe: 4 })), { parses: true, settled: true, stale: true })
+    docCase('recipe 4 failed, all open: it stands', stored((h, a) => setDraft(h, todayPage, 'failed', two(a), { recipe: 4 })), { parses: true, settled: false, stale: false })
+    docCase('recipe 5 ready', stored((h, a) => setDraft(h, todayPage, 'ready', two(a), { recipe: 5 })), { parses: true, settled: true, stale: false })
+    // No command stores these: the shapes an older build or a hand edit may leave.
+    docCase('an item with no state is not open, so the draft is settled', JSON.stringify({ status: 'failed', items: [{ id: 'i1', anchor: '', place: 'after', source: 'model' }], moreOpen: [], recipe: DRAFT_RECIPE }), { parses: true, settled: true, stale: false })
+    docCase('ready with no items', '{"status":"ready"}', { parses: true, settled: true, stale: true })
+    docCase('not json', 'not json', { parses: false })
+    docCase('the written-days draft: ready, no items, moreOpen empty', JSON.stringify({ status: 'ready', items: [], moreOpen: [] }), { parses: true, settled: true, stale: true })
+    put('draft/documents.json', cases)
+  }
+
+  // draft/planning.json: the planning part of a page, where a band with no anchor goes, and where "N more open" goes.
+  {
+    const cases: unknown[] = []
+    const moreOpenTest = 'draft: "more open" goes at the end of the planning part, before a closing divider, never under the heading'
+    const planningCase = (name: string, nodes: EditorNode[], tasks: string[], wanted: [start: number, end: number, planningEnd: number, moreOpenAfter: number], test?: string) => {
+      if (test) knownTest(`draft/planning ${name}`, test)
+      const document = JSON.stringify(nodes), doc = JSON.parse(document) as EditorNode[]
+      const range = planningRange(doc), planningEnd = planningEndIndex(doc, new Set(tasks)), moreOpenAfter = moreOpenAfterIndex(doc, planningEnd)
+      expect(`draft/planning ${name}`, [range.start, range.end, planningEnd, moreOpenAfter], wanted)
+      cases.push({ name, ...(test ? { test } : {}), document, tasks, range, planningEnd, moreOpenAfter })
+    }
+    const level = (n: EditorNode, l: number): EditorNode => ({ ...n, props: { level: l } })
+    const quote = (id: string, words: string): EditorNode => ({ id, type: 'quote', props: {}, content: [text(words)], children: [] })
+    const divider = (id: string): EditorNode => ({ id, type: 'divider', props: {}, children: [] })
+    // tests/day-draft.test.ts's template: his newest one's shape, a planning section with sub-sections, then a reflection.
+    const template = (): EditorNode[] => [
+      heading('m', 'Morning'), level(heading('ev', 'Events'), 3), bullet('eb'),
+      level(heading('t3', 'Top 3'), 3), quote('q', 'Finishable today.'), todo('s1', '', 'reference', ''), todo('s2', '', 'reference', ''), todo('s3', '', 'reference', ''),
+      level(heading('o', 'Other'), 3), todo('s4', '', 'reference', ''),
+      heading('r', 'Reflection'), level(heading('pr', 'Progress'), 4), para('pp', text('What went well?')), para('blank'),
+    ]
+    planningCase('his template: planning ends at the reflection', template(), [], [0, 10, 1, 9], 'draft: the planning part is the outermost section holding the first to-do row, never the reflection')
+    {
+      const h = rowsWorld()
+      planningCase('the built-in template', pageNodes(h.page(todayPage)), h.ws.tasks.map(t => t.id), [0, 2, 1, 1])
+    }
+    planningCase('the built-in day as the test has it', [heading('t', 'TODO'), todo('slot', '', 'reference', ''), heading('e', 'Events'), bullet('b')], [], [0, 2, 1, 1], moreOpenTest)
+    planningCase('a first to-do row under a level-2 heading under a level-1', [level(heading('a', 'Plan'), 1), heading('b', 'Today'), todo('c', 'Write the report'), level(heading('d', 'Notes'), 1), para('e', text('words'))], [], [0, 3, 1, 2])
+    planningCase('a to-do row nested under a bullet', [heading('a', 'Plan'), { ...bullet('b', text('Errands')), children: [todo('c', 'Post the parcel')] }, heading('d', 'Notes'), para('e', text('words'))], [], [0, 2, 1, 1])
+    planningCase('no to-do row: the first section', [para('a', text('Before')), heading('b', 'One'), para('c', text('words')), heading('d', 'Two'), para('e', text('more'))], [], [1, 3, 2, 2])
+    planningCase('no heading, to-do rows: the whole page, more open after the last row', [todo('a', 'One', 'plan'), bullet('b', text('note')), todo('c', 'Two', 'plan'), para('n', text('long notes'))], [], [0, 4, 0, 2], moreOpenTest)
+    planningCase('no heading, no to-do row', [para('n', text('notes')), bullet('b', text('more'))], [], [0, 2, 0, -1], moreOpenTest)
+    planningCase('a planning part that is only its heading', [heading('p', 'Plan'), heading('n', 'Notes'), para('x', text('words'))], [], [0, 1, 1, 0], moreOpenTest)
+    planningCase('one closing divider', [...template().slice(0, 10), level(heading('d', 'Drop'), 3), para('dl'), divider('hr'), ...template().slice(10)], [], [0, 13, 1, 11], moreOpenTest)
+    planningCase('two closing dividers', [...template().slice(0, 10), level(heading('d', 'Drop'), 3), para('dl'), divider('hr1'), divider('hr2'), ...template().slice(10)], [], [0, 14, 1, 11], moreOpenTest)
+    planningCase('plan rows of a known and of an unknown task directly under the heading', [heading('a', 'Plan'), todo('k', 'Known'), todo('u', 'Unknown'), para('p', text('words')), heading('n', 'Notes')], [taskOf('k')], [0, 4, 2, 3])
+    planningCase('a heading with no level reads as level 1', [{ id: 'a', type: 'heading', props: {}, content: [text('Plan')], children: [] }, todo('b', 'Write'), heading('c', 'Notes'), para('d', text('words'))], [], [0, 4, 1, 3])
+    put('draft/planning.json', cases)
+  }
+
+  // draft/same-words.json: the words two lines are compared by.
+  {
+    const texts = ['Call Mom.', '  call   mom  ', 'CALL MOM!', 'Call mom。', 'Call mom！', 'Done. . ', '...', '', 'a b', 'a　b', 'a\u0085b', 'a​b', 'İstanbul', 'ΟΔΟΣ', 'Straße']
+    const cases = texts.map(t => ({ text: t, words: sameWords(t) }))
+    // Every output is held, the case-folding ones too, so another ICU fails here rather than quietly changing the file.
+    expect('draft/same-words', cases.map(c => c.words), ['call mom', 'call mom', 'call mom', 'call mom', 'call mom', 'done', '', '', 'a b', 'a b', 'a\u0085b', 'a​b', 'i̇stanbul', 'οδος','straße'])
+    put('draft/same-words.json', cases)
+  }
+
+  // draft/views.json: what a day page shows of its draft (draftView), from the workspace as the app holds it.
+  {
+    const cases: unknown[] = []
+    const viewCase = (name: string, test: string | null, h: World, pageId: string, check: (view: ReturnType<typeof draftView>) => void) => {
+      if (test) knownTest(`draft/views ${name}`, test)
+      const ws = forBrowser(h.ws)
+      const view = draftView(ws, ws.pages.find(p => p.id === pageId)!)
+      expect(`draft/views ${name}: the same as from the server's workspace`, view, draftView(h.ws, h.page(pageId)))
+      check(view)
+      cases.push({ name, ...(test ? { test } : {}), workspace: ws, pageId, view })
+    }
+    const ids = (view: ReturnType<typeof draftView>) => view?.items.map(i => i.id)
+    const tomorrowPage = dayId(webTomorrow)
+
+    // tests/day-draft.test.ts: yesterday (Oct 22) with two open to-dos; Oct 23 made from his template.
+    const level = (n: EditorNode, l: number): EditorNode => ({ ...n, props: { level: l } })
+    const quote = (id: string, words: string): EditorNode => ({ id, type: 'quote', props: {}, content: [text(words)], children: [] })
+    const template = (): EditorNode[] => [
+      heading('m', 'Morning'), level(heading('ev', 'Events'), 3), bullet('eb'),
+      level(heading('t3', 'Top 3'), 3), quote('q', 'Finishable today.'), todo('s1', '', 'reference', ''), todo('s2', '', 'reference', ''), todo('s3', '', 'reference', ''),
+      level(heading('o', 'Other'), 3), todo('s4', '', 'reference', ''),
+      heading('r', 'Reflection'), level(heading('pr', 'Progress'), 4), para('pp', text('What went well?')), para('blank'),
+    ]
+    const templateSetup = (build: () => EditorNode[] = template) => {
+      const h = harness()
+      h.day(webToday)
+      h.save(dayId(webToday), d => underHeading(d, 'TODO', todo('r1', 'Book the flights'), todo('r2', 'Buy a dog bed')), { at: when(webToday) })
+      h.run({ type: 'create-template', title: 'Day', pageId: 'tpl', dayPage: true })
+      h.save('tpl', () => build(), { at: when(webToday, '09:01') })
+      const slots = pageNodes(h.day(webTomorrow)).map(n => n.id)
+      const book = h.task('Book the flights').id, dog = h.task('Buy a dog bed').id
+      const draft = (items: Partial<DraftItem>[], moreOpen: string[] = []) =>
+        setDraft(h, tomorrowPage, 'ready', items.map((x, i) => draftItem(`i${i}`, { anchor: slots[5]!, place: 'fill', ...x })), { moreOpen, allowedTaskIds: [book, dog] })
+      return { h, ids: slots, book, dog, draft }
+    }
+    {
+      const { h, ids: slot, book, dog, draft } = templateSetup()
+      draft([{ taskId: book, anchor: slot[5]! }, { taskId: dog, anchor: slot[6]! }], [])
+      h.task('Book the flights').title = 'Book the flights to Lisbon'
+      viewCase('a renamed to-do shows under its current title', 'draft: the view shows each open item where it goes, with the task under its current title', h, tomorrowPage,
+        v => expect('draft/views renamed', v!.items.map(i => [i.kind, i.anchorId, inlineText(i.block.content)]), [['fill', slot[5], 'Book the flights to Lisbon'], ['fill', slot[6], 'Buy a dog bed']]))
+    }
+    {
+      const { h, ids: slot, book, dog, draft } = templateSetup()
+      draft([{ taskId: book, anchor: slot[5]! }, { taskId: dog, anchor: slot[6]! }])
+      h.run({ type: 'task-status', taskId: book, status: 'done', today: webTomorrow })
+      h.task('Buy a dog bed').title = 'Buy a big dog bed'
+      viewCase('a to-do done elsewhere drops out; a renamed one stays', 'draft: a to-do done, cancelled or set aside elsewhere drops out; a renamed one stays and keeps its new title', h, tomorrowPage,
+        v => expect('draft/views done elsewhere', v!.items.map(i => [i.taskId, inlineText(i.block.content)]), [[dog, 'Buy a big dog bed']]))
+    }
+    {
+      const { h, ids: slot, book, dog, draft } = templateSetup()
+      draft([{ taskId: book, anchor: slot[5]! }, { taskId: dog, anchor: 'gone' }])
+      h.save(tomorrowPage, d => d.map(n => (n.id === slot[5] ? { ...n, content: [text('Write the intro')] } : n)), { at: when(webTomorrow) })
+      viewCase('a written-in slot and a gone anchor', 'draft: a fill whose slot he already wrote in goes after it; a gone anchor goes to the planning end', h, tomorrowPage,
+        v => expect('draft/views written-in slot', v!.items.map(i => [i.kind, i.anchorId]), [['after', slot[5]], ['after', slot[0]]]))
+    }
+    {
+      const { h, book, dog, draft } = templateSetup()
+      draft([], [book, dog])
+      h.run({ type: 'task-status', taskId: dog, status: 'cancelled' })
+      viewCase('"more open" without a closed to-do', 'draft: "more open" lists the open to-dos it holds, minus any now on the page or closed', h, tomorrowPage,
+        v => expect('draft/views more open', v!.moreOpen.map(m => m.title), ['Book the flights']))
+    }
+    {
+      const { h, ids: slot, book, dog, draft } = templateSetup()
+      draft([{ taskId: book, anchor: slot[5]! }, { taskId: dog, anchor: slot[5]!, place: 'after' }])
+      h.run({ type: 'apply-draft', pageId: tomorrowPage, itemIds: ['i0'], today: webTomorrow })
+      viewCase('after a fill, a band on that slot follows the filled row', 'draft: after a fill, the bands anchored on that slot stay right after the filled row', h, tomorrowPage,
+        v => expect('draft/views after a fill', v!.items.map(i => [i.taskId, i.kind, i.anchorId]), [[dog, 'after', slot[5]]]))
+    }
+    {
+      const { h, ids: slot, book, draft } = templateSetup()
+      draft([{ taskId: book, anchor: slot[12]! }])
+      viewCase('an anchor outside the planning part', 'draft: a carried to-do whose anchor left the planning part goes to the planning end, never lost', h, tomorrowPage,
+        v => expect('draft/views anchor outside', v!.items.map(i => [i.taskId, i.kind, i.anchorId]), [[book, 'after', slot[0]]]))
+    }
+    {
+      const { h, ids: slot, book, dog, draft } = templateSetup()
+      draft([{ taskId: book, anchor: slot[5]! }, { taskId: dog, anchor: slot[6]! }])
+      h.run({ type: 'apply-draft', pageId: tomorrowPage, itemIds: ['i0'], today: webTomorrow })
+      viewCase('after a partial apply', 'draft: partial Apply then Apply all never applies an item twice', h, tomorrowPage, v => expect('draft/views partial apply', ids(v), ['i1']))
+    }
+    {
+      // The test compares two worlds; here the one with database views in the template, given a draft.
+      const view: EditorNode = { id: 'v1', type: 'database', props: { pageId: 'list', view: '' }, children: [] }
+      const withView = () => {
+        const out = template()
+        out.splice(out.findIndex(n => n.id === 'ev') + 1, 0, view)
+        out.splice(out.findIndex(n => n.id === 'pr') + 1, 0, { ...view, id: 'v2' })
+        return out
+      }
+      const drafted = (build: () => EditorNode[]) => {
+        const { h, book, draft } = templateSetup(build)
+        const slot = pageNodes(h.page(tomorrowPage)).find(n => n.type === 'task' && !inlineText(n.content))!.id
+        draft([{ taskId: book, anchor: slot }])
+        return h
+      }
+      const plain = drafted(template), viewed = drafted(withView)
+      const shape = (h: World) => draftView(h.ws, h.page(tomorrowPage))!.items.map(i => [i.kind, i.taskId, inlineText(i.block.content)])
+      expect('draft/views database view: the same bands as without it', shape(viewed), shape(plain))
+      viewCase('a database view in the template', 'R2-6: a database view in the template changes nothing about the draft', viewed, tomorrowPage, v => expect('draft/views database view', v!.items.map(i => i.kind), ['fill']))
+    }
+
+    // tests/draft-apply-order.test.ts: four suggestions share the spot right after the planning heading.
+    const orderSetup = () => {
+      const h = harness()
+      h.day(webToday)
+      h.save(dayId(webToday), d => underHeading(d, 'TODO', todo('r1', 'Book the flights'), todo('r2', 'Buy a dog bed')), { at: when(webToday) })
+      h.day(webTomorrow)
+      h.save(tomorrowPage, () => [heading('m', 'Morning'), bullet('eb', text('Own line')), heading('r', 'Reflection')], { at: when(webTomorrow) })
+      const book = h.task('Book the flights').id, dog = h.task('Buy a dog bed').id
+      setDraft(h, tomorrowPage, 'ready', [
+        draftItem('i0', { anchor: 'm', taskId: book }),
+        draftItem('i1', { anchor: 'm', block: lineBlock('b1', 'task', 'Pack the bags') }),
+        draftItem('i2', { anchor: 'm', block: lineBlock('b2', 'bulletListItem', 'Read the lease') }),
+        draftItem('i3', { anchor: 'm', taskId: dog }),
+      ], { allowedTaskIds: [book, dog] })
+      const apply = (...itemIds: string[]) => h.run({ type: 'apply-draft', pageId: tomorrowPage, itemIds, today: webToday })
+      const rowOf = (id: string) => draftOf(h.ws, tomorrowPage)!.items.find(i => i.id === id)!.row!
+      const lines = () => pageNodes(h.page(tomorrowPage)).map(n => inlineText(n.content).trim())
+      return { h, apply, rowOf, lines }
+    }
+    let saves = 0
+    const resave = (h: World, edit: (d: EditorNode[]) => EditorNode[]) => h.save(tomorrowPage, edit, { at: when(webTomorrow, `10:${String(++saves).padStart(2, '0')}`) })
+    {
+      const s = orderSetup()
+      s.apply('i2')
+      viewCase('the bands still waiting around an applied row', 'B102: the suggestions still waiting are shown in their offered places around the rows applied', s.h, tomorrowPage,
+        v => expect('draft/views waiting around', v!.items.map(i => [i.id, i.anchorId]), [['i0', 'm'], ['i1', 'm'], ['i3', s.rowOf('i2')]]))
+    }
+    {
+      const s = orderSetup()
+      s.apply('i0'); s.apply('i1')
+      const pack = s.rowOf('i1')
+      resave(s.h, d => d.filter(n => n.id !== pack))
+      viewCase('an applied row he deleted', 'B102: a row he deleted or moved away no longer counts; the next lands after the nearest earlier one still there (Jazz)', s.h, tomorrowPage,
+        v => expect('draft/views deleted row', v!.items.map(i => [i.id, i.anchorId]), [['i2', s.rowOf('i0')], ['i3', s.rowOf('i0')]]))
+      const m = orderSetup()
+      m.apply('i0')
+      const book = m.rowOf('i0')
+      resave(m.h, d => { const row = d.find(n => n.id === book)!; const rest = d.filter(n => n.id !== book); return [...rest.slice(0, 2), row, ...rest.slice(2)] })
+      expect('draft/views moved row: the page', m.lines(), ['Morning', 'Own line', 'Book the flights', 'Reflection'])
+      viewCase('an applied row he moved away', 'B102: a row he deleted or moved away no longer counts; the next lands after the nearest earlier one still there (Jazz)', m.h, tomorrowPage,
+        v => expect('draft/views moved row', v!.items.map(i => [i.id, i.anchorId]), [['i1', 'm'], ['i2', 'm'], ['i3', 'm']]))
+    }
+    {
+      const s = orderSetup()
+      s.apply('i0')
+      const book = s.rowOf('i0')
+      resave(s.h, d => d.flatMap(n => (n.id === book ? [n, bullet('typed', text('Typed by him'))] : [n])))
+      viewCase('a line he typed below an applied row', 'B102: a line he typed right below an applied row stays below the rows that follow it', s.h, tomorrowPage,
+        v => expect('draft/views typed below', v!.items.map(i => [i.id, i.anchorId]), [['i1', book], ['i2', book], ['i3', book]]))
+    }
+    {
+      const s = orderSetup()
+      s.apply('i0'); s.apply('i2')
+      // As a build from before B102 left them: applied, with no row.
+      setRaw(s.h, draftPageId(tomorrowPage), p => { const d = JSON.parse(p.document) as { items: DraftItem[] }; for (const i of d.items) delete i.row; return { ...p, document: JSON.stringify(d) } })
+      const rows = pageNodes(s.h.page(tomorrowPage))
+      viewCase('rows applied before rows were kept', 'B102: rows applied before rows were kept are still found: a to-do by its row, a line by its words', s.h, tomorrowPage,
+        v => expect('draft/views no rows kept', v!.items.map(i => [i.id, i.anchorId]), [['i1', rows[1]!.id], ['i3', rows[2]!.id]]))
+    }
+    for (const mode of ['fill', 'missing'] as const) {
+      const h = harness()
+      h.day(webTomorrow)
+      h.save(tomorrowPage, () => [heading('m', 'Morning'), { id: 'slot', type: 'task', props: { taskId: 'editor-task:slot' }, content: [], children: [] }, heading('r', 'Reflection')], { at: when(webTomorrow) })
+      setDraft(h, tomorrowPage, 'ready', ['Alpha', 'Beta', 'Gamma'].map((w, i) => draftItem(`i${i}`, { anchor: mode === 'fill' ? 'slot' : 'gone', place: mode === 'fill' ? 'fill' : 'after', block: lineBlock(`b${i}`, 'task', w) })))
+      h.run({ type: 'apply-draft', pageId: tomorrowPage, itemIds: ['i2'], today: webToday })
+      const gamma = draftOf(h.ws, tomorrowPage)!.items.find(i => i.id === 'i2')!.row!
+      const doc = pageNodes(h.page(tomorrowPage)), above = doc[doc.findIndex(n => n.id === gamma) - 1]!.id
+      const where = mode === 'fill' ? 'an empty slot' : 'a missing anchor'
+      viewCase(`bands waiting at ${where}`, `B102: with ${where}, the bands still waiting sit where their rows will land`, h, tomorrowPage,
+        v => expect(`draft/views ${where}`, v!.items.map(i => [i.id, i.anchorId]), [['i0', above], ['i1', above]]))
+    }
+    {
+      const lineFirst = (taps: string[][]) => {
+        const h = harness()
+        h.day(webTomorrow)
+        h.save(tomorrowPage, () => [heading('m', 'Morning'), { id: 'slot', type: 'task', props: { taskId: 'editor-task:slot' }, content: [], children: [] }, heading('r', 'Reflection')], { at: when(webTomorrow) })
+        setDraft(h, tomorrowPage, 'ready', [
+          draftItem('i0', { anchor: 'slot', place: 'fill', block: lineBlock('b0', 'bulletListItem', 'Alpha') }),
+          draftItem('i1', { anchor: 'slot', place: 'fill', block: lineBlock('b1', 'task', 'Beta') }),
+        ])
+        for (const itemIds of taps) h.run({ type: 'apply-draft', pageId: tomorrowPage, itemIds, today: webToday })
+        return h
+      }
+      const test = 'B102: a line that can\'t fill the slot, offered before a to-do that can: Apply all and every tap order read line, to-do (Ratchet 0297bd0e)'
+      viewCase('a line that can\'t fill the slot, before a to-do that can', test, lineFirst([]), tomorrowPage,
+        v => expect('draft/views line before to-do', v!.items.map(i => [i.id, i.kind, i.anchorId]), [['i0', 'after', 'slot'], ['i1', 'fill', 'slot']]))
+      const after = lineFirst([['i1']])
+      viewCase('the line still waiting after the to-do filled the slot', test, after, tomorrowPage,
+        v => expect('draft/views line after to-do', v!.items.map(i => [i.id, i.kind, i.anchorId]), [['i0', 'after', 'm']]))
+    }
+    {
+      const s = orderSetup()
+      s.apply('i0'); s.apply('i2')
+      s.h.run({ type: 'undo', targetOperationId: s.h.ws.undo!.operationId })
+      viewCase('after Undo of a single apply', 'B102: Undo of a single apply puts it back, and applying it again lands in its place', s.h, tomorrowPage,
+        v => expect('draft/views after undo', v!.items.map(i => [i.id, i.anchorId]), [['i1', s.rowOf('i0')], ['i2', s.rowOf('i0')], ['i3', s.rowOf('i0')]]))
+    }
+
+    // tests/day-draft-skipped.test.ts: two days ago he wrote "Pack the bags" for the next day; yesterday he never used.
+    const planOn = (h: World, date: string) => {
+      h.day(date)
+      h.save(dayId(date), d => [...d, heading('h', 'Next day'), bullet('b1', text('Pack the bags')), bullet('b2', text('Call the bank'))], { at: `${date}T21:00:00.000Z` })
+    }
+    const packItem = (id: string, from?: string) => draftItem(id, { ...(from ? { from } : {}), block: lineBlock(`${id}-b`, 'task', 'Pack the bags') })
+    const twoDrafts = (recipe: { yesterday?: number; today?: number; todayFrom?: string } = {}) => {
+      const h = harness()
+      planOn(h, webTwoDaysAgo)
+      h.day(webYesterday)
+      h.day(webToday)
+      setDraft(h, dayId(webYesterday), 'ready', [packItem('y1', recipe.yesterday ? 'b1' : undefined)], { recipe: recipe.yesterday ?? 2 })
+      setDraft(h, dayId(webToday), 'ready', [packItem('t1', recipe.todayFrom ?? 'b1')], { recipe: recipe.today ?? 3 })
+      return h
+    }
+    {
+      const h = twoDrafts()
+      h.run({ type: 'apply-draft', pageId: dayId(webToday), itemIds: ['t1'], today: webToday })
+      viewCase('the skipped day\'s draft after today\'s applied the line', 'B101: applied today, the old draft for the skipped day no longer offers it, and can\'t apply it', h, dayId(webYesterday), v => expect('draft/views B101 applied today', ids(v), []))
+    }
+    {
+      const test = 'B101: applied on the old draft first, today\'s draft no longer offers it; skipped today, the old one doesn\'t either'
+      const a = twoDrafts()
+      a.run({ type: 'apply-draft', pageId: dayId(webYesterday), itemIds: ['y1'], today: webToday })
+      viewCase('today\'s draft after the old one applied the line', test, a, dayId(webToday), v => expect('draft/views B101 applied old', ids(v), []))
+      const b = twoDrafts()
+      b.run({ type: 'skip-draft', pageId: dayId(webToday), itemIds: ['t1'] })
+      viewCase('the old draft after today\'s skipped the line', test, b, dayId(webYesterday), v => expect('draft/views B101 skipped today', ids(v), []))
+    }
+    {
+      const test = 'B101: between two new drafts the line is known by where it came from, so the same words written again aren\'t taken for it'
+      const same = twoDrafts({ yesterday: DRAFT_RECIPE })
+      same.run({ type: 'apply-draft', pageId: dayId(webToday), itemIds: ['t1'], today: webToday })
+      viewCase('two new drafts, the same line', test, same, dayId(webYesterday), v => expect('draft/views B101 same line', ids(v), []))
+      const again = twoDrafts({ yesterday: DRAFT_RECIPE, todayFrom: 'written-again' })
+      again.run({ type: 'apply-draft', pageId: dayId(webToday), itemIds: ['t1'], today: webToday })
+      viewCase('two new drafts, the same words from another line', test, again, dayId(webYesterday), v => expect('draft/views B101 written again', ids(v), ['y1']))
+    }
+    {
+      const h = harness()
+      planOn(h, webTwoDaysAgo)
+      h.day(webYesterday)
+      h.day(webToday)
+      setDraft(h, dayId(webYesterday), 'ready', [packItem('y1')], { recipe: 2 })
+      h.run({ type: 'skip-draft', pageId: dayId(webYesterday), itemIds: ['y1'] })
+      setDraft(h, dayId(webYesterday), 'ready', [], { recipe: DRAFT_RECIPE })
+      setDraft(h, dayId(webToday), 'ready', [packItem('t1', 'b1')], { recipe: DRAFT_RECIPE })
+      viewCase('a decision a remake kept', 'B101: a decision a remake kept from an older draft still counts by its words (Ratchet 5dd205a3)', h, dayId(webToday), v => expect('draft/views B101 remake kept', ids(v), []))
+    }
+    {
+      const h = harness()
+      h.day(webTwoDaysAgo)
+      h.day(webToday)
+      setDraft(h, dayId(webTwoDaysAgo), 'ready', [packItem('o1')], { recipe: 2 })
+      h.run({ type: 'apply-draft', pageId: dayId(webTwoDaysAgo), itemIds: ['o1'], today: webTwoDaysAgo })
+      planOn(h, webYesterday)
+      setDraft(h, dayId(webToday), 'ready', [packItem('t1', 'b1')], { recipe: DRAFT_RECIPE })
+      viewCase('the same words written again on a later page', 'B101: the same words written again on a later page aren\'t taken for an old draft\'s line', h, dayId(webToday), v => expect('draft/views B101 later page', ids(v), ['t1']))
+    }
+
+    // tests/day-draft-carry.test.ts: yesterday's draft, never acted on, holds two plan lines as to-dos and a plain line.
+    for (const [recipe, withFrom] of [[DRAFT_RECIPE, true], [3, true], [2, false]] as const) {
+      const h = harness()
+      h.day(webTwoDaysAgo)
+      h.save(dayId(webTwoDaysAgo), d => [...d, heading('h', 'Next day'), bullet('b1', text('Pack the bags')), bullet('b2', text('Call the bank')), bullet('b3', text('Nice view'))], { at: `${webTwoDaysAgo}T21:00:00.000Z` })
+      h.day(webYesterday)
+      setDraft(h, dayId(webYesterday), 'ready', [
+        draftItem('y1', { ...(withFrom ? { from: 'b1' } : {}), block: lineBlock('yb1', 'task', 'Pack the bags') }),
+        draftItem('y2', { ...(withFrom ? { from: 'b2' } : {}), block: lineBlock('yb2', 'task', 'Call the bank') }),
+        draftItem('y3', { ...(withFrom ? { from: 'b3' } : {}), block: lineBlock('yb3', 'bulletListItem', 'Nice view') }),
+      ], { recipe })
+      h.day(webToday)
+      const req = buildDayDraftRequest(h.ws, h.page(dayId(webToday)), 'UTC')
+      let n = 0
+      const { items } = withSkippedPlan(h.ws, h.page(dayId(webToday)), req, [], () => `n${++n}`)
+      setDraft(h, dayId(webToday), 'failed', items, { recipe: DRAFT_RECIPE })
+      viewCase(`the skipped day's draft once today's is stored (its recipe ${recipe})`, 'carry: once today\'s draft is stored, the skipped day\'s draft hands its to-do lines on; its plain line stays (Lead 312046f4)', h, dayId(webYesterday),
+        v => expect(`draft/views carry recipe ${recipe}`, ids(v), ['y3']))
+    }
+
+    // tests/draft-not-twice-sweep.test.ts: "Pack the bags" sits open in yesterday's recipe 2 draft.
+    {
+      const h = harness()
+      h.day(webTwoDaysAgo)
+      h.save(dayId(webTwoDaysAgo), d => [...d, heading('h', 'Next day'), bullet('b1', text('Pack the bags'))], { at: `${webTwoDaysAgo}T21:00:00.000Z` })
+      h.day(webYesterday)
+      setDraft(h, dayId(webYesterday), 'ready', [draftItem('old', { block: lineBlock('ob', 'task', 'Pack the bags') })], { recipe: 2 })
+      h.day(webToday)
+      const req = buildDayDraftRequest(h.ws, h.page(dayId(webToday)), 'UTC')
+      let n = 0
+      const items = withSkippedPlan(h.ws, h.page(dayId(webToday)), req, [], () => `${webToday}-${++n}`).items.filter(() => false)
+      setDraft(h, dayId(webToday), 'ready', items, { recipe: DRAFT_RECIPE })
+      const test = 'not twice: a stored draft that doesn\'t hold the line takes nothing over; the old draft keeps offering it (Lead 7969b862)'
+      viewCase('the old draft keeps offering the line', test, h, dayId(webYesterday), v => expect('draft/views not twice old', ids(v), ['old']))
+      viewCase('the stored draft that doesn\'t hold it', test, h, dayId(webToday), v => expect('draft/views not twice new', ids(v), []))
+    }
+
+    // tests/draft-typed-anew.test.ts: three days ago two plan lines; two days ago a recipe 2 draft holds them, unused;
+    // yesterday's draft carried both, and he applied the first and crossed out the second.
+    {
+      const threeDaysAgo = addDays(webToday, -3), LINES = ['Pack the bags', 'Call the bank'] as const
+      type Kind = 'line_todo' | 'line' | 'new_todo' | 'new_line'
+      const words = (i: { block?: EditorNode }) => (i.block ? inlineText(i.block.content).trim() : '')
+      const make = (h: World, date: string, answer: (lineId: (w: string) => string) => Partial<ModelSuggestion>[]) => {
+        if (!h.ws.pages.some(p => p.id === dayId(date))) h.day(date)
+        const page = h.page(dayId(date)), req = buildDayDraftRequest(h.ws, page, 'UTC')
+        const anchor = [...req.blocks.keys()][0]!
+        const lineId = (w: string) => [...req.lines].find(([, x]) => inlineText(x.content).trim() === w)?.[0] ?? 'L-none'
+        let n = 0
+        const newId = () => `${date}-${DRAFT_RECIPE}-${++n}`
+        const sugs = answer(lineId).map(x => ({ anchor, place: 'after', kind: 'line_todo', taskId: '', lineId: '', text: '', why: '', ...x }) as ModelSuggestion)
+        const items = withSkippedPlan(h.ws, page, req, itemsFromModel(req, sugs, newId, {}), newId).items
+        setDraft(h, dayId(date), 'ready', items, { recipe: DRAFT_RECIPE, allowedTaskIds: [...req.tasks.values()].map(t => t.id) })
+      }
+      const scene = (tick: boolean) => {
+        const h = harness()
+        h.day(threeDaysAgo)
+        h.save(dayId(threeDaysAgo), d => [...d, heading('h', 'Next day'), bullet('b1', text(LINES[0])), bullet('b2', text(LINES[1]))], { at: `${threeDaysAgo}T21:00:00.000Z` })
+        h.day(webTwoDaysAgo)
+        setDraft(h, dayId(webTwoDaysAgo), 'ready', [draftItem('o1', { block: lineBlock('ob1', 'task', LINES[0]) }), draftItem('o2', { block: lineBlock('ob2', 'task', LINES[1]) })], { recipe: 2 })
+        make(h, webYesterday, lineId => LINES.map(w => ({ lineId: lineId(w) })))
+        const y = draftOf(h.ws, dayId(webYesterday))!.items
+        h.run({ type: 'apply-draft', pageId: dayId(webYesterday), itemIds: [y.find(i => words(i) === LINES[0])!.id], today: webYesterday })
+        h.run({ type: 'skip-draft', pageId: dayId(webYesterday), itemIds: [y.find(i => words(i) === LINES[1])!.id] })
+        if (tick) h.run({ type: 'task-status', taskId: h.task(LINES[0]).id, status: 'done', today: webYesterday })
+        return h
+      }
+      for (const tick of [true, false]) for (const kind of ['line_todo', 'line', 'new_todo', 'new_line'] as Kind[]) {
+        const h = scene(tick)
+        make(h, webToday, lineId => LINES.map(w => (kind === 'line_todo' || kind === 'line' ? { kind, lineId: lineId(w) } : { kind, text: w })))
+        const label = `${tick ? 'applied and ticked' : 'applied, left open'}, ${kind}`
+        viewCase(`a line decided yesterday, today's answer ${label}`, 'B106: a line he decided yesterday is never offered again today, carried by its id or typed anew, as a to-do or a line', h, dayId(webToday), v => {
+          const shown = v!.items.filter(i => LINES.includes(inlineText(i.block.content).trim() as typeof LINES[number]))
+          if (shown.some(i => inlineText(i.block.content).trim() === LINES[1])) throw new Error(`draft/views B106 ${label}: the crossed-out line is offered`)
+          if (tick ? shown.length : shown.some(i => i.taskId !== h.task(LINES[0]).id) || shown.length > 1) throw new Error(`draft/views B106 ${label}: the applied line is offered as a copy`)
+        })
+      }
+    }
+
+    // tests/draft-skipped-days.test.ts: the days on a carried to-do's band.
+    {
+      const thu = '2026-10-15', sat = '2026-10-17', sun = '2026-10-18', mon = '2026-10-19'
+      const h = harness()
+      h.day(thu)
+      h.save(dayId(thu), d => underHeading(d, 'TODO', todo('r1', 'Kathy app', 'plan', thu), todo('r2', 'Lenny reply', 'plan', thu)), { at: when(thu) })
+      const kathy = h.task('Kathy app').id, lenny = h.task('Lenny reply').id
+      const draft = (date: string) => { h.day(date); setDraft(h, dayId(date), 'ready', [draftItem('k', { taskId: kathy }), draftItem('l', { taskId: lenny }), draftItem('n', { block: lineBlock(`nb-${date}`, 'task', 'Kathy app') })], { recipe: 5, allowedTaskIds: [kathy, lenny] }) }
+      draft(sat); h.run({ type: 'skip-draft', pageId: dayId(sat), itemIds: ['k'] })
+      draft(sun); h.run({ type: 'skip-draft', pageId: dayId(sun), itemIds: draftOf(h.ws, dayId(sun))!.items.filter(i => i.state === 'open').map(i => i.id) })
+      draft(mon)
+      viewCase('skipped on two days', 'skipped days: ✕ and Dismiss both count, by the drafts’ own days, oldest first', h, dayId(mon),
+        v => expect('draft/views skipped days', v!.items.map(i => [i.id, i.skipped ?? []]), [['k', [sat, sun]], ['l', [sun]], ['n', []]]))
+    }
+
+    // Drafts as the web leaves them, on Thu 2026-11-26: a to-do carried from yesterday and today's built-in page.
+    {
+      const odd = () => {
+        const h = harness()
+        h.day(YESTERDAY)
+        saveRows(h, YESTERDAY, plan('y1', 'Book the flights', YESTERDAY))
+        h.day(TODAY)
+        return h
+      }
+      const flights = taskOf('y1'), headingId = `${todayPage}:h0`
+      const items = () => [draftItem('i1', { anchor: headingId, taskId: flights }), draftItem('i2', { anchor: headingId, block: lineBlock('b2', 'bulletListItem', 'Stretch') })]
+      const store = (h: World, status: 'preparing' | 'ready' | 'failed', list = items()) => setDraft(h, todayPage, status, list, { recipe: DRAFT_RECIPE, allowedTaskIds: [flights] })
+      {
+        const h = odd(); store(h, 'ready')
+        setRaw(h, draftPageId(todayPage), p => ({ ...p, document: 'not json' }))
+        viewCase('a draft whose document does not parse', null, h, todayPage, v => expect('draft/views not json', v, null))
+      }
+      { const h = odd(); store(h, 'failed'); viewCase('failed, every item open', null, h, todayPage, v => expect('draft/views failed', [v!.status, ids(v)], ['failed', ['i1', 'i2']])) }
+      {
+        const h = odd(); store(h, 'failed')
+        h.run({ type: 'skip-draft', pageId: todayPage, itemIds: ['i2'] })
+        viewCase('failed with one skipped', null, h, todayPage, v => expect('draft/views failed, one skipped', [v!.status, ids(v)], ['ready', ['i1']]))
+      }
+      { const h = odd(); store(h, 'preparing'); viewCase('preparing', null, h, todayPage, v => expect('draft/views preparing', [v!.status, ids(v)], ['preparing', ['i1', 'i2']])) }
+      {
+        const h = odd(); store(h, 'ready')
+        // Written by hand: no command puts a draft page in Trash on its own (delete-page refuses a draft page).
+        setRaw(h, draftPageId(todayPage), p => ({ ...p, trashedAt: stamped(5) }))
+        viewCase('the draft in Trash', null, h, todayPage, v => expect('draft/views draft in Trash', v, null))
+      }
+      {
+        const h = odd(); store(h, 'ready')
+        h.run({ type: 'delete-page', pageId: todayPage, at: stamped(5) }, 'trash-today')
+        h.day(TODAY)
+        const fresh = `${todayPage}:2`
+        if (!h.ws.pages.some(p => p.id === fresh && !p.trashedAt)) throw new Error(`draft/views: today's new page must be ${fresh}`)
+        viewCase('today\'s page in Trash, and a new page with no draft of its own', null, h, fresh, v => expect('draft/views new page', v, null))
+      }
+      {
+        const h = odd(); store(h, 'ready')
+        // Written by hand: every command gives a to-do its createdOn; a task from older data may have none.
+        h.ws = { ...h.ws, tasks: h.ws.tasks.map(t => { if (t.id !== flights) return t; const { createdOn: _createdOn, ...rest } = t; return rest as Task }) }
+        viewCase('a carried to-do with no createdOn has no since', null, h, todayPage, v => expect('draft/views no createdOn', v!.items.map(i => [i.id, i.since ?? null]), [['i1', null], ['i2', null]]))
+      }
+      {
+        const h = odd(); store(h, 'ready', [draftItem('i1', { anchor: headingId, taskId: flights }), draftItem('i2', { anchor: headingId, since: '2026-11-24', block: lineBlock('b2', 'bulletListItem', 'Stretch') })])
+        viewCase('a line item with since', null, h, todayPage, v => expect('draft/views since', v!.items.map(i => [i.id, i.since ?? null]), [['i1', h.task('Book the flights').createdOn], ['i2', '2026-11-24']]))
+      }
+      { const h = odd(); store(h, 'ready'); viewCase('two items on one anchor', null, h, todayPage, v => expect('draft/views two on one anchor', v!.items.map(i => [i.id, i.kind, i.anchorId]), [['i1', 'after', headingId], ['i2', 'after', headingId]])) }
+      {
+        const h = odd()
+        h.save(todayPage, d => underHeading(d, 'TODO', { ...bullet('p1', text('Errands')), children: [bullet('p2', text('Post office'))] }), { today: TODAY, at: stamped(2) })
+        store(h, 'ready', [draftItem('i1', { anchor: 'p2', taskId: flights })])
+        viewCase('an anchor that is a nested block\'s id goes to the planning end', null, h, todayPage, v => expect('draft/views nested anchor', v!.items.map(i => [i.id, i.anchorId]), [['i1', headingId]]))
+      }
+      // A carried to-do the draft no longer offers for a reason other than done, beside one it still offers (Water the plants).
+      const withControl = (h: World) => {
+        saveRows(h, YESTERDAY, plan('y2', 'Water the plants', YESTERDAY))
+        const water = taskOf('y2')
+        setDraft(h, todayPage, 'ready', [draftItem('i1', { anchor: headingId, taskId: flights }), draftItem('i3', { anchor: headingId, taskId: water })], { recipe: DRAFT_RECIPE, moreOpen: [flights, water], allowedTaskIds: [flights, water] })
+        return water
+      }
+      const hidden = (name: string, water: string) => (v: ReturnType<typeof draftView>) => {
+        expect(`draft/views ${name}: the suggestions`, ids(v), ['i3'])
+        expect(`draft/views ${name}: more open`, v!.moreOpen.map(m => m.taskId), [water])
+      }
+      {
+        const h = odd(), water = withControl(h)
+        h.run({ type: 'plan-task', taskId: flights, date: '2026-11-27', today: TODAY })
+        viewCase('a carried to-do planned on a later day drops out, and from "more open"', null, h, todayPage, hidden('planned later', water))
+      }
+      {
+        const h = odd(), water = withControl(h)
+        h.run({ type: 'task-status', taskId: flights, status: 'cancelled', today: TODAY })
+        viewCase('a carried to-do cancelled elsewhere drops out, and from "more open"', null, h, todayPage, hidden('cancelled', water))
+      }
+      {
+        const h = odd(), water = withControl(h)
+        setAside(h, flights)
+        viewCase('a carried to-do set aside drops out, and from "more open"', null, h, todayPage, hidden('set aside', water))
+      }
+      {
+        // Lines of drafts made before lines kept where they came from (recipe 2) are known by their words, as sameWords reads them.
+        const h = odd()
+        setDraft(h, dayId(YESTERDAY), 'ready', [draftItem('y1', { anchor: `${dayId(YESTERDAY)}:h0`, block: lineBlock('yb1', 'task', 'pack the bags.') })], { recipe: 2 })
+        h.run({ type: 'skip-draft', pageId: dayId(YESTERDAY), itemIds: ['y1'] })
+        setDraft(h, todayPage, 'ready', [draftItem('i1', { anchor: headingId, block: lineBlock('b1', 'task', 'Pack the  bags') }), draftItem('i2', { anchor: headingId, block: lineBlock('b2', 'task', 'Call the bank') })], { recipe: 2 })
+        expect('draft/views same words: they read the same', sameWords('pack the bags.'), sameWords('Pack the  bags'))
+        viewCase('a line decided on another day in other case, spacing and stop is not offered', null, h, todayPage, v => expect('draft/views same words', ids(v), ['i2']))
+      }
+    }
+    put('draft/views.json', cases)
+  }
+
+  // draft/skipped.json: skippedDays, as tests/draft-skipped-days.test.ts builds each world.
+  {
+    const cases: unknown[] = []
+    const thu = '2026-10-15', sat = '2026-10-17', sun = '2026-10-18', mon = '2026-10-19', tue = '2026-10-20', fri = '2026-10-23'
+    let saves = 0
+    const scene = () => {
+      const h = harness()
+      h.day(thu)
+      h.save(dayId(thu), d => underHeading(d, 'TODO', todo('r1', 'Kathy app', 'plan', thu), todo('r2', 'Lenny reply', 'plan', thu)), { at: when(thu) })
+      const kathy = h.task('Kathy app').id, lenny = h.task('Lenny reply').id
+      const draft = (date: string) => { h.day(date); setDraft(h, dayId(date), 'ready', [draftItem('k', { taskId: kathy }), draftItem('l', { taskId: lenny }), draftItem('n', { block: lineBlock(`nb-${date}`, 'task', 'Kathy app') })], { recipe: 5, allowedTaskIds: [kathy, lenny] }) }
+      const cross = (date: string, ...itemIds: string[]) => h.run({ type: 'skip-draft', pageId: dayId(date), itemIds })
+      const dismiss = (date: string) => cross(date, ...draftOf(h.ws, dayId(date))!.items.filter(i => i.state === 'open').map(i => i.id))
+      return { h, kathy, lenny, draft, cross, dismiss }
+    }
+    const skippedCase = (name: string, test: string, s: ReturnType<typeof scene>, day: string, wanted: [who: 'kathy' | 'lenny', days: string[]][]) => {
+      knownTest(`draft/skipped ${name}`, test)
+      const ws = forBrowser(s.h.ws)
+      const skipped = [...skippedDays(ws, day)]
+      expect(`draft/skipped ${name}`, skipped, wanted.map(([who, days]) => [who === 'kathy' ? s.kathy : s.lenny, days]))
+      cases.push({ name, test, workspace: ws, day, skipped })
+    }
+    { const s = scene(); s.draft(sat); s.cross(sat, 'k'); s.draft(sun); s.dismiss(sun); s.draft(mon)
+      skippedCase('✕ and Dismiss', 'skipped days: ✕ and Dismiss both count, by the drafts’ own days, oldest first', s, mon, [['kathy', [sat, sun]], ['lenny', [sun]]]) }
+    { const s = scene(); s.draft(sat); s.cross(sat, 'k'); s.draft(sun); s.draft(mon)
+      skippedCase('a day left open', 'skipped days: a day he didn’t decide on is not a skip, nor a draft he never opened', s, mon, [['kathy', [sat]]]) }
+    {
+      const s = scene(); s.draft(sat); s.cross(sat, 'k'); s.draft(sun)
+      const skip = s.cross(sun, 'k')
+      s.h.run({ type: 'undo', targetOperationId: skip.receipt.operationId })
+      const again = s.cross(sun, 'l')
+      s.h.run({ type: 'reopen-draft', pageId: dayId(sun), itemIds: ['l'], skippedBy: again.receipt.operationId, seen: { l: plannedOn(s.h.ws, s.lenny) } })
+      s.draft(mon)
+      skippedCase('skips undone', 'skipped days: a skip he undid doesn’t count, by Undo or by the notice’s second Undo', s, mon, [['kathy', [sat]]])
+    }
+    { const s = scene(); s.draft(sat); s.cross(sat, 'k'); s.draft(sun); s.h.run({ type: 'apply-draft', pageId: dayId(sun), itemIds: ['k'], today: sun }); s.draft(mon); s.cross(mon, 'k'); s.draft(tue)
+      skippedCase('applied, then skipped again', 'skipped days: applying it starts the list again', s, tue, [['kathy', [mon]]]) }
+    { const s = scene(); s.draft(sat); s.cross(sat, 'k'); s.h.run({ type: 'plan-task', taskId: s.kathy, date: sun, today: sun }); s.draft(mon)
+      skippedCase('planned another way', 'skipped days: planning it on a day another way (a plan row on that day’s page) starts the list again', s, mon, []) }
+    for (const how of ['notice', 'row'] as const) {
+      const s = scene(); s.draft(sat); s.cross(sat, 'k'); s.draft(sun)
+      if (how === 'notice') {
+        const seen = { k: plannedOn(s.h.ws, s.kathy) }
+        const skip = s.cross(sun, 'k')
+        s.h.run({ type: 'snooze-draft', pageId: dayId(sun), itemIds: ['k'], date: mon, today: sun, skippedBy: skip.receipt.operationId, seen })
+      } else s.h.run({ type: 'move-draft', pageId: dayId(sun), itemId: 'k', date: mon, today: sun })
+      s.h.day(mon)
+      s.draft(tue); s.cross(tue, 'k')
+      s.h.day(fri)
+      skippedCase(`moved from the ${how}`, 'skipped days: moving it from the notice or from the row starts the list again', s, fri, [['kathy', [tue]]])
+    }
+    {
+      const s = scene(); s.draft(sat); s.cross(sat, 'k'); s.draft(sun); s.h.run({ type: 'move-draft', pageId: dayId(sun), itemId: 'k', date: mon, today: sun })
+      s.h.save(dayId(mon), d => d.filter(n => n.props?.taskId !== s.kathy), { today: sun, at: when(sun, `10:${String(++saves).padStart(2, '0')}`) })
+      s.draft(tue); s.cross(tue, 'k')
+      s.h.day(fri)
+      skippedCase('moved, and its plan row taken off that day', 'skipped days: a move from a draft starts the list again even after its plan row is gone from that day', s, fri, [['kathy', [tue]]])
+    }
+    { const s = scene(); s.draft(sat); s.cross(sat, 'k'); s.draft(sun); s.draft(mon); s.cross(mon, 'k')
+      skippedCase('a past day\'s draft', 'skipped days: a past day’s draft lists only the skips before that day', s, sun, [['kathy', [sat]]]) }
+    { const s = scene(); s.draft(sat); s.cross(sat, 'k', 'n'); s.draft(sun)
+      skippedCase('a to-do the model wrote', 'skipped days: a to-do the model wrote has no list, even in the words of one skipped before', s, sun, [['kathy', [sat]]]) }
+    put('draft/skipped.json', cases)
+  }
+
+  // draft/skipped-labels.json: a band's skipped days in words.
+  {
+    const on = TODAY
+    const labelCase = (days: string[], wanted: [text: string, full: string], at = on) => {
+      const { text: words, full } = skippedLabel(days, at)
+      expect(`draft/skipped-labels ${days.join(',')} on ${at}`, [words, full], wanted)
+      return { days, on: at, text: words, full }
+    }
+    put('draft/skipped-labels.json', [
+      labelCase(['2026-11-25'], ['skipped Wed', 'skipped Wed 11/25']),
+      labelCase(['2026-11-21', '2026-11-22'], ['skipped Sat, Sun', 'skipped Sat 11/21, Sun 11/22']),
+      labelCase(['2026-11-21', '2026-11-22', '2026-11-24'], ['skipped Sat, Sun, Tue', 'skipped Sat 11/21, Sun 11/22, Tue 11/24']),
+      labelCase(['2026-11-20', '2026-11-21', '2026-11-22', '2026-11-24'], ['skipped 4 times', 'skipped Fri 11/20, Sat 11/21, Sun 11/22, Tue 11/24']),
+      labelCase(['2026-11-19'], ['skipped 11/19', 'skipped Thu 11/19']),
+      labelCase(['2026-11-20'], ['skipped Fri', 'skipped Fri 11/20']),
+      labelCase(['2026-12-20', '2026-12-31'], ['skipped 12/20, Thu', 'skipped Sun 12/20, Thu 12/31'], '2027-01-02'),
+    ])
+  }
+
+  // draft/line.json: the line's state (draftLineState) and words (draftLineWords), with `shown` the view's item count.
+  {
+    const viewOf = (v: { status: 'preparing' | 'ready' | 'failed'; items: number } | null) => v && { status: v.status, items: Array.from({ length: v.items }, (_, i): DraftItemView => ({ id: `i${i}`, kind: 'after', anchorId: null, block: lineBlock(`b${i}`, 'paragraph', '') })) }
+    const lineCase = (name: string, view: { status: 'preparing' | 'ready' | 'failed'; items: number } | null, ask: DraftAskSummary, offline: boolean, held: boolean, wanted: [state: string, words: unknown]) => {
+      const state = draftLineState(viewOf(view), ask, offline), words = draftLineWords(state, view?.items ?? 0, held)
+      expect(`draft/line ${name}`, [state, words], wanted)
+      return { name, view, ask, offline, held, state, words }
+    }
+    const segs = (count: string | null, failed = false, offline = false) => ({ kind: 'segments', count, failed, offline })
+    put('draft/line.json', [
+      lineCase('nothing: no draft stored and never asked', null, null, false, false, ['none', null]),
+      lineCase('nothing: asked, and the answer stored nothing', null, 'done', false, false, ['none', null]),
+      lineCase('nothing: a ready draft with no open suggestion', { status: 'ready', items: 0 }, 'done', false, false, ['ready', null]),
+      lineCase('preparing: an ask in flight, nothing stored', null, 'in-flight', false, false, ['preparing', { kind: 'preparing' }]),
+      lineCase('preparing: an older draft with nothing to show while it is asked for again', { status: 'ready', items: 0 }, 'in-flight', false, false, ['preparing', { kind: 'preparing' }]),
+      lineCase('held: suggestions arrived while he was typing', { status: 'ready', items: 3 }, 'done', false, true, ['ready', { kind: 'held' }]),
+      lineCase('open: three suggestions', { status: 'ready', items: 3 }, 'done', false, false, ['ready', segs('3 suggestions')]),
+      lineCase('open: one suggestion', { status: 'ready', items: 1 }, null, false, false, ['ready', segs('1 suggestion')]),
+      lineCase('open: in flight with suggestions already shown', { status: 'ready', items: 2 }, 'in-flight', false, false, ['ready', segs('2 suggestions')]),
+      lineCase('failed: the ask failed, nothing stored', null, 'failed', false, false, ['failed', segs(null, true)]),
+      lineCase('failed: the ask was lost, nothing stored', null, 'lost', false, false, ['failed', segs(null, true)]),
+      lineCase('failed: a stored draft marked failed, none decided, with suggestions', { status: 'failed', items: 2 }, 'done', false, false, ['failed', segs('2 suggestions', true)]),
+      lineCase('failed: a stored draft marked failed with no suggestion shown', { status: 'failed', items: 0 }, null, false, false, ['failed', segs(null, true)]),
+      lineCase('the ask failed but a ready draft is stored: the draft\'s state', { status: 'ready', items: 1 }, 'failed', false, false, ['ready', segs('1 suggestion')]),
+      lineCase('offline: no draft stored', null, null, true, false, ['offline', segs(null, false, true)]),
+      lineCase('offline: an ask in flight and nothing stored', null, 'in-flight', true, false, ['offline', segs(null, false, true)]),
+      lineCase('offline with a stored draft: the draft\'s state', { status: 'ready', items: 2 }, null, true, false, ['ready', segs('2 suggestions')]),
+      lineCase('a stored draft still preparing reads as ready', { status: 'preparing', items: 1 }, null, false, false, ['ready', segs('1 suggestion')]),
+    ])
+  }
+
+  // draft/notices.json
+  {
+    const notices = { applied: [1, 2].map(n => [n, appliedNotice(n)]), skipped: [1, 3].map(n => [n, skippedNotice(n)]), notApplied: draftWords.notApplied, notSkipped: draftWords.notSkipped, cantUndo: draftWords.cantUndo }
+    expect('draft/notices', notices, { applied: [[1, 'Applied'], [2, 'Applied 2']], skipped: [[1, 'Skipped'], [3, 'Skipped 3']], notApplied: 'Not applied · changed elsewhere', notSkipped: 'Not skipped · changed elsewhere', cantUndo: "Can't undo · edited since" })
+    put('draft/notices.json', notices)
+  }
+
+  // draft/actions/<name>.json: the draft's commands as the server takes or refuses them.
+  // `{ before, pageId, itemIds, today, action, receipt, refusal, after, ticket }`: `action` is the web's builder's, applied as
+  // is; `after` is as the browser gets it, with the Undo marker `{ operationId: "cmd-<name>", revision }` (`after` is
+  // `before` when refused); `ticket` is draftTicket's for a skip, read from `after`.
+  {
+    const flights = taskOf('y1'), bed = taskOf('bed'), headingId = `${todayPage}:h0`, slotId = `${todayPage}:r0`
+    /** Yesterday's plan row of "Book the flights" (planned Wed 11/25); "Buy a dog bed" on Errands, not planned. */
+    const actionWorld = (items: DraftItem[]) => {
+      const h = harness()
+      h.day(YESTERDAY)
+      saveRows(h, YESTERDAY, plan('y1', 'Book the flights', YESTERDAY))
+      errands(h); errandRows(h, ['bed', 'Buy a dog bed'])
+      h.day(TODAY)
+      setDraft(h, todayPage, 'ready', items, { recipe: DRAFT_RECIPE, allowedTaskIds: [flights, bed] })
+      return h
+    }
+    const carried = (id: string, taskId: string, extra: Partial<DraftItem> = {}) => draftItem(id, { anchor: headingId, taskId, ...extra })
+    const line = (id: string, words: string, type = 'bulletListItem') => draftItem(id, { anchor: headingId, block: lineBlock(`b-${id}`, type, words) })
+    const mix = () => [carried('i1', flights), carried('i2', bed), line('i3', 'Stretch')]
+    const itemOf = (ws: Workspace, id: string) => draftOf(ws, todayPage)!.items.find(i => i.id === id)!
+    const todayRows = (ws: Workspace) => pageNodes(ws.pages.find(p => p.id === todayPage)!)
+    const actionCase = (name: string, h: World, itemIds: string[], action: Action, skip: boolean) => {
+      const before = forBrowser(h.ws)
+      let receipt: unknown = null, refusal: string | null = null, after = before
+      try {
+        const result = applyCommand(h.ws, { operationId: `cmd-${name}`, expectedRevision: h.ws.revision, action })
+        h.ws = result.workspace
+        after = forBrowser(result.workspace)
+        receipt = result.receipt
+        if (action.type === 'undo' ? after.undo !== undefined : after.undo?.operationId !== `cmd-${name}`) throw new Error(`draft/actions ${name}: the Undo marker is not what the command leaves`)
+      } catch (e) {
+        if (!(e instanceof DomainError)) throw e
+        refusal = e.message
+      }
+      const ticket: DraftTicket | null = skip && !refusal ? draftTicket(after, todayPage, itemIds, `cmd-${name}`) : null
+      put(`draft/actions/${name}.json`, { before, pageId: todayPage, itemIds, today: TODAY, action, receipt, refusal, after, ticket })
+      return { before, after, receipt: receipt as { message: string } | null, refusal, ticket }
+    }
+    const apply = (name: string, h: World, itemIds: string[]) => actionCase(name, h, itemIds, applyDraftAction(todayPage, itemIds, TODAY), false)
+    const skip = (name: string, h: World, itemIds: string[]) => actionCase(name, h, itemIds, skipDraftAction(todayPage, itemIds), true)
+
+    {
+      const h = actionWorld([carried('i1', flights)])
+      const r = apply('apply-a-carried-to-do-after-its-anchor', h, ['i1'])
+      const rows = todayRows(r.after)
+      expect('draft/actions apply-a-carried-to-do-after-its-anchor', [r.receipt?.message, rows[0]!.id, rowTaskId(rows[1]!), rowRole(rows[1]!), plannedOn(r.after, flights), itemOf(r.after, 'i1').state], ['Applied', headingId, flights, 'plan', TODAY, 'applied'])
+      // undo-an-apply: its `before` is the apply's `after`.
+      const u = actionCase('undo-an-apply', h, ['i1'], { type: 'undo', targetOperationId: 'cmd-apply-a-carried-to-do-after-its-anchor' }, false)
+      expect('draft/actions undo-an-apply', [itemOf(u.after, 'i1').state, todayRows(u.after).some(n => rowTaskId(n) === flights), plannedOn(u.after, flights)], ['open', false, YESTERDAY])
+    }
+    {
+      const h = actionWorld([carried('i1', flights, { anchor: slotId, place: 'fill' })])
+      const r = apply('apply-fills-an-empty-slot', h, ['i1'])
+      const row = todayRows(r.after).find(n => rowTaskId(n) === flights)
+      if (row?.id !== slotId) throw new Error(`draft/actions apply-fills-an-empty-slot: the row must keep the slot's id ${slotId}, has ${row?.id}`)
+      expect('draft/actions apply-fills-an-empty-slot', itemOf(r.after, 'i1').row, slotId)
+    }
+    {
+      const h = actionWorld([line('i1', 'Call the vet', 'task')])
+      const r = apply('apply-a-new-to-do', h, ['i1'])
+      const task = r.after.tasks.find(t => t.title === 'Call the vet')
+      expect('draft/actions apply-a-new-to-do', [r.before.tasks.some(t => t.title === 'Call the vet'), task?.createdOn, task && plannedOn(r.after, task.id)], [false, TODAY, TODAY])
+    }
+    {
+      const h = actionWorld([line('i1', 'Stretch')])
+      const r = apply('apply-a-line', h, ['i1'])
+      const row = todayRows(r.after).find(n => inlineText(n.content) === 'Stretch')
+      if (!row?.id.startsWith('brought:') || itemOf(r.after, 'i1').row !== row.id) throw new Error(`draft/actions apply-a-line: the line must be a brought: row the item names, is ${row?.id}`)
+    }
+    {
+      const h = actionWorld(mix())
+      h.run({ type: 'task-status', taskId: bed, status: 'done', today: TODAY })
+      const r = apply('apply-all-partly', h, ['i1', 'i2', 'i3'])
+      const applied = draftOf(r.after, todayPage)!.items.filter(i => i.state === 'applied').map(i => i.id)
+      if (applied.length !== 2) throw new Error(`draft/actions apply-all-partly: exactly two must be applied, got ${applied}`)
+      expect('draft/actions apply-all-partly', [r.receipt?.message, applied], ['Applied 2', ['i1', 'i3']])
+    }
+    {
+      const h = actionWorld([carried('i1', flights)])
+      h.run(applyDraftAction(todayPage, ['i1'], TODAY))
+      expect('draft/actions apply-nothing', apply('apply-nothing', h, ['i1']).refusal, 'Nothing to apply')
+    }
+    {
+      const h = actionWorld([carried('i1', flights)])
+      const r = skip('skip-one', h, ['i1'])
+      expect('draft/actions skip-one', [r.receipt?.message, r.ticket], ['Skipped', { itemIds: ['i1'], skippedBy: 'cmd-skip-one', seen: { i1: YESTERDAY } }])
+    }
+    {
+      const h = actionWorld(mix())
+      const r = skip('dismiss-a-mix', h, ['i1', 'i2', 'i3'])
+      expect('draft/actions dismiss-a-mix', [r.receipt?.message, r.ticket], ['Skipped 3', { itemIds: ['i1', 'i2', 'i3'], skippedBy: 'cmd-dismiss-a-mix', seen: { i1: YESTERDAY, i2: null } }])
+      // reopen-after-a-skip: its `before` is dismiss-a-mix's `after`.
+      const o = actionCase('reopen-after-a-skip', h, r.ticket!.itemIds, reopenDraftAction(todayPage, r.ticket!), false)
+      expect('draft/actions reopen-after-a-skip', o.receipt?.message, 'Brought back 3')
+      for (const id of ['i1', 'i2', 'i3']) { const i = itemOf(o.after, id); if (i.state !== 'open' || 'by' in i) throw new Error(`draft/actions reopen-after-a-skip: ${id} must be open, without by`) }
+    }
+    {
+      const h = actionWorld([carried('i1', flights)])
+      h.run(applyDraftAction(todayPage, ['i1'], TODAY))
+      expect('draft/actions skip-nothing', skip('skip-nothing', h, ['i1']).refusal, 'Nothing to skip')
+    }
+    {
+      // Skipped, its Undo taken, then applied: the notice's second Undo finds nothing that skip left.
+      const h = actionWorld([carried('i1', flights)])
+      h.run(skipDraftAction(todayPage, ['i1']), 'skip-1')
+      const ticket = draftTicket(h.ws, todayPage, ['i1'], 'skip-1')
+      h.run({ type: 'undo', targetOperationId: 'skip-1' })
+      h.run(applyDraftAction(todayPage, ['i1'], TODAY))
+      const r = actionCase('reopen-after-a-later-change', h, ['i1'], reopenDraftAction(todayPage, ticket), false)
+      expect('draft/actions reopen-after-a-later-change', r.refusal, 'Cannot undo after later changes; current values kept')
+    }
+  }
+}
+
 // ---- README ------------------------------------------------------------------------------------------------------------
 files.set('README.md', `# Core cases
 
@@ -1343,6 +2146,19 @@ The morning: the strip above a day's page. Today is Thu 2026-11-26 here too.
 - \`facts/cases.json\`: \`{ name, workspace, date, today, facts }\`, what \`dayFacts\` says of a day (\`null\`: no strip): \`{ events, dueSoon, notToday }\`, each row \`{ taskId, words, tag, setAside }\` with \`tag\` \`""\` for none.
 - \`notices/strip.json\`: \`{ date, today, text }\`, the notice \`planOnNotice\` gives Bring back and Another day.
 - \`facts-actions/\`: one file per strip command. \`{ before, taskId, date, today, action, receipt, after, notice }\`: \`action\` is the web's \`planOnAction\`, \`after\` holds the Undo marker \`{ operationId: "cmd-<name>", revision }\`, \`notice\` is \`planOnNotice\`'s.
+
+The day draft. A case that mirrors a web test names it as \`test\` and is built on that test's days (its today is Thu 2026-10-22); the others are on Thu 2026-11-26. Every input is made by the server's commands except these, written by hand because no command makes them: in \`documents.json\`, "an item with no state is not open, so the draft is settled", "ready with no items", "not json" and "the written-days draft: ready, no items, moreOpen empty"; in \`views.json\`, "a draft whose document does not parse", "rows applied before rows were kept" (its items' \`row\` removed), "the draft in Trash" and "a carried to-do with no createdOn has no since".
+
+- \`draft/recipe.json\`: \`{ recipe }\`, the web's \`DRAFT_RECIPE\`: how drafts are made now.
+- \`draft/documents.json\`: \`{ name, document, draft, settled, stale }\`, a draft page's stored string as \`draftOf\` reads it (\`null\` when it does not parse, and then no \`settled\` or \`stale\`), with \`draftSettled\` and \`draftStale\`.
+- \`draft/planning.json\`: \`{ name, test?, document, tasks, range: { start, end }, planningEnd, moreOpenAfter }\`, \`planningRange\`, \`planningEndIndex\` with \`tasks\` the known task ids, and \`moreOpenAfterIndex\` (\`-1\` for none).
+- \`draft/same-words.json\`: \`{ text, words }\`, \`sameWords\`, the words two lines are compared by (lowercased as JavaScript does in English).
+- \`draft/views.json\`: \`{ name, test?, workspace, pageId, view }\`, what \`draftView\` shows of the page's draft (\`null\` for none).
+- \`draft/skipped.json\`: \`{ name, test, workspace, day, skipped }\`, \`skippedDays\` as \`[taskId, [days]]\` in its order.
+- \`draft/skipped-labels.json\`: \`{ days, on, text, full }\`, \`skippedLabel\`, a band's skipped days in words.
+- \`draft/line.json\`: \`{ name, view, ask, offline, held, state, words }\`, the line's state (\`draftLineState\`, \`view\` as \`{ status, items: <count> }\` or \`null\`, \`ask\` one of \`in-flight\`, \`lost\`, \`failed\`, \`done\` or \`null\`) and its words (\`draftLineWords\`, with the view's count shown).
+- \`draft/notices.json\`: \`{ applied, skipped, notApplied, notSkipped, cantUndo }\`, the notices' words (\`appliedNotice\`, \`skippedNotice\` as \`[n, text]\`, and \`draftWords\`).
+- \`draft/actions/\`: one file per draft command. \`{ before, pageId, itemIds, today, action, receipt, refusal, after, ticket }\`: \`action\` is the web's builder's (\`applyDraftAction\`, \`skipDraftAction\`, \`reopenDraftAction\`, or an \`undo\`); \`receipt\` is \`null\` and \`refusal\` the server's message when it is refused, and \`after\` is then \`before\`; otherwise \`after\` holds the Undo marker \`{ operationId: "cmd-<name>", revision }\`. \`ticket\` is \`draftTicket\`'s for a skip, read from \`after\`, else \`null\`.
 
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:
 

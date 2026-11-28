@@ -11,7 +11,8 @@ import { createPortal } from 'react-dom'
 import { inlineText, type EditorNode } from '../domain/editor-document'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { Button, toast } from '@heroui/react'
-import { addDays, anotherDayOptions, daysBetween, fromIso, shortLabel, todayIso, weekday } from './dates'
+import { addDays, anotherDayOptions, shortLabel, todayIso } from './dates'
+import { appliedNotice as appliedWords, draftLineWords, draftWords, skippedLabel, skippedNotice } from './draft-words'
 import { NoticeRow } from './notice-row'
 import { noticeDate, pickDate } from './row-actions'
 import { useDayDraft as useRealDayDraft, type DecisionHooks, type DecisionOutcome, type DraftTicket } from './use-day-draft'
@@ -128,7 +129,7 @@ const REFUSAL_MS = 6000
  */
 function showSkipped(draft: DayDraft, ticket: DraftTicket): string {
   const day = todayIso(), n = ticket.itemIds.length, todos = Object.keys(ticket.seen).length
-  const title = n === 1 ? 'Skipped' : `Skipped ${n}`
+  const title = skippedNotice(n)
   const label = todos === n ? 'Move to' : todos === 1 ? 'Move the to-do to' : `Move ${todos} to-dos to`
   // The choices "Another day" offers, less Tomorrow: a plain ✕ already brings it back tomorrow.
   const days = anotherDayOptions(day).map(o => o.date).filter(d => d !== addDays(day, 1))
@@ -136,7 +137,7 @@ function showSkipped(draft: DayDraft, ticket: DraftTicket): string {
   const move = (date: LocalDate) => { toast.close(key); void moveTo(draft, ticket, date) }
   const options = (timeout: number) => ({
     timeout,
-    actionProps: { children: 'Undo', onPress: () => { toast.close(key); forget(ticket.itemIds); void draft.reopen(ticket).then(r => { if (r === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
+    actionProps: { children: 'Undo', onPress: () => { toast.close(key); forget(ticket.itemIds); void draft.reopen(ticket).then(r => { if (r === 'refused') toast(draftWords.cantUndo, { timeout: REFUSAL_MS }) }) } },
     description: todos ? (
       <NoticeRow label={label}>
         {days.map(d => <Button key={d} size="sm" variant="ghost" className="toast-row-button" aria-label={`${label} ${noticeDate(d)}`} onPress={() => move(d)}>{shortLabel(d)}</Button>)}
@@ -161,7 +162,7 @@ async function moveTo(draft: DayDraft, ticket: DraftTicket, date: LocalDate) {
   const text = `${moved > 1 ? `Moved ${moved} to` : 'Moved to'} ${noticeDate(date)}${left > 0 ? ` · ${left} changed elsewhere` : ''}`
   const key: string = toast(text, {
     timeout: NOTICE_MS,
-    actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.undoMove(r.operationId).then(u => { if (u === 'done') showSkipped(draft, ticket); else if (u === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
+    actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.undoMove(r.operationId).then(u => { if (u === 'done') showSkipped(draft, ticket); else if (u === 'refused') toast(draftWords.cantUndo, { timeout: REFUSAL_MS }) }) } },
   })
 }
 
@@ -218,7 +219,7 @@ function bandsOf(pageId: string, items: DraftItem[], decided: DayDraft['decided'
   for (const item of items) known.set(item.id, item)
   // Held: said for as long as it's held, not 4 s (Jazz 93fbd48f); a refusal's note lasts 4 s. A batch's rows say
   // nothing: they show as open again, and the draft line says it once (B109, Jazz e28c328e).
-  const heldNote = (id: string) => held[id] && !held[id].batch ? (held[id].kind === 'apply' ? 'Not applied · changed elsewhere' : held[id].kind === 'move' ? 'Not moved · changed elsewhere' : 'Not skipped · changed elsewhere') : undefined
+  const heldNote = (id: string) => held[id] && !held[id].batch ? (held[id].kind === 'apply' ? draftWords.notApplied : held[id].kind === 'move' ? 'Not moved · changed elsewhere' : draftWords.notSkipped) : undefined
   const noteOf = (id: string) => { const n = notes.get(id); return heldNote(id) || (n && n.until > now ? n.text : undefined) }
   for (const item of items) {
     seen.add(item.id)
@@ -254,9 +255,9 @@ function noteFor(items: DraftItem[], pageId: string, text: string) {
 /** `Applied · Undo` (§2.1.2): shown once the change is stored. A newer decision retires it: the workspace has one Undo. */
 function showApplied(draft: DayDraft, n: number, operationId: string): string {
   if (appliedNotice) toast.close(appliedNotice)
-  const key: string = toast(n === 1 ? 'Applied' : `Applied ${n}`, {
+  const key: string = toast(appliedWords(n), {
     timeout: NOTICE_MS,
-    actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.undoApply(operationId).then(u => { if (u === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
+    actionProps: { children: 'Undo', onPress: () => { toast.close(key); void draft.undoApply(operationId).then(u => { if (u === 'refused') toast(draftWords.cantUndo, { timeout: REFUSAL_MS }) }) } },
   })
   appliedNotice = key
   noticeOf.set(operationId, key)
@@ -303,7 +304,7 @@ async function applyAndTell(draft: DayDraft, pageId: string, wanted: string[]) {
   if (r.held && key) toast.close(key)
   const back = r.refused ? items : r.landed ? items.filter(i => r.dropped.includes(i.id)) : []
   if (back.length) {
-    noteFor(back, pageId, 'Not applied · changed elsewhere')
+    noteFor(back, pageId, draftWords.notApplied)
     if (key) toast.close(key)
     if (r.applied.length) showApplied(draft, r.applied.length, r.operationId)
   } else if (r.failed) noteFor(items, pageId, 'Not applied · try again')
@@ -332,7 +333,7 @@ async function skipAndTell(draft: DayDraft, pageId: string, wanted: string[]) {
     // (offline) keeps its skipped look, and the outbox's banner says it's waiting.
     for (const item of items) local.delete(item.id)
     if (key) toast.close(key)
-    noteFor(items, pageId, refused ? 'Not skipped · changed elsewhere' : 'Not skipped · try again')
+    noteFor(items, pageId, refused ? draftWords.notSkipped : 'Not skipped · try again')
   }
   bump()
 }
@@ -342,16 +343,6 @@ async function skipAndTell(draft: DayDraft, pageId: string, wanted: string[]) {
 /** The one row whose day choices are open, on any page: opening another's, Esc, or deciding this row closes them. */
 let choices: { itemId: string; pageId: string } | null = null
 const closeChoices = () => { choices = null; bump() }
-
-/**
- * "skipped Sat, Sun" (Jazz sketch §1): up to three days by weekday name, one more than six days before the draft's day
- * as its date ("11/14"); from four on, "skipped 5 times". `full` names every day, for the accessible name and hover.
- */
-export function skippedLabel(days: readonly LocalDate[], on: LocalDate): { text: string; full: string } {
-  const name = (d: LocalDate) => (daysBetween(d, on) > 6 ? `${fromIso(d).getMonth() + 1}/${fromIso(d).getDate()}` : weekday(d))
-  const full = `skipped ${days.map(d => shortLabel(d)).join(', ')}`
-  return { text: days.length > 3 ? `skipped ${days.length} times` : `skipped ${days.map(name).join(', ')}`, full }
-}
 
 /** The days Another day offers: the notice's Move to choices (less Tomorrow, which ✕ already means), after the draft's day. */
 const moveDays = (on: LocalDate): LocalDate[] => {
@@ -364,7 +355,7 @@ function showMoved(draft: DayDraft, item: DraftItem, date: LocalDate, operationI
   if (appliedNotice) toast.close(appliedNotice)
   const key: string = toast(`Moved to ${noticeDate(date)}`, {
     timeout: NOTICE_MS,
-    actionProps: { children: 'Undo', onPress: () => { toast.close(key); forget([item.id]); void draft.undoApply(operationId).then(u => { if (u === 'refused') toast("Can't undo · edited since", { timeout: REFUSAL_MS }) }) } },
+    actionProps: { children: 'Undo', onPress: () => { toast.close(key); forget([item.id]); void draft.undoApply(operationId).then(u => { if (u === 'refused') toast(draftWords.cantUndo, { timeout: REFUSAL_MS }) }) } },
   })
   // The workspace keeps one Undo: a newer decision's notice retires this one, as it does Applied's.
   appliedNotice = key
@@ -678,14 +669,15 @@ export function DraftLine({ page }: { page: Page }) {
   const n = ids.length
   const all = (fn: 'apply' | 'skip') => keepView(() => void (fn === 'apply' ? applyAndTell(draft, page.id, ids) : skipAndTell(draft, page.id, ids)))
   if (draft.state === 'none') return null
-  if (draft.state === 'preparing') return <p className="draft-line" role="status"><span className="draft-spin" aria-hidden="true" />Preparing…</p>
-  if (n > 0 && !shown) return <p className="draft-line" role="status">Suggestions ready<span className="sep"> · </span><button type="button" className="draft-primary" onClick={show}>Show</button></p>
+  const words = draftLineWords(draft.state, n, n > 0 && !shown)
+  if (words?.kind === 'preparing') return <p className="draft-line" role="status"><span className="draft-spin" aria-hidden="true" />{draftWords.preparing}</p>
+  if (words?.kind === 'held') return <p className="draft-line" role="status">{draftWords.ready}<span className="sep"> · </span><button type="button" className="draft-primary" onClick={show}>{draftWords.show}</button></p>
   // A held Apply all or Dismiss is one decision: said once, here, until Keep mine or Discard (B109, Jazz e28c328e).
   const batches = new Set(Object.values(draft.held).filter(h => h.batch).map(h => h.kind))
-  const heldLine = batches.size > 0 && <p className="draft-held" role="status">{[...batches].sort().map(k => k === 'apply' ? 'Not applied · changed elsewhere' : 'Not dismissed · changed elsewhere').join(' / ')}</p>
-  const counts = n > 0 && <span className="draft-seg">{n} suggestion{n === 1 ? '' : 's'}<span className="sep"> · </span><button type="button" className="draft-primary" onClick={() => all('apply')}>Apply all</button><span className="sep"> · </span><button type="button" onClick={() => all('skip')}>Dismiss</button></span>
-  const tail = draft.state === 'failed' ? <span className="draft-seg"><span className="draft-warn">Couldn’t draft</span><span className="sep"> · </span><button type="button" onClick={() => draft.retry()}>Retry</button></span>
-    : draft.state === 'offline' ? <span className="draft-seg">Offline</span> : null
+  const heldLine = batches.size > 0 && <p className="draft-held" role="status">{[...batches].sort().map(k => k === 'apply' ? draftWords.notApplied : 'Not dismissed · changed elsewhere').join(' / ')}</p>
+  const counts = words?.count && <span className="draft-seg">{words.count}<span className="sep"> · </span><button type="button" className="draft-primary" onClick={() => all('apply')}>{draftWords.applyAll}</button><span className="sep"> · </span><button type="button" onClick={() => all('skip')}>{draftWords.dismiss}</button></span>
+  const tail = words?.failed ? <span className="draft-seg"><span className="draft-warn">{draftWords.failed}</span><span className="sep"> · </span><button type="button" onClick={() => draft.retry()}>{draftWords.retry}</button></span>
+    : words?.offline ? <span className="draft-seg">{draftWords.offline}</span> : null
   if (!counts && !tail) return heldLine || null
   return <><p className="draft-line is-segs" role="status"><span className="draft-segs">{counts}{tail}</span></p>{heldLine}</>
 }
