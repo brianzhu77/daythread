@@ -134,6 +134,11 @@
     private(set) var draftReads = 0
     /// The workspace and page `draftView` was worked out from: an ask's change alone redraws the line without it.
     private var draftViewOf: (workspace: Workspace, pageId: String)?
+    /// `draftView`'s suggestions as guest rows, and the words they were placed on: worked out when `draftView` is, and
+    /// again only for other words.
+    private var draftGuests: (document: String, guests: [GuestRow])?
+    /// The guests the list was last handed, with the page or alone.
+    private var handedGuests: [GuestRow] = []
     private let heldButton = UIBarButtonItem(image: UIImage(systemName: "exclamationmark.triangle"))
     private let moreButton = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
     private lazy var previousButton = symbolButton("chevron.left", label: "Previous day") { $0.step(by: -1) }
@@ -191,7 +196,11 @@
     private var actionOut: ActionOrigin? {
       didSet {
         guard actionOut != oldValue else { return }
-        if case .row(let rowID) = actionOut { document.actingRow = rowID } else { document.actingRow = nil }
+        // A suggestion's id dims its guest row; Apply all and Dismiss dim no single row.
+        switch actionOut {
+        case .row(let id), .suggestion(let id): document.actingRow = id
+        case .strip, .draftLine, nil: document.actingRow = nil
+        }
         document.pausesRowActions = actionOut != nil
         if case .strip(let taskId) = actionOut { factsModel.acting = taskId } else { factsModel.acting = nil }
         updateStripEnabled()
@@ -256,6 +265,9 @@
       heldButton.tintColor = .systemRed
       document.onTick = { [weak self] taskId in self?.tick(taskId) }
       document.onRowAction = { [weak self] request in self?.rowRequested(request) }
+      document.onGuestAction = { [weak self] itemId, actionID in
+        self?.suggestionTapped(itemId, actionID == "apply" ? .apply : .skip)
+      }
       notice.onUndo = { [weak self] operationId in self?.undo(operationId) }
       notice.onChange = { [weak self] _ in self?.noteUndoSlot() }
       document.onChange = { [weak self] document, singleDeleteIds in self?.wrote(document, singleDeleteIds) }
@@ -395,6 +407,7 @@
         // No copy is shown (signed out, or another account's): nothing of the last account's is said above the page.
         showFacts(.none)
         showDraft(of: nil, in: nil)
+        handGuests([])
         updateStripEnabled()
         return
       }
@@ -411,7 +424,10 @@
         // Until the engine has made today's page, an empty one stands in for it. Shown first: what he was composing
         // on the page before is reported for that page.
         if let page = Self.emptyPage(on: date) {
-          document.show(page: page, in: workspace, index: todoIndex(of: workspace))
+          document.show(page: page, in: workspace, index: todoIndex(of: workspace), guests: [])
+          handedGuests = []
+        } else {
+          handGuests([])
         }
         closePage()
         drawnWith = workspace
@@ -465,8 +481,11 @@
         let mine = document.document
       else {
         let previous = openPage?.id
+        let guests = suggestionGuests(on: page.document, of: page.id, in: workspace)
         // Another page: what he was composing on the one before is reported for that one, so `openPage` moves after.
-        document.edit(page: page, in: workspace, index: todoIndex(of: workspace), afresh: openPage != nil)
+        document.edit(
+          page: page, in: workspace, index: todoIndex(of: workspace), afresh: openPage != nil, guests: guests)
+        handedGuests = guests
         if let previous { model.closed(previous) }
         model.opened(page.id)
         openPage = OpenPage(id: page.id, owner: owner, startedFrom: page.document)
@@ -483,16 +502,22 @@
       // A draft behind the server's page is the stored one, older than the screen: it is merged, never taken.
       let drawnWith: Workspace
       if !ahead, draft?.state != .behind, !page.document.utf8.elementsEqual(mine.utf8) {
-        replaceList(with: page.document, in: workspace)
+        replaceList(
+          with: page.document, in: workspace,
+          guests: suggestionGuests(on: page.document, of: page.id, in: workspace))
         if draft != nil { openPage?.startedFrom = page.document }
         listWorkspace = workspace
         drawnWith = workspace
       } else {
-        // His words stay; the list is handed the new workspace only when it would draw a row of them differently.
+        // His words stay; the list is handed the new workspace only when it would draw a row of them differently, and
+        // the guests alone when only they changed.
         let drawn = workspace.drawing(draft: mine, of: page.id)
+        let guests = suggestionGuests(on: mine, of: page.id, in: drawn)
         if reading(mine, on: page.date, in: drawn) != listWorkspace.map({ reading(mine, on: page.date, in: $0) }) {
-          replaceList(with: mine, in: drawn)
+          replaceList(with: mine, in: drawn, guests: guests)
           listWorkspace = drawn
+        } else {
+          handGuests(guests)
         }
         drawnWith = drawn
       }
@@ -533,20 +558,50 @@
       guard let page, let workspace else {
         draftView = nil
         draftViewOf = nil
+        draftGuests = nil
         factsModel.show(line: nil)
         updateStripHidden()
         return
       }
-      if draftViewOf.map({ $0.pageId.utf8.elementsEqual(page.id.utf8) && $0.workspace == workspace }) != true {
-        draftReads += 1
-        draftView = DraftView.of(page: page, in: workspace, index: todoIndex(of: workspace))
-        draftViewOf = (workspace, page.id)
-      }
+      readDraft(of: page, in: workspace)
       let state = DraftLine.state(
         view: draftView, ask: model.draftAsk(of: page.id), offline: model.state.offline, at: model.now())
       // 1d.2a never holds suggestions back while he types (§13.6 is 1d.2b's).
       factsModel.show(line: DraftLine.of(state, shown: draftView?.suggestions.count ?? 0, held: false))
       updateStripHidden()
+    }
+
+    /// Works `draftView` out for `page` as `workspace` draws it, unless it already is for that page and workspace.
+    private func readDraft(of page: Page, in workspace: Workspace) {
+      guard draftViewOf.map({ $0.pageId.utf8.elementsEqual(page.id.utf8) && $0.workspace == workspace }) != true
+      else { return }
+      draftReads += 1
+      draftView = DraftView.of(page: page, in: workspace, index: todoIndex(of: workspace))
+      draftViewOf = (workspace, page.id)
+      draftGuests = nil
+    }
+
+    /// The suggestions of today's page `pageId`, as `workspace` draws it, as guest rows placed on `document`: the words
+    /// handed to the list in the same call, so the list's rows and their places are numbered alike. `draftView` is
+    /// worked out here when the list is handed today's page (before the line reads it), so the guests come from the
+    /// same reading of the same workspace; none on another day. Called only when a state is drawn or a page merged.
+    private func suggestionGuests(on document: String, of pageId: String, in workspace: Workspace) -> [GuestRow] {
+      let today = model.today
+      guard date == today, let page = workspace.page(pageId), page.date == today else { return [] }
+      readDraft(of: page, in: workspace)
+      guard let suggestions = draftView?.suggestions, !suggestions.isEmpty else { return [] }
+      if let drawn = draftGuests, drawn.document.utf8.elementsEqual(document.utf8) { return drawn.guests }
+      let blocks = Document.blocks(document)
+      let guests = suggestions.compactMap { $0.guest(on: blocks) }
+      draftGuests = (document, guests)
+      return guests
+    }
+
+    /// The guests alone, when the page's words stay: handed only when they changed.
+    private func handGuests(_ guests: [GuestRow]) {
+      guard guests != handedGuests else { return }
+      handedGuests = guests
+      document.setGuestRows(guests)
     }
 
     /// The strip takes no room when it has nothing at all to show; showing or hiding it changes its height.
@@ -600,10 +655,12 @@
       return index
     }
 
-    /// Every page replace hands the list, so tests can tell a replace that happened from one that did not.
-    private func replaceList(with page: String, in workspace: Workspace) {
+    /// Every page replace hands the list, so tests can tell a replace that happened from one that did not. `guests` go
+    /// in the same call, placed on `page`: a suggestion leaves in the update that brings its row.
+    private func replaceList(with page: String, in workspace: Workspace, guests: [GuestRow]) {
       replacedDocuments.append(page)
-      document.replace(document: page, in: workspace, index: todoIndex(of: workspace))
+      document.replace(document: page, in: workspace, index: todoIndex(of: workspace), guests: guests)
+      handedGuests = guests
       if let ids = openPage?.singleDeleteIds, !ids.isEmpty {
         openPage?.singleDeleteIds = DraftMerging.rowsStillRemoved(ids, from: page)
       }
@@ -669,7 +726,11 @@
         }
         let merged = DraftMerging.merged(base: pair.baseDocument, mine: mine, theirs: pair.theirs)
         let drawn = workspace.drawing(draft: merged.document, of: pageId)
-        self.replaceList(with: merged.document, in: drawn)
+        // The suggestions are placed again on the merged page, and handed with it.
+        self.replaceList(
+          with: merged.document, in: drawn,
+          guests: self.suggestionGuests(on: merged.document, of: pageId, in: drawn))
+        if let page = drawn.page(pageId), self.draftView != nil { self.showDraft(of: page, in: drawn) }
         self.listWorkspace = drawn
         self.openPage?.startedFrom = merged.document
         if merged.bothChanged {
@@ -939,7 +1000,11 @@
         if document.document.flatMap({ Self.block(rowID, in: $0) }) == nil { document.actingRow = nil }
       case .strip(let taskId):
         if !factsModel.facts.lists(taskId) { factsModel.acting = nil }
-      case .suggestion, .draftLine:
+      case .suggestion(let itemId):
+        if draftView?.suggestions.contains(where: { $0.id.utf8.elementsEqual(itemId.utf8) }) != true {
+          document.actingRow = nil
+        }
+      case .draftLine:
         break
       }
       Task { [weak self, model] in
@@ -1401,6 +1466,34 @@
       let top = min(max(insets.top, 0), bounds.height)
       let height = max(bounds.height - top - max(insets.bottom, 0), 0)
       content.frame = CGRect(x: 0, y: top, width: bounds.width, height: height)
+    }
+  }
+
+  extension DraftView.Suggestion {
+    /// The guest row it is drawn as on a page of `blocks` (the top-level blocks the list draws): after the last row of
+    /// its anchor's whole block, a fill too in 1d.2a (no anchor: before the first line); nil, not drawn, when `blocks`
+    /// do not hold its anchor (his typing took it away since the state it was placed on: drawn again at the next).
+    func guest(on blocks: [Block]) -> GuestRow? {
+      let place: GuestRow.Place
+      if let anchorId {
+        guard let last = BlockRows.lastRowID(ofBlock: anchorId, in: blocks) else { return nil }
+        place = .after(lineID: last)
+      } else {
+        place = .after(lineID: nil)
+      }
+      let kind: GuestRow.Kind =
+        switch mark {
+        case .todo: .todo
+        case .bullet: .bullet
+        case .line: .line
+        }
+      return GuestRow(
+        id: id, place: place, kind: kind, depth: 0, words: words, detail: detail ?? "", spokenDetail: spokenDetail,
+        spokenKind: "Suggestion",
+        actions: [
+          GuestRow.Action(id: "apply", symbol: "checkmark", label: applyLabel, spokenName: "Apply"),
+          GuestRow.Action(id: "skip", symbol: "xmark", label: skipLabel, spokenName: "Skip"),
+        ])
     }
   }
 #endif

@@ -350,8 +350,8 @@ enum SuggestionArrival: String, CaseIterable, Sendable {
       asksForDayDrafts: arrival == .retryReplacesAFailedDraft)
     let day = try RowScreen(h.model)
     try await settled(day)
-    let list = try #require(day.screen.list)
-    list.setContentOffset(CGPoint(x: 0, y: 240 - list.adjustedContentInset.top), animated: false)
+    // Line 8 on screen, under the suggestions, however tall they are.
+    #expect(day.editor.scroll(toRow: "f8", animated: false))
     try await settled(day)
     let typed = try day.line("Line 8")
     #expect(typed.becomeFirstResponder())
