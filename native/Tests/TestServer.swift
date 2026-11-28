@@ -32,6 +32,9 @@ actor TestServer: ServerTransport {
   private var drafts: [Result<DayDraftReply, TransportError>] = []
   /// The dates day drafts were asked for, in the order asked.
   private(set) var draftDates: [LocalDate] = []
+  private var holdingDrafts = false
+  private var heldDrafts: [CheckedContinuation<Void, Never>] = []
+  private var draftArrivals: [CheckedContinuation<Void, Never>] = []
 
   init(_ script: [Reply] = []) {
     self.script = script
@@ -80,6 +83,28 @@ actor TestServer: ServerTransport {
     await withCheckedContinuation { arrivals.append($0) }
   }
 
+  /// Every day draft asked for from now on waits for `releaseDrafts`; `hold` and `release` do not touch them.
+  func holdDrafts() {
+    holdingDrafts = true
+  }
+
+  /// The day drafts waiting to be released.
+  var waitingDrafts: Int { heldDrafts.count }
+
+  /// Lets every waiting day draft through, and stops holding them.
+  func releaseDrafts() {
+    holdingDrafts = false
+    let waiting = heldDrafts
+    heldDrafts = []
+    for ask in waiting { ask.resume() }
+  }
+
+  /// Returns once a day draft is waiting to be released.
+  func draftHeld() async {
+    if !heldDrafts.isEmpty { return }
+    await withCheckedContinuation { draftArrivals.append($0) }
+  }
+
   // MARK: ServerTransport
 
   func signIn(email: String, password: String, timezone: String) async throws -> Session {
@@ -123,6 +148,15 @@ actor TestServer: ServerTransport {
   /// With no answer queued it fails for lack of network, and is not counted as unscripted.
   func dayDraft(token: String?, date: LocalDate, operationId: String) async throws -> DayDraftReply {
     draftDates.append(date)
+    if holdingDrafts {
+      await withCheckedContinuation { ask in
+        heldDrafts.append(ask)
+        let waiting = draftArrivals
+        draftArrivals = []
+        for arrival in waiting { arrival.resume() }
+      }
+    }
+    // Its answer is taken once released, so one queued while it was held is the one it gets.
     guard !drafts.isEmpty else { throw TransportError.offline }
     return try drafts.removeFirst().get()
   }

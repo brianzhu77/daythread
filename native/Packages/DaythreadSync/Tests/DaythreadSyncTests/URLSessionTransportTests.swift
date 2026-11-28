@@ -445,6 +445,13 @@ private func expectError(_ expected: TransportError, _ call: () async throws -> 
     #expect(request.bodyText == #"{"date":"2026-11-26","operationId":"op"}"#)
   }
 
+  @Test func a_day_draft_waits_sixty_seconds_for_its_answer() async throws {
+    let server = StubServer()
+    server.answer(status: 200, json: #"{"setDraft":null,"owner":"user-1","modelOn":false,"remakeFailed":false}"#)
+    _ = try await ask(server)
+    #expect(try #require(server.requests.first).timeout == 60)
+  }
+
   @Test func day_draft_reads_the_reply() async throws {
     let server = StubServer()
     server.answer(
@@ -490,6 +497,19 @@ private func expectError(_ expected: TransportError, _ call: () async throws -> 
       status: 200,
       json: reply([
         "setDraft": .number("5"), "owner": .string("user-1"), "modelOn": .bool(false), "remakeFailed": .bool(false),
+      ]))
+    await expectError(.unreadable) { _ = try await ask(server) }
+
+    // `setDraft` is always written, null when the draft stands; one left out is not a draft that stands.
+    server.answer(
+      status: 200, json: reply(["owner": .string("user-1"), "modelOn": .bool(false), "remakeFailed": .bool(false)]))
+    await expectError(.unreadable) { _ = try await ask(server) }
+
+    // A flag may be left out, but one written must be a boolean.
+    server.answer(
+      status: 200,
+      json: reply([
+        "setDraft": .null, "owner": .string("user-1"), "modelOn": .string("yes"), "remakeFailed": .bool(false),
       ]))
     await expectError(.unreadable) { _ = try await ask(server) }
   }
