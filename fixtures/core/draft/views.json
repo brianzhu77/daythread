@@ -4856,5 +4856,410 @@
       "planningEndId": "day:2026-11-26:h0",
       "moreOpenAfterId": "day:2026-11-26:r0"
     }
+  },
+  {
+    "name": "a carried to-do planned on a later day drops out, and from \"more open\"",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-25",
+          "type": "daily",
+          "date": "2026-11-25",
+          "title": "2026-11-25",
+          "document": "[{\"id\":\"day:2026-11-25:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-25:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"y1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y1\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the flights\",\"styles\":{}}],\"children\":[]},{\"id\":\"y2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y2\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"Water the plants\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "draft:day:2026-11-26",
+          "type": "draft",
+          "date": null,
+          "title": "",
+          "parentId": "day:2026-11-26",
+          "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:y1\",\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i3\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:y2\",\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[\"editor-task:y1\",\"editor-task:y2\"],\"recipe\":5}"
+        },
+        {
+          "id": "day:2026-11-27",
+          "type": "daily",
+          "date": "2026-11-27",
+          "title": "2026-11-27",
+          "document": "[{\"id\":\"day:2026-11-27:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"76a4bf31-689f-47f2-9e52-346142534cd7\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y1\",\"role\":\"plan\",\"planDate\":\"2026-11-27\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the flights\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-27:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-27:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-27\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-27:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-27:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-27:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-27:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-27:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-27:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:y1",
+          "title": "Book the flights",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-25",
+          "sourcePageId": "day:2026-11-25"
+        },
+        {
+          "id": "editor-task:y2",
+          "title": "Water the plants",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-25",
+          "sourcePageId": "day:2026-11-25"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-6",
+        "revision": 6
+      }
+    },
+    "pageId": "day:2026-11-26",
+    "view": {
+      "status": "ready",
+      "items": [
+        {
+          "id": "i3",
+          "kind": "after",
+          "anchorId": "day:2026-11-26:h0",
+          "block": {
+            "id": "draft-row:i3",
+            "type": "task",
+            "props": {
+              "taskId": "editor-task:y2",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Water the plants",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "taskId": "editor-task:y2",
+          "since": "2026-11-25"
+        }
+      ],
+      "moreOpen": [
+        {
+          "taskId": "editor-task:y2",
+          "title": "Water the plants",
+          "since": "2026-11-25"
+        }
+      ],
+      "planningEndId": "day:2026-11-26:h0",
+      "moreOpenAfterId": "day:2026-11-26:r0"
+    }
+  },
+  {
+    "name": "a carried to-do cancelled elsewhere drops out, and from \"more open\"",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-25",
+          "type": "daily",
+          "date": "2026-11-25",
+          "title": "2026-11-25",
+          "document": "[{\"id\":\"day:2026-11-25:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-25:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"y1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y1\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the flights\",\"styles\":{}}],\"children\":[]},{\"id\":\"y2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y2\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"Water the plants\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "draft:day:2026-11-26",
+          "type": "draft",
+          "date": null,
+          "title": "",
+          "parentId": "day:2026-11-26",
+          "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:y1\",\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i3\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:y2\",\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[\"editor-task:y1\",\"editor-task:y2\"],\"recipe\":5}"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:y1",
+          "title": "Book the flights",
+          "status": "cancelled",
+          "version": 2,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-25",
+          "sourcePageId": "day:2026-11-25",
+          "doneOn": null
+        },
+        {
+          "id": "editor-task:y2",
+          "title": "Water the plants",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-25",
+          "sourcePageId": "day:2026-11-25"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-6",
+        "revision": 6
+      }
+    },
+    "pageId": "day:2026-11-26",
+    "view": {
+      "status": "ready",
+      "items": [
+        {
+          "id": "i3",
+          "kind": "after",
+          "anchorId": "day:2026-11-26:h0",
+          "block": {
+            "id": "draft-row:i3",
+            "type": "task",
+            "props": {
+              "taskId": "editor-task:y2",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Water the plants",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "taskId": "editor-task:y2",
+          "since": "2026-11-25"
+        }
+      ],
+      "moreOpen": [
+        {
+          "taskId": "editor-task:y2",
+          "title": "Water the plants",
+          "since": "2026-11-25"
+        }
+      ],
+      "planningEndId": "day:2026-11-26:h0",
+      "moreOpenAfterId": "day:2026-11-26:r0"
+    }
+  },
+  {
+    "name": "a carried to-do set aside drops out, and from \"more open\"",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-25",
+          "type": "daily",
+          "date": "2026-11-25",
+          "title": "2026-11-25",
+          "document": "[{\"id\":\"day:2026-11-25:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-25:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"y1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y1\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the flights\",\"styles\":{}}],\"children\":[]},{\"id\":\"y2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y2\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"Water the plants\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "draft:day:2026-11-26",
+          "type": "draft",
+          "date": null,
+          "title": "",
+          "parentId": "day:2026-11-26",
+          "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:y1\",\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i3\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:y2\",\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[\"editor-task:y1\",\"editor-task:y2\"],\"recipe\":5}"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:y1",
+          "title": "Book the flights",
+          "status": "open",
+          "version": 2,
+          "paused": true,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-25",
+          "sourcePageId": "day:2026-11-25"
+        },
+        {
+          "id": "editor-task:y2",
+          "title": "Water the plants",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-25",
+          "sourcePageId": "day:2026-11-25"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-6",
+        "revision": 6
+      }
+    },
+    "pageId": "day:2026-11-26",
+    "view": {
+      "status": "ready",
+      "items": [
+        {
+          "id": "i3",
+          "kind": "after",
+          "anchorId": "day:2026-11-26:h0",
+          "block": {
+            "id": "draft-row:i3",
+            "type": "task",
+            "props": {
+              "taskId": "editor-task:y2",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Water the plants",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "taskId": "editor-task:y2",
+          "since": "2026-11-25"
+        }
+      ],
+      "moreOpen": [
+        {
+          "taskId": "editor-task:y2",
+          "title": "Water the plants",
+          "since": "2026-11-25"
+        }
+      ],
+      "planningEndId": "day:2026-11-26:h0",
+      "moreOpenAfterId": "day:2026-11-26:r0"
+    }
+  },
+  {
+    "name": "a line decided on another day in other case, spacing and stop is not offered",
+    "workspace": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "timezone": "America/Vancouver",
+      "pages": [
+        {
+          "id": "day:2026-11-25",
+          "type": "daily",
+          "date": "2026-11-25",
+          "title": "2026-11-25",
+          "document": "[{\"id\":\"day:2026-11-25:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-25:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"y1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y1\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the flights\",\"styles\":{}}],\"children\":[]}]",
+          "editedAt": "2026-11-26T09:01:00.000Z"
+        },
+        {
+          "id": "day:2026-11-26",
+          "type": "daily",
+          "date": "2026-11-26",
+          "title": "2026-11-26",
+          "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+        },
+        {
+          "id": "draft:day:2026-11-25",
+          "type": "draft",
+          "date": null,
+          "title": "",
+          "parentId": "day:2026-11-25",
+          "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"y1\",\"anchor\":\"day:2026-11-25:h0\",\"place\":\"after\",\"block\":{\"id\":\"yb1\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"pack the bags.\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"skipped\",\"by\":\"op-5\"}],\"moreOpen\":[],\"recipe\":2}"
+        },
+        {
+          "id": "draft:day:2026-11-26",
+          "type": "draft",
+          "date": null,
+          "title": "",
+          "parentId": "day:2026-11-26",
+          "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b1\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Pack the  bags\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b2\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the bank\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[],\"recipe\":2}"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "editor-task:y1",
+          "title": "Book the flights",
+          "status": "open",
+          "version": 1,
+          "paused": false,
+          "deadlineOn": null,
+          "attentionOn": null,
+          "createdOn": "2026-11-25",
+          "sourcePageId": "day:2026-11-25"
+        }
+      ],
+      "deletedTasks": [],
+      "receipts": {},
+      "undo": {
+        "operationId": "op-6",
+        "revision": 6
+      }
+    },
+    "pageId": "day:2026-11-26",
+    "view": {
+      "status": "ready",
+      "items": [
+        {
+          "id": "i2",
+          "kind": "after",
+          "anchorId": "day:2026-11-26:h0",
+          "block": {
+            "id": "b2",
+            "type": "task",
+            "props": {
+              "taskId": "",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Call the bank",
+                "styles": {}
+              }
+            ],
+            "children": []
+          }
+        }
+      ],
+      "moreOpen": [],
+      "planningEndId": "day:2026-11-26:h0",
+      "moreOpenAfterId": "day:2026-11-26:r0"
+    }
   }
 ]

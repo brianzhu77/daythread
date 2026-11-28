@@ -37,7 +37,7 @@ import type { Action, Command, Page, Task, Workspace } from '../src/domain/types
 if (Intl.DateTimeFormat().resolvedOptions().timeZone !== 'UTC') throw new Error('the time zone is not fixed: scripts/fixed-time-zone.ts must be the first import')
 // sameWords lowercases in the host's locale (toLocaleLowerCase); the app lowercases as JavaScript does in English, so the
 // cases are made only in an English one.
-if (!Intl.DateTimeFormat().resolvedOptions().locale.startsWith('en')) throw new Error(`the locale is ${Intl.DateTimeFormat().resolvedOptions().locale}: the draft's cases are made in an English one`)
+if (!Intl.DateTimeFormat().resolvedOptions().locale.startsWith('en')) throw new Error(`the locale is ${Intl.DateTimeFormat().resolvedOptions().locale}: the draft's cases are made in an English one. Run with LANG=en_US.UTF-8, and unset LC_ALL if it is set (set but empty, it resolves to "und")`)
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dir = join(root, 'fixtures', 'core')
@@ -1405,7 +1405,7 @@ const factsOf = (ws: Workspace, date: string, today = TODAY) => dayFacts(getDayV
     planningCase('no heading, no to-do row', [para('n', text('notes')), bullet('b', text('more'))], [], [0, 2, 0, -1], moreOpenTest)
     planningCase('a planning part that is only its heading', [heading('p', 'Plan'), heading('n', 'Notes'), para('x', text('words'))], [], [0, 1, 1, 0], moreOpenTest)
     planningCase('one closing divider', [...template().slice(0, 10), level(heading('d', 'Drop'), 3), para('dl'), divider('hr'), ...template().slice(10)], [], [0, 13, 1, 11], moreOpenTest)
-    planningCase('two closing dividers', [...template().slice(0, 10), level(heading('d', 'Drop'), 3), para('dl'), divider('hr1'), divider('hr2'), ...template().slice(10)], [], [0, 14, 1, 11])
+    planningCase('two closing dividers', [...template().slice(0, 10), level(heading('d', 'Drop'), 3), para('dl'), divider('hr1'), divider('hr2'), ...template().slice(10)], [], [0, 14, 1, 11], moreOpenTest)
     planningCase('plan rows of a known and of an unknown task directly under the heading', [heading('a', 'Plan'), todo('k', 'Known'), todo('u', 'Unknown'), para('p', text('words')), heading('n', 'Notes')], [taskOf('k')], [0, 4, 2, 3])
     planningCase('a heading with no level reads as level 1', [{ id: 'a', type: 'heading', props: {}, content: [text('Plan')], children: [] }, todo('b', 'Write'), heading('c', 'Notes'), para('d', text('words'))], [], [0, 4, 1, 3])
     put('draft/planning.json', cases)
@@ -1415,7 +1415,8 @@ const factsOf = (ws: Workspace, date: string, today = TODAY) => dayFacts(getDayV
   {
     const texts = ['Call Mom.', '  call   mom  ', 'CALL MOM!', 'Call mom。', 'Call mom！', 'Done. . ', '...', '', 'a b', 'a　b', 'a\u0085b', 'a​b', 'İstanbul', 'ΟΔΟΣ', 'Straße']
     const cases = texts.map(t => ({ text: t, words: sameWords(t) }))
-    expect('draft/same-words', cases.slice(0, 5).map(c => c.words), ['call mom', 'call mom', 'call mom', 'call mom', 'call mom'])
+    // Every output is held, the case-folding ones too, so another ICU fails here rather than quietly changing the file.
+    expect('draft/same-words', cases.map(c => c.words), ['call mom', 'call mom', 'call mom', 'call mom', 'call mom', 'done', '', '', 'a b', 'a b', 'a\u0085b', 'a​b', 'i̇stanbul', 'οδος','straße'])
     put('draft/same-words.json', cases)
   }
 
@@ -1801,6 +1802,7 @@ const factsOf = (ws: Workspace, date: string, today = TODAY) => dayFacts(getDayV
       { const h = odd(); store(h, 'preparing'); viewCase('preparing', null, h, todayPage, v => expect('draft/views preparing', [v!.status, ids(v)], ['preparing', ['i1', 'i2']])) }
       {
         const h = odd(); store(h, 'ready')
+        // Written by hand: no command puts a draft page in Trash on its own (delete-page refuses a draft page).
         setRaw(h, draftPageId(todayPage), p => ({ ...p, trashedAt: stamped(5) }))
         viewCase('the draft in Trash', null, h, todayPage, v => expect('draft/views draft in Trash', v, null))
       }
@@ -1814,6 +1816,7 @@ const factsOf = (ws: Workspace, date: string, today = TODAY) => dayFacts(getDayV
       }
       {
         const h = odd(); store(h, 'ready')
+        // Written by hand: every command gives a to-do its createdOn; a task from older data may have none.
         h.ws = { ...h.ws, tasks: h.ws.tasks.map(t => { if (t.id !== flights) return t; const { createdOn: _createdOn, ...rest } = t; return rest as Task }) }
         viewCase('a carried to-do with no createdOn has no since', null, h, todayPage, v => expect('draft/views no createdOn', v!.items.map(i => [i.id, i.since ?? null]), [['i1', null], ['i2', null]]))
       }
@@ -1827,6 +1830,41 @@ const factsOf = (ws: Workspace, date: string, today = TODAY) => dayFacts(getDayV
         h.save(todayPage, d => underHeading(d, 'TODO', { ...bullet('p1', text('Errands')), children: [bullet('p2', text('Post office'))] }), { today: TODAY, at: stamped(2) })
         store(h, 'ready', [draftItem('i1', { anchor: 'p2', taskId: flights })])
         viewCase('an anchor that is a nested block\'s id goes to the planning end', null, h, todayPage, v => expect('draft/views nested anchor', v!.items.map(i => [i.id, i.anchorId]), [['i1', headingId]]))
+      }
+      // A carried to-do the draft no longer offers for a reason other than done, beside one it still offers (Water the plants).
+      const withControl = (h: World) => {
+        saveRows(h, YESTERDAY, plan('y2', 'Water the plants', YESTERDAY))
+        const water = taskOf('y2')
+        setDraft(h, todayPage, 'ready', [draftItem('i1', { anchor: headingId, taskId: flights }), draftItem('i3', { anchor: headingId, taskId: water })], { recipe: DRAFT_RECIPE, moreOpen: [flights, water], allowedTaskIds: [flights, water] })
+        return water
+      }
+      const hidden = (name: string, water: string) => (v: ReturnType<typeof draftView>) => {
+        expect(`draft/views ${name}: the suggestions`, ids(v), ['i3'])
+        expect(`draft/views ${name}: more open`, v!.moreOpen.map(m => m.taskId), [water])
+      }
+      {
+        const h = odd(), water = withControl(h)
+        h.run({ type: 'plan-task', taskId: flights, date: '2026-11-27', today: TODAY })
+        viewCase('a carried to-do planned on a later day drops out, and from "more open"', null, h, todayPage, hidden('planned later', water))
+      }
+      {
+        const h = odd(), water = withControl(h)
+        h.run({ type: 'task-status', taskId: flights, status: 'cancelled', today: TODAY })
+        viewCase('a carried to-do cancelled elsewhere drops out, and from "more open"', null, h, todayPage, hidden('cancelled', water))
+      }
+      {
+        const h = odd(), water = withControl(h)
+        setAside(h, flights)
+        viewCase('a carried to-do set aside drops out, and from "more open"', null, h, todayPage, hidden('set aside', water))
+      }
+      {
+        // Lines of drafts made before lines kept where they came from (recipe 2) are known by their words, as sameWords reads them.
+        const h = odd()
+        setDraft(h, dayId(YESTERDAY), 'ready', [draftItem('y1', { anchor: `${dayId(YESTERDAY)}:h0`, block: lineBlock('yb1', 'task', 'pack the bags.') })], { recipe: 2 })
+        h.run({ type: 'skip-draft', pageId: dayId(YESTERDAY), itemIds: ['y1'] })
+        setDraft(h, todayPage, 'ready', [draftItem('i1', { anchor: headingId, block: lineBlock('b1', 'task', 'Pack the  bags') }), draftItem('i2', { anchor: headingId, block: lineBlock('b2', 'task', 'Call the bank') })], { recipe: 2 })
+        expect('draft/views same words: they read the same', sameWords('pack the bags.'), sameWords('Pack the  bags'))
+        viewCase('a line decided on another day in other case, spacing and stop is not offered', null, h, todayPage, v => expect('draft/views same words', ids(v), ['i2']))
       }
     }
     put('draft/views.json', cases)
@@ -2109,7 +2147,7 @@ The morning: the strip above a day's page. Today is Thu 2026-11-26 here too.
 - \`notices/strip.json\`: \`{ date, today, text }\`, the notice \`planOnNotice\` gives Bring back and Another day.
 - \`facts-actions/\`: one file per strip command. \`{ before, taskId, date, today, action, receipt, after, notice }\`: \`action\` is the web's \`planOnAction\`, \`after\` holds the Undo marker \`{ operationId: "cmd-<name>", revision }\`, \`notice\` is \`planOnNotice\`'s.
 
-The day draft. A case that mirrors a web test names it as \`test\` and is built on that test's days (its today is Thu 2026-10-22); the others are on Thu 2026-11-26.
+The day draft. A case that mirrors a web test names it as \`test\` and is built on that test's days (its today is Thu 2026-10-22); the others are on Thu 2026-11-26. Every input is made by the server's commands except these, written by hand because no command makes them: in \`documents.json\`, "an item with no state is not open, so the draft is settled", "ready with no items", "not json" and "the written-days draft: ready, no items, moreOpen empty"; in \`views.json\`, "a draft whose document does not parse", "rows applied before rows were kept" (its items' \`row\` removed), "the draft in Trash" and "a carried to-do with no createdOn has no since".
 
 - \`draft/recipe.json\`: \`{ recipe }\`, the web's \`DRAFT_RECIPE\`: how drafts are made now.
 - \`draft/documents.json\`: \`{ name, document, draft, settled, stale }\`, a draft page's stored string as \`draftOf\` reads it (\`null\` when it does not parse, and then no \`settled\` or \`stale\`), with \`draftSettled\` and \`draftStale\`.
