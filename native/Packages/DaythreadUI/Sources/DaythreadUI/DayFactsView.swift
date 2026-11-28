@@ -24,6 +24,47 @@
     @ObservationIgnored var onPickDate: ((_ taskId: String) -> Void)?
     /// How many times `show` changed `facts` (tests read it).
     @ObservationIgnored private(set) var changes = 0
+    /// The draft's line, the strip's first row (§13.4). Set only through `show(line:)`; nil: no line.
+    private(set) var line: DraftLine?
+    /// Task 10 sends the draft's decisions; until then nothing listens.
+    @ObservationIgnored var onApplyAll: (() -> Void)?
+    @ObservationIgnored var onDismiss: (() -> Void)?
+    @ObservationIgnored var onRetry: (() -> Void)?
+    /// The line's words and each of its buttons, in the hosting view's coordinates. Not observed, as `menuFrames`:
+    /// tests read them, since a hosted SwiftUI view gives a unit test no frames of its own.
+    @ObservationIgnored private(set) var lineFrames: [DraftLinePart: CGRect] = [:]
+
+    /// Nothing to draw: no facts and no line.
+    var isEmpty: Bool { facts.isEmpty && line == nil }
+
+    /// Takes `line` when it differs from the one shown; returns whether it did.
+    @discardableResult func show(line: DraftLine?) -> Bool {
+      guard line != self.line else { return false }
+      self.line = line
+      let drawn = line?.parts ?? []
+      lineFrames = lineFrames.filter { drawn.contains($0.key) }
+      return true
+    }
+
+    /// What the line's buttons call, also from tests: each reports only while `enabled`.
+    func applyAllTapped() {
+      guard enabled else { return }
+      onApplyAll?()
+    }
+
+    func dismissTapped() {
+      guard enabled else { return }
+      onDismiss?()
+    }
+
+    func retryTapped() {
+      guard enabled else { return }
+      onRetry?()
+    }
+
+    func recordLineFrame(_ frame: CGRect, of part: DraftLinePart) {
+      lineFrames[part] = frame
+    }
 
     /// Takes `facts` when they differ from those shown; returns whether they did.
     @discardableResult func show(_ facts: DayFacts) -> Bool {
@@ -75,6 +116,10 @@
       @Bindable var model = model
       let facts = model.facts
       VStack(alignment: .leading) {
+        // The web's order: the draft's line first, directly under the title and the status line.
+        if let line = model.line {
+          DraftLineView(line: line, model: model)
+        }
         if let events = facts.events {
           EventsLineView(events: events, isButton: facts.eventsHeadingId != nil, model: model)
         }
@@ -124,6 +169,158 @@
     override var preferredContentSize: CGSize {
       didSet {
         if preferredContentSize != oldValue { onPreferredContentSizeChange?() }
+      }
+    }
+  }
+
+  /// A part of the draft's line whose frame the strip's model keeps.
+  enum DraftLinePart: Hashable, Sendable { case words, applyAll, dismiss, retry, show }
+
+  extension DraftLine {
+    /// The parts the line draws.
+    fileprivate var parts: Set<DraftLinePart> {
+      switch self {
+      case .preparing: [.words]
+      case .held: [.words, .show]
+      case .segments(let count, let failed, _):
+        Set([.words] + (count != nil ? [.applyAll, .dismiss] : []) + (failed ? [.retry] : []))
+      }
+    }
+
+    /// Its words, each with the buttons that follow them: the count with `Apply all` and `Dismiss`, `Couldn’t draft`
+    /// with `Retry`, `Offline` alone; `Suggestions ready` with `Show`.
+    fileprivate var segments: [(words: String, buttons: [DraftLinePart])] {
+      switch self {
+      case .preparing: [(Self.preparingText, [])]
+      case .held: [(Self.readyText, [.show])]
+      case .segments(let count, let failed, let offline):
+        [
+          count.map { ($0, [DraftLinePart.applyAll, .dismiss]) },
+          failed ? (Self.failedText, [.retry]) : nil,
+          offline ? (Self.offlineText, []) : nil,
+        ].compactMap { $0 }
+      }
+    }
+  }
+
+  /// The draft's line (§13.4): secondary words at the strip's size, each followed by its quiet system buttons, `Apply
+  /// all` and `Show` in the accent colour (the line's one primary action), every button a 44-point target. While an ask
+  /// is out, the system's small progress view and `Preparing…`. The segments sit on one line when they fit, else one
+  /// under another; from the accessibility text sizes the buttons go under their words. VoiceOver reads the words as
+  /// one element, `DraftLine.spoken`, and each button as its own.
+  private struct DraftLineView: View {
+    let line: DraftLine
+    let model: DayFactsModel
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+      Group {
+        if case .preparing = line {
+          HStack {
+            ProgressView().controlSize(.small)
+            words(DraftLine.preparingText, first: true)
+          }
+          .frame(minHeight: 44)
+          .accessibilityElement(children: .ignore)
+          .accessibilityLabel(line.spoken)
+        } else {
+          let segments = line.segments
+          Group {
+            if typeSize.isAccessibilitySize {
+              VStack(alignment: .leading, spacing: 0) {
+                ForEach(segments.indices, id: \.self) { stacked(segments[$0], first: $0 == 0) }
+              }
+            } else {
+              ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                  ForEach(segments.indices, id: \.self) { beside(segments[$0], first: $0 == 0) }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                  ForEach(segments.indices, id: \.self) { beside(segments[$0], first: $0 == 0) }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                  ForEach(segments.indices, id: \.self) { stacked(segments[$0], first: $0 == 0) }
+                }
+              }
+            }
+          }
+          .accessibilityElement(children: .contain)
+        }
+      }
+      .font(.subheadline)
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The words with their buttons after them, on one line.
+    private func beside(_ segment: (words: String, buttons: [DraftLinePart]), first: Bool) -> some View {
+      HStack {
+        words(segment.words, first: first)
+        buttons(segment.buttons)
+      }
+      .frame(minHeight: 44)
+    }
+
+    /// The words, then their buttons under them: side by side when they fit, else one under another.
+    private func stacked(_ segment: (words: String, buttons: [DraftLinePart]), first: Bool) -> some View {
+      VStack(alignment: .leading, spacing: 0) {
+        words(segment.words, first: first)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(minHeight: segment.buttons.isEmpty ? 44 : nil, alignment: .leading)
+        if !segment.buttons.isEmpty {
+          ViewThatFits(in: .horizontal) {
+            HStack { buttons(segment.buttons) }
+            VStack(alignment: .leading, spacing: 0) { buttons(segment.buttons) }
+          }
+        }
+      }
+    }
+
+    /// The first segment's words carry the whole line's spoken words; the others are heard there, not again.
+    @ViewBuilder private func words(_ text: String, first: Bool) -> some View {
+      let words = Text(text).foregroundStyle(.secondary)
+      if first {
+        words
+          .accessibilityLabel(line.spoken)
+          .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .named(DayFactsView.space))
+          } action: { frame in
+            model.recordLineFrame(frame, of: .words)
+          }
+      } else {
+        words.accessibilityHidden(true)
+      }
+    }
+
+    @ViewBuilder private func buttons(_ parts: [DraftLinePart]) -> some View {
+      ForEach(parts, id: \.self) { part in
+        switch part {
+        case .applyAll: button(DraftLine.applyAll, part, accent: true, action: model.applyAllTapped)
+        case .dismiss: button(DraftLine.dismiss, part, accent: false, action: model.dismissTapped)
+        case .retry: button(DraftLine.retry, part, accent: false, action: model.retryTapped)
+        // 1d.2b gives it its action; nothing in 1d.2a shows the held line.
+        case .show: button(DraftLine.show, part, accent: true) {}
+        case .words: EmptyView()
+        }
+      }
+    }
+
+    /// A plain system button, its title alone: in the accent colour, or quiet in the secondary colour; its target at
+    /// least 44 points each way.
+    private func button(_ title: String, _ part: DraftLinePart, accent: Bool, action: @escaping () -> Void)
+      -> some View
+    {
+      Button(action: action) {
+        Text(title)
+          .frame(minWidth: 44, minHeight: 44)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.borderless)
+      .tint(accent ? nil : Color(uiColor: .secondaryLabel))
+      .disabled(!model.enabled)
+      .onGeometryChange(for: CGRect.self) { proxy in
+        proxy.frame(in: .named(DayFactsView.space))
+      } action: { frame in
+        model.recordLineFrame(frame, of: part)
       }
     }
   }

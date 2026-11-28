@@ -123,6 +123,13 @@
     private(set) var factsReads = 0
     /// How many indexes the screen built (tests read it).
     private(set) var indexesBuilt = 0
+    /// What today's page shows of its draft, worked out in `showDay`; nil on another day, with no live page of today,
+    /// or with no copy shown.
+    private(set) var draftView: DraftView?
+    /// How many times `DraftView.of` ran (tests read it).
+    private(set) var draftReads = 0
+    /// The workspace and page `draftView` was worked out from: an ask's change alone redraws the line without it.
+    private var draftViewOf: (workspace: Workspace, pageId: String)?
     private let heldButton = UIBarButtonItem(image: UIImage(systemName: "exclamationmark.triangle"))
     private let moreButton = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
     private lazy var previousButton = symbolButton("chevron.left", label: "Previous day") { $0.step(by: -1) }
@@ -239,6 +246,10 @@
       factsModel.onBringBack = { [weak self] taskId in self?.stripRequested(taskId, on: nil) }
       factsModel.onAnotherDay = { [weak self] taskId, date in self?.stripRequested(taskId, on: date) }
       factsModel.onPickDate = { [weak self] taskId in self?.presentStripDatePicker(for: taskId) }
+      factsModel.onRetry = { [weak self] in
+        guard let self, date == model.today, case .page(let page) = content else { return }
+        model.retryDraft(page)
+      }
       factsModel.onEvents = { [weak self] in
         guard let self, let heading = factsModel.facts.eventsHeadingId else { return }
         // The caret stays where it is: with the keyboard up he sees the heading, and his line where the scroll put it.
@@ -352,6 +363,7 @@
       guard let workspace = model.workspace else {
         // No copy is shown (signed out, or another account's): nothing of the last account's is said above the page.
         showFacts(.none)
+        showDraft(of: nil, in: nil)
         updateStripEnabled()
         return
       }
@@ -396,6 +408,10 @@
       if date == model.today, case .page(let page) = content {
         model.todayDrawn(page)
         if cameBack { model.cameBackToToday(page) }
+        // After the ask it may have made, so the first draw of the ask already says `Preparing…`.
+        showDraft(of: drawnWith.page(page.id) ?? page, in: drawnWith)
+      } else {
+        showDraft(of: nil, in: nil)
       }
     }
 
@@ -471,10 +487,40 @@
       if factsModel.enabled != enabled { factsModel.enabled = enabled }
     }
 
-    /// Hands `facts` to the strip when they differ from those it shows; the strip takes no room when they are empty.
+    /// Hands `facts` to the strip when they differ from those it shows; `showDraft`, which every draw ends with, then
+    /// shows or hides the strip once for both.
     private func showFacts(_ facts: DayFacts) {
       factsModel.show(facts)
-      let hidden = facts.isEmpty
+    }
+
+    /// Works out what today's live `page`, as `workspace` draws it, shows of its draft, and the line that says where the
+    /// draft stands (§13.4); nil for no line. `DraftView.of` runs once for each workspace drawn, with the index the
+    /// screen already holds of it: a redraw for the ask's change alone (`model.draftAsk(of:)`, read here, so that
+    /// `updateProperties` runs again when it changes) reads the line again, not the draft. Only `showDay` calls this:
+    /// a keystroke draws nothing.
+    private func showDraft(of page: Page?, in workspace: Workspace?) {
+      guard let page, let workspace else {
+        draftView = nil
+        draftViewOf = nil
+        factsModel.show(line: nil)
+        updateStripHidden()
+        return
+      }
+      if draftViewOf.map({ $0.pageId.utf8.elementsEqual(page.id.utf8) && $0.workspace == workspace }) != true {
+        draftReads += 1
+        draftView = DraftView.of(page: page, in: workspace, index: todoIndex(of: workspace))
+        draftViewOf = (workspace, page.id)
+      }
+      let state = DraftLine.state(
+        view: draftView, ask: model.draftAsk(of: page.id), offline: model.state.offline, at: model.now())
+      // 1d.2a never holds suggestions back while he types (§13.6 is 1d.2b's).
+      factsModel.show(line: DraftLine.of(state, shown: draftView?.suggestions.count ?? 0, held: false))
+      updateStripHidden()
+    }
+
+    /// The strip takes no room when it has nothing at all to show; showing or hiding it changes its height.
+    private func updateStripHidden() {
+      let hidden = factsModel.isEmpty
       guard factsView.isHidden != hidden else { return }
       factsView.isHidden = hidden
       stripHeightChanged()
