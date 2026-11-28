@@ -275,6 +275,97 @@ private struct DraftScreen {
     #expect(h.model.draftAsk(of: todayId) == second)
   }
 
+  @Test func a_lost_asks_late_answer_still_sends_its_draft() async throws {
+    let waits = Waits()
+    let h = try await harness(draftSleep: { try await waits.wait($0) })
+    await h.server.holdDrafts()
+    h.model.todayDrawn(try todays(h))
+    await h.server.draftHeld()
+    try await eventually { await waits.requested == [.seconds(60)] }
+    await waits.release(0)
+    try await soon { h.model.draftAsk(of: todayId) == .failed(failures: 1) }
+    h.model.cameBackToToday(try todays(h))
+    try await eventually { await h.server.waitingDrafts == 2 }
+    let second = DraftAsk.asking(since: thursdayNoon, failures: 1)
+
+    // The draft was made and paid for: it is stored, and the newer ask is left as it is.
+    await h.server.add([try drafted()])
+    await h.server.addDrafts([reply()])
+    await h.server.releaseFirstDraft()
+    let sent = try JSON.parse(setDraft)
+    try await eventually { await setDrafts(h) == [sent] }
+    try await soon { h.model.state.workspace?.page("draft:\(todayId)") != nil }
+    try await turns()
+    #expect(h.model.draftAsk(of: todayId) == second)
+    await h.server.releaseDrafts()
+  }
+
+  @Test func an_ask_out_past_sixty_seconds_while_the_app_was_away_is_asked_again() async throws {
+    let clock = thursday
+    // The model's wait never runs out, as when the app was suspended past the 60 seconds before it fired.
+    let h = try await harness(clock: clock)
+    await h.server.holdDrafts()
+    h.model.todayDrawn(try todays(h))
+    await h.server.draftHeld()
+
+    clock.date = thursdayNoon.addingTimeInterval(61)
+    #expect(h.model.draftAsk(of: todayId)?.inFlight(at: clock.date) == false)
+    h.model.cameBackToToday(try todays(h))
+    try await eventually { await h.server.draftDates.count == 2 }
+    #expect(h.model.draftAsk(of: todayId) == .asking(since: clock.date, failures: 1))
+    h.model.cameBackToToday(try todays(h))
+    try await turns()
+    #expect(await h.server.draftDates.count == 2, "the new ask is in flight")
+    await h.server.releaseDrafts()
+  }
+
+  @Test func an_answer_waiting_for_the_undo_slot_is_not_lost() async throws {
+    let clock = thursday
+    let waits = Waits()
+    let h = try await harness(
+      pages: [todayPage, page(tomorrow, [])], clock: clock, draftSleep: { try await waits.wait($0) })
+    await h.server.holdDrafts()
+    // With VoiceOver the notice has no timer: the slot is held until he dismisses it.
+    let day = try DraftScreen(h.model, voiceOver: true)
+    await h.server.draftHeld()
+    try await eventually { await waits.requested == [.seconds(60)] }
+
+    await h.server.hold()
+    try day.swipe("Water the plants", "Tomorrow")
+    await h.server.callHeld()
+    let operationId = try #require(await h.server.operationIds.last)
+    await h.server.add([
+      applied(
+        try changes(
+          from: 1, to: 2,
+          pages: [page(today, [line("a", "Morning")]), page(tomorrow, [row("r1", "t1", "Water the plants", on: tomorrow)])],
+          undo: operationId))
+    ])
+    await h.server.release()
+    try await soon { day.notice?.undoing == operationId }
+
+    await h.server.add([try drafted(from: 2)])
+    await h.server.addDrafts([reply()])
+    await h.server.releaseDrafts()
+    try await soon { h.model.sendsWaitingForUndoSlot == 1 }
+
+    // The 60 seconds run out, and more, while the answer waits for the slot.
+    await waits.release(0)
+    clock.date = thursdayNoon.addingTimeInterval(120)
+    try await turns()
+    #expect(h.model.draftAsk(of: todayId)?.inFlight(at: clock.date) == true)
+    h.model.cameBackToToday(try todays(h))
+    h.model.retryDraft(try todays(h))
+    try await turns()
+    #expect(await h.server.draftDates == [today], "no second request")
+    #expect(await setDrafts(h).isEmpty)
+
+    day.screen.notice.swipedUp()
+    try await soon { h.model.draftAsk(of: todayId) == .done }
+    #expect(await setDrafts(h) == [try JSON.parse(setDraft)])
+    day.close()
+  }
+
   // MARK: The answer
 
   @Test func remake_failed_counts_as_a_failed_ask() async throws {
@@ -393,8 +484,7 @@ private struct DraftScreen {
     await h.server.add([try drafted(from: 2)])
     await h.server.addDrafts([reply()])
     await h.server.releaseDrafts()
-    try await eventually { await h.server.waitingDrafts == 0 }
-    try await turns()
+    try await soon { h.model.sendsWaitingForUndoSlot == 1 }
     #expect(await setDrafts(h).isEmpty, "voiceOver: \(voiceOver)")
     #expect(h.model.draftAsk(of: todayId)?.inFlight(at: thursdayNoon) == true)
 
@@ -445,8 +535,7 @@ private struct DraftScreen {
     h.model.holdsUndoSlot = true
     await h.server.addDrafts([reply()])
     h.model.todayDrawn(try todays(h))
-    try await eventually { await h.server.draftDates == [today] }
-    try await turns()
+    try await soon { h.model.sendsWaitingForUndoSlot == 1 }
     #expect(await h.server.sent.isEmpty)
 
     await h.server.add([
@@ -455,8 +544,33 @@ private struct DraftScreen {
     await h.model.refresh()
     try await soon { h.model.state.owner == "two" }
     h.model.holdsUndoSlot = false
+    try await soon { h.model.sendsWaitingForUndoSlot == 0 }
     try await turns()
     #expect(await h.server.sent.isEmpty, "nothing of the first account's goes into the second's")
+  }
+
+  @Test func an_ask_of_a_forgotten_run_sends_nothing() async throws {
+    let h = try await harness()
+    h.model.holdsUndoSlot = true
+    await h.server.addDrafts([reply()])
+    h.model.todayDrawn(try todays(h))
+    try await soon { h.model.sendsWaitingForUndoSlot == 1 }
+
+    // Signed out and in again as the same account: the asks of the run before are forgotten.
+    await h.server.add([.done])
+    #expect(await h.model.signOut(discardingUnsent: true) == .signedOut)
+    await h.server.add([
+      .session(one), .account(Account(owner: "one", email: "one@example.com", signIn: true)),
+      .workspace(.full(try copy(revision: 1, pages: [todayPage], tasks: [water]), owner: "one")),
+    ])
+    #expect(await h.model.signIn(email: "one@example.com", password: "secret") == nil)
+    try await soon { h.model.state.phase == .ready && h.model.state.owner == "one" }
+    #expect(h.model.draftAsk(of: todayId) == nil)
+
+    h.model.holdsUndoSlot = false
+    try await soon { h.model.sendsWaitingForUndoSlot == 0 }
+    try await turns()
+    #expect(await setDrafts(h).isEmpty, "the owner matches, but the ask is of a run forgotten")
   }
 
   @Test func midnight_during_an_ask_asks_for_the_new_today() async throws {
