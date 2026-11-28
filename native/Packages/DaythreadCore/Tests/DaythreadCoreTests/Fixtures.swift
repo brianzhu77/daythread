@@ -272,3 +272,44 @@ extension Fixtures {
       notice: try #require(object["notice"]?.stringValue, "notice: \(name)"))
   }
 }
+
+/// A shared case of `draft/actions/`: one draft command and what the server answered, or refused.
+struct DraftActionCase {
+  var name: String
+  var before: Workspace
+  var pageId: String
+  var itemIds: [String]
+  var today: LocalDate
+  var action: JSONValue
+  var receipt: JSONValue?
+  var refusal: String?
+  var after: Workspace
+  /// The skip's ticket as the web wrote it; nil for every other command.
+  var ticket: JSONObject?
+
+  var type: String { Command.type(of: action) ?? "" }
+}
+
+extension Fixtures {
+  static func draftActionNames() throws -> [String] {
+    try FileManager.default.contentsOfDirectory(atPath: core.appending(path: "draft/actions").path)
+      .filter { $0.hasSuffix(".json") }
+      .map { String($0.dropLast(".json".count)) }
+      .sorted()
+  }
+
+  static func draftActionCase(_ name: String) throws -> DraftActionCase {
+    let object = try #require(try json("draft/actions/\(name).json").objectValue)
+    return DraftActionCase(
+      name: name,
+      before: try #require(object["before"].flatMap(Workspace.init), "before: \(name)"),
+      pageId: try #require(object["pageId"]?.stringValue, "pageId: \(name)"),
+      itemIds: try #require(object["itemIds"]?.arrayValue, "itemIds: \(name)").compactMap(\.stringValue),
+      today: try #require(object["today"]?.stringValue.flatMap(LocalDate.init), "today: \(name)"),
+      action: try #require(object["action"], "action: \(name)"),
+      receipt: object["receipt"].flatMap { $0 == .null ? nil : $0 },
+      refusal: object["refusal"]?.stringValue,
+      after: try #require(object["after"].flatMap(Workspace.init), "after: \(name)"),
+      ticket: object["ticket"]?.objectValue)
+  }
+}
