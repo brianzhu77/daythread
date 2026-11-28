@@ -25,8 +25,7 @@ public struct TaskRow: Hashable, Sendable {
 /// What the rows of a workspace say about its to-dos, read once per workspace value: a keystroke that draws
 /// one row never reads every page again. Build one for each workspace a screen is given, and read every row from it.
 ///
-/// Building it parses each live page's document once, each day page's draft that a plan row could be held back by,
-/// and the workspace's repeats and links. Nothing it answers reads a document again. It is a value: a caller keeps
+/// Building it parses each live page's document once, each draft page once, and the workspace's repeats and links. Nothing it answers reads a document again. It is a value: a caller keeps
 /// it beside the workspace it was built from (for a screen, in the model that holds the workspace) and builds a new
 /// one when that workspace changes.
 public struct TodoIndex: Sendable {
@@ -34,32 +33,31 @@ public struct TodoIndex: Sendable {
   private var plannedDays: [CodeUnitKey: LocalDate] = [:]
   private var repeatRules: [CodeUnitKey: RepeatRule] = [:]
   private var blockersByTask: [CodeUnitKey: [TodoTask]] = [:]
-  /// By day page id: the to-dos its draft applied; only for day pages that hold a plan row.
-  private var appliedByDayPage: [CodeUnitKey: Set<CodeUnitKey>] = [:]
+  /// Every draft page not in Trash that reads, in the workspace's order (`takenOver`, `decidedElsewhere`,
+  /// `skippedDays` walk them).
+  private(set) var dayDrafts: [(pageId: String, parentId: String?, draft: DayDraft)] = []
+  /// By draft page id: `draftOf`'s answer, the first draft page of an id that is not in Trash.
+  private var draftsByPageId: [CodeUnitKey: DayDraft] = [:]
 
   /// Every chip event, in the order each id was first met; see `events(on:)`.
   private(set) var eventsInFirstMetOrder: [DayEvent] = []
 
   public init(_ workspace: Workspace) {
-    var daysWithPlanRows: [String] = []
     var chips = EventCollector()
     for page in workspace.pages where Self.isLive(page) {
       // A document that does not parse reads as no blocks (`pageNodes`).
       let day = page.type == "daily" ? page.date : nil
-      var holdsPlanRow = false
       for (taskId, row) in Self.rows(in: Document.blocks(page.document), of: page, day: day, chips: &chips) {
         let key = CodeUnitKey(taskId)
         rowsByTask[key, default: []].append(row)
         guard row.role == .plan, let day else { continue }
-        holdsPlanRow = true
         if let held = plannedDays[key], !(held < day) { continue }
         plannedDays[key] = day
       }
-      if holdsPlanRow { daysWithPlanRows.append(page.id) }
     }
     // Titles need every page, so only a workspace that holds a chip pays for reading them.
     if !chips.isEmpty { eventsInFirstMetOrder = chips.events(pages: workspace.pages) }
-    readDrafts(of: daysWithPlanRows, in: workspace)
+    readDrafts(in: workspace)
     readRepeats(in: workspace)
     readBlockers(in: workspace)
   }
@@ -86,19 +84,17 @@ public struct TodoIndex: Sendable {
     return found
   }
 
-  private mutating func readDrafts(of dayPageIds: [String], in workspace: Workspace) {
-    guard !dayPageIds.isEmpty else { return }
-    // `draftOf`: the first draft page of that id that is not in Trash.
-    var drafts: [CodeUnitKey: Page] = [:]
+  /// Each draft page is parsed here and nowhere else: a page of an id already met is not read (`draftOf` takes the
+  /// first, and a first that does not parse is no draft, not a reason to take the second), but it is still one of
+  /// `dayDrafts` when it reads, as `takenOver` walks every page.
+  private mutating func readDrafts(in workspace: Workspace) {
+    var met = Set<CodeUnitKey>()
     for page in workspace.pages where page.isDraft && (page.trashedAt?.isEmpty ?? true) {
       let key = CodeUnitKey(page.id)
-      if drafts[key] == nil { drafts[key] = page }
-    }
-    for dayPageId in dayPageIds {
-      guard let page = drafts[CodeUnitKey(Workspace.draftPageId(of: dayPageId))],
-        let draft = DayDraft(document: page.document)
-      else { continue }
-      appliedByDayPage[CodeUnitKey(dayPageId)] = draft.appliedTaskIds
+      let first = met.insert(key).inserted
+      guard let draft = DayDraft(document: page.document) else { continue }
+      dayDrafts.append((page.id, page.parentId, draft))
+      if first { draftsByPageId[key] = draft }
     }
   }
 
@@ -131,6 +127,21 @@ public struct TodoIndex: Sendable {
     }
   }
 
+  /// `draftOf`: the draft of a day page, from the draft pages the index parsed once (not in Trash; the first of an id).
+  public func dayDraft(of dayPageId: String) -> DayDraft? {
+    draftsByPageId[CodeUnitKey(Workspace.draftPageId(of: dayPageId))]
+  }
+
+  /// The standing draft rule of `use-day-draft.ts:91`: stored, and not stale.
+  public func draftStands(for dayPageId: String) -> Bool {
+    dayDraft(of: dayPageId).map { !$0.stale } ?? false
+  }
+
+  /// `plannedAfter`'s question for one to-do: a plan row on a day page dated after `day`.
+  public func isPlanned(_ taskId: String, after day: LocalDate) -> Bool {
+    rows(of: taskId).contains { $0.role == .plan && ($0.day.map { day < $0 } ?? false) }
+  }
+
   /// `plannedOn`: the newest day page holding a plan row of it; nil when none does.
   public func plannedOn(_ taskId: String) -> LocalDate? { plannedDays[CodeUnitKey(taskId)] }
 
@@ -156,7 +167,7 @@ public struct TodoIndex: Sendable {
     for row in rows(of: task.id) {
       guard row.role == .plan, let day = row.day, day <= today else { continue }
       if let since, day <= since { continue }
-      if appliedByDayPage[CodeUnitKey(row.pageId)]?.contains(taskKey) == true { continue }
+      if dayDraft(of: row.pageId)?.appliedTaskIds.contains(taskKey) == true { continue }
       since = day
     }
     guard let since, let weekAgo = today.adding(days: -7), since <= weekAgo else { return nil }

@@ -113,7 +113,6 @@ import Testing
     #expect(DraftPlanning.place(try Self.item("gone", taskId: "t1"), in: odd, tasks: Self.tasks) == nil)
   }
 
-
   @Test func a_heading_level_reads_as_javascripts_number() {
     // The next heading, of level 2, closes the first one's section only when its level is at least 2.
     func rangeEnd(_ level: JSONValue?) -> Int {
@@ -133,7 +132,7 @@ import Testing
     #expect(rangeEnd(.string("0b11")) == closed)
     #expect(rangeEnd(.string("1e1")) == closed)
     #expect(rangeEnd(.string(".5e1")) == closed)
-    #expect(rangeEnd(.string("Infinity")) == closed)
+    #expect(rangeEnd(.string("Infinity")) == none, "no level is below Infinity, so no heading starts it")
     #expect(rangeEnd(.string("-Infinity")) == open)
     #expect(rangeEnd(.string("")) == open, "an empty string is 0")
     #expect(rangeEnd(.bool(false)) == open)
