@@ -34,6 +34,8 @@ final class TypingFeelTests: XCTestCase {
   private var server: TestServer?
   /// Beats for the whole test, so a wait sees a stall that began in the one before it.
   private var heartbeat: Heartbeat?
+  /// What each keystroke's calls and wait covered, with the clock, so a held main thread is named by what it was in.
+  private var spans: [Span] = []
 
   override func setUp() async throws {
     heartbeat = Heartbeat()
@@ -121,6 +123,7 @@ final class TypingFeelTests: XCTestCase {
     let warning = try XCTUnwrap(warnings.first, "and says what it found")
     XCTAssertTrue(warning.hasPrefix("TypingFeel: main thread held"), warning)
     XCTAssertTrue(warning.contains("the main thread alone was held for"), warning)
+    XCTAssertTrue(warning.contains("while waiting for the state after keystroke 1 of run 1"), warning)
   }
 
   func test_a_main_thread_held_alone_fails_a_wait_whose_state_arrived_where_the_budget_is_enforced() async throws {
@@ -128,6 +131,7 @@ final class TypingFeelTests: XCTestCase {
     let failure = try await waitThroughAStall(budgetEnforced: true) { warnings.append($0) }
     let message = try XCTUnwrap(failure, "the main thread held alone for 1.5 s, past a limit of 1 s")
     XCTAssertTrue(message.contains("the main thread alone was held for"), message)
+    XCTAssertTrue(message.contains("while waiting for the state after keystroke 1 of run 1"), message)
     XCTAssertEqual(warnings, [], "a failure is not also a warning")
   }
 
@@ -141,7 +145,7 @@ final class TypingFeelTests: XCTestCase {
     state.arrive(after: .milliseconds(200))
     let failure = try await wait(
       "the state reached the screen", deadline: .seconds(1), mainHeldLimit: .seconds(1), besideLimit: besideLimit,
-      budgetEnforced: budgetEnforced, warn: warn
+      budgetEnforced: budgetEnforced, warn: warn, after: (index: 1, run: 1)
     ) { state.arrived }
     // On a loaded machine the heartbeat itself can miss its beats; the two cases cannot then be told apart here.
     let besideStall = try XCTUnwrap(heartbeat).longestStall(since: started)
@@ -206,17 +210,6 @@ final class TypingFeelTests: XCTestCase {
     XCTAssertNil(failure)
   }
 
-  func test_the_main_thread_held_alone_is_told_from_a_stopped_process() {
-    let limits = (main: Duration.seconds(10), beside: Duration.seconds(1))
-    XCTAssertTrue(
-      Self.mainThreadAloneWasHeld(main: .seconds(12), beside: .milliseconds(50), limits: limits), "main alone")
-    XCTAssertFalse(
-      Self.mainThreadAloneWasHeld(main: .seconds(36), beside: .seconds(36), limits: limits), "the process stopped")
-    XCTAssertFalse(Self.mainThreadAloneWasHeld(main: .seconds(5), beside: .zero, limits: limits), "a short stall")
-    XCTAssertFalse(
-      Self.mainThreadAloneWasHeld(main: .seconds(12), beside: .seconds(2), limits: limits), "the thread beside stalled")
-  }
-
   @MainActor private final class Arrival {
     var arrived = false
 
@@ -278,8 +271,12 @@ final class TypingFeelTests: XCTestCase {
     XCTAssertNotNil(facts.events, "the events of today")
   }
 
+  /// Whether the machine is the one the budget was measured on (`DAYTHREAD_FEEL_BUDGET=1`): the budget and a main
+  /// thread held alone fail only there.
+  private static var budgetIsEnforced: Bool { ProcessInfo.processInfo.environment["DAYTHREAD_FEEL_BUDGET"] == "1" }
+
   private func checkBudget(_ median: Double, against measured: Double) throws {
-    guard ProcessInfo.processInfo.environment["DAYTHREAD_FEEL_BUDGET"] == "1" else { return }
+    guard Self.budgetIsEnforced else { return }
     let budget = try XCTUnwrap(measured > 0 ? measured * 1.5 : nil, "no median measured yet to hold the budget to")
     XCTAssertLessThanOrEqual(median, budget, "ms per keystroke, against one and a half times the \(measured) measured")
   }
@@ -322,8 +319,15 @@ final class TypingFeelTests: XCTestCase {
         let character = String(Self.typing[index % Self.typing.count])
         let start = clock.now
         line.insertText(character)
+        // The one clock read added inside the timed span: it splits the call from the layout for the stall's naming.
+        let inserted = clock.now
         window.layoutIfNeeded()
-        laidOut += clock.now - start
+        let laidOutAt = clock.now
+        laidOut += laidOutAt - start
+        // The spans are written once the keystroke's state has arrived, not between the call and the wait: appending
+        // there read 0.5 to 1 ms a keystroke higher on both pages. A wait's stall begins inside the wait, so the
+        // keystroke's own calls are not needed while it runs; the wait writes its own span.
+        let keystroke = (index: index + 1, run: runIndex + 1)
         typed += character
         // As between his keystrokes, the engine's state with this one is drawn before the next. Each character typed
         // is one byte of the document; its length is read, not its text searched, so the wait costs the main actor
@@ -331,7 +335,7 @@ final class TypingFeelTests: XCTestCase {
         stored += 1
         let expected = stored
         try await until(
-          "the engine's state reached the screen",
+          "the engine's state reached the screen", after: keystroke,
           held: {
             let length = model.workspace?.dayPage(Self.today)?.document.utf8.count
             let state = model.state
@@ -340,8 +344,13 @@ final class TypingFeelTests: XCTestCase {
               + "keystroke \(index + 1) of run \(runIndex + 1); the engine had published \(published.last)"
           }
         ) { model.workspace?.dayPage(Self.today)?.document.utf8.count == expected }
+        let waitedAt = clock.now
         window.layoutIfNeeded()
-        drawn += clock.now - start
+        let drawnAt = clock.now
+        drawn += drawnAt - start
+        spans.append(Span(place: .insertText, keystroke: keystroke.index, run: keystroke.run, start: start, end: inserted))
+        spans.append(Span(place: .layout, keystroke: keystroke.index, run: keystroke.run, start: inserted, end: laidOutAt))
+        spans.append(Span(place: .layout, keystroke: keystroke.index, run: keystroke.run, start: waitedAt, end: drawnAt))
       }
       runs.append(laidOut / .milliseconds(1) / Double(Self.keystrokes))
       drawnRuns.append(drawn / .milliseconds(1) / Double(Self.keystrokes))
@@ -379,9 +388,12 @@ final class TypingFeelTests: XCTestCase {
   /// log tells a state that came late from one that did not come. A failed wait records the failure and throws, which
   /// ends the test: the keystrokes after it are not measured.
   private func until(
-    _ what: String, deadline patience: Duration = .seconds(30), held: () -> String = { "" }, _ condition: () -> Bool
+    _ what: String, deadline patience: Duration = .seconds(30), after keystroke: (index: Int, run: Int)? = nil,
+    held: () -> String = { "" }, _ condition: () -> Bool
   ) async throws {
-    guard let message = try await wait(what, deadline: patience, held: held, condition) else { return }
+    guard let message = try await wait(what, deadline: patience, after: keystroke, held: held, condition) else {
+      return
+    }
     XCTFail(message)
     // The test ends here: another wait after a failed one would cost the same again for every keystroke left.
     throw WaitFailed(message: message)
@@ -392,11 +404,15 @@ final class TypingFeelTests: XCTestCase {
   /// `hardStop`, by the clock: a main thread that runs in chunks longer than a turn counts towards the deadline
   /// slowly, and without it one wait for a state that never comes could outlast CI's job. `mainHeldLimit` and
   /// `besideLimit`: a wait whose condition held still fails when the main thread alone was held that long while the
-  /// heartbeat beside it ran (`mainThreadAloneWasHeld`); only a stop of the whole process is forgiven silently.
+  /// heartbeat beside it ran (`outcomeOfMainStall`): that fails the wait where the budget is enforced and is otherwise
+  /// printed to `warn` as a line beginning `TypingFeel: main thread held`; only a stop of the whole process is
+  /// forgiven silently. Either names what the main thread was doing during the stall, from `spans` and, for a wait
+  /// after a keystroke (`keystroke`), this wait's own span.
   private func wait(
     _ what: String, deadline patience: Duration = .seconds(30), hardStop: Duration = .seconds(300),
-    mainHeldLimit: Duration = .seconds(10), besideLimit: Duration = .seconds(1), held: () -> String = { "" },
-    _ condition: () -> Bool
+    mainHeldLimit: Duration = .seconds(10), besideLimit: Duration = .seconds(1),
+    budgetEnforced: Bool = TypingFeelTests.budgetIsEnforced, warn: (String) -> Void = { print($0) },
+    after keystroke: (index: Int, run: Int)? = nil, held: () -> String = { "" }, _ condition: () -> Bool
   ) async throws -> String? {
     let clock = ContinuousClock()
     let started = clock.now
@@ -404,26 +420,39 @@ final class TypingFeelTests: XCTestCase {
     let turn = Duration.milliseconds(100)
     var waited = Duration.zero
     var longestStall = Duration.zero
+    var longestStallAt = (start: started, end: started)
     var lastTurn = started
     while !condition(), waited < patience, clock.now < stopAt {
       try await Task.sleep(nanoseconds: 1_000_000)
       let now = clock.now
-      longestStall = max(longestStall, now - lastTurn)
+      if now - lastTurn > longestStall {
+        longestStall = now - lastTurn
+        longestStallAt = (lastTurn, now)
+      }
       waited += min(now - lastTurn, turn)
       lastTurn = now
+    }
+    if let keystroke {
+      spans.append(Span(place: .wait, keystroke: keystroke.index, run: keystroke.run, start: started, end: clock.now))
     }
     let besideStall = heartbeat?.longestStall(since: started)
     let stalls =
       "the main thread stalled for up to \(Self.seconds(longestStall)) s and a thread beside it for up to "
       + "\(besideStall.map(Self.seconds) ?? "an unknown") s"
     if condition() {
-      guard let besideStall,
-        Self.mainThreadAloneWasHeld(
-          main: longestStall, beside: besideStall, limits: (main: mainHeldLimit, beside: besideLimit))
-      else { return nil }
-      return "\(what): there, but the main thread alone was held for \(Self.seconds(longestStall)) s while a thread "
+      guard let besideStall else { return nil }
+      let outcome = Self.outcomeOfMainStall(
+        main: longestStall, beside: besideStall, limits: (main: mainHeldLimit, beside: besideLimit),
+        budgetEnforced: budgetEnforced)
+      guard outcome != .nothing else { return nil }
+      let message =
+        "\(what): there, but the main thread alone was held for \(Self.seconds(longestStall)) s while a thread "
         + "beside it stalled for no more than \(Self.seconds(besideStall)) s: the app's or the test's own doing, not a "
-        + "stopped process"
+        + "stopped process; the main thread was: "
+        + Self.placesOfStall(from: longestStallAt.start, to: longestStallAt.end, in: spans)
+      if outcome == .fail { return message }
+      warn("TypingFeel: main thread held: \(message)")
+      return nil
     }
     let gaveUp = clock.now
     let endedBy =
@@ -446,12 +475,48 @@ final class TypingFeelTests: XCTestCase {
       + "(\(Self.seconds(gaveUp - started)) s by the clock), ended by \(endedBy); the model held \(heldThen); \(outcome)"
   }
 
-  /// Whether the main thread was held while the process ran: it stalled for `limits.main` or more while a thread
-  /// beside it never stalled more than `limits.beside`. When both stalled, the whole process stopped.
-  private static func mainThreadAloneWasHeld(
-    main: Duration, beside: Duration, limits: (main: Duration, beside: Duration)
-  ) -> Bool {
-    main >= limits.main && beside <= limits.beside
+  /// What a wait that found its state does about the main thread's longest stall: a main thread held for
+  /// `limits.main` or more while a thread beside it never stalled more than `limits.beside` is held alone (when both
+  /// stalled, the whole process stopped, and nothing is said). Held alone, it fails where the budget is enforced and
+  /// only warns elsewhere.
+  private enum MainStallOutcome { case fail, warn, nothing }
+
+  private static func outcomeOfMainStall(
+    main: Duration, beside: Duration, limits: (main: Duration, beside: Duration), budgetEnforced: Bool
+  ) -> MainStallOutcome {
+    guard main >= limits.main, beside <= limits.beside else { return .nothing }
+    return budgetEnforced ? .fail : .warn
+  }
+
+  /// A stretch of the test body's own time: what it was in, for which keystroke of which run, and when by the clock.
+  private struct Span {
+    enum Place { case insertText, layout, wait }
+    let place: Place
+    let keystroke: Int
+    let run: Int
+    let start: ContinuousClock.Instant
+    let end: ContinuousClock.Instant
+  }
+
+  /// What the main thread was doing during a stall from `from` to `to`: each span the stall overlaps, with the span's
+  /// own length and the share of the stall inside it. The wait is the body suspended, so the main thread was held by
+  /// other work on it.
+  private static func placesOfStall(
+    from: ContinuousClock.Instant, to: ContinuousClock.Instant, in spans: [Span]
+  ) -> String {
+    let places: [String] = spans.compactMap { span in
+      let share = min(to, span.end) - max(from, span.start)
+      guard share > .zero else { return nil }
+      let of = "keystroke \(span.keystroke) of run \(span.run)"
+      let timings = "\(preciseSeconds(span.end - span.start)) s, \(preciseSeconds(share)) s of the stall in it"
+      switch span.place {
+      case .insertText: return "inside insertText of \(of) (the call took \(timings))"
+      case .layout: return "inside the list's layout of \(of) (the call took \(timings))"
+      case .wait: return "while waiting for the state after \(of) (the wait took \(timings))"
+      }
+    }
+    return places.isEmpty
+      ? "outside every call the test recorded (the setup, or between keystrokes)" : places.joined(separator: " and ")
   }
 
   /// Beats every 10 ms on a thread off the main one for the whole test and keeps its long gaps between beats: next to
@@ -526,6 +591,10 @@ final class TypingFeelTests: XCTestCase {
   private struct WaitFailed: Error, CustomStringConvertible {
     let message: String
     var description: String { message }
+  }
+
+  private static func preciseSeconds(_ duration: Duration) -> String {
+    String(format: "%.3f", duration / .milliseconds(1) / 1_000)
   }
 
   private static func seconds(_ duration: Duration) -> String {

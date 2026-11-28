@@ -127,7 +127,10 @@ pages about 55 ms a state (on the typing path the rows already read it; where th
 opened or the day has no page, the strip's facts build one of their own), today's facts from it about 3.4 ms, the strip
 about 14 ms a state on the 300-line page in all, and a keystroke 9.3 ms (300 lines) and 3.3 ms (10 lines) against
 limits of 10.56 and 4.01, unchanged by the strip. A wait for the engine's state that fails says what the
-model held when it gave up and, after a further two minutes, whether the state came late or not at all.
+model held when it gave up and, after a further two minutes, whether the state came late or not at all. A wait whose
+state arrived after the main thread alone was held for 10 s or more says what the main thread was in (inside
+`insertText` or the list's layout of a keystroke, or while waiting for the state): it fails the test only with the
+budget enforced, and otherwise prints a line beginning `TypingFeel: main thread held`.
 
 Leave it off in CI and on other machines: their times differ, and a budget from this Mac would only be noise there.
 
