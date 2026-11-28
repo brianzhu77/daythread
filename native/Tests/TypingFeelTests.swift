@@ -1,6 +1,7 @@
 import DaythreadCore
 import DaythreadSync
 import Foundation
+import Synchronization
 import UIKit
 import XCTest
 
@@ -129,7 +130,9 @@ final class TypingFeelTests: XCTestCase {
   /// Types `keystrokes` characters at the end of line `target` (1-based) of a page of `count` lines, `runs` times, and
   /// returns the median of the runs' milliseconds per keystroke to the list laid out.
   private func measureTyping(lines count: Int, into target: Int) async throws -> Double {
-    let model = try await model(page: count)
+    let (model, engine) = try await model(page: count)
+    let published = Published(following: engine.states, page: Self.today)
+    defer { published.stop() }
     let screen = DayViewController(model: model)
     let window = try feelWindow()
     window.rootViewController = UINavigationController(rootViewController: screen)
@@ -177,7 +180,7 @@ final class TypingFeelTests: XCTestCase {
             let state = model.state
             return "the page's document \(length.map(String.init) ?? "absent") bytes long, \(expected) expected; "
               + "state number \(state.published), \(state.drafts.count) drafts \(state.drafts.map { "\($0.state)" }); "
-              + "keystroke \(index + 1) of run \(runIndex + 1)"
+              + "keystroke \(index + 1) of run \(runIndex + 1); the engine had published \(published.last)"
           }
         ) { model.workspace?.dayPage(Self.today)?.document.utf8.count == expected }
         window.layoutIfNeeded()
@@ -204,24 +207,42 @@ final class TypingFeelTests: XCTestCase {
   }
 
   /// Waits, a millisecond at a time, for `condition`, the main actor's other work running meanwhile; fails after
-  /// thirty seconds. The wait is long because it is not what is measured: on CI's machines one keystroke's state
-  /// has taken more than two seconds to be drawn on the 300-line page, which failed the run without any defect.
+  /// thirty seconds of the main thread's time. The wait is long because it is not what is measured: on CI's machines
+  /// one keystroke's state has taken more than two seconds to be drawn on the 300-line page, which failed the run
+  /// without any defect.
   ///
-  /// A failure says what the model held when it gave up (`held`), then waits a further two minutes and reads again, so
-  /// the log tells a state that came late from one that did not come. A failed wait records the failure and throws,
-  /// which ends the test: the keystrokes after it are not measured.
+  /// The main thread's time, not the clock's: the model receives a state on the main actor, and a main thread held
+  /// by something else (on CI the app once logged nothing for 36 s while the keyboard's predictions answered over a
+  /// minute late) gives no state a chance to arrive. Each turn of the loop counts at most `turn` towards the deadline,
+  /// so such a stall costs the wait one turn; the drawn time still counts all of it.
+  ///
+  /// A failure says what the model held when it gave up (`held`) and the longest stalls of the main thread and of a
+  /// thread beside it, then waits a further two minutes and reads again, so the log tells a state that came late from
+  /// one that did not come. A failed wait records the failure and throws, which ends the test: the keystrokes after
+  /// it are not measured.
   private func until(
     _ what: String, deadline patience: Duration = .seconds(30), held: () -> String = { "" }, _ condition: () -> Bool
   ) async throws {
     let clock = ContinuousClock()
     let started = clock.now
-    let deadline = started.advanced(by: patience)
-    while !condition(), clock.now < deadline {
+    let beside = Heartbeat()
+    defer { beside.stop() }
+    let turn = Duration.milliseconds(100)
+    var waited = Duration.zero
+    var longestStall = Duration.zero
+    var lastTurn = started
+    while !condition(), waited < patience {
       try await Task.sleep(nanoseconds: 1_000_000)
+      let now = clock.now
+      longestStall = max(longestStall, now - lastTurn)
+      waited += min(now - lastTurn, turn)
+      lastTurn = now
     }
     guard !condition() else { return }
     let gaveUp = clock.now
-    let heldThen = held()
+    let heldThen =
+      "\(held()); the main thread stalled for up to \(Self.seconds(longestStall)) s and a thread beside it for up to "
+      + "\(Self.seconds(beside.longestStall)) s, in \(Self.seconds(gaveUp - started)) s by the clock"
     let furtherDeadline = gaveUp.advanced(by: .seconds(120))
     while !condition(), clock.now < furtherDeadline {
       try await Task.sleep(nanoseconds: 10_000_000)
@@ -230,10 +251,64 @@ final class TypingFeelTests: XCTestCase {
       condition()
       ? "it arrived late, \(Self.seconds(clock.now - gaveUp)) s after the first wait ended"
       : "it had still not arrived after a further \(Self.seconds(clock.now - gaveUp)) s; the model then held \(held())"
-    let message = "\(what): not there after \(Self.seconds(gaveUp - started)) s; the model held \(heldThen); \(outcome)"
+    let message = "\(what): not there after \(Self.seconds(waited)) s; the model held \(heldThen); \(outcome)"
     XCTFail(message)
     // The test ends here: another wait after a failed one would cost the same again for every keystroke left.
     throw WaitFailed(message: message)
+  }
+
+  /// Beats every 10 ms on a thread off the main one and keeps the longest gap between beats: next to the main
+  /// thread's own stalls, it tells a whole app (or simulator) that stopped from a main thread held by something.
+  private final class Heartbeat: Sendable {
+    private let longest = Mutex(Duration.zero)
+    private let beating = Mutex<Task<Void, Never>?>(nil)
+
+    init() {
+      // The task ends at `stop`, which lets go of the beat.
+      let task = Task.detached { [self] in
+        let clock = ContinuousClock()
+        var last = clock.now
+        while !Task.isCancelled {
+          // Cancelled the moment it starts on CI's Xcode, `Task.sleep(for:)` aborts the process.
+          try? await Task.sleep(nanoseconds: 10_000_000)
+          let now = clock.now
+          self.longest.withLock { $0 = max($0, now - last) }
+          last = now
+        }
+      }
+      beating.withLock { $0 = task }
+    }
+
+    var longestStall: Duration { longest.withLock { $0 } }
+
+    func stop() {
+      beating.withLock { $0?.cancel() }
+    }
+  }
+
+  /// The engine's last state, read as it is published, off the main thread: a failed wait says whether the engine had
+  /// published the keystroke when the model had not drawn it.
+  private final class Published: Sendable {
+    private let latest = Mutex("no state")
+    private let following = Mutex<Task<Void, Never>?>(nil)
+
+    init(following states: AsyncStream<SyncState>, page day: LocalDate) {
+      let task = Task.detached { [self] in
+        for await state in states {
+          let length = state.workspace?.dayPage(day)?.document.utf8.count
+          self.latest.withLock {
+            $0 = "state number \(state.published), the page's document \(length.map(String.init) ?? "absent") bytes long"
+          }
+        }
+      }
+      following.withLock { $0 = task }
+    }
+
+    var last: String { latest.withLock { $0 } }
+
+    func stop() {
+      following.withLock { $0?.cancel() }
+    }
   }
 
   private struct WaitFailed: Error, CustomStringConvertible {
@@ -323,7 +398,7 @@ final class TypingFeelTests: XCTestCase {
   /// planned on the days before, 100 a day, so the rows' facts read an index of a workspace that size. The strip
   /// above the page is on screen too: 100 of those to-dos are set aside, 100 are due and have no row today, and the
   /// past pages hold 200 chips, 2 of them dated today.
-  private func model(page count: Int) async throws -> AppModel {
+  private func model(page count: Int) async throws -> (AppModel, SyncEngine) {
     var tasks: [JSONValue] = []
     let lines = (1...count).map { index in
       guard index % 3 == 1 else {
@@ -355,7 +430,7 @@ final class TypingFeelTests: XCTestCase {
     ) { model.state.phase == .ready && model.workspace != nil }
     await engine.settled()
     await server.hold()
-    return model
+    return (model, engine)
   }
 
   private func feelWindow() throws -> UIWindow {
