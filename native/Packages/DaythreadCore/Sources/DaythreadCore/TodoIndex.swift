@@ -25,9 +25,9 @@ public struct TaskRow: Hashable, Sendable {
 /// What the rows of a workspace say about its to-dos, read once per workspace value: a keystroke that draws
 /// one row never reads every page again. Build one for each workspace a screen is given, and read every row from it.
 ///
-/// Building it parses each live page's document once, each draft page once, and the workspace's repeats and links. Nothing it answers reads a document again. It is a value: a caller keeps
-/// it beside the workspace it was built from (for a screen, in the model that holds the workspace) and builds a new
-/// one when that workspace changes.
+/// Building it parses each live page's document once, each draft page once, and the workspace's repeats and links.
+/// Nothing it answers reads a document again. It is a value: a caller keeps it beside the workspace it was built from
+/// (for a screen, in the model that holds the workspace) and builds a new one when that workspace changes.
 public struct TodoIndex: Sendable {
   private var rowsByTask: [CodeUnitKey: [TaskRow]] = [:]
   private var plannedDays: [CodeUnitKey: LocalDate] = [:]
