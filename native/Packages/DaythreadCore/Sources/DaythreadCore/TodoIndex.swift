@@ -26,7 +26,8 @@ public struct TaskRow: Hashable, Sendable {
 /// one row never reads every page again. Build one for each workspace a screen is given, and read every row from it.
 ///
 /// Building it parses each live page's document once, each draft page once, and the workspace's repeats and links.
-/// Nothing it answers reads a document again. It is a value: a caller keeps it beside the workspace it was built from
+/// Nothing it answers reads a document again: the same walk notes where each line a stored draft says it came from
+/// first sits (`decidedMatch`'s `sourceDay`). It is a value: a caller keeps it beside the workspace it was built from
 /// (for a screen, in the model that holds the workspace) and builds a new one when that workspace changes.
 public struct TodoIndex: Sendable {
   private var rowsByTask: [CodeUnitKey: [TaskRow]] = [:]
@@ -41,13 +42,19 @@ public struct TodoIndex: Sendable {
 
   /// Every chip event, in the order each id was first met; see `events(on:)`.
   private(set) var eventsInFirstMetOrder: [DayEvent] = []
+  /// Where the lines the stored drafts' items say they came from (`from`) first sit on a live page.
+  private var sources = BlockSources(sought: [])
 
   public init(_ workspace: Workspace) {
+    // The drafts first, so the walk over the pages knows which lines' places to note.
+    readDrafts(in: workspace)
+    sources = BlockSources(sought: Set(dayDrafts.lazy.flatMap { $0.draft.items.lazy.compactMap(\.from) }))
     var chips = EventCollector()
-    for page in workspace.pages where Self.isLive(page) {
+    for (position, page) in workspace.pages.enumerated() where Self.isLive(page) {
       // A document that does not parse reads as no blocks (`pageNodes`).
       let day = page.type == "daily" ? page.date : nil
-      for (taskId, row) in Self.rows(in: Document.blocks(page.document), of: page, day: day, chips: &chips) {
+      let blocks = Document.blocks(page.document)
+      for (taskId, row) in Self.rows(in: blocks, of: page, at: position, day: day, chips: &chips, sources: &sources) {
         let key = CodeUnitKey(taskId)
         rowsByTask[key, default: []].append(row)
         guard row.role == .plan, let day else { continue }
@@ -57,21 +64,21 @@ public struct TodoIndex: Sendable {
     }
     // Titles need every page, so only a workspace that holds a chip pays for reading them.
     if !chips.isEmpty { eventsInFirstMetOrder = chips.events(pages: workspace.pages) }
-    readDrafts(in: workspace)
     readRepeats(in: workspace)
     readBlockers(in: workspace)
   }
 
   /// A page that holds rows: not in Trash (an empty stamp is none, as `Boolean(p.trashedAt)`), not the day template,
   /// not a day's draft (`livePages`).
-  private static func isLive(_ page: Page) -> Bool {
+  static func isLive(_ page: Page) -> Bool {
     (page.trashedAt?.isEmpty ?? true) && page.type != "template" && !page.isDraft
   }
 
   /// Every to-do row of the blocks, a row before the rows nested under it (`flatNodes`, `isTaskRow`). The same
-  /// walk hands each block's chips to `chips`, so no document is read twice.
+  /// walk hands each block's chips to `chips` and its id to `sources`, so no document is read twice.
   private static func rows(
-    in blocks: [Block], of page: Page, day: LocalDate?, chips: inout EventCollector
+    in blocks: [Block], of page: Page, at position: Int, day: LocalDate?, chips: inout EventCollector,
+    sources: inout BlockSources
   ) -> [(taskId: String, row: TaskRow)] {
     var found: [(taskId: String, row: TaskRow)] = []
     for block in blocks {
@@ -79,7 +86,8 @@ public struct TodoIndex: Sendable {
         found.append((taskId, TaskRow(pageId: page.id, day: day, blockId: block.id, role: RowRole(block.props["role"]))))
       }
       chips.read(block, on: page, pageDate: day)
-      found += rows(in: block.children, of: page, day: day, chips: &chips)
+      sources.read(block, at: position)
+      found += rows(in: block.children, of: page, at: position, day: day, chips: &chips, sources: &sources)
     }
     return found
   }
@@ -132,6 +140,10 @@ public struct TodoIndex: Sendable {
     draftsByPageId[CodeUnitKey(Workspace.draftPageId(of: dayPageId))]
   }
 
+  /// The place among the workspace's pages of the first live page holding a block of this id, for a line some stored
+  /// draft's item says it came from: `.some(nil)` when no live page holds it, nil when the index did not look.
+  func firstLivePage(holding blockId: String) -> Int?? { sources.firstLivePage(holding: blockId) }
+
   /// The standing draft rule of `use-day-draft.ts:91`: stored, and not stale.
   public func draftStands(for dayPageId: String) -> Bool {
     dayDraft(of: dayPageId).map { !$0.stale } ?? false
@@ -172,5 +184,26 @@ public struct TodoIndex: Sendable {
     }
     guard let since, let weekAgo = today.adding(days: -7), since <= weekAgo else { return nil }
     return since
+  }
+}
+
+/// Where each sought block id first sits on a live page, met as the index walks the pages in the workspace's order.
+private struct BlockSources: Sendable {
+  /// Compared as Swift strings, which may take two ids for one where the web would not: that only notes more blocks
+  /// than were sought, each under its own code units, so every id's answer is still its own.
+  let sought: Set<String>
+  private var firstPage: [CodeUnitKey: Int] = [:]
+
+  init(sought: Set<String>) { self.sought = sought }
+
+  mutating func read(_ block: Block, at position: Int) {
+    guard !sought.isEmpty, sought.contains(block.id) else { return }
+    let key = CodeUnitKey(block.id)
+    if firstPage[key] == nil { firstPage[key] = position }
+  }
+
+  func firstLivePage(holding blockId: String) -> Int?? {
+    guard sought.contains(blockId) else { return nil }
+    return .some(firstPage[CodeUnitKey(blockId)])
   }
 }

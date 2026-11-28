@@ -29,9 +29,17 @@ func takenOver(_ index: TodoIndex) -> Set<CodeUnitKey> {
 /// A line is known by the block it was carried from (`from`); an item an older recipe made has none and is known by
 /// its words, but only against a line that could have been in its draft: one from a page dated before that draft's
 /// day. The row an applied item became (`row`) is that line too while it still reads the item's words.
-func decidedElsewhere(in workspace: Workspace, index: TodoIndex, dayPage: Page) -> (DayDraft.Item) -> Bool {
+///
+/// The index answers where a line came from for every line a stored draft names, so only pages it does not hold are
+/// parsed here. One reading differs from the web's at its edge: a day page or a draft's parent with no date reads as
+/// unknown, so readable, where the web's comparison with `undefined` is false; stored data cannot reach it, as drafts
+/// are made only for dated pages. `parse` is how a page is read (a test counts the pages read through it).
+func decidedElsewhere(
+  in workspace: Workspace, index: TodoIndex, dayPage: Page,
+  parse: @escaping (Page) -> [Block] = { Document.blocks($0.document) }
+) -> (DayDraft.Item) -> Bool {
   let own = index.dayDraft(of: dayPage.id)
-  let match = DecidedMatch(workspace, index: index, dayPage: dayPage)
+  let match = DecidedMatch(workspace, index: index, dayPage: dayPage, parse: parse)
   return { item in match.matches(item, old: own.map { $0.recipe(of: item) < fromRecipe } ?? true) }
 }
 
@@ -57,7 +65,12 @@ private final class DecidedMatch {
   /// The flattened block ids of each page searched so far, by its place in `pages`: no page is parsed twice.
   private var blockIds: [Int: Set<CodeUnitKey>] = [:]
 
-  init(_ workspace: Workspace, index: TodoIndex, dayPage: Page) {
+  private let parse: (Page) -> [Block]
+  private let index: TodoIndex
+
+  init(_ workspace: Workspace, index: TodoIndex, dayPage: Page, parse: @escaping (Page) -> [Block]) {
+    self.parse = parse
+    self.index = index
     pages = workspace.pages
     dayPageDate = dayPage.raw["date"]?.stringValue
     let ownId = CodeUnitKey(Workspace.draftPageId(of: dayPage.id))
@@ -114,15 +127,32 @@ private final class DecidedMatch {
 
   /// `sourceDay` (`day-draft.ts:144-150`): the day of the first page that is not a draft (in Trash or not, a template
   /// or not) holding a block of that id: a day page's date, another page's creation day; nil when unknown.
+  ///
+  /// The index already knows the first live page holding a line a stored draft names; only the pages it does not hold
+  /// (in Trash, templates) that come before that one are parsed, to keep the web's "first in the workspace's order".
   private func sourceDay(_ id: String) -> String? {
     let key = CodeUnitKey(id)
     if let known = sourceDays[key] { return known }
-    var found: String?
-    for (position, page) in pages.enumerated() where !page.isDraft && ids(of: page, at: position).contains(key) {
-      found =
-        page.type == "daily"
-        ? page.raw["date"]?.stringValue : page.raw["createdAt"]?.stringValue.map(Self.dayPart)
-      break
+    var holder: Page?
+    switch index.firstLivePage(holding: id) {
+    case .some(let live):
+      for position in 0..<(live ?? pages.count) {
+        let page = pages[position]
+        if !page.isDraft, !TodoIndex.isLive(page), ids(of: page, at: position).contains(key) {
+          holder = page
+          break
+        }
+      }
+      if holder == nil, let live { holder = pages[live] }
+    case nil:
+      // An id no stored draft names, which the index did not look for: every page that is not a draft is searched.
+      for (position, page) in pages.enumerated() where !page.isDraft && ids(of: page, at: position).contains(key) {
+        holder = page
+        break
+      }
+    }
+    let found = holder.flatMap { page in
+      page.type == "daily" ? page.raw["date"]?.stringValue : page.raw["createdAt"]?.stringValue.map(Self.dayPart)
     }
     sourceDays[key] = .some(found)
     return found
@@ -130,7 +160,7 @@ private final class DecidedMatch {
 
   private func ids(of page: Page, at position: Int) -> Set<CodeUnitKey> {
     if let known = blockIds[position] { return known }
-    let ids = Set(Document.blocks(page.document).flatMap(\.flattened).map { CodeUnitKey($0.id) })
+    let ids = Set(parse(page).flatMap(\.flattened).map { CodeUnitKey($0.id) })
     blockIds[position] = ids
     return ids
   }
