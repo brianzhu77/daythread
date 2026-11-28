@@ -61,10 +61,13 @@ struct Harness {
 
   /// `relay`: the engine's states reach the model through it, so a test can hand them over late. `engineClock`: the
   /// engine reads its time from it, so a test can move the engine's day; without one it stays at the start.
+  /// `asksForDayDrafts`: off unless a test opts in, so a test that shows today meets no ask it did not script;
+  /// `draftSleep` is how the model waits out an ask's 60 seconds.
   init(
     copy: Workspace, clock: Clock = Clock(), drafts: [PageDraft] = [],
     sleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep, relay: StateRelay? = nil,
-    engineClock: EngineClock? = nil
+    engineClock: EngineClock? = nil, asksForDayDrafts: Bool = false,
+    draftSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep
   ) async throws {
     server = TestServer([
       .account(Account(owner: "one", email: "one@example.com", signIn: true)),
@@ -83,11 +86,9 @@ struct Harness {
       now = { start }
     }
     engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: sleep, now: now)
-    if let relay {
-      model = AppModel(engine: engine, keepsChanges: true, now: { clock.date }, states: relay.follow(engine.states))
-    } else {
-      model = AppModel(engine: engine, now: { clock.date })
-    }
+    model = AppModel(
+      engine: engine, keepsChanges: true, now: { clock.date }, states: relay?.follow(engine.states),
+      asksForDayDrafts: asksForDayDrafts, draftSleep: draftSleep)
     model.start()
     try await until { [model] in model.state.phase == .ready && model.state.workspace != nil }
     await engine.settled()
