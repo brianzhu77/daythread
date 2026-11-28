@@ -1067,10 +1067,10 @@ The day draft has its own section, §13, written when 1d.1 was in.
 ## 13. Slice 1d.2: the day draft
 
 Written 2026-11-27 against the web as it is (the survey `web-facts-1d.md`, sections 1 to 3 and 6) and the app
-after 1d.1, and checked against the code by a builder before the plan (four corrections came of it: the
-route's 404, when `Couldn’t draft` shows, what holds `set-draft` back, and the empty row under the caret). On the web, when he opens today's page the app asks the server
-for the day's draft once; what comes back is drawn inside the page as suggestions he applies or skips one at a
-time, or all at once. This slice brings that to the app.
+after 1d.1, and checked against the code by a builder before the plan (four corrections came of it: the route's
+404, when `Couldn’t draft` shows, what holds `set-draft` back, and the empty row under the caret). On the web,
+when he opens today's page the app asks the server for the day's draft once; what comes back is drawn inside the
+page as suggestions he applies or skips one at a time, or all at once. This slice brings that to the app.
 
 It is about twice the size of 1d.1, and one part of it reaches the typing path. So it is built and merged in
 parts, each of which he can use, after a narrow spike (§13.5) that the plan waits for:
