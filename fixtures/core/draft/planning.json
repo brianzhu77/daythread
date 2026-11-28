@@ -1,0 +1,153 @@
+[
+  {
+    "name": "his template: planning ends at the reflection",
+    "test": "draft: the planning part is the outermost section holding the first to-do row, never the reflection",
+    "document": "[{\"id\":\"m\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Morning\",\"styles\":{}}],\"children\":[]},{\"id\":\"ev\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"eb\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"t3\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Top 3\",\"styles\":{}}],\"children\":[]},{\"id\":\"q\",\"type\":\"quote\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Finishable today.\",\"styles\":{}}],\"children\":[]},{\"id\":\"s1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s1\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"s2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s2\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"s3\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s3\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"o\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Other\",\"styles\":{}}],\"children\":[]},{\"id\":\"s4\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s4\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"r\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Reflection\",\"styles\":{}}],\"children\":[]},{\"id\":\"pr\",\"type\":\"heading\",\"props\":{\"level\":4},\"content\":[{\"type\":\"text\",\"text\":\"Progress\",\"styles\":{}}],\"children\":[]},{\"id\":\"pp\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"What went well?\",\"styles\":{}}],\"children\":[]},{\"id\":\"blank\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 10
+    },
+    "planningEnd": 1,
+    "moreOpenAfter": 9
+  },
+  {
+    "name": "the built-in template",
+    "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 2
+    },
+    "planningEnd": 1,
+    "moreOpenAfter": 1
+  },
+  {
+    "name": "the built-in day as the test has it",
+    "test": "draft: \"more open\" goes at the end of the planning part, before a closing divider, never under the heading",
+    "document": "[{\"id\":\"t\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"slot\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:slot\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"e\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 2
+    },
+    "planningEnd": 1,
+    "moreOpenAfter": 1
+  },
+  {
+    "name": "a first to-do row under a level-2 heading under a level-1",
+    "document": "[{\"id\":\"a\",\"type\":\"heading\",\"props\":{\"level\":1},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Today\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write the report\",\"styles\":{}}],\"children\":[]},{\"id\":\"d\",\"type\":\"heading\",\"props\":{\"level\":1},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"e\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"words\",\"styles\":{}}],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 3
+    },
+    "planningEnd": 1,
+    "moreOpenAfter": 2
+  },
+  {
+    "name": "a to-do row nested under a bullet",
+    "document": "[{\"id\":\"a\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Errands\",\"styles\":{}}],\"children\":[{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Post the parcel\",\"styles\":{}}],\"children\":[]}]},{\"id\":\"d\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"e\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"words\",\"styles\":{}}],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 2
+    },
+    "planningEnd": 1,
+    "moreOpenAfter": 1
+  },
+  {
+    "name": "no to-do row: the first section",
+    "document": "[{\"id\":\"a\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Before\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"One\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"words\",\"styles\":{}}],\"children\":[]},{\"id\":\"d\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Two\",\"styles\":{}}],\"children\":[]},{\"id\":\"e\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"more\",\"styles\":{}}],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 1,
+      "end": 3
+    },
+    "planningEnd": 2,
+    "moreOpenAfter": 2
+  },
+  {
+    "name": "no heading, to-do rows: the whole page, more open after the last row",
+    "test": "draft: \"more open\" goes at the end of the planning part, before a closing divider, never under the heading",
+    "document": "[{\"id\":\"a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:a\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"One\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"note\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Two\",\"styles\":{}}],\"children\":[]},{\"id\":\"n\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"long notes\",\"styles\":{}}],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 4
+    },
+    "planningEnd": 0,
+    "moreOpenAfter": 2
+  },
+  {
+    "name": "no heading, no to-do row",
+    "test": "draft: \"more open\" goes at the end of the planning part, before a closing divider, never under the heading",
+    "document": "[{\"id\":\"n\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"more\",\"styles\":{}}],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 2
+    },
+    "planningEnd": 0,
+    "moreOpenAfter": -1
+  },
+  {
+    "name": "a planning part that is only its heading",
+    "test": "draft: \"more open\" goes at the end of the planning part, before a closing divider, never under the heading",
+    "document": "[{\"id\":\"p\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"n\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"x\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"words\",\"styles\":{}}],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 1
+    },
+    "planningEnd": 1,
+    "moreOpenAfter": 0
+  },
+  {
+    "name": "one closing divider",
+    "test": "draft: \"more open\" goes at the end of the planning part, before a closing divider, never under the heading",
+    "document": "[{\"id\":\"m\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Morning\",\"styles\":{}}],\"children\":[]},{\"id\":\"ev\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"eb\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"t3\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Top 3\",\"styles\":{}}],\"children\":[]},{\"id\":\"q\",\"type\":\"quote\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Finishable today.\",\"styles\":{}}],\"children\":[]},{\"id\":\"s1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s1\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"s2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s2\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"s3\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s3\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"o\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Other\",\"styles\":{}}],\"children\":[]},{\"id\":\"s4\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s4\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"d\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Drop\",\"styles\":{}}],\"children\":[]},{\"id\":\"dl\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"hr\",\"type\":\"divider\",\"props\":{},\"children\":[]},{\"id\":\"r\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Reflection\",\"styles\":{}}],\"children\":[]},{\"id\":\"pr\",\"type\":\"heading\",\"props\":{\"level\":4},\"content\":[{\"type\":\"text\",\"text\":\"Progress\",\"styles\":{}}],\"children\":[]},{\"id\":\"pp\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"What went well?\",\"styles\":{}}],\"children\":[]},{\"id\":\"blank\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 13
+    },
+    "planningEnd": 1,
+    "moreOpenAfter": 11
+  },
+  {
+    "name": "two closing dividers",
+    "document": "[{\"id\":\"m\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Morning\",\"styles\":{}}],\"children\":[]},{\"id\":\"ev\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"eb\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"t3\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Top 3\",\"styles\":{}}],\"children\":[]},{\"id\":\"q\",\"type\":\"quote\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Finishable today.\",\"styles\":{}}],\"children\":[]},{\"id\":\"s1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s1\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"s2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s2\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"s3\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s3\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"o\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Other\",\"styles\":{}}],\"children\":[]},{\"id\":\"s4\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:s4\",\"role\":\"reference\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"\",\"styles\":{}}],\"children\":[]},{\"id\":\"d\",\"type\":\"heading\",\"props\":{\"level\":3},\"content\":[{\"type\":\"text\",\"text\":\"Drop\",\"styles\":{}}],\"children\":[]},{\"id\":\"dl\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"hr1\",\"type\":\"divider\",\"props\":{},\"children\":[]},{\"id\":\"hr2\",\"type\":\"divider\",\"props\":{},\"children\":[]},{\"id\":\"r\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Reflection\",\"styles\":{}}],\"children\":[]},{\"id\":\"pr\",\"type\":\"heading\",\"props\":{\"level\":4},\"content\":[{\"type\":\"text\",\"text\":\"Progress\",\"styles\":{}}],\"children\":[]},{\"id\":\"pp\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"What went well?\",\"styles\":{}}],\"children\":[]},{\"id\":\"blank\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 14
+    },
+    "planningEnd": 1,
+    "moreOpenAfter": 11
+  },
+  {
+    "name": "plan rows of a known and of an unknown task directly under the heading",
+    "document": "[{\"id\":\"a\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"k\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:k\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Known\",\"styles\":{}}],\"children\":[]},{\"id\":\"u\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:u\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Unknown\",\"styles\":{}}],\"children\":[]},{\"id\":\"p\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"words\",\"styles\":{}}],\"children\":[]},{\"id\":\"n\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]}]",
+    "tasks": [
+      "editor-task:k"
+    ],
+    "range": {
+      "start": 0,
+      "end": 4
+    },
+    "planningEnd": 2,
+    "moreOpenAfter": 3
+  },
+  {
+    "name": "a heading with no level reads as level 1",
+    "document": "[{\"id\":\"a\",\"type\":\"heading\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Plan\",\"styles\":{}}],\"children\":[]},{\"id\":\"b\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:b\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":[{\"type\":\"text\",\"text\":\"Write\",\"styles\":{}}],\"children\":[]},{\"id\":\"c\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"d\",\"type\":\"paragraph\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"words\",\"styles\":{}}],\"children\":[]}]",
+    "tasks": [],
+    "range": {
+      "start": 0,
+      "end": 4
+    },
+    "planningEnd": 1,
+    "moreOpenAfter": 3
+  }
+]

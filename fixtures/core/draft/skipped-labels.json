@@ -1,0 +1,65 @@
+[
+  {
+    "days": [
+      "2026-11-25"
+    ],
+    "on": "2026-11-26",
+    "text": "skipped Wed",
+    "full": "skipped Wed 11/25"
+  },
+  {
+    "days": [
+      "2026-11-21",
+      "2026-11-22"
+    ],
+    "on": "2026-11-26",
+    "text": "skipped Sat, Sun",
+    "full": "skipped Sat 11/21, Sun 11/22"
+  },
+  {
+    "days": [
+      "2026-11-21",
+      "2026-11-22",
+      "2026-11-24"
+    ],
+    "on": "2026-11-26",
+    "text": "skipped Sat, Sun, Tue",
+    "full": "skipped Sat 11/21, Sun 11/22, Tue 11/24"
+  },
+  {
+    "days": [
+      "2026-11-20",
+      "2026-11-21",
+      "2026-11-22",
+      "2026-11-24"
+    ],
+    "on": "2026-11-26",
+    "text": "skipped 4 times",
+    "full": "skipped Fri 11/20, Sat 11/21, Sun 11/22, Tue 11/24"
+  },
+  {
+    "days": [
+      "2026-11-19"
+    ],
+    "on": "2026-11-26",
+    "text": "skipped 11/19",
+    "full": "skipped Thu 11/19"
+  },
+  {
+    "days": [
+      "2026-11-20"
+    ],
+    "on": "2026-11-26",
+    "text": "skipped Fri",
+    "full": "skipped Fri 11/20"
+  },
+  {
+    "days": [
+      "2026-12-20",
+      "2026-12-31"
+    ],
+    "on": "2027-01-02",
+    "text": "skipped 12/20, Thu",
+    "full": "skipped Sun 12/20, Thu 12/31"
+  }
+]

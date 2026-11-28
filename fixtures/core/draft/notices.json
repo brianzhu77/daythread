@@ -1,0 +1,25 @@
+{
+  "applied": [
+    [
+      1,
+      "Applied"
+    ],
+    [
+      2,
+      "Applied 2"
+    ]
+  ],
+  "skipped": [
+    [
+      1,
+      "Skipped"
+    ],
+    [
+      3,
+      "Skipped 3"
+    ]
+  ],
+  "notApplied": "Not applied · changed elsewhere",
+  "notSkipped": "Not skipped · changed elsewhere",
+  "cantUndo": "Can't undo · edited since"
+}

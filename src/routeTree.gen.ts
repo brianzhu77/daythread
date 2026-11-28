@@ -37,6 +37,7 @@ import { Route as ApiPushTickRouteImport } from './routes/api/push/tick'
 import { Route as ApiPushUnsubscribeRouteImport } from './routes/api/push/unsubscribe'
 import { Route as ApiV1AccountRouteImport } from './routes/api/v1/account'
 import { Route as ApiV1CommandsRouteImport } from './routes/api/v1/commands'
+import { Route as ApiV1DayDraftRouteImport } from './routes/api/v1/day-draft'
 import { Route as ApiV1SavesRouteImport } from './routes/api/v1/saves'
 import { Route as ApiV1WorkspaceRouteImport } from './routes/api/v1/workspace'
 import { Route as ApiV1AuthSignInRouteImport } from './routes/api/v1/auth/sign-in'
@@ -182,6 +183,11 @@ const ApiV1CommandsRoute = ApiV1CommandsRouteImport.update({
   path: '/api/v1/commands',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1DayDraftRoute = ApiV1DayDraftRouteImport.update({
+  id: '/api/v1/day-draft',
+  path: '/api/v1/day-draft',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiV1SavesRoute = ApiV1SavesRouteImport.update({
   id: '/api/v1/saves',
   path: '/api/v1/saves',
@@ -232,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/api/push/unsubscribe': typeof ApiPushUnsubscribeRoute
   '/api/v1/account': typeof ApiV1AccountRoute
   '/api/v1/commands': typeof ApiV1CommandsRoute
+  '/api/v1/day-draft': typeof ApiV1DayDraftRoute
   '/api/v1/saves': typeof ApiV1SavesRoute
   '/api/v1/workspace': typeof ApiV1WorkspaceRoute
   '/api/v1/auth/sign-in': typeof ApiV1AuthSignInRoute
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/api/push/unsubscribe': typeof ApiPushUnsubscribeRoute
   '/api/v1/account': typeof ApiV1AccountRoute
   '/api/v1/commands': typeof ApiV1CommandsRoute
+  '/api/v1/day-draft': typeof ApiV1DayDraftRoute
   '/api/v1/saves': typeof ApiV1SavesRoute
   '/api/v1/workspace': typeof ApiV1WorkspaceRoute
   '/api/v1/auth/sign-in': typeof ApiV1AuthSignInRoute
@@ -301,6 +309,7 @@ export interface FileRoutesById {
   '/api/push/unsubscribe': typeof ApiPushUnsubscribeRoute
   '/api/v1/account': typeof ApiV1AccountRoute
   '/api/v1/commands': typeof ApiV1CommandsRoute
+  '/api/v1/day-draft': typeof ApiV1DayDraftRoute
   '/api/v1/saves': typeof ApiV1SavesRoute
   '/api/v1/workspace': typeof ApiV1WorkspaceRoute
   '/api/v1/auth/sign-in': typeof ApiV1AuthSignInRoute
@@ -337,6 +346,7 @@ export interface FileRouteTypes {
     | '/api/push/unsubscribe'
     | '/api/v1/account'
     | '/api/v1/commands'
+    | '/api/v1/day-draft'
     | '/api/v1/saves'
     | '/api/v1/workspace'
     | '/api/v1/auth/sign-in'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/api/push/unsubscribe'
     | '/api/v1/account'
     | '/api/v1/commands'
+    | '/api/v1/day-draft'
     | '/api/v1/saves'
     | '/api/v1/workspace'
     | '/api/v1/auth/sign-in'
@@ -405,6 +416,7 @@ export interface FileRouteTypes {
     | '/api/push/unsubscribe'
     | '/api/v1/account'
     | '/api/v1/commands'
+    | '/api/v1/day-draft'
     | '/api/v1/saves'
     | '/api/v1/workspace'
     | '/api/v1/auth/sign-in'
@@ -440,6 +452,7 @@ export interface RootRouteChildren {
   ApiPushUnsubscribeRoute: typeof ApiPushUnsubscribeRoute
   ApiV1AccountRoute: typeof ApiV1AccountRoute
   ApiV1CommandsRoute: typeof ApiV1CommandsRoute
+  ApiV1DayDraftRoute: typeof ApiV1DayDraftRoute
   ApiV1SavesRoute: typeof ApiV1SavesRoute
   ApiV1WorkspaceRoute: typeof ApiV1WorkspaceRoute
   ApiV1AuthSignInRoute: typeof ApiV1AuthSignInRoute
@@ -644,6 +657,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1CommandsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/day-draft': {
+      id: '/api/v1/day-draft'
+      path: '/api/v1/day-draft'
+      fullPath: '/api/v1/day-draft'
+      preLoaderRoute: typeof ApiV1DayDraftRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/saves': {
       id: '/api/v1/saves'
       path: '/api/v1/saves'
@@ -704,6 +724,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPushUnsubscribeRoute: ApiPushUnsubscribeRoute,
   ApiV1AccountRoute: ApiV1AccountRoute,
   ApiV1CommandsRoute: ApiV1CommandsRoute,
+  ApiV1DayDraftRoute: ApiV1DayDraftRoute,
   ApiV1SavesRoute: ApiV1SavesRoute,
   ApiV1WorkspaceRoute: ApiV1WorkspaceRoute,
   ApiV1AuthSignInRoute: ApiV1AuthSignInRoute,

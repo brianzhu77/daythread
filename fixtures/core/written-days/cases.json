@@ -300,7 +300,7 @@
           "date": null,
           "title": "",
           "parentId": "day:2026-10-21",
-          "document": "{\"status\":\"ready\",\"items\":[],\"moreOpen\":false}"
+          "document": "{\"status\":\"ready\",\"items\":[],\"moreOpen\":[]}"
         }
       ],
       "tasks": [],

@@ -1,0 +1,10 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { appRoute } from '../../../server/auth/app-path.ts'
+
+export const Route = createFileRoute('/api/v1/day-draft')({
+  server: {
+    handlers: {
+      POST: appRoute(async request => (await import('../../../server/api-v1.ts')).handleDayDraft(request)),
+    },
+  },
+})

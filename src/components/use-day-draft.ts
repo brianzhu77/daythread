@@ -6,14 +6,15 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { EditorNode } from '../domain/editor-document'
 import { draftOf, draftStale, draftView, type DraftItemView } from '../domain/day-draft'
-import { plannedOn } from '../domain/workspace'
 import type { Action, LocalDate, Page, Task, Workspace } from '../domain/types'
 import { prepareDayDraft } from '../server/functions'
 import { todayIso } from './dates'
+import { applyDraftAction, draftTicket, reopenDraftAction, skipDraftAction, type DraftTicket } from './draft-actions'
+import { draftLineState, type DayDraftState, type DraftAskSummary } from './draft-words'
 import { flushEditor } from './editor-flush'
 import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
-export type DayDraftState = 'none' | 'preparing' | 'ready' | 'failed' | 'offline'
+export type { DayDraftState, DraftTicket }
 export interface DayDraftHook {
   state: DayDraftState
   items: DraftItemView[]
@@ -63,11 +64,6 @@ export interface DayDraftHook {
 export type { DraftItemView, EditorNode, Task }
 export interface DecisionHooks<T = string> { onStored?: (stored: T) => void; /** The server said nothing was left to decide (decided elsewhere). */ onRefused?: () => void; /** The server held it (the draft changed since): the banner keeps Keep mine / Discard. */ onHeld?: () => void }
 export interface DecisionOutcome { operationId: string; stored: boolean; landed: boolean; refused: boolean; /** Held by the server, not refused outright: still in the outbox for Keep mine / Discard. */ held: boolean; failed: boolean }
-/**
- * What a skip notice acts on (Ratchet da1ca677): the items, the skip that set them aside, and each to-do's planned day
- * as the notice was shown. Move to and Undo are refused for what changed since, in this tab or any other.
- */
-export interface DraftTicket { itemIds: string[]; skippedBy: string; seen: Record<string, LocalDate | null> }
 
 /**
  * This tab's ask for each day page's draft, shared by every hook on the page: in flight since `at`, answered (`done`), or
@@ -83,6 +79,7 @@ const subscribeAsks = (l: () => void) => { askListeners.add(l); return () => { a
 /** No reply this long after asking (a tab frozen mid-request, Nov 1 07:00Z): the ask is taken as lost and may go again. */
 const LOST_MS = 60_000
 const inFlight = (ask: Ask | undefined): boolean => ask?.state === 'asking' && Date.now() - ask.at < LOST_MS
+const askSummary = (ask: Ask | undefined): DraftAskSummary => (!ask ? null : ask.state === 'asking' ? (inFlight(ask) ? 'in-flight' : 'lost') : ask.state)
 /** A draft ask still waiting for its reply in this tab, on any page: a reload waits for it (new-build.ts). */
 export const draftAskPending = (): boolean => [...asks.values()].some(inFlight)
 const failuresOf = (ask: Ask | undefined): number => !ask || ask.state === 'done' ? 0 : ask.state === 'failed' ? ask.failures : ask.failures + 1
@@ -172,7 +169,7 @@ export function useDayDraft(page: Page): DayDraftHook {
     const operationId = newOperationId()
     let stored = false, refused = false, held = false
     // No notice from here: the day-draft UI shows `Applied · Undo` as soon as the change is stored (tap feedback §2.1).
-    const receipt = await write({ type: 'apply-draft', pageId: page.id, itemIds, ...(edits ? { edits } : {}), today: todayIso() }, undefined, operationId, {
+    const receipt = await write(applyDraftAction(page.id, itemIds, todayIso(), edits), undefined, operationId, {
       inlineRefusal: /Nothing to apply/, onRefused: () => { refused = true }, onHeld: () => { held = true }, onStored: () => { stored = true; hooks?.onStored?.(operationId) },
     })
     const after = receipt ? draftOf(latest()!, page.id) : null
@@ -190,13 +187,11 @@ export function useDayDraft(page: Page): DayDraftHook {
   }, [latest, run])
 
   const skip = useCallback(async (itemIds: string[], hooks?: DecisionHooks<DraftTicket>): Promise<DraftTicket | null> => {
-    const ws = latest(), draft = ws ? draftOf(ws, page.id) : null
-    const seen: Record<string, LocalDate | null> = {}
-    for (const item of draft?.items ?? []) if (ws && item.taskId && itemIds.includes(item.id)) seen[item.id] = plannedOn(ws, item.taskId)
+    const ws = latest()
     const skippedBy = newOperationId()
     // No notice from here: the day-draft UI shows `Skipped` with its day row (day-draft.tsx).
-    const ticket: DraftTicket = { itemIds, skippedBy, seen }
-    const receipt = await write({ type: 'skip-draft', pageId: page.id, itemIds }, undefined, skippedBy, { inlineRefusal: /Nothing to skip/, onRefused: () => hooks?.onRefused?.(), onHeld: () => hooks?.onHeld?.(), onStored: () => hooks?.onStored?.(ticket) })
+    const ticket: DraftTicket = ws ? draftTicket(ws, page.id, itemIds, skippedBy) : { itemIds, skippedBy, seen: {} }
+    const receipt = await write(skipDraftAction(page.id, itemIds), undefined, skippedBy, { inlineRefusal: /Nothing to skip/, onRefused: () => hooks?.onRefused?.(), onHeld: () => hooks?.onHeld?.(), onStored: () => hooks?.onStored?.(ticket) })
     return receipt ? ticket : null
   }, [latest, page.id, write])
 
@@ -212,7 +207,7 @@ export function useDayDraft(page: Page): DayDraftHook {
 
   const reopen = useCallback(async (ticket: DraftTicket) => {
     let refused = false
-    const receipt = await write({ type: 'reopen-draft', pageId: page.id, itemIds: ticket.itemIds, skippedBy: ticket.skippedBy, seen: ticket.seen }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo/, onRefused: () => { refused = true } })
+    const receipt = await write(reopenDraftAction(page.id, ticket), { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo/, onRefused: () => { refused = true } })
     return receipt ? 'done' as const : refused ? 'refused' as const : 'failed' as const
   }, [page.id, write])
 
@@ -238,8 +233,6 @@ export function useDayDraft(page: Page): DayDraftHook {
 
   const retry = useCallback(() => { void prepare(false) }, [prepare])
 
-  const state: DayDraftState = offline && !view ? 'offline' : inFlight(ask) && !view?.items.length ? 'preparing'
-    // A failed or lost ask here shows Retry at once (he may be looking at the page); a tab coming back asks again first.
-    : !view ? (ask && ask.state !== 'done' ? 'failed' : 'none') : view.status === 'failed' ? 'failed' : 'ready'
+  const state = draftLineState(view, askSummary(ask), offline)
   return { state, items: view?.items ?? [], decided, held, moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, undoApply, snooze, undoMove, move, reopen, addOpen, retry }
 }

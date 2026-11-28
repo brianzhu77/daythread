@@ -1,0 +1,174 @@
+{
+  "before": {
+    "schemaVersion": 2,
+    "revision": 6,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "day:2026-11-25",
+        "type": "daily",
+        "date": "2026-11-25",
+        "title": "2026-11-25",
+        "document": "[{\"id\":\"day:2026-11-25:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-25:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"y1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y1\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the flights\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:01:00.000Z"
+      },
+      {
+        "id": "errands",
+        "type": "document",
+        "date": null,
+        "title": "Errands",
+        "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"bed\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:bed\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Buy a dog bed\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:02:00.000Z"
+      },
+      {
+        "id": "day:2026-11-26",
+        "type": "daily",
+        "date": "2026-11-26",
+        "title": "2026-11-26",
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+      },
+      {
+        "id": "draft:day:2026-11-26",
+        "type": "draft",
+        "date": null,
+        "title": "",
+        "parentId": "day:2026-11-26",
+        "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:y1\",\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:bed\",\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i3\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b-i3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Stretch\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[],\"recipe\":5}"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "editor-task:y1",
+        "title": "Book the flights",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-25",
+        "sourcePageId": "day:2026-11-25"
+      },
+      {
+        "id": "editor-task:bed",
+        "title": "Buy a dog bed",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "errands"
+      }
+    ],
+    "deletedTasks": [],
+    "receipts": {},
+    "undo": {
+      "operationId": "op-5",
+      "revision": 6
+    }
+  },
+  "pageId": "day:2026-11-26",
+  "itemIds": [
+    "i1",
+    "i2",
+    "i3"
+  ],
+  "today": "2026-11-26",
+  "action": {
+    "type": "skip-draft",
+    "pageId": "day:2026-11-26",
+    "itemIds": [
+      "i1",
+      "i2",
+      "i3"
+    ]
+  },
+  "receipt": {
+    "operationId": "cmd-dismiss-a-mix",
+    "message": "Skipped 3",
+    "entityId": "draft:day:2026-11-26",
+    "revision": 7,
+    "fingerprint": "c128:b3efee4809ec4c1305fac5d0f79f4941"
+  },
+  "refusal": null,
+  "after": {
+    "schemaVersion": 2,
+    "revision": 7,
+    "timezone": "America/Vancouver",
+    "pages": [
+      {
+        "id": "day:2026-11-25",
+        "type": "daily",
+        "date": "2026-11-25",
+        "title": "2026-11-25",
+        "document": "[{\"id\":\"day:2026-11-25:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-25:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-25:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-25:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"y1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:y1\",\"role\":\"plan\",\"planDate\":\"2026-11-25\"},\"content\":[{\"type\":\"text\",\"text\":\"Book the flights\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:01:00.000Z"
+      },
+      {
+        "id": "errands",
+        "type": "document",
+        "date": null,
+        "title": "Errands",
+        "document": "[{\"id\":\"ffc64c92-f7bc-4105-ae37-05e1ec5c86e5\",\"type\":\"paragraph\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"bed\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:bed\",\"role\":\"plan\",\"planDate\":\"\"},\"content\":[{\"type\":\"text\",\"text\":\"Buy a dog bed\",\"styles\":{}}],\"children\":[]}]",
+        "editedAt": "2026-11-26T09:02:00.000Z"
+      },
+      {
+        "id": "day:2026-11-26",
+        "type": "daily",
+        "date": "2026-11-26",
+        "title": "2026-11-26",
+        "document": "[{\"id\":\"day:2026-11-26:h0\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"TODO\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:day:2026-11-26:r0\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h1\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Events\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h2\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Good Stuffs\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r2\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]},{\"id\":\"day:2026-11-26:h3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":[{\"type\":\"text\",\"text\":\"Notes\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-11-26:r3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[],\"children\":[]}]"
+      },
+      {
+        "id": "draft:day:2026-11-26",
+        "type": "draft",
+        "date": null,
+        "title": "",
+        "parentId": "day:2026-11-26",
+        "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:y1\",\"source\":\"model\",\"state\":\"skipped\",\"by\":\"cmd-dismiss-a-mix\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"taskId\":\"editor-task:bed\",\"source\":\"model\",\"state\":\"skipped\",\"by\":\"cmd-dismiss-a-mix\"},{\"id\":\"i3\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b-i3\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Stretch\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"skipped\",\"by\":\"cmd-dismiss-a-mix\"}],\"moreOpen\":[],\"recipe\":5}"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "editor-task:y1",
+        "title": "Book the flights",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-25",
+        "sourcePageId": "day:2026-11-25"
+      },
+      {
+        "id": "editor-task:bed",
+        "title": "Buy a dog bed",
+        "status": "open",
+        "version": 1,
+        "paused": false,
+        "deadlineOn": null,
+        "attentionOn": null,
+        "createdOn": "2026-11-26",
+        "sourcePageId": "errands"
+      }
+    ],
+    "deletedTasks": [],
+    "receipts": {},
+    "undo": {
+      "operationId": "cmd-dismiss-a-mix",
+      "revision": 7
+    }
+  },
+  "ticket": {
+    "itemIds": [
+      "i1",
+      "i2",
+      "i3"
+    ],
+    "skippedBy": "cmd-dismiss-a-mix",
+    "seen": {
+      "i1": "2026-11-25",
+      "i2": null
+    }
+  }
+}

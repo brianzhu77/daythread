@@ -38,6 +38,19 @@ The morning: the strip above a day's page. Today is Thu 2026-11-26 here too.
 - `notices/strip.json`: `{ date, today, text }`, the notice `planOnNotice` gives Bring back and Another day.
 - `facts-actions/`: one file per strip command. `{ before, taskId, date, today, action, receipt, after, notice }`: `action` is the web's `planOnAction`, `after` holds the Undo marker `{ operationId: "cmd-<name>", revision }`, `notice` is `planOnNotice`'s.
 
+The day draft. A case that mirrors a web test names it as `test` and is built on that test's days (its today is Thu 2026-10-22); the others are on Thu 2026-11-26.
+
+- `draft/recipe.json`: `{ recipe }`, the web's `DRAFT_RECIPE`: how drafts are made now.
+- `draft/documents.json`: `{ name, document, draft, settled, stale }`, a draft page's stored string as `draftOf` reads it (`null` when it does not parse, and then no `settled` or `stale`), with `draftSettled` and `draftStale`.
+- `draft/planning.json`: `{ name, test?, document, tasks, range: { start, end }, planningEnd, moreOpenAfter }`, `planningRange`, `planningEndIndex` with `tasks` the known task ids, and `moreOpenAfterIndex` (`-1` for none).
+- `draft/same-words.json`: `{ text, words }`, `sameWords`, the words two lines are compared by (lowercased as JavaScript does in English).
+- `draft/views.json`: `{ name, test?, workspace, pageId, view }`, what `draftView` shows of the page's draft (`null` for none).
+- `draft/skipped.json`: `{ name, test, workspace, day, skipped }`, `skippedDays` as `[taskId, [days]]` in its order.
+- `draft/skipped-labels.json`: `{ days, on, text, full }`, `skippedLabel`, a band's skipped days in words.
+- `draft/line.json`: `{ name, view, ask, offline, held, state, words }`, the line's state (`draftLineState`, `view` as `{ status, items: <count> }` or `null`, `ask` one of `in-flight`, `lost`, `failed`, `done` or `null`) and its words (`draftLineWords`, with the view's count shown).
+- `draft/notices.json`: `{ applied, skipped, notApplied, notSkipped, cantUndo }`, the notices' words (`appliedNotice`, `skippedNotice` as `[n, text]`, and `draftWords`).
+- `draft/actions/`: one file per draft command. `{ before, pageId, itemIds, today, action, receipt, refusal, after, ticket }`: `action` is the web's builder's (`applyDraftAction`, `skipDraftAction`, `reopenDraftAction`, or an `undo`); `receipt` is `null` and `refusal` the server's message when it is refused, and `after` is then `before`; otherwise `after` holds the Undo marker `{ operationId: "cmd-<name>", revision }`. `ticket` is `draftTicket`'s for a skip, read from `after`, else `null`.
+
 These files are generated. Never edit them by hand; CI fails when they differ from the domain. To regenerate them:
 
 ```sh
