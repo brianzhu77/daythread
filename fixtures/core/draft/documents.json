@@ -1,0 +1,457 @@
+[
+  {
+    "name": "ready with items",
+    "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Stretch\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b2\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the vet\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[],\"recipe\":5}",
+    "draft": {
+      "status": "ready",
+      "items": [
+        {
+          "id": "i1",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b1",
+            "type": "bulletListItem",
+            "props": {},
+            "content": [
+              {
+                "type": "text",
+                "text": "Stretch",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        },
+        {
+          "id": "i2",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b2",
+            "type": "task",
+            "props": {
+              "taskId": "",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Call the vet",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        }
+      ],
+      "moreOpen": [],
+      "recipe": 5
+    },
+    "settled": true,
+    "stale": false
+  },
+  {
+    "name": "failed with every item open",
+    "document": "{\"status\":\"failed\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Stretch\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b2\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the vet\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[],\"recipe\":5}",
+    "draft": {
+      "status": "failed",
+      "items": [
+        {
+          "id": "i1",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b1",
+            "type": "bulletListItem",
+            "props": {},
+            "content": [
+              {
+                "type": "text",
+                "text": "Stretch",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        },
+        {
+          "id": "i2",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b2",
+            "type": "task",
+            "props": {
+              "taskId": "",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Call the vet",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        }
+      ],
+      "moreOpen": [],
+      "recipe": 5
+    },
+    "settled": false,
+    "stale": false
+  },
+  {
+    "name": "failed with one skipped",
+    "document": "{\"status\":\"failed\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Stretch\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"skipped\",\"by\":\"op-3\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b2\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the vet\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[],\"recipe\":5}",
+    "draft": {
+      "status": "failed",
+      "items": [
+        {
+          "id": "i1",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b1",
+            "type": "bulletListItem",
+            "props": {},
+            "content": [
+              {
+                "type": "text",
+                "text": "Stretch",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "skipped",
+          "by": "op-3"
+        },
+        {
+          "id": "i2",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b2",
+            "type": "task",
+            "props": {
+              "taskId": "",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Call the vet",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        }
+      ],
+      "moreOpen": [],
+      "recipe": 5
+    },
+    "settled": true,
+    "stale": false
+  },
+  {
+    "name": "preparing",
+    "document": "{\"status\":\"preparing\",\"items\":[],\"moreOpen\":[],\"recipe\":5}",
+    "draft": {
+      "status": "preparing",
+      "items": [],
+      "moreOpen": [],
+      "recipe": 5
+    },
+    "settled": false,
+    "stale": false
+  },
+  {
+    "name": "ready with no recipe (recipe 1)",
+    "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Stretch\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b2\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the vet\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[]}",
+    "draft": {
+      "status": "ready",
+      "items": [
+        {
+          "id": "i1",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b1",
+            "type": "bulletListItem",
+            "props": {},
+            "content": [
+              {
+                "type": "text",
+                "text": "Stretch",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        },
+        {
+          "id": "i2",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b2",
+            "type": "task",
+            "props": {
+              "taskId": "",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Call the vet",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        }
+      ],
+      "moreOpen": []
+    },
+    "settled": true,
+    "stale": true
+  },
+  {
+    "name": "recipe 4 ready",
+    "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Stretch\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b2\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the vet\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[],\"recipe\":4}",
+    "draft": {
+      "status": "ready",
+      "items": [
+        {
+          "id": "i1",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b1",
+            "type": "bulletListItem",
+            "props": {},
+            "content": [
+              {
+                "type": "text",
+                "text": "Stretch",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        },
+        {
+          "id": "i2",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b2",
+            "type": "task",
+            "props": {
+              "taskId": "",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Call the vet",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        }
+      ],
+      "moreOpen": [],
+      "recipe": 4
+    },
+    "settled": true,
+    "stale": true
+  },
+  {
+    "name": "recipe 4 failed, all open: it stands",
+    "document": "{\"status\":\"failed\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Stretch\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b2\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the vet\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[],\"recipe\":4}",
+    "draft": {
+      "status": "failed",
+      "items": [
+        {
+          "id": "i1",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b1",
+            "type": "bulletListItem",
+            "props": {},
+            "content": [
+              {
+                "type": "text",
+                "text": "Stretch",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        },
+        {
+          "id": "i2",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b2",
+            "type": "task",
+            "props": {
+              "taskId": "",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Call the vet",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        }
+      ],
+      "moreOpen": [],
+      "recipe": 4
+    },
+    "settled": false,
+    "stale": false
+  },
+  {
+    "name": "recipe 5 ready",
+    "document": "{\"status\":\"ready\",\"items\":[{\"id\":\"i1\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b1\",\"type\":\"bulletListItem\",\"props\":{},\"content\":[{\"type\":\"text\",\"text\":\"Stretch\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"},{\"id\":\"i2\",\"anchor\":\"day:2026-11-26:h0\",\"place\":\"after\",\"block\":{\"id\":\"b2\",\"type\":\"task\",\"props\":{\"taskId\":\"\",\"role\":\"plan\",\"planDate\":\"2026-11-26\"},\"content\":[{\"type\":\"text\",\"text\":\"Call the vet\",\"styles\":{}}],\"children\":[]},\"source\":\"model\",\"state\":\"open\"}],\"moreOpen\":[],\"recipe\":5}",
+    "draft": {
+      "status": "ready",
+      "items": [
+        {
+          "id": "i1",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b1",
+            "type": "bulletListItem",
+            "props": {},
+            "content": [
+              {
+                "type": "text",
+                "text": "Stretch",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        },
+        {
+          "id": "i2",
+          "anchor": "day:2026-11-26:h0",
+          "place": "after",
+          "block": {
+            "id": "b2",
+            "type": "task",
+            "props": {
+              "taskId": "",
+              "role": "plan",
+              "planDate": "2026-11-26"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Call the vet",
+                "styles": {}
+              }
+            ],
+            "children": []
+          },
+          "source": "model",
+          "state": "open"
+        }
+      ],
+      "moreOpen": [],
+      "recipe": 5
+    },
+    "settled": true,
+    "stale": false
+  },
+  {
+    "name": "an item with no state is not open, so the draft is settled",
+    "document": "{\"status\":\"failed\",\"items\":[{\"id\":\"i1\",\"anchor\":\"\",\"place\":\"after\",\"source\":\"model\"}],\"moreOpen\":[],\"recipe\":5}",
+    "draft": {
+      "status": "failed",
+      "items": [
+        {
+          "id": "i1",
+          "anchor": "",
+          "place": "after",
+          "source": "model"
+        }
+      ],
+      "moreOpen": [],
+      "recipe": 5
+    },
+    "settled": true,
+    "stale": false
+  },
+  {
+    "name": "ready with no items",
+    "document": "{\"status\":\"ready\"}",
+    "draft": {
+      "status": "ready"
+    },
+    "settled": true,
+    "stale": true
+  },
+  {
+    "name": "not json",
+    "document": "not json",
+    "draft": null
+  },
+  {
+    "name": "the written-days draft: ready, no items, moreOpen empty",
+    "document": "{\"status\":\"ready\",\"items\":[],\"moreOpen\":[]}",
+    "draft": {
+      "status": "ready",
+      "items": [],
+      "moreOpen": []
+    },
+    "settled": true,
+    "stale": true
+  }
+]
