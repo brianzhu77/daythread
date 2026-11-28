@@ -32,10 +32,17 @@ final class TypingFeelTests: XCTestCase {
 
   private var storeURL: URL?
   private var server: TestServer?
+  /// Beats for the whole test, so a wait sees a stall that began in the one before it.
+  private var heartbeat: Heartbeat?
+
+  override func setUp() async throws {
+    heartbeat = Heartbeat()
+  }
 
   /// The server is never released: once the engine's save of what was typed is waiting on it, the engine touches the
   /// store no more, and the store goes.
   override func tearDown() async throws {
+    heartbeat?.stop()
     await server?.callHeld()
     if let storeURL {
       for suffix in ["", "-shm", "-wal"] {
@@ -58,19 +65,95 @@ final class TypingFeelTests: XCTestCase {
   /// thread stalled by something else (on CI, the keyboard's predictions answered more than a minute late while the
   /// whole app logged nothing for 36 s) is no state arriving late. Here the main thread is stalled past the wait's
   /// deadline while the state is on its way, as the model's would be.
+  ///
+  /// It fails a wait that counts the clock only because the main actor runs its jobs in the order they were queued:
+  /// the wait's wake-up, queued 1 ms into the stall, runs before the state's delivery, queued at 200 ms, and finds
+  /// the deadline gone. With the jobs taken in another order the state would be seen first and the old wait pass too.
   func test_a_main_thread_stalled_past_the_deadline_is_not_a_state_that_came_late() async throws {
     let state = Arrival()
     // Runs once the wait first sleeps, so the wait's own wake-up is queued behind it, before the state's.
     Task { Self.stallTheMainThread(for: .milliseconds(1_500)) }
-    Task.detached {
-      try? await Task.sleep(nanoseconds: 200_000_000)
-      await MainActor.run { state.arrived = true }
-    }
+    state.arrive(after: .milliseconds(200))
     try await until("the state reached the screen", deadline: .seconds(1)) { state.arrived }
+  }
+
+  /// The wait forgives a stall, not a late state: with the main thread free, a state that comes after the deadline
+  /// fails the wait, and the message says it came late.
+  func test_a_state_that_comes_after_the_deadline_fails_the_wait() async throws {
+    let state = Arrival()
+    state.arrive(after: .seconds(2))
+    let failure = try await wait("the state reached the screen", deadline: .seconds(1)) { state.arrived }
+    let message = try XCTUnwrap(failure, "a state 2 s late against a deadline of 1 s fails the wait")
+    XCTAssertTrue(message.contains("ended by the deadline"), message)
+    XCTAssertTrue(message.contains("it arrived late"), message)
+    XCTAssertTrue(message.contains("s by the clock)"), "the clock's time beside the main thread's: \(message)")
+  }
+
+  /// A main thread that runs in chunks longer than a turn counts towards the deadline slowly; the wait still ends by
+  /// the clock, says so, and does not wait a further two minutes for the state.
+  func test_a_main_thread_busy_in_long_chunks_ends_the_wait_by_the_hard_stop() async throws {
+    let busy = Task {
+      while !Task.isCancelled {
+        Self.stallTheMainThread(for: .milliseconds(300))
+        try? await Task.sleep(nanoseconds: 1_000_000)
+      }
+    }
+    defer { busy.cancel() }
+    let clock = ContinuousClock()
+    let started = clock.now
+    let failure = try await wait("the state reached the screen", deadline: .seconds(30), hardStop: .seconds(2)) {
+      false
+    }
+    let message = try XCTUnwrap(failure, "a state that never comes fails the wait")
+    XCTAssertTrue(message.contains("ended by the hard stop of 2.0 s by the clock"), message)
+    XCTAssertLessThan(clock.now - started, .seconds(10), "no further wait after the hard stop: \(message)")
+  }
+
+  /// A main thread held for long while a thread beside it ran is the app's or the test's own doing: the state that
+  /// came after it is not forgiven silently. A whole process that stopped holds both, which a test cannot bring
+  /// about from inside the process; that case is covered only by `mainThreadAloneWasHeld`, tested below.
+  func test_a_main_thread_held_alone_fails_a_wait_whose_state_arrived() async throws {
+    let state = Arrival()
+    Task { Self.stallTheMainThread(for: .milliseconds(1_500)) }
+    state.arrive(after: .milliseconds(200))
+    let failure = try await wait(
+      "the state reached the screen", deadline: .seconds(1), mainHeldLimit: .seconds(1), besideLimit: .milliseconds(500)
+    ) { state.arrived }
+    let message = try XCTUnwrap(failure, "the main thread held alone for 1.5 s, past a limit of 1 s")
+    XCTAssertTrue(message.contains("the main thread alone was held for"), message)
+  }
+
+  func test_a_wait_with_no_stall_records_nothing() async throws {
+    let state = Arrival()
+    state.arrive(after: .milliseconds(100))
+    let failure = try await wait(
+      "the state reached the screen", deadline: .seconds(5), mainHeldLimit: .seconds(1), besideLimit: .milliseconds(500)
+    ) { state.arrived }
+    XCTAssertNil(failure)
+  }
+
+  func test_the_main_thread_held_alone_is_told_from_a_stopped_process() {
+    let limits = (main: Duration.seconds(10), beside: Duration.seconds(1))
+    XCTAssertTrue(
+      Self.mainThreadAloneWasHeld(main: .seconds(12), beside: .milliseconds(50), limits: limits), "main alone")
+    XCTAssertFalse(
+      Self.mainThreadAloneWasHeld(main: .seconds(36), beside: .seconds(36), limits: limits), "the process stopped")
+    XCTAssertFalse(Self.mainThreadAloneWasHeld(main: .seconds(5), beside: .zero, limits: limits), "a short stall")
+    XCTAssertFalse(
+      Self.mainThreadAloneWasHeld(main: .seconds(12), beside: .seconds(2), limits: limits), "the thread beside stalled")
   }
 
   @MainActor private final class Arrival {
     var arrived = false
+
+    /// Arrives on the main actor after `delay`, queued from a thread off it.
+    func arrive(after delay: Duration) {
+      let nanoseconds = UInt64(delay / .nanoseconds(1))
+      Task.detached { [self] in
+        try? await Task.sleep(nanoseconds: nanoseconds)
+        await MainActor.run { self.arrived = true }
+      }
+    }
   }
 
   private static func stallTheMainThread(for duration: Duration) {
@@ -223,6 +306,18 @@ final class TypingFeelTests: XCTestCase {
   private func until(
     _ what: String, deadline patience: Duration = .seconds(30), held: () -> String = { "" }, _ condition: () -> Bool
   ) async throws {
+    guard let message = try await wait(what, deadline: patience, held: held, condition) else { return }
+    XCTFail(message)
+    // The test ends here: another wait after a failed one would cost the same again for every keystroke left.
+    throw WaitFailed(message: message)
+  }
+
+  /// The wait `until` makes, with what it found: nil when `condition` held in time, else the failure's words.
+  private func wait(
+    _ what: String, deadline patience: Duration = .seconds(30), hardStop: Duration = .seconds(300),
+    mainHeldLimit: Duration = .seconds(10), besideLimit: Duration = .seconds(1), held: () -> String = { "" },
+    _ condition: () -> Bool
+  ) async throws -> String? {
     let clock = ContinuousClock()
     let started = clock.now
     let beside = Heartbeat()
@@ -238,7 +333,7 @@ final class TypingFeelTests: XCTestCase {
       waited += min(now - lastTurn, turn)
       lastTurn = now
     }
-    guard !condition() else { return }
+    guard !condition() else { return nil }
     let gaveUp = clock.now
     let heldThen =
       "\(held()); the main thread stalled for up to \(Self.seconds(longestStall)) s and a thread beside it for up to "
@@ -251,10 +346,15 @@ final class TypingFeelTests: XCTestCase {
       condition()
       ? "it arrived late, \(Self.seconds(clock.now - gaveUp)) s after the first wait ended"
       : "it had still not arrived after a further \(Self.seconds(clock.now - gaveUp)) s; the model then held \(held())"
-    let message = "\(what): not there after \(Self.seconds(waited)) s; the model held \(heldThen); \(outcome)"
-    XCTFail(message)
-    // The test ends here: another wait after a failed one would cost the same again for every keystroke left.
-    throw WaitFailed(message: message)
+    return "\(what): not there after \(Self.seconds(waited)) s; the model held \(heldThen); \(outcome)"
+  }
+
+  /// Whether the main thread was held while the process ran: it stalled for `limits.main` or more while a thread
+  /// beside it never stalled more than `limits.beside`. When both stalled, the whole process stopped.
+  private static func mainThreadAloneWasHeld(
+    main: Duration, beside: Duration, limits: (main: Duration, beside: Duration)
+  ) -> Bool {
+    main >= limits.main && beside <= limits.beside
   }
 
   /// Beats every 10 ms on a thread off the main one and keeps the longest gap between beats: next to the main
