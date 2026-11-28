@@ -96,7 +96,8 @@ public final class AppModel {
   private struct StateWait {
     let isDue: (SyncState) -> Bool
     let owner: String
-    let arrived: CheckedContinuation<Bool, Never>
+    /// Handed the state that satisfied it when that state is `owner`'s, else nil.
+    let arrived: CheckedContinuation<SyncState?, Never>
   }
 
   /// Something of his words is on its way to the engine or ahead of the state here: a writing call waits or is being
@@ -356,7 +357,7 @@ public final class AppModel {
     if stateWaits.contains(where: { $0.isDue(state) }) {
       let due = stateWaits.filter { $0.isDue(state) }
       stateWaits.removeAll { $0.isDue(state) }
-      for wait in due { wait.arrived.resume(returning: state.owner == wait.owner) }
+      for wait in due { wait.arrived.resume(returning: state.owner == wait.owner ? state : nil) }
     }
     #if DEBUG
       if let workspace = state.workspace { audit(workspace) }
@@ -773,31 +774,38 @@ extension AppModel {
     for handover in Array(tickHandovers.values) { await handover.value }
     _ = await Self.answer(enqueue(.flush, owner: nil))
     let written = await engine.draftsWritten
-    return await stateWhere({ $0.draftsWritten >= written }, madeUnder: owner)
+    return await stateWhere({ $0.draftsWritten >= written }, madeUnder: owner) != nil
   }
 
   /// Returns once a state numbered `published` or more has arrived here, whichever came first, it or the answer
   /// that named it; true when that state is still `owner`'s.
   func stateHolding(_ published: Int, madeUnder owner: String) async -> Bool {
+    await stateReached(published, madeUnder: owner) != nil
+  }
+
+  /// `stateHolding`, handing back the state that held the answer: the first numbered `published` or more to arrive,
+  /// not whichever the model holds when the caller resumes (a newer one may have arrived in between). Nil when it is
+  /// not `owner`'s, or no state will come.
+  func stateReached(_ published: Int, madeUnder owner: String) async -> SyncState? {
     await stateWhere({ $0.published >= published }, madeUnder: owner)
   }
 
-  /// Returns once a state for which `isDue` holds has arrived here (the one here now, if it does); true when it is
-  /// `owner`'s. False at once when the states have stopped.
-  private func stateWhere(_ isDue: @escaping (SyncState) -> Bool, madeUnder owner: String) async -> Bool {
-    if isDue(state) { return state.owner == owner }
-    guard !statesEnded else { return false }
+  /// Returns once a state for which `isDue` holds has arrived here (the one here now, if it does): that state, when it
+  /// is `owner`'s. Nil at once when the states have stopped.
+  private func stateWhere(_ isDue: @escaping (SyncState) -> Bool, madeUnder owner: String) async -> SyncState? {
+    if isDue(state) { return state.owner == owner ? state : nil }
+    guard !statesEnded else { return nil }
     return await withCheckedContinuation { arrived in
       stateWaits.append(StateWait(isDue: isDue, owner: owner, arrived: arrived))
     }
   }
 
-  /// The states stopped, or the model is going: every wait is answered false, and so is every later one.
+  /// The states stopped, or the model is going: every wait is answered nil, and so is every later one.
   fileprivate func endStateWaits() {
     statesEnded = true
     let waiting = stateWaits
     stateWaits = []
-    for wait in waiting { wait.arrived.resume(returning: false) }
+    for wait in waiting { wait.arrived.resume(returning: nil) }
   }
 
   /// Sets `wordsOnTheirWay` from the queue, the call in flight, and the pages ahead of the state.

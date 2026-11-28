@@ -176,48 +176,29 @@
   /// A part of the draft's line whose frame the strip's model keeps.
   enum DraftLinePart: Hashable, Sendable { case words, applyAll, dismiss, retry, show }
 
-  extension DraftLine {
-    /// The parts the line draws.
-    fileprivate var parts: Set<DraftLinePart> {
-      switch self {
-      case .preparing: [.words]
-      case .held: [.words, .show]
-      case .segments(let count, let failed, _):
-        Set([.words] + (count != nil ? [.applyAll, .dismiss] : []) + (failed ? [.retry] : []))
+  extension DraftLinePart {
+    fileprivate init(_ button: DraftLine.Button) {
+      switch button {
+      case .applyAll: self = .applyAll
+      case .dismiss: self = .dismiss
+      case .retry: self = .retry
+      case .show: self = .show
       }
-    }
-
-    /// Its words, each with what VoiceOver hears of them (`spokenSegments`) and the buttons that follow them: the
-    /// count with `Apply all` and `Dismiss`, `Couldn’t draft` with `Retry`, `Offline` alone; `Suggestions ready` with
-    /// `Show`.
-    fileprivate var segments: [DraftLineSegment] {
-      let shown: [(words: String, buttons: [DraftLinePart])] =
-        switch self {
-        case .preparing: [(Self.preparingText, [])]
-        case .held: [(Self.readyText, [.show])]
-        case .segments(let count, let failed, let offline):
-          [
-            count.map { ($0, [DraftLinePart.applyAll, .dismiss]) },
-            failed ? (Self.failedText, [.retry]) : nil,
-            offline ? (Self.offlineText, []) : nil,
-          ].compactMap { $0 }
-        }
-      return zip(shown, spokenSegments).map { DraftLineSegment(words: $0.words, spoken: $1, buttons: $0.buttons) }
     }
   }
 
-  /// A segment of the draft's line: its words, what VoiceOver hears of them, and the buttons after them.
-  private struct DraftLineSegment {
-    let words: String
-    let spoken: String
-    let buttons: [DraftLinePart]
+  extension DraftLine {
+    /// The parts the line draws: its words and each of its segments' buttons.
+    fileprivate var parts: Set<DraftLinePart> {
+      Set([.words] + shownSegments.flatMap(\.buttons).map(DraftLinePart.init))
+    }
   }
 
   /// The draft's line (§13.4): secondary words at the strip's size, each followed by its quiet system buttons, `Apply
   /// all` and `Show` in the accent colour (the line's one primary action), every button a 44-point target. While an ask
   /// is out, the system's small progress view and `Preparing…`. The segments sit on one line when they fit, else one
   /// under another; from the accessibility text sizes the buttons go under their words. VoiceOver reads each segment's
-  /// words as an element of its own (`DraftLine.spokenSegments`), then that segment's buttons, each its own.
+  /// words as an element of its own (`DraftLine.shownSegments`), then that segment's buttons, each its own.
   private struct DraftLineView: View {
     let line: DraftLine
     let model: DayFactsModel
@@ -228,13 +209,13 @@
         if case .preparing = line {
           HStack {
             ProgressView().controlSize(.small)
-            words(DraftLine.preparingText, spoken: line.spoken, first: true)
+            words(DraftLine.preparingText, first: true)
           }
           .frame(minHeight: 44)
           .accessibilityElement(children: .ignore)
           .accessibilityLabel(line.spoken)
         } else {
-          let segments = line.segments
+          let segments = line.shownSegments
           Group {
             if typeSize.isAccessibilitySize {
               VStack(alignment: .leading, spacing: 0) {
@@ -262,18 +243,18 @@
     }
 
     /// The words with their buttons after them, on one line.
-    private func beside(_ segment: DraftLineSegment, first: Bool) -> some View {
+    private func beside(_ segment: DraftLine.Segment, first: Bool) -> some View {
       HStack {
-        words(segment.words, spoken: segment.spoken, first: first)
+        words(segment.words, first: first)
         buttons(segment.buttons)
       }
       .frame(minHeight: 44)
     }
 
     /// The words, then their buttons under them: side by side when they fit, else one under another.
-    private func stacked(_ segment: DraftLineSegment, first: Bool) -> some View {
+    private func stacked(_ segment: DraftLine.Segment, first: Bool) -> some View {
       VStack(alignment: .leading, spacing: 0) {
-        words(segment.words, spoken: segment.spoken, first: first)
+        words(segment.words, first: first)
           .fixedSize(horizontal: false, vertical: true)
           .frame(minHeight: segment.buttons.isEmpty ? 44 : nil, alignment: .leading)
         if !segment.buttons.isEmpty {
@@ -285,9 +266,9 @@
       }
     }
 
-    /// A segment's words, heard as `spoken` just before that segment's buttons; the first one's frame is kept.
-    @ViewBuilder private func words(_ text: String, spoken: String, first: Bool) -> some View {
-      let words = Text(text).foregroundStyle(.secondary).accessibilityLabel(spoken)
+    /// A segment's words, heard as shown just before that segment's buttons; the first one's frame is kept.
+    @ViewBuilder private func words(_ text: String, first: Bool) -> some View {
+      let words = Text(text).foregroundStyle(.secondary)
       if first {
         words
           .onGeometryChange(for: CGRect.self) { proxy in
@@ -300,15 +281,15 @@
       }
     }
 
-    @ViewBuilder private func buttons(_ parts: [DraftLinePart]) -> some View {
-      ForEach(parts, id: \.self) { part in
-        switch part {
+    @ViewBuilder private func buttons(_ buttons: [DraftLine.Button]) -> some View {
+      ForEach(buttons, id: \.self) { kind in
+        let part = DraftLinePart(kind)
+        switch kind {
         case .applyAll: button(DraftLine.applyAll, part, accent: true, action: model.applyAllTapped)
         case .dismiss: button(DraftLine.dismiss, part, accent: false, action: model.dismissTapped)
         case .retry: button(DraftLine.retry, part, accent: false, action: model.retryTapped)
         // 1d.2b gives it its action; nothing in 1d.2a shows the held line.
         case .show: button(DraftLine.show, part, accent: true) {}
-        case .words: EmptyView()
         }
       }
     }
