@@ -387,9 +387,9 @@ import Testing
     of dayPageId: String, recipe: Int = 5, moreOpen: [String] = [], _ items: [String]
   ) -> JSONValue {
     let ids = moreOpen.map { #""\#($0)""# }.joined(separator: ",")
+    let document = #"{"status":"ready","recipe":\#(recipe),"items":[\#(items.joined(separator: ","))],"#
     return TestWorkspace.page(
-      "draft:\(dayPageId)", type: "draft", parentId: dayPageId,
-      document: #"{"status":"ready","recipe":\#(recipe),"items":[\#(items.joined(separator: ","))],"moreOpen":[\#(ids)]}"#)
+      "draft:\(dayPageId)", type: "draft", parentId: dayPageId, document: document + #""moreOpen":[\#(ids)]}"#)
   }
 
   /// A page whose blocks are paragraphs of these ids.

@@ -27,7 +27,9 @@ import Testing
     #expect(DraftLine.count(3) == "3 suggestions")
     #expect(DraftLine.failedText.unicodeScalars.contains("\u{2019}"))
     #expect(DraftLine.preparingText.unicodeScalars.last == "\u{2026}")
-    #expect(DraftLine.segments(count: "2 suggestions", failed: true, offline: false).spoken == "2 suggestions, Couldn\u{2019}t draft")
+    #expect(
+      DraftLine.segments(count: "2 suggestions", failed: true, offline: false).spoken
+        == "2 suggestions, Couldn\u{2019}t draft")
     #expect(DraftLine.segments(count: "3 suggestions", failed: false, offline: false).spoken == "3 suggestions")
     #expect(DraftLine.segments(count: nil, failed: true, offline: false).spoken == "Couldn\u{2019}t draft")
     #expect(DraftLine.preparing.spoken == "Preparing\u{2026}")
