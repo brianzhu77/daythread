@@ -119,6 +119,9 @@
     /// The index the rows' facts were last read with, and the workspace it is of: a draw in the same workspace (a key
     /// that restructures the page, a composition that ends) reads no page again.
     private var factsIndex: (workspace: Workspace, index: TodoIndex)?
+    /// How many indexes this list has built itself: none while its host hands it the index of every workspace (tests
+    /// read it).
+    public private(set) var indexesBuilt = 0
 
     /// The app's today, for the rows' facts; a change redraws the rows whose facts change. Nil: no facts.
     public var today: LocalDate? {
@@ -297,8 +300,13 @@
     /// Draws a page that is not edited. A row that is the same as before is left alone, one whose content or status
     /// changed is reconfigured in place, and the scroll position is kept. The first call, and the first for another
     /// page, do not animate.
-    public func show(page: Page, in workspace: Workspace) {
+    ///
+    /// `index` is of `workspace` (the caller's to keep true) and is what every row's facts are read with, here and in
+    /// each later draw of that workspace (a new today, a key that restructures the page): the list builds none of its
+    /// own. Nil builds one, for a host that has none.
+    public func show(page: Page, in workspace: Workspace, index: TodoIndex? = nil) {
       finishEditing()
+      adopt(index, of: workspace)
       editedPage = nil
       heldReplace = nil
       shownPage = page
@@ -307,18 +315,21 @@
       draw(rows, pageID: page.id, pageDate: page.date, in: workspace, editable: [])
     }
 
-    /// What the rows' facts are read with now: nil without a today. The index is built again only for another
-    /// workspace; a workspace value handed on unchanged compares by its storage, at no cost.
+    /// Keeps the index its host handed with `workspace`, for the draws that follow.
+    private func adopt(_ index: TodoIndex?, of workspace: Workspace) {
+      if let index { factsIndex = (workspace, index) }
+    }
+
+    /// What the rows' facts are read with now: nil without a today. An index is built only for a workspace the host
+    /// handed none of; a workspace value handed on unchanged compares by its storage, at no cost.
     private func factsSource(in workspace: Workspace, pageDate: LocalDate?) -> BlockRows.FactsSource? {
-      guard let today else {
-        factsIndex = nil
-        return nil
-      }
+      guard let today else { return nil }
       let index: TodoIndex
       if let cached = factsIndex, cached.workspace == workspace {
         index = cached.index
       } else {
         index = TodoIndex(workspace)
+        indexesBuilt += 1
         factsIndex = (workspace, index)
       }
       return BlockRows.FactsSource(today: today, pageDate: pageDate, index: index)
@@ -342,12 +353,14 @@
     /// Shows a page for editing. `page` is the workspace's (the draft's document when it has one). The page that is
     /// being edited, given again, is a change from outside, as `replace`; unless `afresh`: then it is another page with
     /// the same id (another account's), and what he composed is committed into the one before first.
-    public func edit(page: Page, in workspace: Workspace, afresh: Bool = false) {
+    /// `index` as in `show`.
+    public func edit(page: Page, in workspace: Workspace, index: TodoIndex? = nil, afresh: Bool = false) {
       if !afresh, editedPage != nil, page.id == shownPageID {
-        replace(document: page.document, in: workspace)
+        replace(document: page.document, in: workspace, index: index)
         return
       }
       finishEditing()
+      adopt(index, of: workspace)
       editedPage = EditablePage(document: page.document, pageDate: page.date)
       shownPage = nil
       heldReplace = nil
@@ -406,8 +419,11 @@
     /// not in the new page, the caret goes to the end of the nearest line above that is (or to the start of the first
     /// line), and the keyboard stays up (`draw`). While he composes, every row but the composing one is drawn from it at once; that row's part waits until the
     /// composition ends, when his composed words and this page are merged (`commitHeld`).
-    public func replace(document: String, in workspace: Workspace) {
+    ///
+    /// `index` as in `show`.
+    public func replace(document: String, in workspace: Workspace, index: TodoIndex? = nil) {
       guard let editedPage, let pageID = shownPageID else { return }
+      adopt(index, of: workspace)
       // A line's resign is under way and its merge is drawn once the line has let the keyboard go: drawn now, this
       // page would be drawn over by that draw's older workspace. It is that draw's page and workspace instead.
       if redrawAfterResign != nil {

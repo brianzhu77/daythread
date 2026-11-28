@@ -77,8 +77,9 @@
         let repeating = try workspace(page: page, repeating: true, deadlineOn: today)
         screen.controller.replace(document: page.document, in: now, index: TodoIndex(repeating))
         #expect(screen.controller.indexesBuilt == 0)
-        #expect(try marks(screen)?.contains("Repeats") == true)
-        #expect(try marks(screen)?.contains("Due today") == true)
+        // The repeat mark is a symbol, one attachment character after the words.
+        #expect(try marks(screen)?.hasPrefix("Due today") == true)
+        #expect(try marks(screen)?.count ?? 0 > "Due today".count, "the index's repeat rule is drawn")
 
         // The same workspace again, with its own index, draws it as before.
         screen.controller.replace(document: page.document, in: now, index: TodoIndex(now))
