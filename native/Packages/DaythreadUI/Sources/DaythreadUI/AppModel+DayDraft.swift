@@ -18,7 +18,7 @@ extension AppModel {
   /// another day. Asks again when the last ask for the page failed or was lost, while fewer than
   /// `DraftAsk.asksByItself` asks for it have failed, and its draft still does not stand.
   public func cameBackToToday(_ page: Page) {
-    guard let ask = draftAsks[page.id], ask.failures < DraftAsk.asksByItself, failedOrLost(ask),
+    guard let ask = draftAsks[page.id], ask.failures < DraftAsk.asksByItself, failedOrLost(page.id),
       asksByItself(for: page)
     else { return }
     askForDraft(of: page)
@@ -26,19 +26,30 @@ extension AppModel {
 
   /// `Retry`: asks, unless an ask for the page is in flight.
   public func retryDraft(_ page: Page) {
-    guard page.date != nil, !(draftAsks[page.id]?.inFlight(at: now()) ?? false) else { return }
+    guard page.date != nil, !(draftAsk(of: page.id)?.inFlight(at: now()) ?? false) else { return }
     askForDraft(of: page)
   }
 
   /// This run's ask for the day page; nil before the first. Observable; a lost ask is published as such at 60 s.
+  /// An ask whose answer is in hand (its `set-draft` waiting for the Undo slot, or being sent) reads as asked now: in
+  /// flight however long it waits, never lost, and not asked for again.
   public func draftAsk(of pageId: String) -> DraftAsk? {
-    draftAsks[pageId]
+    guard let ask = draftAsks[pageId] else { return nil }
+    if case .asking(_, let failures) = ask, let number = latestDraftAsks[pageId], answeredDraftAsks.contains(number) {
+      return .asking(since: now(), failures: failures)
+    }
+    return ask
   }
 
+  /// The `set-draft`s waiting for the Undo slot to be let go (tests read it).
+  var sendsWaitingForUndoSlot: Int { undoSlotWaits.count }
+
   /// The account changed or nobody is signed in: the new account's pages, whose ids are the same, are asked for
-  /// afresh, and no ask of the one before writes its outcome.
+  /// afresh, and no ask of the one before writes its outcome or sends its draft.
   func forgetDraftAsks() {
+    draftAskRun += 1
     latestDraftAsks = [:]
+    if !answeredDraftAsks.isEmpty { answeredDraftAsks = [] }
     if !draftAsks.isEmpty { draftAsks = [:] }
   }
 
@@ -48,29 +59,19 @@ extension AppModel {
     guard asksForDayDrafts, state.phase == .ready, state.owner != nil, !state.offline, page.type == "daily",
       page.date == today, let workspace = state.workspace
     else { return false }
-    return !Self.draftStands(for: page.id, in: workspace)
+    // One page's draft, read without an index of the whole workspace: this runs on every state today is drawn with
+    // while no ask was made (a draft that stands is never asked for).
+    let stands = workspace.dayDraft(of: page.id).map { !$0.stale } ?? false
+    return !stands
   }
 
-  /// `TodoIndex.draftStands(for:)` for the one page, read without building an index for the whole workspace: this
-  /// runs on every state today is drawn with while no ask was made (a draft that stands is never asked for).
-  /// The draft is the first draft page of its id not in Trash, as `draftOf` takes it.
-  private static func draftStands(for dayPageId: String, in workspace: Workspace) -> Bool {
-    let id = "draft:\(dayPageId)"
-    guard
-      let page = workspace.pages.first(where: {
-        $0.isDraft && ($0.trashedAt?.isEmpty ?? true) && $0.id.utf8.elementsEqual(id.utf8)
-      }),
-      let draft = DayDraft(document: page.document)
-    else { return false }
-    return !draft.stale
-  }
-
-  /// Failed, or asked `DraftAsk.lostAfter` ago with no answer (the app may have been away while the wait ran).
-  private func failedOrLost(_ ask: DraftAsk) -> Bool {
-    switch ask {
-    case .failed: true
-    case .asking: !ask.inFlight(at: now())
-    case .done: false
+  /// Failed, or asked `DraftAsk.lostAfter` ago with no answer (the app may have been away while the wait ran). An
+  /// ask whose answer is in hand is neither.
+  private func failedOrLost(_ pageId: String) -> Bool {
+    switch draftAsk(of: pageId) {
+    case .failed?: true
+    case let ask? where !ask.inFlight(at: now()): ask != .done
+    case .asking?, .done?, nil: false
     }
   }
 
@@ -94,17 +95,23 @@ extension AppModel {
       self.latestDraftAsks[pageId] = nil
     }
     let engine = engine
+    let run = draftAskRun
     Task { [weak self] in
       let answer = await engine.dayDraft(for: date)
-      let outcome = await self?.outcome(of: answer, failures: failures) ?? failed
+      // The answer is in hand: what is left (the wait for the Undo slot, the send) is not an ask with no answer.
       lost.cancel()
-      guard let self, self.latestDraftAsks[pageId] == number else { return }
+      guard let self else { return }
+      if self.latestDraftAsks[pageId] == number { self.answeredDraftAsks.insert(number) }
+      let outcome = await self.outcome(of: answer, failures: failures, run: run)
+      self.answeredDraftAsks.remove(number)
+      guard self.latestDraftAsks[pageId] == number else { return }
       self.draftAsks[pageId] = outcome
     }
   }
 
-  /// What the answer comes to; `set-draft` sent first when it holds one.
-  private func outcome(of answer: DayDraftAnswer, failures: Int) async -> DraftAsk {
+  /// What the answer comes to; `set-draft` sent first when it holds one. `run`: the run of asks it was made in, which
+  /// an account change, a sign-in or a sign-out ends.
+  private func outcome(of answer: DayDraftAnswer, failures: Int, run: Int) async -> DraftAsk {
     let failed = DraftAsk.failed(failures: failures + 1)
     // Not found (the page went to Trash), offline, a timeout, a failure, or signed out: nothing stored.
     guard case .reply(let reply) = answer else { return failed }
@@ -123,7 +130,8 @@ extension AppModel {
     for _ in 0..<2 {
       // `set-draft` takes the server's one Undo: it waits while he is offered one it would take away.
       await undoSlotLetGo()
-      guard state.owner == reply.owner else { return .done }
+      // An ask of a run forgotten sends nothing, even signed in again as the same account.
+      guard draftAskRun == run, state.owner == reply.owner else { return .done }
       switch await engine.perform(action: action, notOvertaking: nil) {
       case .applied(let answer):
         // Done once the draft is drawn, so the line does not show nothing in between.

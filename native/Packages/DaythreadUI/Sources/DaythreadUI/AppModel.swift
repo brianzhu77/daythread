@@ -112,6 +112,10 @@ public final class AppModel {
   /// The number of each page's latest ask: only it writes the page's ask, so a late answer leaves a newer one alone.
   @ObservationIgnored var latestDraftAsks: [String: Int] = [:]
   @ObservationIgnored var draftAsksMade = 0
+  /// The asks whose answer is in hand and whose outcome is not written yet, by number (`draftAsk(of:)`).
+  var answeredDraftAsks: Set<Int> = []
+  /// Counts the times the asks were forgotten (`forgetDraftAsks`): an answer of an earlier run sends nothing.
+  @ObservationIgnored var draftAskRun = 0
   /// The answers whose `set-draft` waits for the Undo slot to be let go.
   @ObservationIgnored var undoSlotWaits: [CheckedContinuation<Void, Never>] = []
   /// False in hosted tests that do not script an ask: the model then never asks by itself.
@@ -157,6 +161,8 @@ public final class AppModel {
   isolated deinit {
     following?.cancel()
     endStateWaits()
+    // A send waiting for the slot keeps the model alive (its task holds it), so this is reached only with none
+    // waiting; kept so that no wait could ever be dropped unanswered.
     for wait in undoSlotWaits { wait.resume() }
   }
 

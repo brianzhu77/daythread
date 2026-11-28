@@ -560,7 +560,7 @@ private struct DraftScreen {
     await h.server.add([.done])
     #expect(await h.model.signOut(discardingUnsent: true) == .signedOut)
     await h.server.add([
-      .session(one), .account(Account(owner: "one", email: "one@example.com", signIn: true)),
+      .session(one),
       .workspace(.full(try copy(revision: 1, pages: [todayPage], tasks: [water]), owner: "one")),
     ])
     #expect(await h.model.signIn(email: "one@example.com", password: "secret") == nil)

@@ -109,4 +109,16 @@ public struct DayDraft: Hashable, Sendable {
 extension Workspace {
   /// `draftPageId`: the id of the page that holds a day page's draft.
   static func draftPageId(of dayPageId: String) -> String { "draft:\(dayPageId)" }
+
+  /// `draftOf`: the draft of a day page, read as `TodoIndex.dayDraft(of:)` reads it (the first draft page of its id
+  /// not in Trash; nil when that one does not parse), without an index: for a caller that needs one page's draft.
+  public func dayDraft(of dayPageId: String) -> DayDraft? {
+    let id = Self.draftPageId(of: dayPageId)
+    guard
+      let page = pages.first(where: {
+        $0.isDraft && ($0.trashedAt?.isEmpty ?? true) && $0.id.hasSameCodeUnits(as: id)
+      })
+    else { return nil }
+    return DayDraft(document: page.document)
+  }
 }
