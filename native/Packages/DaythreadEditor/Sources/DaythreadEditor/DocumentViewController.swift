@@ -387,19 +387,30 @@
     /// each later draw of that workspace (a new today, a key that restructures the page): the list builds none of its
     /// own. Nil builds one, for a host that has none.
     ///
-    /// `guests`: the rows drawn among the page's that are not its lines (`GuestRow`); nil keeps those shown (a host
-    /// draws every state it has), [] removes them. The page and its guests in one call, so a guest can leave in the
+    /// `guests`: the rows drawn among the page's that are not its lines (`GuestRow`); [] removes them, and nil keeps
+    /// those shown while the page is the same one (a host draws every state it has) but gives another page none, so
+    /// no guest of one page is drawn on the next. The page and its guests in one call, so a guest can leave in the
     /// update that brings the row it became. The same in `edit` and `replace`.
     public func show(page: Page, in workspace: Workspace, index: TodoIndex? = nil, guests: [GuestRow]? = nil) {
       finishEditing()
       adopt(index, of: workspace)
-      if let guests { take(guests) }
+      take(guests, for: page.id, afresh: false)
       editedPage = nil
       heldReplace = nil
       shownPage = page
       let rows = BlockRows.rows(
         for: Document.blocks(page.document), in: workspace, facts: factsSource(in: workspace, pageDate: page.date))
       draw(rows, pageID: page.id, pageDate: page.date, in: workspace, editable: [])
+    }
+
+    /// The guests for page `pageID` about to be drawn: those given, else the ones shown while it is the page shown now
+    /// (`afresh`: another page with the same id), else none.
+    private func take(_ guests: [GuestRow]?, for pageID: String, afresh: Bool) {
+      if let guests {
+        take(guests)
+      } else if afresh || pageID != shownPageID {
+        take([])
+      }
     }
 
     /// Keeps the index its host handed with `workspace`, for the draws that follow.
@@ -450,7 +461,7 @@
       }
       finishEditing()
       adopt(index, of: workspace)
-      if let guests { take(guests) }
+      take(guests, for: page.id, afresh: afresh)
       editedPage = EditablePage(document: page.document, pageDate: page.date)
       shownPage = nil
       heldReplace = nil
