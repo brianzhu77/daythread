@@ -125,22 +125,18 @@ import Testing
     #expect(DraftNotice.cantUndo.unicodeScalars.map(\.value).contains(0xB7))
   }
 
-  @Test func the_notice_after_an_answer_reads_the_receipt_as_the_web_does() throws {
+  @Test func the_notice_after_an_answer_is_the_servers_count() throws {
     for entry in try Self.cases() {
-      let receipt = entry.receipt.flatMap(Receipt.init)
-      switch (entry.type, entry.refusal) {
-      case ("apply-draft", nil):
-        let message = try #require(receipt?.message, "\(entry.name)")
-        #expect(DraftNotice.text(after: .apply, receipt: receipt, asked: entry.itemIds.count) == message, "\(entry.name)")
-      case ("skip-draft", nil):
-        let message = try #require(receipt?.message, "\(entry.name)")
-        #expect(DraftNotice.text(after: .skip, receipt: receipt, asked: entry.itemIds.count) == message, "\(entry.name)")
-      case ("reopen-draft", nil):
-        // After a reopen the app says `Undone`; the receipt only has to be a reply.
-        #expect(receipt?.message == "Brought back 3", "\(entry.name)")
-      case ("apply-draft", .some(let refusal)): #expect(refusal == "Nothing to apply", "\(entry.name)")
-      case ("skip-draft", .some(let refusal)): #expect(refusal == "Nothing to skip", "\(entry.name)")
-      case ("reopen-draft", .some(let refusal)): #expect(refusal.hasPrefix("Cannot undo"), "\(entry.name)")
+      guard entry.refusal == nil, let receipt = entry.receipt.flatMap(Receipt.init) else { continue }
+      switch entry.type {
+      case "apply-draft":
+        #expect(
+          DraftNotice.text(after: .apply, receipt: receipt, asked: entry.itemIds.count) == receipt.message,
+          "\(entry.name)")
+      case "skip-draft":
+        #expect(
+          DraftNotice.text(after: .skip, receipt: receipt, asked: entry.itemIds.count) == receipt.message,
+          "\(entry.name)")
       default: break
       }
     }
@@ -149,7 +145,25 @@ import Testing
     #expect(DraftNotice.text(after: .apply, receipt: receipt, asked: 3) == "Applied 2")
     #expect(DraftNotice.text(after: .apply, receipt: nil, asked: 3) == "Applied 3")
     #expect(DraftNotice.text(after: .skip, receipt: nil, asked: 1) == "Skipped")
-    let odd = try #require(Receipt(try json(#"{"message":"Previous operation restored"}"#)))
-    #expect(DraftNotice.text(after: .apply, receipt: odd, asked: 2) == "Applied 2")
+  }
+
+  @Test func a_skip_says_the_servers_count_where_the_web_says_the_asked_one() throws {
+    // The web draws the skip before the answer and says what it asked; the app waits, so it knows.
+    #expect(DraftNotice.text(after: .skip, receipt: try Self.receipt("Skipped 2"), asked: 3) == "Skipped 2")
+    #expect(DraftNotice.text(after: .skip, receipt: try Self.receipt("Skipped"), asked: 3) == "Skipped")
+  }
+
+  @Test func a_receipt_that_does_not_read_as_the_decision_says_what_was_asked() throws {
+    for message in [
+      "Applied 0", "Applied x", "Applied 02", "Applied 99999999999999999999", "Applied 2 ", "", "Skipped 2",
+      "Previous operation restored",
+    ] {
+      #expect(DraftNotice.text(after: .apply, receipt: try Self.receipt(message), asked: 3) == "Applied 3", "\(message)")
+    }
+    #expect(DraftNotice.text(after: .skip, receipt: try Self.receipt("Applied 2"), asked: 3) == "Skipped 3")
+  }
+
+  static func receipt(_ message: String) throws -> Receipt {
+    try #require(Receipt(.object(["message": .string(message)])))
   }
 }
