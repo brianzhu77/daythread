@@ -119,7 +119,9 @@ private final class DecidedMatch {
     if let known = sourceDays[key] { return known }
     var found: String?
     for (position, page) in pages.enumerated() where !page.isDraft && ids(of: page, at: position).contains(key) {
-      found = page.type == "daily" ? page.raw["date"]?.stringValue : page.raw["createdAt"]?.stringValue.map(Self.dayPart)
+      found =
+        page.type == "daily"
+        ? page.raw["date"]?.stringValue : page.raw["createdAt"]?.stringValue.map(Self.dayPart)
       break
     }
     sourceDays[key] = .some(found)

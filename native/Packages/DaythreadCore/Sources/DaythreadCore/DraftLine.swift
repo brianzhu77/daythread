@@ -77,7 +77,8 @@ public enum DraftLine: Hashable, Sendable {
     return count != nil || failed || offline ? .segments(count: count, failed: failed, offline: offline) : nil
   }
 
-  /// The line's words for VoiceOver: `3 suggestions`, `Couldn’t draft`, `3 suggestions, Couldn’t draft`, `Preparing…`.
+  /// The line's words for VoiceOver: `3 suggestions`, `Couldn’t draft`, `3 suggestions, Couldn’t draft`,
+  /// `Preparing…`.
   public var spoken: String {
     switch self {
     case .preparing: Self.preparingText
