@@ -110,7 +110,8 @@ private let setDraftText =
   }
 
   private func harness(
-    draft: JSONValue = draftPage(), clock: Clock? = nil, relay: StateRelay? = nil, asksForDayDrafts: Bool = false
+    draft: JSONValue = draftPage(), tasks: [JSONValue] = tasks, clock: Clock? = nil, relay: StateRelay? = nil,
+    asksForDayDrafts: Bool = false
   ) async throws -> Harness {
     try await Harness(
       copy: try copy(pages: [todayPage(), yesterdayPage, draft], tasks: tasks), clock: clock ?? thursday,
@@ -499,10 +500,11 @@ private let setDraftText =
     h.model.checkToday()
     try await soon { h.model.today == tomorrow }
     relay.release()
-    try await soon { day.factsModel.enabled }
+    try await soon { !day.editor.pausesRowActions }
     try await turns()
 
-    #expect(await h.server.sent.isEmpty, "nothing sent")
+    // Leaving Thursday sends his words of it at once; the decision is not sent.
+    #expect(await h.server.sent.allSatisfy { type(of: $0) != "apply-draft" }, "no apply-draft")
     #expect(day.notice == nil, "the screen shows the new today: nothing is said there of the day before")
     day.close()
   }
@@ -628,12 +630,16 @@ private let setDraftText =
     day.close()
   }
 
-  /// The line leaving (its last suggestion applied) changes the strip's height while a line holds the keyboard.
+  /// The line leaving (its last suggestion applied) takes the strip away while a line holds the keyboard: nothing else
+  /// is in it.
   @Test func the_line_being_typed_stays_when_the_line_leaves() async throws {
-    let h = try await harness(draft: draftPage(["i2": "skipped", "i3": "skipped", "i4": "skipped"]))
+    let h = try await harness(
+      draft: draftPage(["i2": "skipped", "i3": "skipped", "i4": "skipped"]), tasks: [flights, dentist, water])
     let day = try RowScreen(h.model)
     try await settled(day)
     #expect(day.factsModel.line == .segments(count: "1 suggestion", failed: false, offline: false))
+    #expect(day.facts.isEmpty, "the line is all the strip shows")
+    #expect(!day.factsView.isHidden)
     let list = try #require(day.screen.list)
     list.setContentOffset(CGPoint(x: 0, y: 240 - list.adjustedContentInset.top), animated: false)
     try await settled(day)
@@ -641,7 +647,6 @@ private let setDraftText =
     #expect(typed.becomeFirstResponder())
     try await settled(day)
     let before = typed.convert(typed.bounds, to: nil)
-    let stripBefore = day.factsView.bounds.height
 
     await h.server.add([
       applied(
@@ -657,7 +662,7 @@ private let setDraftText =
     try await settled(day)
 
     #expect(day.factsModel.line == nil, "the line went")
-    #expect(day.factsView.bounds.height < stripBefore, "the strip is shorter: \(stripBefore) to \(day.factsView.bounds.height)")
+    #expect(day.factsView.isHidden, "and the strip with it")
     #expect(typed.isFirstResponder, "the keyboard stays up")
     let after = typed.convert(typed.bounds, to: nil)
     #expect(abs(after.minY - before.minY) <= 0.5, "the line was at \(before.minY), now \(after.minY)")

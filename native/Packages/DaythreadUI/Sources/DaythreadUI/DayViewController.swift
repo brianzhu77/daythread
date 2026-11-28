@@ -14,6 +14,10 @@
     /// The row's id.
     case row(String)
     case strip(taskId: String)
+    /// A suggestion's button: its item's id.
+    case suggestion(String)
+    /// `Apply all` or `Dismiss`.
+    case draftLine
   }
 
   @MainActor
@@ -141,14 +145,34 @@
     /// The day shown.
     var date: LocalDate { shownDate ?? model.today }
 
-    /// What an action's notice is of: where it was made (a row, or the strip), the page it did not overtake (nil: it
-    /// had none to wait for), the day and account it was made under, and the operation an Undo would undo.
+    /// What an action's notice is of: where it was made (a row, the strip, the draft), the page it did not overtake
+    /// (nil: it had none to wait for), the day and account it was made under, and what its Undo sends.
     private struct Acted {
       let origin: ActionOrigin
       let pageId: String?
       let date: LocalDate
       let owner: String
-      let operationId: String
+      let undo: UndoOf
+
+      /// The operation the notice's `Undo` names: the one undone, or the skip reopened.
+      var operationId: String {
+        switch undo {
+        case .server(let operationId): operationId
+        case .reopen(let ticket): ticket.skippedBy
+        }
+      }
+    }
+
+    /// What an Undo sends: the server's `undo` of the operation, offered while the server's one slot holds it; or a
+    /// skip's `reopen-draft` (§13.8), which does not use the slot, so it is not withdrawn when the slot moves and does
+    /// not hold an answer's `set-draft` back.
+    private enum UndoOf {
+      case server(String)
+      case reopen(DraftTicket)
+
+      var holdsUndoSlot: Bool {
+        if case .server = self { true } else { false }
+      }
     }
 
     /// The notice, over the page (on a phone under the status bar, at regular width under the navigation bar); it says
@@ -162,7 +186,8 @@
     private var holdsUndoSlot = false
     /// The action or Undo out on the screen, and where it came from: no other runs until it is answered (§12.4, one
     /// at a time for the whole screen). Setting it dims its row (of the page, or of the strip), disables the strip and
-    /// holds every row's actions on whatever day is shown; leaving the day takes the dimming away while it stays out.
+    /// the draft's line, and holds every row's actions and every suggestion's buttons on whatever day is shown;
+    /// leaving the day takes the dimming away while it stays out.
     private var actionOut: ActionOrigin? {
       didSet {
         guard actionOut != oldValue else { return }
@@ -172,6 +197,10 @@
         updateStripEnabled()
         noteUndoSlot()
       }
+    }
+    /// The suggestion whose decision (or its Undo) is out, by item id: its row is the one drawn dimmed.
+    var actingSuggestion: String? {
+      if case .suggestion(let itemId) = actionOut { itemId } else { nil }
     }
     /// The indexes the last `ListReading`s were read with, newest first, and the workspaces they are of: the list's
     /// workspace and a state's are read again at the next state, at no cost.
@@ -246,6 +275,8 @@
       factsModel.onBringBack = { [weak self] taskId in self?.stripRequested(taskId, on: nil) }
       factsModel.onAnotherDay = { [weak self] taskId, date in self?.stripRequested(taskId, on: date) }
       factsModel.onPickDate = { [weak self] taskId in self?.presentStripDatePicker(for: taskId) }
+      factsModel.onApplyAll = { [weak self] in self?.decideAll(.apply) }
+      factsModel.onDismiss = { [weak self] in self?.decideAll(.skip) }
       factsModel.onRetry = { [weak self] in
         guard let self, date == model.today, case .page(let page) = content else { return }
         model.retryDraft(page)
@@ -822,11 +853,27 @@
         let offers = model.offersUndo(operationId)
         notice.show(Notice(text: text, kind: .done, undoing: offers ? operationId : nil))
         if offers {
-          noticeOf = Acted(origin: origin, pageId: pageId, date: date, owner: owner, operationId: operationId)
+          noticeOf = Acted(origin: origin, pageId: pageId, date: date, owner: owner, undo: .server(operationId))
           followUndo(operationId)
         }
       case .notDone:
         notice.show(Notice(text: RowNotice.notDone, kind: .failed, undoing: nil))
+      }
+    }
+
+    /// The notice of a draft's decision (§13.8): an apply's `Undo` while the server would take it, as a row action's;
+    /// a skip's always, for its 10 seconds.
+    private func say(_ acted: DraftActed, of origin: ActionOrigin, pageId: String, date: LocalDate, owner: String) {
+      switch acted {
+      case .applied(let text, let operationId):
+        say(.done(text: text, operationId: operationId), of: origin, pageId: pageId, date: date, owner: owner)
+      case .skipped(let text, let ticket):
+        notice.show(Notice(text: text, kind: .skipped, undoing: ticket.skippedBy))
+        noticeOf = Acted(origin: origin, pageId: pageId, date: date, owner: owner, undo: .reopen(ticket))
+      case .refused(let text):
+        notice.show(Notice(text: text, kind: .failed, undoing: nil))
+      case .notDone:
+        say(RowActed.notDone, of: origin, pageId: pageId, date: date, owner: owner)
       }
     }
 
@@ -847,9 +894,11 @@
     }
 
     /// Tells the model whether the server's Undo slot is held here (§13.3): while an action is out, or while the notice
-    /// shown offers the `Undo` of the action it is of. A notice whose `Undo` does not use the slot holds nothing.
+    /// shown offers the `Undo` of the action it is of. A notice whose `Undo` does not use the slot (a skip's) holds
+    /// nothing.
     private func noteUndoSlot() {
-      let holds = actionOut != nil || noticeOf.map { notice.shown?.undoing == $0.operationId } ?? false
+      let holds =
+        actionOut != nil || noticeOf.map { $0.undo.holdsUndoSlot && notice.shown?.undoing == $0.operationId } ?? false
       guard holds != holdsUndoSlot else { return }
       holdsUndoSlot = holds
       model.holdsUndoSlot = holds
@@ -860,23 +909,41 @@
       guard actionOut == nil, let acted = noticeOf, acted.operationId == operationId else { return }
       noticeOf = nil
       // What he composes is committed first: his words would take the server's slot before the Undo reached it, so
-      // once they are reported the Undo is not offered and nothing is sent.
+      // once they are reported the Undo is not offered and nothing is sent. A skip's reopen does not use the slot.
       document.commitComposition()
       // The button can be tapped in the turn after it stopped being offered, before the observation withdraws it.
-      guard model.offersUndo(operationId) else {
+      if case .server(let undone) = acted.undo, !model.offersUndo(undone) {
         notice.withdrawUndo()
         return
       }
+      // A draft's refused undo or reopen says the web's words for it; a row's and the strip's keep slice 1c's.
+      let refused: String =
+        switch acted.origin {
+        case .row, .strip: RowNotice.cantUndo
+        case .suggestion, .draftLine: DraftNotice.cantUndo
+        }
+      let send: () async -> Notice
+      switch acted.undo {
+      case .server(let undone):
+        send = { [model] in await model.undo(undone, pageId: acted.pageId, owner: acted.owner, refused: refused) }
+      case .reopen(let ticket):
+        // A decision always names its page.
+        guard let pageId = acted.pageId else { return }
+        send = { [model] in await model.reopen(ticket, pageId: pageId, owner: acted.owner) }
+      }
       actionOut = acted.origin
-      // It dims again only what is there to dim: the row on the page, the to-do in the strip's list.
+      // It dims again only what is there to dim: the row on the page, the to-do in the strip's list. A decision's
+      // suggestion left with its answer.
       switch acted.origin {
       case .row(let rowID):
         if document.document.flatMap({ Self.block(rowID, in: $0) }) == nil { document.actingRow = nil }
       case .strip(let taskId):
         if !factsModel.facts.lists(taskId) { factsModel.acting = nil }
+      case .suggestion, .draftLine:
+        break
       }
       Task { [weak self, model] in
-        let said = await model.undo(operationId, pageId: acted.pageId, owner: acted.owner)
+        let said = await send()
         guard let self else { return }
         self.actionOut = nil
         guard self.stillShows(acted), model.state.owner == acted.owner else { return }
@@ -884,11 +951,11 @@
       }
     }
 
-    /// Whether the screen still shows where `acted` was made: the row's page, or the strip's today.
+    /// Whether the screen still shows where `acted` was made: the row's page, or the today of the strip or the draft.
     private func stillShows(_ acted: Acted) -> Bool {
       switch acted.origin {
       case .row: openPage?.id == acted.pageId
-      case .strip: date == acted.date && date == model.today
+      case .strip, .suggestion, .draftLine: date == acted.date && date == model.today
       }
     }
 
@@ -983,6 +1050,70 @@
         guard self.date == today, model.today == today, model.state.owner == owner else { return }
         self.say(acted, of: origin, pageId: pageId, date: today, owner: owner)
       }
+    }
+
+    // MARK: The draft's decisions
+
+    /// A suggestion's two buttons (§13.8).
+    enum SuggestionAction: Equatable { case apply, skip }
+
+    /// A suggestion's `checkmark` (`apply`) or `xmark` (`skip`): `apply-draft` or `skip-draft` with its item, sent and
+    /// waited for as a row's action is. Nothing unless `draftView` shows it, or while an action is out.
+    func suggestionTapped(_ itemId: String, _ action: SuggestionAction) {
+      guard draftView?.suggestions.contains(where: { $0.id.utf8.elementsEqual(itemId.utf8) }) == true else { return }
+      decide(action == .apply ? .apply : .skip, [itemId], from: .suggestion(itemId))
+    }
+
+    /// `Apply all` or `Dismiss`: every suggestion shown.
+    private func decideAll(_ decision: DraftDecision) {
+      guard let shown = draftView?.suggestions.map(\.id), !shown.isEmpty else { return }
+      decide(decision, shown, from: .draftLine)
+    }
+
+    /// §13.8, on today's screen only: what he composes is committed, the screen holds the action (the line's and the
+    /// strip's controls disabled, the rows' swipes and every suggestion's buttons held), and the notice says what
+    /// came of it while the screen still shows that today under that account. Nothing is drawn ahead: a suggestion
+    /// stays as it was until the state holding the answer arrives.
+    private func decide(_ decision: DraftDecision, _ itemIds: [String], from origin: ActionOrigin) {
+      let today = model.today
+      guard actionOut == nil, presentedViewController == nil, date == today, case .page(let page)? = content,
+        let pageDate = page.date, let owner = model.state.owner
+      else { return }
+      document.commitComposition()
+      actionOut = origin
+      // The command about to go takes the server's slot: an Undo of the action before would be refused, and a skip's
+      // would be of a notice no longer shown.
+      notice.withdrawUndo()
+      noticeOf = nil
+      Task { [weak self, model] in
+        let acted = await model.decide(decision, itemIds: itemIds, page: (page.id, pageDate), owner: owner) {
+          [weak self] in
+          self?.stillShown(itemIds, today: today) ?? []
+        }
+        guard let self else { return }
+        self.actionOut = nil
+        guard self.date == today, model.today == today, model.state.owner == owner else { return }
+        self.say(acted, of: origin, pageId: page.id, date: today, owner: owner)
+      }
+    }
+
+    /// Of `itemIds`, those today's page still shows as suggestions, worked out again from the workspace with his words
+    /// drawn in (as `isListedAside` draws them): asked once his words are handed over, when a state may have arrived
+    /// since `draftView` was worked out. The index is the one the state drawn next reads, kept for that draw.
+    private func stillShown(_ itemIds: [String], today: LocalDate) -> [String] {
+      guard date == today, model.today == today, let workspace = model.workspace,
+        case .page(let page) = DayContent.content(for: today, today: today, in: workspace)
+      else { return [] }
+      var drawn = workspace
+      if let open = openPage, open.id.utf8.elementsEqual(page.id.utf8), open.owner == model.state.owner,
+        let mine = document.document
+      {
+        drawn = workspace.drawing(draft: mine, of: page.id)
+      }
+      draftReads += 1
+      let index = checkIndex(of: drawn, afterHandOver: true)
+      guard let view = DraftView.of(page: drawn.page(page.id) ?? page, in: drawn, index: index) else { return [] }
+      return itemIds.filter { id in view.suggestions.contains { $0.id.utf8.elementsEqual(id.utf8) } }
     }
 
     /// The block `id` of `document`, at any depth.

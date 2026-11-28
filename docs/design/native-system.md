@@ -80,7 +80,12 @@
 | Undone | The notice after `Undo` went through. 4 seconds, no button |
 | Can't undo · changed since | The notice when the server refused the Undo because something changed since ("Cannot undo after later changes"). 6 seconds, no button; a straight apostrophe, as the web |
 | Couldn't undo · your text is kept | The notice when the Undo failed for any other reason (no connection, his words not saved first). 6 seconds, no button |
-| Not done · your text is kept | The notice when a row action or a strip action (`Bring back`, a day of `Another day`) was not sent (the page's words could not be saved first, or no connection), failed or was refused: nothing changed. 6 seconds, no button. The web's words |
+| Not done · your text is kept | The notice when a row action, a strip action (`Bring back`, a day of `Another day`) or a draft's decision (a suggestion's `checkmark` or `xmark`, `Apply all`, `Dismiss`) was not sent (the page's words could not be saved first, or no connection), failed or was refused for another reason than the two below: nothing changed. 6 seconds, no button. The web's words |
+| Applied, Applied 2 (Applied N) | The notice after a suggestion's `checkmark` or the draft's line's `Apply all` (`native-phase-1.md` §13.8): the server's count, which is fewer than asked when some were decided elsewhere meanwhile (what was left stays a suggestion while the page still shows it). 8 seconds, with `Undo` while the server's slot holds it, as a row action's; its Undo is the server's `undo` |
+| Skipped, Skipped 3 (Skipped N) | The notice after a suggestion's `xmark` or the line's `Dismiss`: the server's count (the web shows the asked count, as it draws the skip ahead; the app waits for the answer). 10 seconds, the web's time for it, with `Undo` throughout: its Undo is `reopen-draft`, which does not use the server's slot, so it is not withdrawn when he types or the slot moves, and it does not hold back the draft's `set-draft`. No `Move to` yet (1d.3) |
+| Not applied · changed elsewhere | The notice when the server answered an apply `Nothing to apply`, or when none of the suggestions he chose is still shown once his words are handed over (nothing is sent then; with some left, only those are sent). 6 seconds, no button; the suggestions stay as the page shows them |
+| Not skipped · changed elsewhere | The same for a skip (`Nothing to skip`) |
+| Can't undo · edited since | The notice when the server refused the Undo of a draft's apply, or the reopen of a skip, because something changed since: the web's words for the draft (a straight apostrophe). A row's or the strip's refused Undo keeps `Can't undo · changed since`. 6 seconds, no button |
 | (the rest of the row's actions), Cancel | `More` in a row's swipe opens the system's action sheet (`UIAlertController`, `.actionSheet`, default look): the Another day options, `Pick date…` and `Cancel task` (destructive) in the web's order, then the system's `Cancel`. A popover from the row, on a wide screen and, on iOS 26, on the phone too, where the system shows no `Cancel` item: a tap outside the popover puts it away |
 | (the system's calendar) | `Pick date…` opens the system's calendar (`UICalendarView`, as the day's title opens it): no day selected, today the first that can be picked, the days before it greyed by the system. A popover from the row on a wide screen, a sheet on the phone; picking a day closes it and moves the to-do there |
 | Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |
@@ -103,7 +108,7 @@
 | Couldn’t draft | The draft's line when an ask of this run failed or got no answer in 60 seconds and nothing is stored, or the stored draft is marked failed and none of its items is decided (then after the count and its buttons, on the same line when it fits): a typographic apostrophe, secondary text like the rest. The web colours it as a warning; here nothing in the strip is red (recorded difference). Followed by `Retry` |
 | Retry | A plain system button (borderless) after `Couldn’t draft`, quiet (secondary colour): asks for today's draft again, whatever the asks before; the line says `Preparing…` while it runs |
 | Offline | The draft's line when the app is offline and no draft is stored: the words alone, secondary colour |
-| 3 suggestions, Couldn’t draft | The draft's line's VoiceOver label: its words as one element, joined by `, ` (`Preparing…`, `3 suggestions`, `Couldn’t draft`, `Offline`); each button is its own element with its title. Every button of the line is at least 44 by 44 points; the segments sit on one line when they fit, else one under another, and from the accessibility text sizes each segment's buttons go under its words. No line: no draft stored and no ask out, a ready draft with nothing open, another day, or today's page in Trash; the strip is hidden only when it has neither facts nor a line |
+| 3 suggestions, Couldn’t draft | The draft's line for VoiceOver: each segment's words are an element of their own (`3 suggestions`; `Couldn’t draft`; `Offline`; or `Preparing…` alone), each followed by that segment's buttons, each its own element with its title, so `Retry` is heard right after `Couldn’t draft`. `Apply all` and `Dismiss` are disabled while any action of the screen is out. Every button of the line is at least 44 by 44 points; the segments sit on one line when they fit, else one under another, and from the accessibility text sizes each segment's buttons go under its words. No line: no draft stored and no ask out, a ready draft with nothing open, another day, or today's page in Trash; the strip is hidden only when it has neither facts nor a line |
 | Lunch with Kathy · 10:30 AM Standup with Lu | The events line, the strip's first part, on today when today has an event: the `calendar` symbol and the first two events, each `10:30 AM Standup with Lu` (`3 PM` on the hour; the title alone when it has no time), joined by ` · `, on one line cut at its end; at the accessibility text sizes the words take the whole width after the symbol, on up to three lines, then cut (a word that fits on a line is never broken), with `+N more` and the chevron on a line of their own under them. A plain system `Label`, subheadline text, the words and the symbol in the secondary colour: quieter and a little smaller than the page's text, as on the web |
 | Untitled event | An event in that line whose line has no words |
 | · All day | Added to that line when today has exactly one event and it has no time: `Lunch with Kathy · All day` |
@@ -194,8 +199,8 @@ says what a row action did:
   regular width (iPad, Mac) one system spacing under the navigation bar, never over its items. Only its surface takes
   touches; the rest of the screen is the page's. It never becomes first
   responder, so the keyboard and the caret stay as they were.
-- **Time:** one at a time, a new one replaces the one showing. It leaves after 8 seconds, `Undone` after 4, a failure
-  after 6, or when swiped up (also VoiceOver's escape gesture). A tap on the words does nothing.
+- **Time:** one at a time, a new one replaces the one showing. It leaves after 8 seconds, `Skipped` after 10, `Undone`
+  after 4, a failure after 6, or when swiped up (also VoiceOver's escape gesture). A tap on the words does nothing.
 - **VoiceOver:** the words are announced when shown; while the notice has `Undo` it does not leave on a timer, and
   once `Undo` is spent or withdrawn its time runs from then. The words are an accessibility element that carries
   `Undo` as its custom action, and the button is an element of its own, so Voice Control and Full Keyboard Access
@@ -206,7 +211,9 @@ says what a row action did:
   words on their way to the engine) and the copy says the server's one Undo slot is that action's at the copy's own
   revision. It is withdrawn the moment that stops (he types, he ticks, another device's change or the day's new page
   takes the slot, another row action starts), and the notice's words stay until their time. While an action or an
-  Undo is out, its row is dimmed and no other row action runs.
+  Undo is out, its row is dimmed and no other row action runs. A draft's skip (slice 1d.2a) is the exception: its
+  `Undo` is `reopen-draft`, which the server checks against what changed since rather than the slot, so it stays
+  until the notice goes or another action starts.
 
 ## Not decided yet
 

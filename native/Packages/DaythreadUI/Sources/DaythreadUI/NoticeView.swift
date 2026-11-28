@@ -3,8 +3,9 @@ import UIKit
 
 /// What the notice says (`native-phase-1.md` §11.5).
 struct Notice: Equatable {
-  /// How long it stays: 8 s after an action, 4 s for `Undone`, 6 s for a failure.
-  enum Kind: Equatable { case done, undone, failed }
+  /// How long it stays: 8 s after an action, 10 s after a draft's skip (the web's time for `Skipped`), 4 s for
+  /// `Undone`, 6 s for a failure.
+  enum Kind: Equatable { case done, skipped, undone, failed }
   let text: String
   let kind: Kind
   /// The operation an `Undo` would undo; nil for no button.
@@ -15,6 +16,7 @@ extension Notice.Kind {
   fileprivate var stays: Duration {
     switch self {
     case .done: .seconds(8)
+    case .skipped: .seconds(10)
     case .undone: .seconds(4)
     case .failed: .seconds(6)
     }

@@ -434,12 +434,12 @@ private func settled(_ day: RowScreen) async throws {
   }
 
   /// SwiftUI builds no accessibility tree for a unit test to read: the words VoiceOver hears are the value's, and the
-  /// view gives them to the line's words as one element, each button its own.
+  /// view gives each segment's words their own element before that segment's buttons, each button its own.
   @Test func voiceover_reads_the_line_and_each_button() throws {
-    #expect(DraftLine.segments(count: "3 suggestions", failed: false, offline: false).spoken == "3 suggestions")
+    #expect(DraftLine.segments(count: "3 suggestions", failed: false, offline: false).spokenSegments == ["3 suggestions"])
     #expect(
-      DraftLine.segments(count: "3 suggestions", failed: true, offline: false).spoken
-        == "3 suggestions, Couldn\u{2019}t draft")
+      DraftLine.segments(count: "3 suggestions", failed: true, offline: false).spokenSegments
+        == ["3 suggestions", "Couldn\u{2019}t draft"])
     let (model, window) = try drawnLine(.segments(count: "3 suggestions", failed: true, offline: false), size: .large)
     #expect(Set(model.lineFrames.keys) == [.words, .applyAll, .dismiss, .retry], "the words, then three buttons")
     window.isHidden = true

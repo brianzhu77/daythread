@@ -79,13 +79,17 @@ public enum DraftLine: Hashable, Sendable {
 
   /// The line's words for VoiceOver: `3 suggestions`, `Couldn’t draft`, `3 suggestions, Couldn’t draft`,
   /// `Preparing…`.
-  public var spoken: String {
+  public var spoken: String { spokenSegments.joined(separator: ", ") }
+
+  /// Each segment's words as VoiceOver hears them, in the line's order: the count, `Couldn’t draft`, `Offline`;
+  /// `Preparing…`; `Suggestions ready`. Each is an element of its own, followed by that segment's buttons, so
+  /// `Retry` is heard after `Couldn’t draft`.
+  public var spokenSegments: [String] {
     switch self {
-    case .preparing: Self.preparingText
-    case .held: Self.readyText
+    case .preparing: [Self.preparingText]
+    case .held: [Self.readyText]
     case .segments(let count, let failed, let offline):
       [count, failed ? Self.failedText : nil, offline ? Self.offlineText : nil].compactMap { $0 }
-        .joined(separator: ", ")
     }
   }
 }

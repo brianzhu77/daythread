@@ -731,17 +731,25 @@ extension AppModel {
     return answer
   }
 
-  /// Sends `undo` the same way; `pageId` nil for an action that had no page to wait for. Returns `Undone`, `Can't
-  /// undo · changed since` (the server's "Cannot undo after later changes"), or `Couldn't undo · your text is kept`.
-  func undo(_ operationId: String, pageId: String?, owner: String) async -> Notice {
+  /// Sends `undo` the same way; `pageId` nil for an action that had no page to wait for. Returns `Undone`, `refused`
+  /// when the server refused it because something changed since (`RowNotice.cantUndo` for a row's or the strip's,
+  /// `DraftNotice.cantUndo` for a draft's apply), or `Couldn't undo · your text is kept`.
+  func undo(_ operationId: String, pageId: String?, owner: String, refused: String) async -> Notice {
+    await takeBack(Command.undo(targetOperationId: operationId), pageId: pageId, owner: owner, refused: refused)
+  }
+
+  /// An Undo's `command` (the server's `undo`, or a skip's `reopen-draft`), sent and waited for as an action is: his
+  /// words handed over first, `pageId` not overtaken. `refused` is said for the server's "Cannot undo after later
+  /// changes", which it answers to both.
+  func takeBack(_ command: JSONValue, pageId: String?, owner: String, refused: String) async -> Notice {
     let couldNot = Notice(text: RowNotice.couldntUndo, kind: .failed, undoing: nil)
     guard await handOverHisWords(owner: owner) else { return couldNot }
-    switch await engine.perform(action: Command.undo(targetOperationId: operationId), notOvertaking: pageId) {
+    switch await engine.perform(action: command, notOvertaking: pageId) {
     case .applied(let answer):
       guard await stateHolding(answer.published, madeUnder: owner) else { return couldNot }
       return Notice(text: RowNotice.undone, kind: .undone, undoing: nil)
     case .refused(let reason) where reason.contains("Cannot undo after later changes"):
-      return Notice(text: RowNotice.cantUndo, kind: .failed, undoing: nil)
+      return Notice(text: refused, kind: .failed, undoing: nil)
     default:
       return couldNot
     }
@@ -761,7 +769,7 @@ extension AppModel {
   /// outbox, every writing call made before it has reached the engine, and a state that draws them has arrived here
   /// (counted by `draftsWritten`), so the workspace read next holds what he typed. False when the account is not
   /// `owner`'s, or no state will come.
-  private func handOverHisWords(owner: String) async -> Bool {
+  func handOverHisWords(owner: String) async -> Bool {
     for handover in Array(tickHandovers.values) { await handover.value }
     _ = await Self.answer(enqueue(.flush, owner: nil))
     let written = await engine.draftsWritten

@@ -159,3 +159,73 @@ extension AppModel {
     }
   }
 }
+
+// MARK: - Deciding the draft's suggestions
+
+/// What a draft's decision came to (§13.8).
+public enum DraftActed: Sendable, Equatable {
+  case applied(text: String, operationId: String)
+  case skipped(text: String, ticket: DraftTicket)
+  /// The server's `Nothing to apply` / `Nothing to skip`, or none of the asked still shown: `DraftNotice.notApplied`
+  /// / `.notSkipped`.
+  case refused(text: String)
+  /// Offline, failed, not sent, another account: `Not done · your text is kept`.
+  case notDone
+}
+
+extension AppModel {
+  /// §13.8: hands his words over, asks `stillShown` which suggestions the page still shows (none of `itemIds`:
+  /// `.refused`, nothing sent), then sends `apply-draft` (with `today`) or `skip-draft` for those, not overtaking
+  /// `page`, and waits for the state holding the answer under `owner`. A skip's ticket is read from that state.
+  ///
+  /// `stillShown` is asked after the hand-over, which suspends: a state may have arrived meanwhile, and the screen works
+  /// the suggestions out again from the workspace and the words it draws now. A decision whose today changed meanwhile
+  /// is not sent (`.notDone`): `apply-draft` would carry yesterday's `today`. The command never holds an empty
+  /// `itemIds`, which the server's reader refuses.
+  public func decide(
+    _ decision: DraftDecision, itemIds: [String], page: (id: String, date: LocalDate), owner: String,
+    stillShown: @MainActor () -> [String]
+  ) async -> DraftActed {
+    let today = today
+    guard !itemIds.isEmpty, await handOverHisWords(owner: owner), self.today == today else { return .notDone }
+    let shown = stillShown()
+    let ids = itemIds.filter { id in shown.contains { $0.utf8.elementsEqual(id.utf8) } }
+    let refused = DraftActed.refused(text: decision == .apply ? DraftNotice.notApplied : DraftNotice.notSkipped)
+    guard !ids.isEmpty else { return refused }
+    // `set-draft` stores at most 50 items, so no more can be open (the plan's Corrections).
+    assert(ids.count <= 50, "the server reads at most 50 ids")
+    let command =
+      switch decision {
+      case .apply: Command.applyDraft(pageId: page.id, itemIds: ids, today: today)
+      case .skip: Command.skipDraft(pageId: page.id, itemIds: ids)
+      }
+    switch await engine.perform(action: command, notOvertaking: page.id) {
+    case .applied(let answer):
+      guard await stateHolding(answer.published, madeUnder: owner) else { return .notDone }
+      let text = DraftNotice.text(after: decision, receipt: answer.receipt.flatMap(Receipt.init), asked: ids.count)
+      switch decision {
+      case .apply:
+        return .applied(text: text, operationId: answer.operationId)
+      case .skip:
+        // The state holding the answer is `owner`'s, so it shows a copy.
+        guard let workspace = state.workspace else { return .notDone }
+        // A skip's ticket is read once per skip: an index of its own rather than one the screen keeps for its draws.
+        let ticket = DraftTicket.of(
+          itemIds: ids, skippedBy: answer.operationId, draft: workspace.dayDraft(of: page.id),
+          index: TodoIndex(workspace))
+        return .skipped(text: text, ticket: ticket)
+      }
+    case .refused(let reason) where reason.contains(decision == .apply ? "Nothing to apply" : "Nothing to skip"):
+      return refused
+    case .refused, .offline, .signedOut, .notSent:
+      return .notDone
+    }
+  }
+
+  /// A skip's Undo: `reopen-draft`, not overtaking the page, waited for. `Undone`; refused: `DraftNotice.cantUndo`;
+  /// otherwise `Couldn't undo · your text is kept`. It does not use the server's Undo slot.
+  func reopen(_ ticket: DraftTicket, pageId: String, owner: String) async -> Notice {
+    await takeBack(
+      Command.reopenDraft(ticket, pageId: pageId), pageId: pageId, owner: owner, refused: DraftNotice.cantUndo)
+  }
+}
