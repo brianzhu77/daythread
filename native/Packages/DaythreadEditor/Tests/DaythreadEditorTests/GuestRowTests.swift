@@ -208,12 +208,11 @@
         #expect(!(hit is UITextView) && !hit.canBecomeFirstResponder)
         #expect(!screen.controller.takesTapUnderTheLastLine(at: cell.convert(CGPoint(x: words.midX, y: words.midY), to: screen.list)))
 
-        // Select all and copy, in a line: the line's words, no guest's.
+        // Select all in a line: the line's words, no guest's; copy copies the selection. (The pasteboard is not read
+        // back: on the simulator that asks for permission to paste and holds the test.)
         let line = try screen.focus(try item("p1", in: screen))
         line.selectAll(nil)
         #expect(line.text(in: try #require(line.selectedTextRange)) == "Line 1")
-        line.copy(nil)
-        #expect(UIPasteboard.general.string == "Line 1")
         #expect(changes == 1, "only the Backspace was a change")
       }
 
@@ -361,6 +360,32 @@
         #expect(try guestCell("gl", in: screen).markCentre == nil, "a line guest has no mark")
       }
 
+      /// Whether anything the button draws touches its outer edge: a symbol cut by its bounds (or a clipping view in
+      /// it) does; one drawn whole inside it leaves the edge empty.
+      private func inkReachesTheEdge(of button: UIButton) -> Bool {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let size = button.bounds.size
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+          button.layer.render(in: context.cgContext)
+        }
+        guard let cgImage = image.cgImage, let data = cgImage.dataProvider?.data,
+          let bytes = CFDataGetBytePtr(data)
+        else { return true }
+        let width = cgImage.width
+        let height = cgImage.height
+        let perRow = cgImage.bytesPerRow
+        let perPixel = cgImage.bitsPerPixel / 8
+        let alpha = cgImage.alphaInfo == .premultipliedFirst || cgImage.alphaInfo == .first ? 0 : perPixel - 1
+        var ink = CGRect.null
+        for y in 0..<height {
+          for x in 0..<width where bytes[y * perRow + x * perPixel + alpha] > 8 {
+            ink = ink.union(CGRect(x: x, y: y, width: 1, height: 1))
+          }
+        }
+        return ink.minX <= 0 || ink.minY <= 0 || ink.maxX >= CGFloat(width) || ink.maxY >= CGFloat(height)
+      }
+
       @Test(arguments: [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge])
       func the_buttons_are_44_points_and_never_clip_their_symbols(category: UIContentSizeCategory) throws {
         let screen = try everyKind(category)
@@ -373,9 +398,10 @@
           for button in cell.actionButtons {
             let target = button.convert(button.bounds, to: cell)
             #expect(target.width >= 44 && target.height >= 44, "\(id)'s button is \(target.size)")
-            let symbol = try #require(button.imageView, "\(id)'s button draws no symbol")
-            let glyph = symbol.convert(symbol.bounds, to: button)
-            #expect(button.bounds.insetBy(dx: -0.5, dy: -0.5).contains(glyph), "\(id)'s symbol \(glyph) is cut by \(button.bounds)")
+            let symbol = try #require(cell.symbolView(of: button), "\(id)'s button draws no symbol")
+            let glyph = try #require(symbol.image?.size)
+            #expect(button.bounds.insetBy(dx: -0.5, dy: -0.5).contains(symbol.frame))
+            #expect(!inkReachesTheEdge(of: button), "\(id)'s symbol is cut by its button")
             #expect(glyph.height <= font.lineHeight + 0.5, "the symbol is larger than the words")
             #expect(cell.bounds.insetBy(dx: -0.5, dy: -0.5).contains(target), "\(id)'s button is cut by its row")
             if category.isAccessibilityCategory {
@@ -558,7 +584,7 @@
         screen.window.layoutIfNeeded()
         #expect(try guestCell("g1", in: screen) === acting, "dimmed in place")
         #expect(acting.wordsLabel.textColor == .tertiaryLabel)
-        #expect(acting.actionButtons.allSatisfy { $0.configuration?.baseForegroundColor == .tertiaryLabel })
+        #expect(acting.actionButtons.allSatisfy { acting.symbolView(of: $0)?.tintColor == .tertiaryLabel })
         #expect(other.wordsLabel.textColor == .secondaryLabel)
         #expect(listed(screen) == ["p1", "guest:g1", "p2", "guest:g2", "p3"], "a guest dimmed is still a guest")
         for cell in [acting, other] {
