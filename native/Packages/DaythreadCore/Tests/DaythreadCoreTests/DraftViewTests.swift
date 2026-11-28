@@ -363,6 +363,51 @@ import Testing
     #expect(view.moreOpen.map(\.taskId) == ["u"])
   }
 
+  // MARK: What finding where a line came from parses
+
+  /// The pages a `decidedElsewhere` parsed, by id, in order.
+  private final class Parses {
+    var ids: [String] = []
+  }
+
+  @Test func a_lines_source_is_found_without_parsing_a_page_the_index_holds() throws {
+    // Check 6: today's line says where it came from (`b1`); yesterday's decided `Gym` is an older recipe's.
+    func decided(first: [JSONValue]) throws -> (decided: Bool, parsed: [String]) {
+      let workspace = try TestWorkspace.make(
+        pages: first + [
+          Self.page("notes", type: "document", createdAt: "2026-11-01T08:00:00.000Z", blocks: ["n1"]),
+          Self.page("day:2026-11-24", type: "daily", date: "2026-11-24", blocks: ["b1"]),
+          Self.page("tpl", type: "template", blocks: ["b1"]),
+          TestWorkspace.day("2026-11-25", rows: [Self.heading("h25")]),
+          Self.draftPage(of: "day:2026-11-25", recipe: 4, [Self.line("x", "Gym", state: "skipped")]),
+          TestWorkspace.day("2026-11-26", rows: [Self.heading("h")]),
+        ])
+      let carried = Self.line("i", "Gym", extra: #","from":"b1""#)
+      let item = try #require(
+        DayDraft(document: #"{"status":"ready","recipe":5,"items":[\#(carried)]}"#)?.items.first)
+      let page = try #require(workspace.page("day:2026-11-26"))
+      let parses = Parses()
+      let elsewhere = DaythreadCore.decidedElsewhere(
+        in: workspace, index: TodoIndex(workspace), dayPage: page,
+        parse: { page in
+          parses.ids.append(page.id)
+          return Document.blocks(page.document)
+        })
+      return (elsewhere(item), parses.ids)
+    }
+
+    let held = try decided(first: [])
+    #expect(held.decided, "written on the 24th, so it could have been in the 25th's draft")
+    #expect(held.parsed == [], "the index already knows the first page holding the block")
+
+    // A page in Trash before it, which the index does not hold, is still the first page holding the block.
+    let trashed = Self.page(
+      "day:2026-11-27", type: "daily", date: "2026-11-27", trashedAt: "2026-11-28T00:00:00.000Z", blocks: ["b1"])
+    let earlier = try decided(first: [trashed])
+    #expect(!earlier.decided, "the first page holding it is dated the 27th")
+    #expect(earlier.parsed == ["day:2026-11-27"], "only the pages the index does not hold, and only before its hit")
+  }
+
   // MARK: Helpers
 
   /// The ids of the suggestions `day:2026-11-26` shows.
@@ -394,10 +439,12 @@ import Testing
 
   /// A page whose blocks are paragraphs of these ids.
   private static func page(
-    _ id: String, type: String, date: String? = nil, createdAt: String? = nil, blocks: [String]
+    _ id: String, type: String, date: String? = nil, createdAt: String? = nil, trashedAt: String? = nil,
+    blocks: [String]
   ) -> JSONValue {
     let document = Document.write(blocks.map { Block(id: $0, type: $0 == "h" ? "heading" : "paragraph") })
-    var object = TestWorkspace.page(id, type: type, date: date, document: document).objectValue ?? [:]
+    let base = TestWorkspace.page(id, type: type, date: date, trashedAt: trashedAt, document: document)
+    var object = base.objectValue ?? [:]
     if let createdAt { object["createdAt"] = .string(createdAt) }
     return .object(object)
   }
