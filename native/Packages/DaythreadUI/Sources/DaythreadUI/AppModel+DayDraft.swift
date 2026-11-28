@@ -201,21 +201,25 @@ extension AppModel {
       }
     switch await engine.perform(action: command, notOvertaking: page.id) {
     case .applied(let answer):
-      guard await stateHolding(answer.published, madeUnder: owner) else { return .notDone }
+      guard let held = await stateReached(answer.published, madeUnder: owner) else { return .notDone }
       let text = DraftNotice.text(after: decision, receipt: answer.receipt.flatMap(Receipt.init), asked: ids.count)
       switch decision {
       case .apply:
         return .applied(text: text, operationId: answer.operationId)
       case .skip:
-        // The state holding the answer is `owner`'s, so it shows a copy.
-        guard let workspace = state.workspace else { return .notDone }
+        // The ticket says what the skip saw: read from the state that holds its answer, not a newer one that arrived
+        // before this resumed (another device planning the to-do since must make the reopen refused, not accepted).
+        guard let workspace = held.workspace else { return .notDone }
         // A skip's ticket is read once per skip: an index of its own rather than one the screen keeps for its draws.
         let ticket = DraftTicket.of(
           itemIds: ids, skippedBy: answer.operationId, draft: workspace.dayDraft(of: page.id),
           index: TodoIndex(workspace))
         return .skipped(text: text, ticket: ticket)
       }
-    case .refused(let reason) where reason.contains(decision == .apply ? "Nothing to apply" : "Nothing to skip"):
+    // Decided elsewhere, or the draft itself gone (another device's change) between the hand-over and the server.
+    case .refused(let reason)
+    where reason.contains(decision == .apply ? "Nothing to apply" : "Nothing to skip")
+      || reason.contains("No draft for this day"):
       return refused
     case .refused, .offline, .signedOut, .notSent:
       return .notDone

@@ -368,7 +368,13 @@ private func settled(_ day: RowScreen) async throws {
     // Made from the first account's workspace: dropped, and the ask is over.
     await h.server.addDrafts([reply(setDraft: nil)])
     #expect(await h.model.signIn(email: "two@example.com", password: "secret") == nil)
-    try await soon { h.model.state.owner == "two" && h.model.state.workspace != nil }
+    // The screen asks once it draws today under the second account, ready and online.
+    try await soon {
+      h.model.state.owner == "two" && h.model.state.phase == .ready && !h.model.state.offline
+        && h.model.workspace?.dayPage(today) != nil
+    }
+    try await settled(day)
+    try await eventually { await h.server.draftDates.count == 1 }
     try await soon { h.model.draftAsk(of: todayId) == .done }
     try await settled(day)
     #expect(shown(day) == nil, "their page has no draft")
@@ -436,9 +442,11 @@ private func settled(_ day: RowScreen) async throws {
   /// SwiftUI builds no accessibility tree for a unit test to read: the words VoiceOver hears are the value's, and the
   /// view gives each segment's words their own element before that segment's buttons, each button its own.
   @Test func voiceover_reads_the_line_and_each_button() throws {
-    #expect(DraftLine.segments(count: "3 suggestions", failed: false, offline: false).spokenSegments == ["3 suggestions"])
     #expect(
-      DraftLine.segments(count: "3 suggestions", failed: true, offline: false).spokenSegments
+      DraftLine.segments(count: "3 suggestions", failed: false, offline: false).shownSegments.map(\.words)
+        == ["3 suggestions"])
+    #expect(
+      DraftLine.segments(count: "3 suggestions", failed: true, offline: false).shownSegments.map(\.words)
         == ["3 suggestions", "Couldn\u{2019}t draft"])
     let (model, window) = try drawnLine(.segments(count: "3 suggestions", failed: true, offline: false), size: .large)
     #expect(Set(model.lineFrames.keys) == [.words, .applyAll, .dismiss, .retry], "the words, then three buttons")

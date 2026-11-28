@@ -64,7 +64,12 @@ private func draftPage(_ states: [String: String] = [:], recipe: Int = DayDraft.
     #"{"id":"i3","anchor":"\#(slotId)","place":"after","block":\#(row("b-i3", "", "Renew the passport")),"source":"model","state":"\#(state("i3"))"}"#,
     #"{"id":"i4","anchor":"\#(slotId)","place":"after","block":\#(bullet("b-i4", "Pack the charger")),"source":"model","state":"\#(state("i4"))"}"#,
   ]
-  return .object([
+  return draftPage(items: items, recipe: recipe)
+}
+
+/// Today's draft, ready, holding `items` (JSON text).
+private func draftPage(items: [String], recipe: Int = DayDraft.currentRecipe) -> JSONValue {
+  .object([
     "id": .string("draft:\(todayId)"), "type": .string("draft"), "parentId": .string(todayId), "title": .string(""),
     "document": .string(
       #"{"status":"ready","recipe":\#(recipe),"moreOpen":[],"items":[\#(items.joined(separator: ","))]}"#),
@@ -413,26 +418,32 @@ private let setDraftText =
     day.close()
   }
 
-  /// Another device ticked `Call the dentist`: the state saying so is held back from the screen, which still shows its
-  /// suggestion when he taps, and reaches the model before the state that ends the hand-over of his words.
-  private func dentistDoneWhileHisWordsGo(_ h: Harness, _ relay: StateRelay) async throws {
+  /// Another device ticked `Call the dentist` (or set it aside, `paused`): the state saying so is held back from the
+  /// screen, which still shows its suggestion when he taps, and reaches the model before the state that ends the
+  /// hand-over of his words.
+  private func dentistDoneWhileHisWordsGo(_ h: Harness, _ relay: StateRelay, paused: Bool = false) async throws {
     relay.hold()
-    let done = task("t2", "Call the dentist", status: "done", version: 2)
+    let changed =
+      paused
+      ? task("t2", "Call the dentist", version: 2, paused: true)
+      : task("t2", "Call the dentist", status: "done", version: 2)
     await h.server.add([
       .workspace(
-        .full(try copy(revision: 2, pages: [todayPage(), yesterdayPage, draftPage()], tasks: [flights, done, water, bike]),
+        .full(
+          try copy(revision: 2, pages: [todayPage(), yesterdayPage, draftPage()], tasks: [flights, changed, water, bike]),
           owner: "one"))
     ])
     await h.model.refresh()
     try await soon { !relay.kept.isEmpty }
   }
 
-  @Test func a_suggestion_gone_after_his_words_were_handed_over_sends_nothing() async throws {
+  @Test(arguments: ["ticked", "set aside"])
+  func a_suggestion_gone_after_his_words_were_handed_over_sends_nothing(_ how: String) async throws {
     let relay = StateRelay()
     let h = try await harness(relay: relay)
     let day = try RowScreen(h.model)
     try await settled(day)
-    try await dentistDoneWhileHisWordsGo(h, relay)
+    try await dentistDoneWhileHisWordsGo(h, relay, paused: how == "set aside")
     // Were the apply sent, the server would take his words, then the apply.
     await h.server.add([
       savedAs(try changes(from: 2, to: 3, pages: [todayPage(walk: "Walk!")])), try appliedI2(from: 3, undo: nil),
@@ -444,9 +455,119 @@ private let setDraftText =
     relay.release()
     try await soon { day.notice != nil }
 
-    #expect(day.notice == Notice(text: "Not applied · changed elsewhere", kind: .failed, undoing: nil))
-    #expect(await h.server.sent.allSatisfy { type(of: $0) != "apply-draft" }, "no apply-draft")
+    #expect(day.notice == Notice(text: "Not applied · changed elsewhere", kind: .failed, undoing: nil), "\(how)")
+    #expect(await h.server.sent.allSatisfy { type(of: $0) != "apply-draft" }, "\(how): no apply-draft")
     #expect(day.factsModel.enabled)
+    day.close()
+  }
+
+  /// His typing removed the row a suggestion follows before its decision went. The web's rule (`placeItem`) puts an
+  /// item whose anchor is gone at the planning end, so it is still shown there, and the server places it there too:
+  /// the apply is sent.
+  @Test func a_suggestion_whose_anchor_he_deleted_goes_to_the_planning_end_and_is_sent() async throws {
+    let item =
+      #"{"id":"i5","anchor":"w1","place":"after","taskId":"t2","source":"model","state":"open"}"#
+    let h = try await harness(draft: draftPage(items: [item]))
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    #expect(day.screen.draftView?.suggestions.map(\.anchorId) == ["w1"])
+
+    let without = todayLines().filter { !$0.contains(#""id":"w1""#) }
+    await h.server.add([
+      savedAs(try changes(from: 1, to: 2, pages: [page(today, without)])),
+      applied(
+        try changes(
+          from: 2, to: 3,
+          pages: [page(today, without + [dentistRow]), draftPage(items: [item.replacingOccurrences(of: "open", with: "applied")])]),
+        receipt: said("Applied")),
+    ])
+    // He removes the anchor row's words, then the row, and taps in the same turn: his words are handed over first.
+    let watering = try day.line("Water the plants")
+    #expect(watering.becomeFirstResponder())
+    watering.selectedRange = NSRange(location: 0, length: (watering.text as NSString).length)
+    watering.deleteBackward()
+    watering.deleteBackward()
+    #expect(!day.words.contains("Water the plants"), "the anchor row is gone from the screen")
+    day.screen.suggestionTapped("i5", .apply)
+    try await soon { day.notice != nil }
+
+    let sent = await h.server.sent
+    #expect(sent.map { type(of: $0) } == ["save-editor", "apply-draft"])
+    #expect(sent.last == (try applyDraft(["i5"])))
+    #expect(day.notice?.text == "Applied")
+    day.close()
+  }
+
+  /// The skip's ticket is read from the state that holds its answer: a newer state that reaches the model before the
+  /// decision resumes (another device planned the to-do for tomorrow) does not change what the reopen says it saw.
+  @Test func the_skips_ticket_is_read_from_the_state_holding_its_answer() async throws {
+    let relay = StateRelay()
+    let h = try await harness(relay: relay)
+    let day = try RowScreen(h.model)
+    try await settled(day)
+
+    await h.server.hold()
+    day.screen.suggestionTapped("i2", .skip)
+    let skip = try await answerHeld(h) { operationId in
+      relay.hold()
+      return applied(
+        try changes(from: 1, to: 2, pages: [draftPage(["i2": "skipped"])], undo: operationId), receipt: said("Skipped"))
+    }
+    await h.engine.settled()
+    // Another device planned `Call the dentist` for tomorrow; its state follows the answer's, and both reach the model
+    // together.
+    let tomorrowPage = page(tomorrow, [row("m2", "t2", "Call the dentist", on: tomorrow)])
+    await h.server.add([
+      .workspace(
+        .full(
+          try copy(
+            revision: 3, pages: [todayPage(), yesterdayPage, tomorrowPage, draftPage(["i2": "skipped"])], tasks: tasks),
+          owner: "one"))
+    ])
+    await h.model.refresh()
+    try await soon { relay.kept.contains { $0.workspace?.revision == 3 } }
+    relay.release()
+    try await soon { day.notice != nil }
+    #expect(day.notice?.undoing == skip)
+
+    await h.server.add([applied(try changes(from: 3, to: 4, pages: [draftPage()]))])
+    try day.undo()
+    try await soon { day.notice?.text == "Undone" }
+    let reopen = try JSON.parse(
+      #"{"type":"reopen-draft","pageId":"day:2026-11-26","itemIds":["i2"],"skippedBy":"\#(skip)","seen":{"i2":"2026-11-25"}}"#
+    )
+    #expect(await h.server.sent.last == reopen)
+    day.close()
+  }
+
+  @Test(arguments: [DraftDecision.apply, .skip])
+  func no_draft_for_this_day_says_changed_elsewhere(_ decision: DraftDecision) async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+
+    await h.server.add([
+      .outcome(.refused(message: "No draft for this day", owner: "one")),
+      .workspace(.unchanged(revision: 1, owner: "one")),
+    ])
+    day.screen.suggestionTapped("i2", decision == .apply ? .apply : .skip)
+    try await soon { day.notice != nil }
+    let text = decision == .apply ? "Not applied · changed elsewhere" : "Not skipped · changed elsewhere"
+    #expect(day.notice == Notice(text: text, kind: .failed, undoing: nil))
+    day.close()
+  }
+
+  @Test func another_refusal_says_not_done() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+
+    await h.server.add([
+      .outcome(.refused(message: "Not a day page", owner: "one")), .workspace(.unchanged(revision: 1, owner: "one")),
+    ])
+    day.screen.suggestionTapped("i2", .apply)
+    try await soon { day.notice != nil }
+    #expect(day.notice == Notice(text: "Not done · your text is kept", kind: .failed, undoing: nil))
     day.close()
   }
 
@@ -714,9 +835,10 @@ private let setDraftText =
 
     try await answerHeld(h) { try appliedI2(undo: $0) }
     await h.engine.settled()
+    // The decision has ended: the strip works again.
+    try await soon { day.factsModel.enabled && !day.editor.pausesRowActions }
     try await turns()
     #expect(day.notice == nil, "nothing is said on this day for today")
-    try await soon { day.factsModel.enabled }
     day.close()
   }
 }

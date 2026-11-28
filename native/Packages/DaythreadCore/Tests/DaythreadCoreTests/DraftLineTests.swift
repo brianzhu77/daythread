@@ -35,17 +35,23 @@ import Testing
     #expect(DraftLine.preparing.spoken == "Preparing\u{2026}")
   }
 
-  /// VoiceOver hears each segment's words as an element of its own, followed by its buttons: `Retry` is heard after
-  /// `Couldn’t draft`, not after the count.
-  @Test func each_segment_is_heard_on_its_own() {
+  /// The line's segments, each its words and the buttons after them: the view draws them in this order, and VoiceOver
+  /// hears each segment's words before its buttons, so `Retry` is heard after `Couldn’t draft`, not after the count.
+  @Test func each_segment_holds_its_words_and_buttons() {
+    typealias Segment = DraftLine.Segment
     #expect(
-      DraftLine.segments(count: "2 suggestions", failed: true, offline: false).spokenSegments
-        == ["2 suggestions", "Couldn\u{2019}t draft"])
-    #expect(DraftLine.segments(count: "3 suggestions", failed: false, offline: false).spokenSegments == ["3 suggestions"])
-    #expect(DraftLine.segments(count: nil, failed: true, offline: false).spokenSegments == ["Couldn\u{2019}t draft"])
-    #expect(DraftLine.segments(count: nil, failed: false, offline: true).spokenSegments == ["Offline"])
-    #expect(DraftLine.preparing.spokenSegments == ["Preparing\u{2026}"])
-    #expect(DraftLine.held.spokenSegments == ["Suggestions ready"])
+      DraftLine.segments(count: "2 suggestions", failed: true, offline: true).shownSegments == [
+        Segment(words: "2 suggestions", buttons: [.applyAll, .dismiss]),
+        Segment(words: "Couldn\u{2019}t draft", buttons: [.retry]), Segment(words: "Offline", buttons: []),
+      ])
+    #expect(
+      DraftLine.segments(count: "3 suggestions", failed: false, offline: false).shownSegments
+        == [Segment(words: "3 suggestions", buttons: [.applyAll, .dismiss])])
+    #expect(
+      DraftLine.segments(count: nil, failed: true, offline: false).shownSegments
+        == [Segment(words: "Couldn\u{2019}t draft", buttons: [.retry])])
+    #expect(DraftLine.preparing.shownSegments == [Segment(words: "Preparing\u{2026}", buttons: [])])
+    #expect(DraftLine.held.shownSegments == [Segment(words: "Suggestions ready", buttons: [.show])])
   }
 
   @Test func an_ask_is_lost_after_sixty_seconds_and_counts_as_a_failure() {
