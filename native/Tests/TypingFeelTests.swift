@@ -204,10 +204,54 @@ final class TypingFeelTests: XCTestCase {
   func test_a_wait_with_no_stall_records_nothing() async throws {
     let state = Arrival()
     state.arrive(after: .milliseconds(100))
+    var warnings: [String] = []
     let failure = try await wait(
-      "the state reached the screen", deadline: .seconds(5), mainHeldLimit: .seconds(1), besideLimit: .milliseconds(500)
+      "the state reached the screen", deadline: .seconds(5), mainHeldLimit: .seconds(1), besideLimit: .milliseconds(500),
+      warn: { warnings.append($0) }
     ) { state.arrived }
     XCTAssertNil(failure)
+    XCTAssertEqual(warnings, [], "no warning was printed")
+  }
+
+  /// A call that takes long is a stall too, though no wait sees it: the call is one stretch of the main thread. It is
+  /// held alone when the heartbeat beside it ran through it, and reported as the wait's stall is.
+  func test_a_long_call_held_alone_warns_or_fails_and_is_named() throws {
+    let base = ContinuousClock.now
+    let limits = (main: Duration.seconds(10), beside: Duration.seconds(1))
+    let insert = CallSpan(
+      place: .insertText, keystroke: 4, run: 1, start: base, end: base.advanced(by: .seconds(34)))
+    let layout = CallSpan(
+      place: .layout, keystroke: 4, run: 1, start: base, end: base.advanced(by: .seconds(12)))
+
+    let warned = try XCTUnwrap(
+      Self.stallOfCall(insert, beside: .milliseconds(20), limits: limits, budgetEnforced: false))
+    XCTAssertEqual(warned.outcome, .warn)
+    XCTAssertTrue(
+      warned.message.hasPrefix("inside insertText of keystroke 4 of run 1, which took 34.0 s"), warned.message)
+    let failed = try XCTUnwrap(
+      Self.stallOfCall(insert, beside: .milliseconds(20), limits: limits, budgetEnforced: true))
+    XCTAssertEqual(failed.outcome, .fail)
+    XCTAssertEqual(failed.message, warned.message)
+    let inLayout = try XCTUnwrap(
+      Self.stallOfCall(layout, beside: .zero, limits: limits, budgetEnforced: true))
+    XCTAssertTrue(inLayout.message.hasPrefix("inside the list's layout of keystroke 4 of run 1, which took 12.0 s"))
+
+    let short = CallSpan(place: .insertText, keystroke: 4, run: 1, start: base, end: base.advanced(by: .milliseconds(40)))
+    XCTAssertNil(Self.stallOfCall(short, beside: .zero, limits: limits, budgetEnforced: true), "a short call")
+    XCTAssertNil(
+      Self.stallOfCall(insert, beside: .seconds(30), limits: limits, budgetEnforced: true), "the process stopped")
+  }
+
+  /// A main thread that has not answered for longer than the threshold has its stack printed, once, by a signal sent
+  /// to it from the heartbeat's thread. The stack's text is not asserted.
+  func test_a_main_thread_held_past_the_threshold_has_its_stack_printed_once() async throws {
+    let before = StackDump.count.load(ordering: .relaxed)
+    let beating = Heartbeat(stackAfter: .seconds(1))
+    defer { beating.stop() }
+    Task { Self.stallTheMainThread(for: .seconds(6)) }
+    // Runs once the stall is over: the main actor takes the stall's job first.
+    try await Task.sleep(nanoseconds: 10_000_000)
+    XCTAssertEqual(StackDump.count.load(ordering: .relaxed) - before, 1, "the stack was printed once, not more")
   }
 
   @MainActor private final class Arrival {
