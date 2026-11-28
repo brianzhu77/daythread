@@ -123,6 +123,23 @@ public enum SaveOutcome: Sendable {
   case ownerMismatch(owner: String)
 }
 
+/// `POST /api/v1/day-draft`'s reply. `setDraft` is the `set-draft` command as JSON text, or nil when the day's draft
+/// already stands.
+public struct DayDraftReply: Sendable, Equatable {
+  public let setDraft: String?
+  /// Whose workspace the draft was made from.
+  public let owner: String
+  public let modelOn: Bool
+  public let remakeFailed: Bool
+
+  public init(setDraft: String?, owner: String, modelOn: Bool, remakeFailed: Bool) {
+    self.setDraft = setDraft
+    self.owner = owner
+    self.modelOn = modelOn
+    self.remakeFailed = remakeFailed
+  }
+}
+
 /// The server as the sync engine sees it. A `nil` token is for a server with sign-in off.
 public protocol ServerTransport: Sendable {
   func signIn(email: String, password: String, timezone: String) async throws -> Session
@@ -136,4 +153,8 @@ public protocol ServerTransport: Sendable {
   func save(
     token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
   ) async throws -> SaveOutcome
+  /// `{ date, operationId }`; a `404 { error: "not-found" }` throws `TransportError.refused(status: 404, reason:
+  /// "not-found")`; a reply without `owner`, or a `setDraft` neither string nor null, throws `.unreadable`. A reply
+  /// only ever gains optional fields: `modelOn` or `remakeFailed` left out reads as false.
+  func dayDraft(token: String?, date: LocalDate, operationId: String) async throws -> DayDraftReply
 }

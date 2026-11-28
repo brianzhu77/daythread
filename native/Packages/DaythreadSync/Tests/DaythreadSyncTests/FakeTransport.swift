@@ -13,6 +13,7 @@ actor FakeTransport: ServerTransport {
     case workspace(token: String?, have: Int?)
     case send(token: String?, operationId: String, action: JSONValue, expectedOwner: String, basis: OutboxBasis)
     case save(token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue)
+    case dayDraft(token: String?, date: LocalDate, operationId: String)
 
     /// The operation of a command sent; nil for every other call, a save included.
     var operationId: String? {
@@ -31,6 +32,7 @@ actor FakeTransport: ServerTransport {
     case workspace(WorkspaceReply)
     case outcome(CommandOutcome)
     case saved(SaveOutcome)
+    case dayDraft(DayDraftReply)
     case failure(any Error)
     case gated(Gate)
   }
@@ -117,6 +119,12 @@ actor FakeTransport: ServerTransport {
       action: action)
     guard case .saved(let outcome) = try await answer(call) else { throw mismatch(call) }
     return outcome
+  }
+
+  func dayDraft(token: String?, date: LocalDate, operationId: String) async throws -> DayDraftReply {
+    let call = Call.dayDraft(token: token, date: date, operationId: operationId)
+    guard case .dayDraft(let reply) = try await answer(call) else { throw mismatch(call) }
+    return reply
   }
 
   // MARK: Script

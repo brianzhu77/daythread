@@ -27,6 +27,9 @@ private actor RefusingServer: ServerTransport {
   func save(
     token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
   ) async throws -> SaveOutcome { throw TransportError.offline }
+  func dayDraft(token: String?, date: LocalDate, operationId: String) async throws -> DayDraftReply {
+    throw TransportError.offline
+  }
 }
 
 @MainActor

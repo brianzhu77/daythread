@@ -2299,6 +2299,10 @@ private actor PageServer: ServerTransport {
       receipt: .object(["revision": .number(String(revision))]),
       changes: try changes(from: revision - 1, to: revision, document: next), owner: "user-1")
   }
+
+  func dayDraft(token: String?, date: LocalDate, operationId: String) async throws -> DayDraftReply {
+    throw TransportError.offline
+  }
 }
 
 /// A device: an engine with its own store and session, on the shared server.

@@ -8,6 +8,8 @@ struct RecordedRequest: Sendable {
   let url: URL
   let headers: [String: String]
   let body: Data?
+  /// The request's own timeout, in seconds.
+  let timeout: TimeInterval
 
   var path: String { url.path }
   var query: String? { url.query }
@@ -84,7 +86,7 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
     }
     let recorded = RecordedRequest(
       method: request.httpMethod ?? "GET", url: url,
-      headers: request.allHTTPHeaderFields ?? [:], body: bodyData())
+      headers: request.allHTTPHeaderFields ?? [:], body: bodyData(), timeout: request.timeoutInterval)
     switch server.record(recorded) {
     case .failure(let code):
       client?.urlProtocol(self, didFailWithError: URLError(code))
