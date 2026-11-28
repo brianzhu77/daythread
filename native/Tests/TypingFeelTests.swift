@@ -114,11 +114,20 @@ final class TypingFeelTests: XCTestCase {
   /// about from inside the process; that case is covered only by `mainThreadAloneWasHeld`, tested below.
   func test_a_main_thread_held_alone_fails_a_wait_whose_state_arrived() async throws {
     let state = Arrival()
+    let besideLimit = Duration.milliseconds(500)
+    let started = ContinuousClock.now
     Task { Self.stallTheMainThread(for: .milliseconds(1_500)) }
     state.arrive(after: .milliseconds(200))
     let failure = try await wait(
-      "the state reached the screen", deadline: .seconds(1), mainHeldLimit: .seconds(1), besideLimit: .milliseconds(500)
+      "the state reached the screen", deadline: .seconds(1), mainHeldLimit: .seconds(1), besideLimit: besideLimit
     ) { state.arrived }
+    // On a loaded machine the heartbeat itself can miss its beats; the two cases cannot then be told apart here.
+    let besideStall = try XCTUnwrap(heartbeat).longestStall(since: started)
+    if besideStall > besideLimit {
+      throw XCTSkip(
+        "the machine was too loaded to tell a held main thread from a stopped process: the thread beside it stalled "
+          + "for \(Self.seconds(besideStall)) s, past the \(Self.seconds(besideLimit)) s limit")
+    }
     let message = try XCTUnwrap(failure, "the main thread held alone for 1.5 s, past a limit of 1 s")
     XCTAssertTrue(message.contains("the main thread alone was held for"), message)
   }
