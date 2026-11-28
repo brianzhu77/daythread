@@ -36,7 +36,7 @@ import Testing
       case "reopen-draft": built = Command.reopenDraft(try Self.ticket(of: entry.action), pageId: entry.pageId)
       default:
         // Undo of an apply is the row's own command.
-        let target = try #require(entry.action.objectValue?["targetOperationId"]?.stringValue, entry.name)
+        let target = try #require(entry.action.objectValue?["targetOperationId"]?.stringValue, "\(entry.name)")
         built = Command.undo(targetOperationId: target)
       }
       #expect(JSON.write(built) == JSON.write(entry.action), "command: \(entry.name)")
@@ -87,14 +87,13 @@ import Testing
       }
       switch entry.type {
       case "apply-draft":
-        #expect(Set(entry.itemIds).isSubset(of: Set(before)), "asked are shown before: \(entry.name)")
         if entry.name == "apply-all-partly" {
-          // The second asked was done since; it is the only one that stays in the draft.
-          #expect(after == ["i2"] || after.isEmpty, "only the one not applied may be left: \(entry.name)")
-          #expect(!after.contains("i1") && !after.contains("i3"), "applied are gone: \(entry.name)")
+          // Three were asked and the second's to-do was done since, so the view never offered it: two are applied.
+          #expect(before == ["i1", "i3"], "the done one is not offered: \(entry.name)")
         } else {
-          #expect(Set(after).isDisjoint(with: Set(entry.itemIds)), "applied are gone: \(entry.name)")
+          #expect(Set(entry.itemIds).isSubset(of: Set(before)), "asked are shown before: \(entry.name)")
         }
+        #expect(Set(after).isDisjoint(with: Set(entry.itemIds)), "applied are gone: \(entry.name)")
       case "skip-draft":
         #expect(Set(entry.itemIds).isSubset(of: Set(before)), "asked are shown before: \(entry.name)")
         #expect(Set(after).isDisjoint(with: Set(entry.itemIds)), "skipped are gone: \(entry.name)")
@@ -131,17 +130,17 @@ import Testing
       let receipt = entry.receipt.flatMap(Receipt.init)
       switch (entry.type, entry.refusal) {
       case ("apply-draft", nil):
-        let message = try #require(receipt?.message, entry.name)
-        #expect(DraftNotice.text(after: .apply, receipt: receipt, asked: entry.itemIds.count) == message, entry.name)
+        let message = try #require(receipt?.message, "\(entry.name)")
+        #expect(DraftNotice.text(after: .apply, receipt: receipt, asked: entry.itemIds.count) == message, "\(entry.name)")
       case ("skip-draft", nil):
-        let message = try #require(receipt?.message, entry.name)
-        #expect(DraftNotice.text(after: .skip, receipt: receipt, asked: entry.itemIds.count) == message, entry.name)
+        let message = try #require(receipt?.message, "\(entry.name)")
+        #expect(DraftNotice.text(after: .skip, receipt: receipt, asked: entry.itemIds.count) == message, "\(entry.name)")
       case ("reopen-draft", nil):
         // After a reopen the app says `Undone`; the receipt only has to be a reply.
-        #expect(receipt?.message == "Brought back 3", entry.name)
-      case ("apply-draft", .some(let refusal)): #expect(refusal == "Nothing to apply", entry.name)
-      case ("skip-draft", .some(let refusal)): #expect(refusal == "Nothing to skip", entry.name)
-      case ("reopen-draft", .some(let refusal)): #expect(refusal.hasPrefix("Cannot undo"), entry.name)
+        #expect(receipt?.message == "Brought back 3", "\(entry.name)")
+      case ("apply-draft", .some(let refusal)): #expect(refusal == "Nothing to apply", "\(entry.name)")
+      case ("skip-draft", .some(let refusal)): #expect(refusal == "Nothing to skip", "\(entry.name)")
+      case ("reopen-draft", .some(let refusal)): #expect(refusal.hasPrefix("Cannot undo"), "\(entry.name)")
       default: break
       }
     }

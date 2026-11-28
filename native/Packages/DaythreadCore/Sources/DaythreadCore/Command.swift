@@ -71,6 +71,37 @@ public enum Command {
     return .object(action)
   }
 
+  /// `{ type, pageId, itemIds, today }` (`applyDraftAction`; the app sends no `edits`).
+  public static func applyDraft(pageId: String, itemIds: [String], today: LocalDate) -> JSONValue {
+    var action = JSONObject()
+    action["type"] = .string("apply-draft")
+    action["pageId"] = .string(pageId)
+    action["itemIds"] = .array(itemIds.map { .string($0) })
+    action["today"] = .string(today.value)
+    return .object(action)
+  }
+
+  public static func skipDraft(pageId: String, itemIds: [String]) -> JSONValue {
+    var action = JSONObject()
+    action["type"] = .string("skip-draft")
+    action["pageId"] = .string(pageId)
+    action["itemIds"] = .array(itemIds.map { .string($0) })
+    return .object(action)
+  }
+
+  /// `seen` keeps the ticket's order, and a day that is nil is written as `null`.
+  public static func reopenDraft(_ ticket: DraftTicket, pageId: String) -> JSONValue {
+    var seen = JSONObject()
+    for entry in ticket.seen { seen[entry.itemId] = entry.plannedOn.map { .string($0.value) } ?? .null }
+    var action = JSONObject()
+    action["type"] = .string("reopen-draft")
+    action["pageId"] = .string(pageId)
+    action["itemIds"] = .array(ticket.itemIds.map { .string($0) })
+    action["skippedBy"] = .string(ticket.skippedBy)
+    action["seen"] = .object(seen)
+    return .object(action)
+  }
+
   public static func undo(targetOperationId: String) -> JSONValue {
     var action = JSONObject()
     action["type"] = .string("undo")
