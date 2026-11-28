@@ -418,6 +418,83 @@ private func expectError(_ expected: TransportError, _ call: () async throws -> 
   }
 }
 
+@Suite struct DayDraftTests {
+  private let date = LocalDate("2026-11-26")!
+  private let command = #"{"type":"set-draft","pageId":"day:2026-11-26","status":"ready","recipe":5}"#
+
+  private func ask(_ server: StubServer) async throws -> DayDraftReply {
+    try await server.transport().dayDraft(token: "tok-1", date: date, operationId: "op")
+  }
+
+  /// The reply as the route writes it, `setDraft` included as JSON text.
+  private func reply(_ object: JSONObject) -> String {
+    JSON.write(.object(object))
+  }
+
+  @Test func day_draft_posts_the_date_and_operation_id() async throws {
+    let server = StubServer()
+    server.answer(status: 200, json: #"{"setDraft":null,"owner":"user-1","modelOn":false,"remakeFailed":false}"#)
+    _ = try await ask(server)
+    let request = try #require(server.requests.first)
+    #expect(request.method == "POST")
+    #expect(request.path == "/api/v1/day-draft")
+    #expect(request.query == nil)
+    #expect(request.header("Authorization") == "Bearer tok-1")
+    #expect(request.header("Content-Type") == "application/json")
+    #expect(request.header("Accept") == "application/json")
+    #expect(request.bodyText == #"{"date":"2026-11-26","operationId":"op"}"#)
+  }
+
+  @Test func day_draft_reads_the_reply() async throws {
+    let server = StubServer()
+    server.answer(
+      status: 200,
+      json: reply([
+        "setDraft": .string(command), "owner": .string("user-1"), "modelOn": .bool(true),
+        "remakeFailed": .bool(false),
+      ]))
+    #expect(
+      try await ask(server) == DayDraftReply(setDraft: command, owner: "user-1", modelOn: true, remakeFailed: false))
+
+    server.answer(
+      status: 200,
+      json: reply(["setDraft": .null, "owner": .string("user-1"), "modelOn": .bool(false), "remakeFailed": .bool(true)]))
+    #expect(
+      try await ask(server) == DayDraftReply(setDraft: nil, owner: "user-1", modelOn: false, remakeFailed: true))
+
+    // A reply only ever gains optional fields: one this client does not know is ignored, and a flag left out is false.
+    server.answer(status: 200, json: reply(["setDraft": .null, "owner": .string("user-1"), "later": .number("1")]))
+    #expect(
+      try await ask(server) == DayDraftReply(setDraft: nil, owner: "user-1", modelOn: false, remakeFailed: false))
+  }
+
+  @Test func a_day_draft_404_is_refused_not_found() async {
+    let server = StubServer()
+    server.answer(status: 404, json: #"{"error":"not-found"}"#)
+    await expectError(.refused(status: 404, reason: "not-found")) { _ = try await ask(server) }
+  }
+
+  @Test func a_day_draft_500_is_a_server_failure() async {
+    let server = StubServer()
+    server.answer(status: 500, json: #"{"error":"internal"}"#)
+    await expectError(.server(status: 500)) { _ = try await ask(server) }
+  }
+
+  @Test func a_day_draft_reply_without_its_fields_is_unreadable() async {
+    let server = StubServer()
+    server.answer(
+      status: 200, json: reply(["setDraft": .null, "modelOn": .bool(false), "remakeFailed": .bool(false)]))
+    await expectError(.unreadable) { _ = try await ask(server) }
+
+    server.answer(
+      status: 200,
+      json: reply([
+        "setDraft": .number("5"), "owner": .string("user-1"), "modelOn": .bool(false), "remakeFailed": .bool(false),
+      ]))
+    await expectError(.unreadable) { _ = try await ask(server) }
+  }
+}
+
 @Suite struct ErrorMapTests {
   private func probe(_ server: StubServer) async throws {
     _ = try await server.transport().account(token: "tok-1")

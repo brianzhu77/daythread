@@ -28,6 +28,10 @@ actor TestServer: ServerTransport {
   private(set) var unscripted = 0
   /// Workspace loads answered, with a reply or a failure.
   private(set) var loadsAnswered = 0
+  /// The day drafts' answers, apart from the script, so a test that does not expect an ask is not thrown off by one.
+  private var drafts: [Result<DayDraftReply, TransportError>] = []
+  /// The dates day drafts were asked for, in the order asked.
+  private(set) var draftDates: [LocalDate] = []
 
   init(_ script: [Reply] = []) {
     self.script = script
@@ -37,7 +41,12 @@ actor TestServer: ServerTransport {
     script += replies
   }
 
-  /// Every call from now on waits for `release`.
+  /// Answers for the day drafts asked for next, in order.
+  func addDrafts(_ answers: [Result<DayDraftReply, TransportError>]) {
+    drafts += answers
+  }
+
+  /// Every call from now on, but a day draft's, waits for `release`.
   func hold() {
     holding = true
   }
@@ -109,6 +118,13 @@ actor TestServer: ServerTransport {
     operationIds.append(operationId)
     guard case .saved(let outcome) = try await answer(isSave: true) else { throw TransportError.unreadable }
     return outcome
+  }
+
+  /// With no answer queued it fails for lack of network, and is not counted as unscripted.
+  func dayDraft(token: String?, date: LocalDate, operationId: String) async throws -> DayDraftReply {
+    draftDates.append(date)
+    guard !drafts.isEmpty else { throw TransportError.offline }
+    return try drafts.removeFirst().get()
   }
 
   private func answer(isSave: Bool = false, isCommand: Bool = false) async throws -> Reply {
