@@ -34,15 +34,24 @@ final class TypingFeelTests: XCTestCase {
   private var server: TestServer?
   /// Beats for the whole test, so a wait sees a stall that began in the one before it.
   private var heartbeat: Heartbeat?
+  /// What each keystroke's calls and wait covered, with the clock, so a held main thread is named by what it was in.
+  private var spans: [CallSpan] = []
 
+  /// The handler that prints a held main thread's stack is installed once for the process, at the first set-up, and
+  /// never restored: a signal that arrives after a test ended finds the handler (which does nothing unless a heartbeat
+  /// is armed), not the default action, which would end the process. The main thread's identity is kept for the
+  /// heartbeat to signal; set-up runs on the main thread.
   override func setUp() async throws {
+    StackDump.installOnce()
+    StackDump.mainThread.store(UInt(bitPattern: pthread_self()), ordering: .relaxed)
     heartbeat = Heartbeat()
   }
 
   /// The server is never released: once the engine's save of what was typed is waiting on it, the engine touches the
   /// store no more, and the store goes.
   override func tearDown() async throws {
-    heartbeat?.stop()
+    // Awaited: once it returns, no ping and no signal can follow the test.
+    await heartbeat?.stop()
     await server?.callHeld()
     if let storeURL {
       for suffix in ["", "-shm", "-wal"] {
@@ -111,15 +120,39 @@ final class TypingFeelTests: XCTestCase {
 
   /// A main thread held for long while a thread beside it ran is the app's or the test's own doing: the state that
   /// came after it is not forgiven silently. A whole process that stopped holds both, which a test cannot bring
-  /// about from inside the process; that case is covered only by `mainThreadAloneWasHeld`, tested below.
-  func test_a_main_thread_held_alone_fails_a_wait_whose_state_arrived() async throws {
+  /// about from inside the process; that case is covered only by `outcomeOfMainStall`, tested below. On a machine
+  /// that does not hold the budget (CI) the wait passes and warns: the stall there is not the app's to answer for.
+  func test_a_main_thread_held_alone_warns_where_the_budget_is_not_enforced() async throws {
+    var warnings: [String] = []
+    let failure = try await waitThroughAStall(budgetEnforced: false) { warnings.append($0) }
+    XCTAssertNil(failure, "the budget is not enforced: the wait passes")
+    XCTAssertEqual(warnings.count, 1, "\(warnings)")
+    let warning = try XCTUnwrap(warnings.first, "and says what it found")
+    XCTAssertTrue(warning.hasPrefix("TypingFeel: main thread held"), warning)
+    XCTAssertTrue(warning.contains("the main thread alone was held for"), warning)
+    XCTAssertTrue(warning.contains("while waiting for the state after keystroke 1 of run 1"), warning)
+  }
+
+  func test_a_main_thread_held_alone_fails_a_wait_whose_state_arrived_where_the_budget_is_enforced() async throws {
+    var warnings: [String] = []
+    let failure = try await waitThroughAStall(budgetEnforced: true) { warnings.append($0) }
+    let message = try XCTUnwrap(failure, "the main thread held alone for 1.5 s, past a limit of 1 s")
+    XCTAssertTrue(message.contains("the main thread alone was held for"), message)
+    XCTAssertTrue(message.contains("while waiting for the state after keystroke 1 of run 1"), message)
+    XCTAssertEqual(warnings, [], "a failure is not also a warning")
+  }
+
+  /// Holds the main thread for 1.5 s while the state is on its way, and waits for it; skips when the machine itself
+  /// stalled.
+  private func waitThroughAStall(budgetEnforced: Bool, warn: @escaping (String) -> Void) async throws -> String? {
     let state = Arrival()
     let besideLimit = Duration.milliseconds(500)
     let started = ContinuousClock.now
     Task { Self.stallTheMainThread(for: .milliseconds(1_500)) }
     state.arrive(after: .milliseconds(200))
     let failure = try await wait(
-      "the state reached the screen", deadline: .seconds(1), mainHeldLimit: .seconds(1), besideLimit: besideLimit
+      "the state reached the screen", deadline: .seconds(1), mainHeldLimit: .seconds(1), besideLimit: besideLimit,
+      budgetEnforced: budgetEnforced, warn: warn, after: (index: 1, run: 1)
     ) { state.arrived }
     // On a loaded machine the heartbeat itself can miss its beats; the two cases cannot then be told apart here.
     let besideStall = try XCTUnwrap(heartbeat).longestStall(since: started)
@@ -128,28 +161,114 @@ final class TypingFeelTests: XCTestCase {
         "the machine was too loaded to tell a held main thread from a stopped process: the thread beside it stalled "
           + "for \(Self.seconds(besideStall)) s, past the \(Self.seconds(besideLimit)) s limit")
     }
-    let message = try XCTUnwrap(failure, "the main thread held alone for 1.5 s, past a limit of 1 s")
-    XCTAssertTrue(message.contains("the main thread alone was held for"), message)
+    return failure
+  }
+
+  func test_the_rule_for_a_main_thread_held_alone_fails_warns_or_says_nothing() {
+    let limits = (main: Duration.seconds(10), beside: Duration.seconds(1))
+    func outcome(main: Duration, beside: Duration, enforced: Bool) -> MainStallOutcome {
+      Self.outcomeOfMainStall(main: main, beside: beside, limits: limits, budgetEnforced: enforced)
+    }
+    XCTAssertEqual(outcome(main: .seconds(34), beside: .milliseconds(500), enforced: true), .fail)
+    XCTAssertEqual(outcome(main: .seconds(34), beside: .milliseconds(500), enforced: false), .warn)
+    XCTAssertEqual(outcome(main: .seconds(34), beside: .seconds(34), enforced: true), .nothing, "the process stopped")
+    XCTAssertEqual(outcome(main: .seconds(34), beside: .seconds(34), enforced: false), .nothing, "the process stopped")
+    XCTAssertEqual(outcome(main: .seconds(5), beside: .zero, enforced: true), .nothing, "a short stall")
+    XCTAssertEqual(outcome(main: .seconds(5), beside: .zero, enforced: false), .nothing, "a short stall")
+  }
+
+  func test_a_stall_is_named_by_what_the_main_thread_was_doing() {
+    let base = ContinuousClock.now
+    func at(_ milliseconds: Int) -> ContinuousClock.Instant { base.advanced(by: .milliseconds(milliseconds)) }
+    // Keystroke 3 of run 2: insertText 0-40 ms, layout 40-90, the wait 90-1,090, the layout after it 1,090-1,100.
+    let spans = [
+      CallSpan(place: .insertText, keystroke: 3, run: 2, start: at(0), end: at(40)),
+      CallSpan(place: .layout, keystroke: 3, run: 2, start: at(40), end: at(90)),
+      CallSpan(place: .wait, keystroke: 3, run: 2, start: at(90), end: at(1_090)),
+      CallSpan(place: .layout, keystroke: 3, run: 2, start: at(1_090), end: at(1_100)),
+    ]
+    func named(_ from: Int, _ to: Int) -> String { Self.placesOfStall(from: at(from), to: at(to), in: spans) }
+
+    XCTAssertEqual(
+      named(5, 35), "inside insertText of keystroke 3 of run 2 (the call took 0.040 s, 0.030 s of the stall in it)")
+    XCTAssertEqual(
+      named(50, 80),
+      "inside the list's layout of keystroke 3 of run 2 (the call took 0.050 s, 0.030 s of the stall in it)")
+    XCTAssertEqual(
+      named(200, 900),
+      "while waiting for the state after keystroke 3 of run 2 (the wait took 1.000 s, 0.700 s of the stall in it)")
+    XCTAssertEqual(
+      named(1_095, 1_099),
+      "inside the list's layout of keystroke 3 of run 2 (the call took 0.010 s, 0.004 s of the stall in it)")
+    XCTAssertEqual(
+      named(20, 60),
+      "inside insertText of keystroke 3 of run 2 (the call took 0.040 s, 0.020 s of the stall in it) and "
+        + "inside the list's layout of keystroke 3 of run 2 (the call took 0.050 s, 0.020 s of the stall in it)",
+      "a stall across two calls names each with its share")
+    XCTAssertEqual(named(2_000, 2_500), "outside every call the test recorded (the setup, or between keystrokes)")
   }
 
   func test_a_wait_with_no_stall_records_nothing() async throws {
     let state = Arrival()
     state.arrive(after: .milliseconds(100))
+    var warnings: [String] = []
     let failure = try await wait(
-      "the state reached the screen", deadline: .seconds(5), mainHeldLimit: .seconds(1), besideLimit: .milliseconds(500)
+      "the state reached the screen", deadline: .seconds(5), mainHeldLimit: .seconds(1), besideLimit: .milliseconds(500),
+      warn: { warnings.append($0) }
     ) { state.arrived }
     XCTAssertNil(failure)
+    XCTAssertEqual(warnings, [], "no warning was printed")
   }
 
-  func test_the_main_thread_held_alone_is_told_from_a_stopped_process() {
+  /// A call that takes long is a stall too, though no wait sees it: the call is one stretch of the main thread. It is
+  /// held alone when the heartbeat beside it ran through it, and reported as the wait's stall is.
+  func test_a_long_call_held_alone_warns_or_fails_and_is_named() throws {
+    let base = ContinuousClock.now
     let limits = (main: Duration.seconds(10), beside: Duration.seconds(1))
+    let insert = CallSpan(
+      place: .insertText, keystroke: 4, run: 1, start: base, end: base.advanced(by: .seconds(34)))
+    let layout = CallSpan(
+      place: .layout, keystroke: 4, run: 1, start: base, end: base.advanced(by: .seconds(12)))
+
+    let warned = try XCTUnwrap(
+      Self.stallOfCall(insert, beside: .milliseconds(20), limits: limits, budgetEnforced: false))
+    XCTAssertEqual(warned.outcome, .warn)
     XCTAssertTrue(
-      Self.mainThreadAloneWasHeld(main: .seconds(12), beside: .milliseconds(50), limits: limits), "main alone")
-    XCTAssertFalse(
-      Self.mainThreadAloneWasHeld(main: .seconds(36), beside: .seconds(36), limits: limits), "the process stopped")
-    XCTAssertFalse(Self.mainThreadAloneWasHeld(main: .seconds(5), beside: .zero, limits: limits), "a short stall")
-    XCTAssertFalse(
-      Self.mainThreadAloneWasHeld(main: .seconds(12), beside: .seconds(2), limits: limits), "the thread beside stalled")
+      warned.message.hasPrefix("inside insertText of keystroke 4 of run 1, which took 34.0 s"), warned.message)
+    let failed = try XCTUnwrap(
+      Self.stallOfCall(insert, beside: .milliseconds(20), limits: limits, budgetEnforced: true))
+    XCTAssertEqual(failed.outcome, .fail)
+    XCTAssertEqual(failed.message, warned.message)
+    let inLayout = try XCTUnwrap(
+      Self.stallOfCall(layout, beside: .zero, limits: limits, budgetEnforced: true))
+    XCTAssertTrue(inLayout.message.hasPrefix("inside the list's layout of keystroke 4 of run 1, which took 12.0 s"))
+
+    let short = CallSpan(place: .insertText, keystroke: 4, run: 1, start: base, end: base.advanced(by: .milliseconds(40)))
+    XCTAssertNil(Self.stallOfCall(short, beside: .zero, limits: limits, budgetEnforced: true), "a short call")
+    XCTAssertNil(
+      Self.stallOfCall(insert, beside: .seconds(30), limits: limits, budgetEnforced: true), "the process stopped")
+  }
+
+  /// A main thread that has not answered for longer than the threshold has its stack printed, once, by a signal sent
+  /// to it from the heartbeat's thread. The stack's text is not asserted.
+  func test_a_main_thread_held_past_the_threshold_has_its_stack_printed_once() async throws {
+    let before = StackDump.count.load(ordering: .relaxed)
+    // The test's own heartbeat stands in for the one of set-up: two would each print the stack.
+    await heartbeat?.stop()
+    heartbeat = Heartbeat(stackAfter: .seconds(1))
+    Task { Self.stallTheMainThread(for: .seconds(6)) }
+    // Runs once the stall is over: the main actor takes the stall's job first.
+    try await Task.sleep(nanoseconds: 10_000_000)
+    XCTAssertEqual(StackDump.count.load(ordering: .relaxed) - before, 1, "the stack was printed once, not more")
+  }
+
+  /// A signal that arrives when no heartbeat is armed (one that was sent as its test ended) prints nothing, and the
+  /// process lives: the handler stays installed for the life of the process.
+  func test_a_signal_with_no_heartbeat_armed_prints_nothing_and_the_process_lives() async throws {
+    await heartbeat?.stop()
+    let before = StackDump.count.load(ordering: .relaxed)
+    pthread_kill(pthread_self(), SIGUSR1)
+    XCTAssertEqual(StackDump.count.load(ordering: .relaxed), before, "nothing printed while nothing is armed")
   }
 
   @MainActor private final class Arrival {
@@ -213,10 +332,35 @@ final class TypingFeelTests: XCTestCase {
     XCTAssertNotNil(facts.events, "the events of today")
   }
 
+  /// Whether the machine is the one the budget was measured on (`DAYTHREAD_FEEL_BUDGET=1`): the budget and a main
+  /// thread held alone fail only there.
+  private static var budgetIsEnforced: Bool { ProcessInfo.processInfo.environment["DAYTHREAD_FEEL_BUDGET"] == "1" }
+
   private func checkBudget(_ median: Double, against measured: Double) throws {
-    guard ProcessInfo.processInfo.environment["DAYTHREAD_FEEL_BUDGET"] == "1" else { return }
+    guard Self.budgetIsEnforced else { return }
     let budget = try XCTUnwrap(measured > 0 ? measured * 1.5 : nil, "no median measured yet to hold the budget to")
     XCTAssertLessThanOrEqual(median, budget, "ms per keystroke, against one and a half times the \(measured) measured")
+  }
+
+  /// Applies the rule for a main thread held alone (`outcomeOfMainStall`) to each call's own length against the
+  /// heartbeat's longest stall while it ran: it fails where the budget is enforced, otherwise prints a warning line.
+  /// A failure ends the test, as a failed wait does.
+  private func checkForHeldMainThread(in calls: [CallSpan]) throws {
+    guard let heartbeat else { return }
+    for call in calls {
+      let beside = heartbeat.longestStall(since: call.start, until: call.end)
+      guard
+        let stall = Self.stallOfCall(
+          call, beside: beside, limits: (main: .seconds(10), beside: .seconds(1)), budgetEnforced: Self.budgetIsEnforced)
+      else { continue }
+      switch stall.outcome {
+      case .fail:
+        XCTFail(stall.message)
+        throw WaitFailed(message: stall.message)
+      case .warn, .nothing:
+        print("TypingFeel: main thread held: \(stall.message)")
+      }
+    }
   }
 
   /// Types `keystrokes` characters at the end of line `target` (1-based) of a page of `count` lines, `runs` times, and
@@ -257,8 +401,15 @@ final class TypingFeelTests: XCTestCase {
         let character = String(Self.typing[index % Self.typing.count])
         let start = clock.now
         line.insertText(character)
+        // The one clock read added inside the timed span: it splits the call from the layout for the stall's naming.
+        let inserted = clock.now
         window.layoutIfNeeded()
-        laidOut += clock.now - start
+        let laidOutAt = clock.now
+        laidOut += laidOutAt - start
+        // The spans are written once the keystroke's state has arrived, not between the call and the wait: appending
+        // there read 0.5 to 1 ms a keystroke higher on both pages. A wait's stall begins inside the wait, so the
+        // keystroke's own calls are not needed while it runs; the wait writes its own span.
+        let keystroke = (index: index + 1, run: runIndex + 1)
         typed += character
         // As between his keystrokes, the engine's state with this one is drawn before the next. Each character typed
         // is one byte of the document; its length is read, not its text searched, so the wait costs the main actor
@@ -266,7 +417,7 @@ final class TypingFeelTests: XCTestCase {
         stored += 1
         let expected = stored
         try await until(
-          "the engine's state reached the screen",
+          "the engine's state reached the screen", after: keystroke,
           held: {
             let length = model.workspace?.dayPage(Self.today)?.document.utf8.count
             let state = model.state
@@ -275,8 +426,19 @@ final class TypingFeelTests: XCTestCase {
               + "keystroke \(index + 1) of run \(runIndex + 1); the engine had published \(published.last)"
           }
         ) { model.workspace?.dayPage(Self.today)?.document.utf8.count == expected }
+        let waitedAt = clock.now
         window.layoutIfNeeded()
-        drawn += clock.now - start
+        let drawnAt = clock.now
+        drawn += drawnAt - start
+        // Each call is a stretch of the main thread too: one held for long fails or warns as a wait's stall does. This
+        // runs after the timed span ended.
+        let calls = [
+          CallSpan(place: .insertText, keystroke: keystroke.index, run: keystroke.run, start: start, end: inserted),
+          CallSpan(place: .layout, keystroke: keystroke.index, run: keystroke.run, start: inserted, end: laidOutAt),
+          CallSpan(place: .layout, keystroke: keystroke.index, run: keystroke.run, start: waitedAt, end: drawnAt),
+        ]
+        spans += calls
+        try checkForHeldMainThread(in: calls)
       }
       runs.append(laidOut / .milliseconds(1) / Double(Self.keystrokes))
       drawnRuns.append(drawn / .milliseconds(1) / Double(Self.keystrokes))
@@ -314,9 +476,12 @@ final class TypingFeelTests: XCTestCase {
   /// log tells a state that came late from one that did not come. A failed wait records the failure and throws, which
   /// ends the test: the keystrokes after it are not measured.
   private func until(
-    _ what: String, deadline patience: Duration = .seconds(30), held: () -> String = { "" }, _ condition: () -> Bool
+    _ what: String, deadline patience: Duration = .seconds(30), after keystroke: (index: Int, run: Int)? = nil,
+    held: () -> String = { "" }, _ condition: () -> Bool
   ) async throws {
-    guard let message = try await wait(what, deadline: patience, held: held, condition) else { return }
+    guard let message = try await wait(what, deadline: patience, after: keystroke, held: held, condition) else {
+      return
+    }
     XCTFail(message)
     // The test ends here: another wait after a failed one would cost the same again for every keystroke left.
     throw WaitFailed(message: message)
@@ -327,11 +492,19 @@ final class TypingFeelTests: XCTestCase {
   /// `hardStop`, by the clock: a main thread that runs in chunks longer than a turn counts towards the deadline
   /// slowly, and without it one wait for a state that never comes could outlast CI's job. `mainHeldLimit` and
   /// `besideLimit`: a wait whose condition held still fails when the main thread alone was held that long while the
-  /// heartbeat beside it ran (`mainThreadAloneWasHeld`); only a stop of the whole process is forgiven silently.
+  /// heartbeat beside it ran (`outcomeOfMainStall`): that fails the wait where the budget is enforced and is otherwise
+  /// printed to `warn` as a line beginning `TypingFeel: main thread held`; only a stop of the whole process is
+  /// forgiven silently. Either names what the main thread was doing during the stall, from `spans` and, for a wait
+  /// after a keystroke (`keystroke`), this wait's own span: a stall the wait sees is inside the wait, where the body
+  /// is suspended and other work on the main thread held it. The calls of each keystroke (`insertText`, the list's
+  /// layout, the layout after the wait) are checked on their own, after the timed span (`checkForHeldMainThread`),
+  /// since no wait sees a stall inside them. A main thread that does not answer for 5 s has its stack printed once
+  /// (`StackDump`, under the line `TypingFeel: main thread stack while held`), which says what held it.
   private func wait(
     _ what: String, deadline patience: Duration = .seconds(30), hardStop: Duration = .seconds(300),
-    mainHeldLimit: Duration = .seconds(10), besideLimit: Duration = .seconds(1), held: () -> String = { "" },
-    _ condition: () -> Bool
+    mainHeldLimit: Duration = .seconds(10), besideLimit: Duration = .seconds(1),
+    budgetEnforced: Bool = TypingFeelTests.budgetIsEnforced, warn: (String) -> Void = { print($0) },
+    after keystroke: (index: Int, run: Int)? = nil, held: () -> String = { "" }, _ condition: () -> Bool
   ) async throws -> String? {
     let clock = ContinuousClock()
     let started = clock.now
@@ -339,26 +512,39 @@ final class TypingFeelTests: XCTestCase {
     let turn = Duration.milliseconds(100)
     var waited = Duration.zero
     var longestStall = Duration.zero
+    var longestStallAt = (start: started, end: started)
     var lastTurn = started
     while !condition(), waited < patience, clock.now < stopAt {
       try await Task.sleep(nanoseconds: 1_000_000)
       let now = clock.now
-      longestStall = max(longestStall, now - lastTurn)
+      if now - lastTurn > longestStall {
+        longestStall = now - lastTurn
+        longestStallAt = (lastTurn, now)
+      }
       waited += min(now - lastTurn, turn)
       lastTurn = now
+    }
+    if let keystroke {
+      spans.append(CallSpan(place: .wait, keystroke: keystroke.index, run: keystroke.run, start: started, end: clock.now))
     }
     let besideStall = heartbeat?.longestStall(since: started)
     let stalls =
       "the main thread stalled for up to \(Self.seconds(longestStall)) s and a thread beside it for up to "
       + "\(besideStall.map(Self.seconds) ?? "an unknown") s"
     if condition() {
-      guard let besideStall,
-        Self.mainThreadAloneWasHeld(
-          main: longestStall, beside: besideStall, limits: (main: mainHeldLimit, beside: besideLimit))
-      else { return nil }
-      return "\(what): there, but the main thread alone was held for \(Self.seconds(longestStall)) s while a thread "
+      guard let besideStall else { return nil }
+      let outcome = Self.outcomeOfMainStall(
+        main: longestStall, beside: besideStall, limits: (main: mainHeldLimit, beside: besideLimit),
+        budgetEnforced: budgetEnforced)
+      guard outcome != .nothing else { return nil }
+      let message =
+        "\(what): there, but the main thread alone was held for \(Self.seconds(longestStall)) s while a thread "
         + "beside it stalled for no more than \(Self.seconds(besideStall)) s: the app's or the test's own doing, not a "
-        + "stopped process"
+        + "stopped process; the main thread was: "
+        + Self.placesOfStall(from: longestStallAt.start, to: longestStallAt.end, in: spans)
+      if outcome == .fail { return message }
+      warn("TypingFeel: main thread held: \(message)")
+      return nil
     }
     let gaveUp = clock.now
     let endedBy =
@@ -381,55 +567,175 @@ final class TypingFeelTests: XCTestCase {
       + "(\(Self.seconds(gaveUp - started)) s by the clock), ended by \(endedBy); the model held \(heldThen); \(outcome)"
   }
 
-  /// Whether the main thread was held while the process ran: it stalled for `limits.main` or more while a thread
-  /// beside it never stalled more than `limits.beside`. When both stalled, the whole process stopped.
-  private static func mainThreadAloneWasHeld(
-    main: Duration, beside: Duration, limits: (main: Duration, beside: Duration)
-  ) -> Bool {
-    main >= limits.main && beside <= limits.beside
+  /// What a wait that found its state does about the main thread's longest stall: a main thread held for
+  /// `limits.main` or more while a thread beside it never stalled more than `limits.beside` is held alone (when both
+  /// stalled, the whole process stopped, and nothing is said). Held alone, it fails where the budget is enforced and
+  /// only warns elsewhere.
+  private enum MainStallOutcome { case fail, warn, nothing }
+
+  private static func outcomeOfMainStall(
+    main: Duration, beside: Duration, limits: (main: Duration, beside: Duration), budgetEnforced: Bool
+  ) -> MainStallOutcome {
+    guard main >= limits.main, beside <= limits.beside else { return .nothing }
+    return budgetEnforced ? .fail : .warn
+  }
+
+  /// What a signal to the main thread does while a heartbeat is armed: counts itself, writes a line and the thread's
+  /// stack to standard error; unarmed it does nothing. It captures nothing, allocates nothing on the heap (64 frames
+  /// sit on the stack), takes no Swift lock and reads only these atomics. It is not strictly async-signal-safe:
+  /// `backtrace_symbols_fd` can take the loader's lock, which is tolerated for a debugging aid that fires only in a
+  /// run already stalled for seconds.
+  private enum StackDump {
+    static let count = Atomic<Int>(0)
+    /// Whether a test's heartbeat is running: set by its start, cleared when its `stop` has returned.
+    static let armed = Atomic<Bool>(false)
+    /// The main thread's `pthread_t`, as an integer, kept at set-up.
+    static let mainThread = Atomic<UInt>(0)
+
+    /// Run once for the process: the lazy initializer of a static is thread-safe and runs once.
+    private static let installed: Void = {
+      var action = sigaction()
+      action.__sigaction_u.__sa_handler = handler
+      sigemptyset(&action.sa_mask)
+      action.sa_flags = SA_RESTART
+      sigaction(SIGUSR1, &action, nil)
+    }()
+
+    static func installOnce() { installed }
+
+    static let handler: @convention(c) (Int32) -> Void = { _ in
+      guard StackDump.armed.load(ordering: .relaxed) else { return }
+      StackDump.count.add(1, ordering: .relaxed)
+      let line: StaticString = "TypingFeel: main thread stack while held\n"
+      write(2, line.utf8Start, line.utf8CodeUnitCount)
+      withUnsafeTemporaryAllocation(of: UnsafeMutableRawPointer?.self, capacity: 64) { frames in
+        let count = backtrace(frames.baseAddress, 64)
+        backtrace_symbols_fd(frames.baseAddress, count, 2)
+      }
+    }
+  }
+
+  /// A stretch of the test body's own time: what it was in, for which keystroke of which run, and when by the clock.
+  private struct CallSpan {
+    enum Place { case insertText, layout, wait }
+    let place: Place
+    let keystroke: Int
+    let run: Int
+    let start: ContinuousClock.Instant
+    let end: ContinuousClock.Instant
+  }
+
+  /// What a call that took long says: it is one stretch of the main thread, so its own length is the stall, held alone
+  /// when the heartbeat `beside` it ran through it (`outcomeOfMainStall`). Nil when nothing is to be said. The waits
+  /// are not checked here: they find their own stall by turns (`wait`).
+  private static func stallOfCall(
+    _ call: CallSpan, beside: Duration, limits: (main: Duration, beside: Duration), budgetEnforced: Bool
+  ) -> (outcome: MainStallOutcome, message: String)? {
+    let length = call.end - call.start
+    let outcome = outcomeOfMainStall(main: length, beside: beside, limits: limits, budgetEnforced: budgetEnforced)
+    guard outcome != .nothing else { return nil }
+    let place =
+      call.place == .insertText ? "inside insertText" : call.place == .layout ? "inside the list's layout" : "in the wait"
+    return (
+      outcome,
+      "\(place) of keystroke \(call.keystroke) of run \(call.run), which took \(seconds(length)) s while a thread "
+        + "beside it stalled for no more than \(seconds(beside)) s: the app's or the test's own doing, not a stopped "
+        + "process"
+    )
+  }
+
+  /// What the main thread was doing during a stall from `from` to `to`: each span the stall overlaps, with the span's
+  /// own length and the share of the stall inside it. The wait is the body suspended, so the main thread was held by
+  /// other work on it; its stack, printed while it was held (`StackDump`), says by what.
+  private static func placesOfStall(
+    from: ContinuousClock.Instant, to: ContinuousClock.Instant, in spans: [CallSpan]
+  ) -> String {
+    let places: [String] = spans.compactMap { span in
+      let share = min(to, span.end) - max(from, span.start)
+      guard share > .zero else { return nil }
+      let of = "keystroke \(span.keystroke) of run \(span.run)"
+      let timings = "\(preciseSeconds(span.end - span.start)) s, \(preciseSeconds(share)) s of the stall in it"
+      switch span.place {
+      case .insertText: return "inside insertText of \(of) (the call took \(timings))"
+      case .layout: return "inside the list's layout of \(of) (the call took \(timings))"
+      case .wait: return "while waiting for the state after \(of) (the wait took \(timings))"
+      }
+    }
+    return places.isEmpty
+      ? "outside every call the test recorded (the setup, or between keystrokes)" : places.joined(separator: " and ")
   }
 
   /// Beats every 10 ms on a thread off the main one for the whole test and keeps its long gaps between beats: next to
   /// the main thread's own stalls, it tells a whole app (or simulator) that stopped from a main thread held by
   /// something.
+  ///
+  /// It also asks the main queue every 250 ms (one empty block, run when the main thread next takes work off its
+  /// queue: not inside a timed call, unless a call runs a nested run loop) and, when an ask has gone unanswered for `stackAfter`, signals the main thread
+  /// once so its stack is printed (`StackDump`): the stack of a main thread held for long says what held it.
   private final class Heartbeat: Sendable {
     private struct Beats {
       var last: ContinuousClock.Instant
       var gaps: [(end: ContinuousClock.Instant, length: Duration)] = []
+      /// When the main queue was last asked and has not answered; nil while it has.
+      var askedAt: ContinuousClock.Instant?
+      var lastAsk: ContinuousClock.Instant
+      var printedStack = false
     }
 
-    private let beats = Mutex(Beats(last: ContinuousClock.now))
+    private let beats = Mutex(Beats(last: ContinuousClock.now, lastAsk: ContinuousClock.now))
     private let beating = Mutex<Task<Void, Never>?>(nil)
 
-    init() {
+    init(stackAfter: Duration = .seconds(5)) {
+      StackDump.armed.store(true, ordering: .relaxed)
       // The task ends at `stop`, which lets go of the beat.
       let task = Task.detached { [self] in
         while !Task.isCancelled {
           // Cancelled the moment it starts on CI's Xcode, `Task.sleep(for:)` aborts the process.
           try? await Task.sleep(nanoseconds: 10_000_000)
           let now = ContinuousClock.now
-          self.beats.withLock { beats in
+          let (ask, signal) = self.beats.withLock { beats -> (Bool, Bool) in
             // Only gaps well past a beat are kept, so the list stays short over a test of minutes.
             if now - beats.last > .milliseconds(50) { beats.gaps.append((now, now - beats.last)) }
             beats.last = now
+            if let askedAt = beats.askedAt {
+              guard !beats.printedStack, now - askedAt >= stackAfter else { return (false, false) }
+              beats.printedStack = true
+              return (false, true)
+            }
+            guard now - beats.lastAsk >= .milliseconds(250) else { return (false, false) }
+            beats.askedAt = now
+            beats.lastAsk = now
+            return (true, false)
+          }
+          if ask {
+            DispatchQueue.main.async { self.beats.withLock { $0.askedAt = nil } }
+          }
+          if signal, let main = pthread_t(bitPattern: StackDump.mainThread.load(ordering: .relaxed)) {
+            pthread_kill(main, SIGUSR1)
           }
         }
       }
       beating.withLock { $0 = task }
     }
 
-    /// The longest the thread went without a beat since `start`: a gap that began before `start` counts from it, and
-    /// a gap still going counts too.
-    func longestStall(since start: ContinuousClock.Instant) -> Duration {
+    /// The longest the thread went without a beat from `start` to `end` (to now when nil): a gap that began before
+    /// `start` counts from it, and a gap still going counts too.
+    func longestStall(since start: ContinuousClock.Instant, until end: ContinuousClock.Instant? = nil) -> Duration {
       let now = ContinuousClock.now
+      let limit = end ?? now
       return beats.withLock { beats in
-        (beats.gaps + [(end: now, length: now - beats.last)]).filter { $0.end > start }
-          .map { min($0.length, $0.end - start) }.max() ?? .zero
+        (beats.gaps + [(end: now, length: now - beats.last)])
+          .map { min($0.end, limit) - max($0.end - $0.length, start) }.max().map { max($0, .zero) } ?? .zero
       }
     }
 
-    func stop() {
-      beating.withLock { $0?.cancel() }
+    /// Cancels the beat and waits for its task to finish, so no ask and no signal follows the return; then disarms the
+    /// stack dump. Calling it again does nothing.
+    func stop() async {
+      let task = beating.withLock { $0 }
+      task?.cancel()
+      await task?.value
+      StackDump.armed.store(false, ordering: .relaxed)
     }
   }
 
@@ -461,6 +767,10 @@ final class TypingFeelTests: XCTestCase {
   private struct WaitFailed: Error, CustomStringConvertible {
     let message: String
     var description: String { message }
+  }
+
+  private static func preciseSeconds(_ duration: Duration) -> String {
+    String(format: "%.3f", duration / .milliseconds(1) / 1_000)
   }
 
   private static func seconds(_ duration: Duration) -> String {
