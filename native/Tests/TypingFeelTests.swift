@@ -111,15 +111,37 @@ final class TypingFeelTests: XCTestCase {
 
   /// A main thread held for long while a thread beside it ran is the app's or the test's own doing: the state that
   /// came after it is not forgiven silently. A whole process that stopped holds both, which a test cannot bring
-  /// about from inside the process; that case is covered only by `mainThreadAloneWasHeld`, tested below.
-  func test_a_main_thread_held_alone_fails_a_wait_whose_state_arrived() async throws {
+  /// about from inside the process; that case is covered only by `outcomeOfMainStall`, tested below. On a machine
+  /// that does not hold the budget (CI) the wait passes and warns: the stall there is not the app's to answer for.
+  func test_a_main_thread_held_alone_warns_where_the_budget_is_not_enforced() async throws {
+    var warnings: [String] = []
+    let failure = try await waitThroughAStall(budgetEnforced: false) { warnings.append($0) }
+    XCTAssertNil(failure, "the budget is not enforced: the wait passes")
+    XCTAssertEqual(warnings.count, 1, "\(warnings)")
+    let warning = try XCTUnwrap(warnings.first, "and says what it found")
+    XCTAssertTrue(warning.hasPrefix("TypingFeel: main thread held"), warning)
+    XCTAssertTrue(warning.contains("the main thread alone was held for"), warning)
+  }
+
+  func test_a_main_thread_held_alone_fails_a_wait_whose_state_arrived_where_the_budget_is_enforced() async throws {
+    var warnings: [String] = []
+    let failure = try await waitThroughAStall(budgetEnforced: true) { warnings.append($0) }
+    let message = try XCTUnwrap(failure, "the main thread held alone for 1.5 s, past a limit of 1 s")
+    XCTAssertTrue(message.contains("the main thread alone was held for"), message)
+    XCTAssertEqual(warnings, [], "a failure is not also a warning")
+  }
+
+  /// Holds the main thread for 1.5 s while the state is on its way, and waits for it; skips when the machine itself
+  /// stalled.
+  private func waitThroughAStall(budgetEnforced: Bool, warn: @escaping (String) -> Void) async throws -> String? {
     let state = Arrival()
     let besideLimit = Duration.milliseconds(500)
     let started = ContinuousClock.now
     Task { Self.stallTheMainThread(for: .milliseconds(1_500)) }
     state.arrive(after: .milliseconds(200))
     let failure = try await wait(
-      "the state reached the screen", deadline: .seconds(1), mainHeldLimit: .seconds(1), besideLimit: besideLimit
+      "the state reached the screen", deadline: .seconds(1), mainHeldLimit: .seconds(1), besideLimit: besideLimit,
+      budgetEnforced: budgetEnforced, warn: warn
     ) { state.arrived }
     // On a loaded machine the heartbeat itself can miss its beats; the two cases cannot then be told apart here.
     let besideStall = try XCTUnwrap(heartbeat).longestStall(since: started)
@@ -128,8 +150,51 @@ final class TypingFeelTests: XCTestCase {
         "the machine was too loaded to tell a held main thread from a stopped process: the thread beside it stalled "
           + "for \(Self.seconds(besideStall)) s, past the \(Self.seconds(besideLimit)) s limit")
     }
-    let message = try XCTUnwrap(failure, "the main thread held alone for 1.5 s, past a limit of 1 s")
-    XCTAssertTrue(message.contains("the main thread alone was held for"), message)
+    return failure
+  }
+
+  func test_the_rule_for_a_main_thread_held_alone_fails_warns_or_says_nothing() {
+    let limits = (main: Duration.seconds(10), beside: Duration.seconds(1))
+    func outcome(main: Duration, beside: Duration, enforced: Bool) -> MainStallOutcome {
+      Self.outcomeOfMainStall(main: main, beside: beside, limits: limits, budgetEnforced: enforced)
+    }
+    XCTAssertEqual(outcome(main: .seconds(34), beside: .milliseconds(500), enforced: true), .fail)
+    XCTAssertEqual(outcome(main: .seconds(34), beside: .milliseconds(500), enforced: false), .warn)
+    XCTAssertEqual(outcome(main: .seconds(34), beside: .seconds(34), enforced: true), .nothing, "the process stopped")
+    XCTAssertEqual(outcome(main: .seconds(34), beside: .seconds(34), enforced: false), .nothing, "the process stopped")
+    XCTAssertEqual(outcome(main: .seconds(5), beside: .zero, enforced: true), .nothing, "a short stall")
+    XCTAssertEqual(outcome(main: .seconds(5), beside: .zero, enforced: false), .nothing, "a short stall")
+  }
+
+  func test_a_stall_is_named_by_what_the_main_thread_was_doing() {
+    let base = ContinuousClock.now
+    func at(_ milliseconds: Int) -> ContinuousClock.Instant { base.advanced(by: .milliseconds(milliseconds)) }
+    // Keystroke 3 of run 2: insertText 0-40 ms, layout 40-90, the wait 90-1,090, the layout after it 1,090-1,100.
+    let spans = [
+      Span(place: .insertText, keystroke: 3, run: 2, start: at(0), end: at(40)),
+      Span(place: .layout, keystroke: 3, run: 2, start: at(40), end: at(90)),
+      Span(place: .wait, keystroke: 3, run: 2, start: at(90), end: at(1_090)),
+      Span(place: .layout, keystroke: 3, run: 2, start: at(1_090), end: at(1_100)),
+    ]
+    func named(_ from: Int, _ to: Int) -> String { Self.placesOfStall(from: at(from), to: at(to), in: spans) }
+
+    XCTAssertEqual(
+      named(5, 35), "inside insertText of keystroke 3 of run 2 (the call took 0.040 s, 0.030 s of the stall in it)")
+    XCTAssertEqual(
+      named(50, 80),
+      "inside the list's layout of keystroke 3 of run 2 (the call took 0.050 s, 0.030 s of the stall in it)")
+    XCTAssertEqual(
+      named(200, 900),
+      "while waiting for the state after keystroke 3 of run 2 (the wait took 1.000 s, 0.700 s of the stall in it)")
+    XCTAssertEqual(
+      named(1_095, 1_099),
+      "inside the list's layout of keystroke 3 of run 2 (the call took 0.010 s, 0.004 s of the stall in it)")
+    XCTAssertEqual(
+      named(20, 60),
+      "inside insertText of keystroke 3 of run 2 (the call took 0.040 s, 0.020 s of the stall in it) and "
+        + "inside the list's layout of keystroke 3 of run 2 (the call took 0.050 s, 0.020 s of the stall in it)",
+      "a stall across two calls names each with its share")
+    XCTAssertEqual(named(2_000, 2_500), "outside every call the test recorded (the setup, or between keystrokes)")
   }
 
   func test_a_wait_with_no_stall_records_nothing() async throws {
