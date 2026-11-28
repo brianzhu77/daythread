@@ -1548,4 +1548,93 @@ Nothing in this task is code, and Brian does the tapping: the app writes to his 
 
 ## Cost, measured
 
-To be written by Task 13.
+Measured 2026-11-28 on an Apple M4 Mac (macOS 27.0.1, Xcode 27.2), the iPhone 17 simulator on iOS 26.5, a Debug
+build, at the head of Task 13's branch. Each figure is the median of a run's five inner runs, as in 1d.1's section
+(`docs/plan/native-phase-1d.md`, "Cost, measured"); the runs are listed. Every run was alone: `pgrep -x xcodebuild`
+empty twice, 15 seconds apart, before each, and each log names only this worktree. The four budgeted runs were
+`TEST_RUNNER_DAYTHREAD_FEEL_BUDGET=1 xcodebuild test ... -only-testing:DaythreadTests/TypingFeelTests` (the README's
+command), back to back as with, without, with, without; "without" is the same fixture with no draft in the workspace
+(`TEST_RUNNER_DAYTHREAD_FEEL_DRAFT=off`). All four held their budget.
+
+**The fixtures.** "With a draft" is the typing tests' workspace (3,000 to-dos, the strip of 1d.1) plus a stored draft of
+20 decided items on each of the 365 days before today (10 carried to-dos and 10 lines, half of the lines with `from`,
+2 of recipe 3), and today's draft of four open suggestions placed above the line typed into: two carried to-dos
+anchored on the line above it and two lines (one with `from`) anchored four lines above. The screen asserts it holds the four
+suggestions, so each is a guest row on the page while the typing runs. Task 13's brief asked for drafts of 10 items on the last 30 days;
+this task was asked for a year of 20 items, the worse case, and that is what was measured. The workspace's 300 pages are
+299 past days and today.
+
+**A keystroke** (milliseconds to the list laid out; limits 10.56 on 300 lines and 4.01 on 10), medians per invocation:
+
+| | with suggestions and a year of drafts | without a draft |
+|---|---|---|
+| 300 lines, line 150 | 9.614, 9.615 (and 10.419 in the unbudgeted full-suite run) | 9.845, 10.548 |
+| 10 lines, line 5 | 3.430, 3.406 (3.859 in the full-suite run) | 3.558, 3.417 |
+
+The suggestions do not cost a keystroke: the "with" runs are, if anything, lower than the "without" ones, and the
+spread between the two invocations of either is larger than any difference between them. A guest row is a row of the
+list like another, and a keystroke reads no draft.
+
+**A state drawn** (milliseconds per keystroke to the engine's state drawn, not budgeted: the wait for the state, then
+the list laid out again). While he types ahead of the last state, each engine state is a new workspace with his words
+drawn in: its index is built reusing the one before (the stored drafts are not parsed again), the draft view is read
+again, and the page's words are parsed once to place the guests.
+
+| | with | without | the draft adds |
+|---|---|---|---|
+| 300 lines | 177.563, 172.816 | 153.615, 139.594 | about 24 to 38, about 29 on average |
+| 10 lines | 84.760, 84.073 | 65.203, 65.453 | about 19 |
+
+(1d.1's figures for the state drawn with the strip were 170 to 175 ms and 89 ms; the 1d.2a base, measured back to back
+with this task, is 140 to 154 and 65 here, so the figures of this day are lower than 1d.1's, and the difference to
+read is the one between the columns of this table.)
+
+The added time agrees with its parts, measured by `test_what_the_draft_adds_to_a_state` on the same workspaces (five
+runs each, medians, four invocations, milliseconds):
+
+| per state | 300 lines | 10 lines |
+|---|---|---|
+| index reusing the one before, page typed ahead, with a year of drafts | 59.7, 60.8, 58.8, 61.1 | 56.6, 57.0, 57.1, 59.9 |
+| the same, no drafts in the workspace | 53.2, 53.2, 54.1, 54.0 | 53.5, 51.4, 53.1, 51.2 |
+| the draft view (`DraftView.of`, four suggestions) | 17.3, 17.2, 17.9, 17.8 | 13.9, 13.4, 13.7, 13.1 |
+| the guests placed: the view read again, the page's words parsed, four guests | 21.4, 21.3, 21.0, 21.8 | 14.1, 13.5, 13.8, 13.2 |
+
+So a state with the draft costs, over one without, about 6 ms more in the index (a year of draft pages is compared, not
+parsed), about 14 to 17 ms for `DraftView.of`, and about 0.3 ms (10 lines) to 4 ms (300 lines) for parsing the page and
+placing the guests; the total, 20 to 27 ms, is the measured 19 to 29. `DraftView.of` is the largest part and does not
+grow with the page: it reads the other days' drafts for where a line came from, and today's page only for what is
+already on it. The screen reads it once for each workspace drawn (`draftReads`); the guests reuse that view.
+
+**The first state of a run** (the index built whole; nothing on the screen has read the workspace). The index with a
+year of drafts costs 167 to 170 ms on 3,000 to-dos on 300 pages, against 49 to 51 ms with none (Core's
+`DraftCostTests`, three alone runs; 168 to 172 ms against 51 to 56 ms in `test_what_the_draft_adds_to_a_state`; and
+`test_the_draft_view_on_a_large_workspace`, with a draft of 20 open suggestions on today's page: 170.4, 169.7, 172.5,
+176.6 ms, the view 30 to 32 ms, an index reusing 58 to 61 ms). Through the real screen, the first state of a typing
+run drew in, milliseconds:
+
+| first state drawn | with | without |
+|---|---|---|
+| 300 lines | 691.7, 512.3 (734 in the full-suite run) | 328.5, 350.3 |
+| 10 lines | 328.7, 321.1 (343) | 166.0, 167.5 |
+
+so a year of drafts adds about 160 ms to the first state on the 10-line page and 160 to 360 ms on the 300-line page
+(one sample a run, and the 300-line figures spread widely: 692 is the first run after a build). That is the index's
+extra 115 to 120 ms, the draft view and the guests (about 30 ms), and the rest of a first draw that is itself heavy
+here (the whole page's first layout). It happens once a launch, and the state after it is the cheap one above. It does
+not reach a keystroke: typing begins after it.
+
+**The remedy if a year of drafts becomes too slow on a first state.** Keeping the parsed drafts across runs (a cache
+on disk, or the store holding each draft page already read) is not built. The index spends about 115 to 120 ms of its
+170 on 365 drafts, so keeping them would take a first state back towards the cost of one reusing the index before it (about 58 to
+61 ms of index in place of 170), the same reuse that makes later states cheap (`TodoIndex(_:reusing:)`). It is a design
+decision (what the store holds, and when a kept draft is stale), and the numbers do not call for it today: a first
+state of about half a second on the largest page of a year of use is a launch, not a keystroke.
+
+**A reading for the budget.** On this machine today the 300-line median is 9.61 ms with the draft on the page against a
+limit of 10.56, a margin of about 9 percent; without the draft the two invocations read 9.85 and 10.55, so on a run
+that is noisy the margin can be nil whether a draft is there or not, and the difference the draft makes to it is not
+measurable beside that. The 10-line median is 3.41 to 3.43 against 4.01, a margin of about 15 percent. The limits
+were not changed. The draft keeps §13.1's anti-goal (a suggestion costs no keystroke); what it costs is in the state
+drawn between keystrokes and in a launch's first state. The 300-line limit was set on a lighter fixture (1c's) and has
+stood about 10 percent above this Mac's reading since 1d.1; whether to re-base it, on this fixture and this Mac, is
+the owner's call, and nothing here asks for it.
