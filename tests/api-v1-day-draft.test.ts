@@ -89,6 +89,36 @@ test('day-draft: a settled older draft whose remake is not ready answers remakeF
   assert.equal(calls.n, 1)
 })
 
+test('day-draft: a settled older draft whose remake comes back ready is replaced: setDraft is the remade draft', async t => {
+  quiet(t)
+  const repo = await withDraft('ready', 4)
+  const calls = { n: 0 }
+  const reply = await dayDraftRouteReply(repo, 'local', someModel, undefined, body(), stand('ready', calls))
+  assert.equal(reply.status, 200)
+  if (reply.status !== 200) return
+  assert.deepEqual([reply.body.modelOn, reply.body.remakeFailed, calls.n], [true, false, 1])
+  const command = JSON.parse(reply.body.setDraft!) as Record<string, unknown>
+  assert.deepEqual([command.type, command.pageId, command.status, command.recipe], ['set-draft', pageId, 'ready', 5])
+})
+
+test('day-draft: an older draft not settled (recipe 4, failed, all open) is not settled, so a draft is made and sent', async t => {
+  quiet(t)
+  const repo = await withDraft('failed', 4)
+  const calls = { n: 0 }
+  const reply = await dayDraftRouteReply(repo, 'local', null, undefined, body(), stand('failed', calls))
+  assert.equal(reply.status, 200)
+  if (reply.status !== 200) return
+  // Not settled, so not stale: the table goes on to make one, as prepareDayDraft always did; set-draft may replace it.
+  assert.equal(calls.n, 1)
+  assert.deepEqual([reply.body.remakeFailed, (JSON.parse(reply.body.setDraft!) as { status: string }).status], [false, 'failed'])
+})
+
+test('day-draft: an owner in the body changes nothing: the reply names the session\'s', async t => {
+  quiet(t)
+  const repo = await withDraft('ready', 5)
+  assert.deepEqual(await dayDraftRouteReply(repo, 'local', null, undefined, body({ owner: 'someone-else', expectedOwner: 'someone-else' })), { status: 200, body: { setDraft: null, owner: 'local', modelOn: false, remakeFailed: false } })
+})
+
 test('day-draft: a date with no live day page is 404 not-found', async t => {
   quiet(t)
   const repo = await withToday()
