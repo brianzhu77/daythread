@@ -17,7 +17,8 @@ struct DraftCostTests {
     print("index, 3,000 to-dos on 300 pages: \(Self.median { _ = TodoIndex(plain) }) ms")
     print("index, the same with 365 drafts of 20 items: \(Self.median { _ = TodoIndex(withDrafts) }) ms")
     let previous = TodoIndex(withDrafts)
-    print("index, 365 drafts, reusing, none changed: \(Self.median { _ = TodoIndex(withDrafts, reusing: previous) }) ms")
+    let unchanged = Self.median { _ = TodoIndex(withDrafts, reusing: previous) }
+    print("index, 365 drafts, reusing, none changed: \(unchanged) ms")
     // One stored draft's document changes, as an apply would; the other pages are the same values.
     var oneChanged = withDrafts
     let position = try #require(oneChanged.pages.firstIndex { $0.id == "draft:day:2026-11-25" })
