@@ -349,7 +349,9 @@
       } else {
         // Until the engine has made today's page, an empty one stands in for it. Shown first: what he was composing
         // on the page before is reported for that page.
-        if let page = Self.emptyPage(on: date) { document.show(page: page, in: workspace, index: todoIndex(of: workspace)) }
+        if let page = Self.emptyPage(on: date) {
+          document.show(page: page, in: workspace, index: todoIndex(of: workspace))
+        }
         closePage()
         drawnWith = workspace
       }
@@ -481,12 +483,12 @@
 
     /// The index of `workspace`, built again only for another workspace than the last two read.
     ///
-    /// The only place the screen and its list get an index from: the list is handed it with the workspace it is of.
+    /// The only builder of a state's index, for the screen and its list: the list is handed it with the workspace it is
+    /// of. A tap's own check may build one more and let it go (`indexForATap(of:)`).
     private func todoIndex(of workspace: Workspace) -> TodoIndex {
       if let cached = readingIndexes.first(where: { $0.workspace == workspace }) { return cached.index }
       let index = TodoIndex(workspace)
-      indexesBuilt += 1
-      // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time.
+      indexesBuilt += 1      // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time.
       readingIndexes = Array(([(workspace, index)] + readingIndexes).prefix(2))
       return index
     }
@@ -640,7 +642,7 @@
         self.dismiss(animated: true)
         // The calendar can stay open for as long as he likes: the row, its to-do and today are read again.
         guard self.rowStillOffers(.pickDate, for: request), !(day < self.model.today) else { return }
-        self.run(.move(day), on: request)
+        self.run(.move(day), on: request, offeredAs: .pickDate)
       }
       picker.modalPresentationStyle = .popover
       if let popover = picker.popoverPresentationController {
@@ -654,7 +656,9 @@
     }
 
     /// Whether the row of `request` is still on the page with the same to-do, and its menu, read now from the
-    /// workspace as the list draws it, still offers `action`: as the list checks a request from a menu left open.
+    /// workspace as the list draws it, still offers `action`: as the list checks a request from a menu left open. The
+    /// row is the block of the same id holding the same to-do, whatever its words now: his typing in it changes
+    /// neither, and a merge keeps the ids of the rows it keeps.
     private func rowStillOffers(_ action: RowAction, for request: RowRequest) -> Bool {
       guard let mine = document.document, let open = openPage, case .page(let page)? = content,
         let block = Self.block(request.rowID, in: mine),
@@ -662,9 +666,23 @@
         let workspace = model.workspace
       else { return false }
       let drawn = workspace.drawing(draft: mine, of: open.id)
-      let facts = RowFacts.of(
-        row: block, pageDate: page.date, in: drawn, index: todoIndex(of: drawn), today: model.today)
-      return facts?.menu?.groups.contains { $0.items.contains { $0.action == action } } ?? false
+      guard
+        let facts = RowFacts.of(
+          row: block, pageDate: page.date, in: drawn, index: indexForATap(of: drawn), today: model.today),
+        let menu = facts.menu
+      else { return false }
+      // As the list checks a request: the reference row's button while the row shows it, any other action while the
+      // menu or the swipe holds it.
+      if action == .planForTodayButton { return facts.planForToday }
+      return menu.groups.contains { $0.items.contains { $0.action == action } }
+        || menu.swipe.contains { $0.action == action }
+    }
+
+    /// The index a tap's check reads `workspace` with: the one kept, when it is of that workspace; otherwise one built
+    /// here and let go. A workspace with words typed since the last state is in no cache, and keeping its index would
+    /// evict the list's, so that the next state built two.
+    private func indexForATap(of workspace: Workspace) -> TodoIndex {
+      readingIndexes.first { $0.workspace == workspace }?.index ?? TodoIndex(workspace)
     }
 
     private func anchor(_ popover: UIPopoverPresentationController?, to rowID: String) {
@@ -674,8 +692,9 @@
     }
 
     /// §11.4: what he composes is committed, the row is dimmed while the command is out, and the notice says what
-    /// happened; `Undo` only while the server would take it.
-    private func run(_ action: RowAction, on request: RowRequest) {
+    /// happened; `Undo` only while the server would take it. `offered` is the item of the row's menu he chose when it
+    /// is not `action` itself (`Pick date…`, for a day picked).
+    private func run(_ action: RowAction, on request: RowRequest, offeredAs offered: RowAction? = nil) {
       guard actionOut == nil, let open = openPage, let owner = open.owner,
         case .page(let page)? = content, let pageDate = page.date
       else { return }
@@ -687,7 +706,16 @@
       noticeOf = nil
       Task { [weak self, model] in
         let acted = await model.act(
-          action, taskId: request.taskId, pageId: open.id, pageDate: pageDate, owner: owner)
+          action, taskId: request.taskId, pageId: open.id, pageDate: pageDate, owner: owner
+        ) { [weak self] in
+          // Read once his words are handed over: the page he tapped on is still shown under that account, and its row,
+          // as drawn now, still offers what he chose; a day picked is not before today by now.
+          guard let self, self.openPage?.id == open.id, self.openPage?.owner == owner,
+            self.rowStillOffers(offered ?? action, for: request)
+          else { return false }
+          if case .move(let day) = action, day < self.model.today { return false }
+          return true
+        }
         guard let self else { return }
         self.actionOut = nil
         // Said only on the page it was made on, under the account it was made under: he may have gone to another
@@ -815,10 +843,7 @@
       {
         drawn = workspace.drawing(draft: mine, of: page.id)
       }
-      // A workspace with words typed since the last state is in no cache: its index is built here and let go, so a tap
-      // does not evict the list's.
-      let index = readingIndexes.first { $0.workspace == drawn }?.index ?? TodoIndex(drawn)
-      return DayFacts.of(day: today, in: drawn, index: index, today: today).lists(taskId)
+      return DayFacts.of(day: today, in: drawn, index: indexForATap(of: drawn), today: today).lists(taskId)
     }
 
     /// §12.4: plans `taskId` on `day` from the strip, on today's screen only, sent and waited for as a row's action
@@ -843,7 +868,13 @@
       noticeOf = nil
       Task { [weak self, model] in
         let acted = await model.plan(
-          taskId, on: day, notOvertaking: pageId, owner: owner, notice: DayFacts.planNotice(date: day, today: today))
+          taskId, on: day, notOvertaking: pageId, owner: owner, notice: DayFacts.planNotice(date: day, today: today)
+        ) { [weak self] in
+          // Read once his words are handed over: the screen still shows the today he tapped on, and the to-do is
+          // still a row of `Not today` as the facts are worked out from what it draws now.
+          guard let self else { return false }
+          return self.date == today && self.model.today == today && self.isListedAside(taskId)
+        }
         guard let self else { return }
         self.actionOut = nil
         // Said only while the screen shows the today it was made on, under the account it was made under.

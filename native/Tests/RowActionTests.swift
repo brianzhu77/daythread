@@ -820,7 +820,8 @@ private func type(of action: JSONValue) -> String? { action.objectValue?["type"]
     try day.type("Buy milk", atEndOf: "")
     #expect(h.model.state.workspace?.task("editor-task:r1") == nil)
     let acted = await h.model.act(
-      .move(tomorrow), taskId: "editor-task:r1", pageId: "day:2026-11-26", pageDate: today, owner: "one")
+      .move(tomorrow), taskId: "editor-task:r1", pageId: "day:2026-11-26", pageDate: today, owner: "one",
+      still: { true })
 
     guard case .done(let text, _) = acted else {
       Issue.record("not done: \(acted)")
