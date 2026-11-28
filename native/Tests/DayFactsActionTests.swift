@@ -156,6 +156,25 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     day.close()
   }
 
+  /// The tap's own check reads the workspace with his words drawn in, which no state has drawn yet, and lets its index
+  /// go; the state holding his words builds its own, which the check after the hand-over reads again.
+  @Test func bring_back_right_after_typing_builds_two_indexes() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let built = day.screen.indexesBuilt
+
+    await h.server.hold()
+    try day.type("!", atEndOf: "Walk")
+    day.factsModel.bringBack("t-aside")
+    // The save of his words waits at the server: the action was checked once they were handed over.
+    try await held(h)
+    #expect(await h.server.sent.map { type(of: $0) } == ["save-editor"])
+    #expect(day.screen.indexesBuilt == built + 2)
+    day.close()
+    await h.server.release()
+  }
+
   @Test func bring_back_after_typing_keeps_the_indexes_the_screen_holds() async throws {
     let h = try await harness()
     let day = try RowScreen(h.model)

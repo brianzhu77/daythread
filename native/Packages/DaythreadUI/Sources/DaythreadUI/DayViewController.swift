@@ -488,7 +488,8 @@
     private func todoIndex(of workspace: Workspace) -> TodoIndex {
       if let cached = readingIndexes.first(where: { $0.workspace == workspace }) { return cached.index }
       let index = TodoIndex(workspace)
-      indexesBuilt += 1      // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time. The
+      indexesBuilt += 1
+      // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time. The
       // list's is the one kept beside the new one, not merely the newer of the two before: a state drawn with his words
       // ahead of it builds an index the list never takes, and the next state would otherwise build the list's again.
       let kept = readingIndexes.first { $0.workspace == listWorkspace } ?? readingIndexes.first
@@ -662,7 +663,10 @@
     /// workspace as the list draws it, still offers `action`: as the list checks a request from a menu left open. The
     /// row is the block of the same id holding the same to-do, whatever its words now: his typing in it changes
     /// neither, and a merge keeps the ids of the rows it keeps.
-    private func rowStillOffers(_ action: RowAction, for request: RowRequest) -> Bool {
+    ///
+    /// `afterHandOver`: asked once his words are handed over, when the workspace checked is the one the state that just
+    /// arrived is drawn with next; its index is kept for that draw rather than built twice.
+    private func rowStillOffers(_ action: RowAction, for request: RowRequest, afterHandOver: Bool = false) -> Bool {
       guard let mine = document.document, let open = openPage, case .page(let page)? = content,
         let block = Self.block(request.rowID, in: mine),
         block.props["taskId"]?.stringValue?.utf8.elementsEqual(request.taskId.utf8) == true,
@@ -671,7 +675,10 @@
       let drawn = workspace.drawing(draft: mine, of: open.id)
       guard
         let facts = RowFacts.of(
-          row: block, pageDate: page.date, in: drawn, index: indexForATap(of: drawn), today: model.today),
+          row: block, pageDate: page.date, in: drawn, index: checkIndex(of: drawn, afterHandOver: afterHandOver),
+          today: model.today),
+        // `planForToday` can be true with no menu only on a page that is not a day's (an open reference row there),
+        // where no action is run (`run` needs the page's day) and the list reports none (it checks the menu first).
         let menu = facts.menu
       else { return false }
       // As the list checks a request: the reference row's button while the row shows it, any other action while the
@@ -683,9 +690,15 @@
 
     /// The index a tap's check reads `workspace` with: the one kept, when it is of that workspace; otherwise one built
     /// here and let go. A workspace with words typed since the last state is in no cache, and keeping its index would
-    /// evict the list's, so that the next state built two.
+    /// evict the list's, so that the next state built two. One built here is counted in `indexesBuilt` too.
+    private func checkIndex(of workspace: Workspace, afterHandOver: Bool) -> TodoIndex {
+      afterHandOver ? todoIndex(of: workspace) : indexForATap(of: workspace)
+    }
+
     private func indexForATap(of workspace: Workspace) -> TodoIndex {
-      readingIndexes.first { $0.workspace == workspace }?.index ?? TodoIndex(workspace)
+      if let kept = readingIndexes.first(where: { $0.workspace == workspace }) { return kept.index }
+      indexesBuilt += 1
+      return TodoIndex(workspace)
     }
 
     private func anchor(_ popover: UIPopoverPresentationController?, to rowID: String) {
@@ -707,17 +720,18 @@
       // The command about to go takes the server's slot: an Undo of the action before would be refused.
       notice.withdrawUndo()
       noticeOf = nil
+      // What he chose was offered in this today's terms (`Bring to today`, a day of the menu), and the command is
+      // built on it.
+      let today = model.today
       Task { [weak self, model] in
         let acted = await model.act(
           action, taskId: request.taskId, pageId: open.id, pageDate: pageDate, owner: owner
         ) { [weak self] in
-          // Read once his words are handed over: the page he tapped on is still shown under that account, and its row,
-          // as drawn now, still offers what he chose; a day picked is not before today by now.
-          guard let self, self.openPage?.id == open.id, self.openPage?.owner == owner,
-            self.rowStillOffers(offered ?? action, for: request)
-          else { return false }
-          if case .move(let day) = action, day < self.model.today { return false }
-          return true
+          // Read once his words are handed over: today has not moved on, the page he tapped on is still shown under
+          // that account, and its row, as drawn now, still offers what he chose.
+          guard let self else { return false }
+          return self.model.today == today && self.openPage?.id == open.id && self.openPage?.owner == owner
+            && self.rowStillOffers(offered ?? action, for: request, afterHandOver: true)
         }
         guard let self else { return }
         self.actionOut = nil
@@ -837,7 +851,8 @@
     /// Whether `taskId` is a row of `Not today` as the facts are worked out now, from what the screen draws (as
     /// `showDay` works them out): a menu or a calendar opened earlier may hold a to-do brought back, ticked or deleted
     /// since.
-    private func isListedAside(_ taskId: String) -> Bool {
+    /// `afterHandOver` as `rowStillOffers`'.
+    private func isListedAside(_ taskId: String, afterHandOver: Bool = false) -> Bool {
       guard let workspace = model.workspace else { return false }
       let today = model.today
       var drawn = workspace
@@ -846,7 +861,8 @@
       {
         drawn = workspace.drawing(draft: mine, of: page.id)
       }
-      return DayFacts.of(day: today, in: drawn, index: indexForATap(of: drawn), today: today).lists(taskId)
+      let index = checkIndex(of: drawn, afterHandOver: afterHandOver)
+      return DayFacts.of(day: today, in: drawn, index: index, today: today).lists(taskId)
     }
 
     /// §12.4: plans `taskId` on `day` from the strip, on today's screen only, sent and waited for as a row's action
@@ -876,7 +892,8 @@
           // Read once his words are handed over: the screen still shows the today he tapped on, and the to-do is
           // still a row of `Not today` as the facts are worked out from what it draws now.
           guard let self else { return false }
-          return self.date == today && self.model.today == today && self.isListedAside(taskId)
+          return self.date == today && self.model.today == today
+            && self.isListedAside(taskId, afterHandOver: true)
         }
         guard let self else { return }
         self.actionOut = nil
