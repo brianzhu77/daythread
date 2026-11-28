@@ -1215,9 +1215,12 @@ public struct GuestRow: Hashable, Sendable {
   public let detail: String
   /// The small text as VoiceOver reads it; nil: as shown.
   public let spokenDetail: String?
+  /// What VoiceOver calls this kind of row, read before its words (`Suggestion`). The host's word: the list has
+  /// none of its own for a guest.
+  public let spokenKind: String
   public let actions: [Action]
   public init(id: String, place: Place, kind: Kind, depth: Int = 0, words: String, detail: String,
-    spokenDetail: String? = nil, actions: [Action])
+    spokenDetail: String? = nil, spokenKind: String, actions: [Action])
 }
 
 /// Internal: an item of the list, a line (a row of `BlockRows`) or a guest; a guest's id is never read as a line's.
@@ -1271,10 +1274,11 @@ extension BlockRows {
   none for a line); no background, no box. The buttons, one per action, plain, each a 44-by-44-point target whose
   symbol is not clipped, the symbol in the secondary colour at the body's text style (quieter than the words): on the
   first line, trailing, at the ordinary sizes; under the words from the accessibility sizes, as `Plan for today` goes
-  there. No swipe, no context menu, no drag. For VoiceOver the cell is one element labelled `Suggestion, <words>,
-  <spokenDetail ?? detail>` (`Suggestion, <words>` when both are empty), its custom actions the actions'
+  there. No swipe, no context menu, no drag. For VoiceOver the cell is one element labelled `<spokenKind>, <words>,
+  <spokenDetail ?? detail>` (`<spokenKind>, <words>` when both are empty), its custom actions the actions'
   `spokenName`s, each reporting through `onGuestAction` as its button does; the buttons' own labels stay for Voice
-  Control and Full Keyboard Access. (The word `Suggestion` is the list's name for a guest row, as §13.5 has it.)
+  Control and Full Keyboard Access. (The word `Suggestion` comes from the host in `spokenKind`: the list knows
+  nothing of drafts, §13.5.)
 
   **A tap under the last line** with a guest last: as now, the caret goes to the end of the last line. When the page
   ends with a divider and a guest follows it, the paragraph made there lands after the guest: accepted, and recorded
@@ -1295,8 +1299,8 @@ extension BlockRows {
     above: no restructure, no snapshot apply, no guest cell reconfigured, as without guests).
   - `the_host_is_told_which_action_was_used` (the `checkmark` button: `onGuestAction("g1", "apply")`; the custom
     action `Skip`: `("g1", "skip")`).
-  - `voiceover_reads_a_guest_as_one_element_with_its_actions` (label `Suggestion, Book the flights, Thursday 11/19` with
-    `spokenDetail` `Thursday 11/19`; `Suggestion, Pack the charger` with no detail; custom actions `Apply`, `Skip`; the
+  - `voiceover_reads_a_guest_as_one_element_with_its_actions` (with `spokenKind` `Suggestion`: label `Suggestion, Book the flights,
+    Thursday 11/19` with `spokenDetail` `Thursday 11/19`; `Suggestion, Pack the charger` with no detail; custom actions `Apply`, `Skip`; the
     buttons' labels `Apply Book the flights`, `Skip Book the flights`). Its place in VoiceOver's order is Task 14's.
   - `the_words_keep_the_column_of_his_rows` at `.large` and `.accessibilityExtraExtraExtraLarge` (a to-do guest's words
     start where `t2`'s text starts, a bullet guest's where `b1`'s does, a line guest's where `p1`'s does, within 1
@@ -1350,7 +1354,7 @@ extension DraftView.Suggestion {
   /// The guest row it is drawn as on a page of `blocks` (the top-level blocks the list draws): `place`
   /// `.after(lineID: BlockRows.lastRowID(ofBlock: anchorId, in: blocks))`, a fill too in 1d.2a (nil anchor: `after(lineID:
   /// nil)`; an anchor the blocks do not hold: nil, not drawn); `kind` its mark; `depth` 0; `words`; `detail` its
-  /// `detail ?? ""`; `spokenDetail` its `spokenDetail`; actions `apply` (`checkmark`, `applyLabel`, `Apply`) and `skip`
+  /// `detail ?? ""`; `spokenDetail` its `spokenDetail`; `spokenKind` `Suggestion`; actions `apply` (`checkmark`, `applyLabel`, `Apply`) and `skip`
   /// (`xmark`, `skipLabel`, `Skip`).
   func guest(on blocks: [Block]) -> GuestRow?
 }
