@@ -89,8 +89,9 @@ extension AppModel {
     let lost = Task { [weak self] in
       do { try await sleep(.seconds(DraftAsk.lostAfter)) } catch { return }
       // Retry shows at once: he may be looking at the page. A reply after this still sends its draft; it no longer
-      // writes the page's ask.
-      guard let self, self.latestDraftAsks[pageId] == number else { return }
+      // writes the page's ask. Cancelling does not stop a wait that had already run out: an answer that came in
+      // between cancelled this task, and the ask is not lost.
+      guard !Task.isCancelled, let self, self.latestDraftAsks[pageId] == number else { return }
       self.draftAsks[pageId] = failed
       self.latestDraftAsks[pageId] = nil
     }
