@@ -488,8 +488,11 @@
     private func todoIndex(of workspace: Workspace) -> TodoIndex {
       if let cached = readingIndexes.first(where: { $0.workspace == workspace }) { return cached.index }
       let index = TodoIndex(workspace)
-      indexesBuilt += 1      // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time.
-      readingIndexes = Array(([(workspace, index)] + readingIndexes).prefix(2))
+      indexesBuilt += 1      // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time. The
+      // list's is the one kept beside the new one, not merely the newer of the two before: a state drawn with his words
+      // ahead of it builds an index the list never takes, and the next state would otherwise build the list's again.
+      let kept = readingIndexes.first { $0.workspace == listWorkspace } ?? readingIndexes.first
+      readingIndexes = [(workspace, index)] + (kept.map { [$0] } ?? [])
       return index
     }
 
