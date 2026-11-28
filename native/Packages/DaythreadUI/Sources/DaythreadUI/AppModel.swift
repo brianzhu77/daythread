@@ -638,12 +638,18 @@ extension AppModel {
   /// command with the page not to overtake. Returns once a state holding the answer has arrived (counted by
   /// `SyncState.published`, never assumed from order), so the words read the workspace after it. `action` is never
   /// `.pickDate`. `owner` is the account the row was drawn under; another's answers `.notDone`.
+  ///
+  /// `still` is asked after his words are handed over and before the command goes; false sends nothing and answers
+  /// `.notDone`. The screen reads in it what it showed when he tapped (the row and its menu, or the to-do in `Not
+  /// today`), against the workspace and the words it draws now: the hand-over suspends, and a state may have arrived
+  /// meanwhile.
   public func act(
-    _ action: RowAction, taskId: String, pageId: String, pageDate: LocalDate, owner: String
+    _ action: RowAction, taskId: String, pageId: String, pageDate: LocalDate, owner: String,
+    still: @MainActor () -> Bool
   ) async -> RowActed {
     let today = today
     guard let command = Command.forRow(action, taskId: taskId, pageDate: pageDate, today: today),
-      await handOverHisWords(owner: owner),
+      await handOverHisWords(owner: owner), still(),
       // The to-do as it is drawn once his words are, before the action: a to-do typed a moment ago is in it now,
       // and a notice words its Due date from it.
       let task = workspace?.task(taskId)
@@ -661,13 +667,15 @@ extension AppModel {
   /// and `Another day`, and 1d.2's `N more open`. As `act`: his words handed over first, then the command sent and
   /// waited for, `pageId` not overtaken (nil: no page to wait for); returns once a state holding the answer has
   /// arrived. `notice` is the words of a done answer. `.notDone` when the to-do is not in the workspace, for another
-  /// owner, or when it fails, is refused or is not sent.
-  public func plan(_ taskId: String, on date: LocalDate, notOvertaking pageId: String?, owner: String, notice: String)
-    async -> RowActed
-  {
+  /// owner, when `still` answers false once his words are handed over (as `act`'s), or when it fails, is refused or is
+  /// not sent.
+  public func plan(
+    _ taskId: String, on date: LocalDate, notOvertaking pageId: String?, owner: String, notice: String,
+    still: @MainActor () -> Bool
+  ) async -> RowActed {
     let today = today
     // Read once his words are: a to-do typed a moment ago is in the workspace by then.
-    guard await handOverHisWords(owner: owner), workspace?.task(taskId) != nil else { return .notDone }
+    guard await handOverHisWords(owner: owner), still(), workspace?.task(taskId) != nil else { return .notDone }
     let command = Command.planTask(taskId: taskId, date: date, from: nil, today: today)
     guard let answer = await performWaited(command, notOvertaking: pageId, owner: owner) else { return .notDone }
     return .done(text: notice, operationId: answer.operationId)

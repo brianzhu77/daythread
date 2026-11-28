@@ -891,10 +891,11 @@ cache: there the index is not the strip's addition, and what the strip adds is `
 the strip's drawing (below). When the list takes the page as the server has it, when another page is opened, and on a
 day with no page, nothing on the screen has read that workspace yet: the facts build a whole index for it, about 55 ms a
 state on this workspace in Debug, which the typing figures below do not show. The editor built its own index of the
-same workspace for the rows it drew (`DocumentViewController`'s `TodoIndex`); that follow-up is done (slice 1d.2a, Task 6):
-the screen's `todoIndex(of:)` is the only builder, and the list takes the index it is handed (`show`, `edit` and
-`replace` take `index:`), so a state costs one index, not two. The typing fixture is not this workspace: it holds the same 3,000 to-dos on
-about 30 pages.
+same workspace for the rows it drew (`DocumentViewController`'s `TodoIndex`); that follow-up is done (slice 1d.2a, Task
+6): the screen's `todoIndex(of:)` is the only builder of a state's index, and the list takes the index it is handed
+(`show`, `edit` and `replace` take `index:`), so a state costs one index, not two. A tap's own check of the workspace
+with his newest words drawn in (a row action's menu, a to-do of `Not today`) may build one more and let it go, so as not
+to evict the list's. The typing fixture is not this workspace: it holds the same 3,000 to-dos on about 30 pages.
 
 Typing with the strip on screen (100 set aside, 100 due, 200 chips on the past pages), milliseconds per keystroke to
 the list laid out, five invocations (the budget's figures, 7.040 and 2.671, were measured before slice 1c made the

@@ -618,6 +618,130 @@ private func type(of action: JSONValue) -> String? { action.objectValue?["type"]
     day.close()
   }
 
+  // MARK: Checked again once his words are handed over
+
+  @Test func a_row_action_whose_to_do_closed_while_his_words_went_sends_nothing() async throws {
+    let relay = StateRelay()
+    let h = try await harness(pages: [todayPage], tasks: [water, read], relay: relay)
+    let day = try RowScreen(h.model)
+    // Another device ticked the to-do: the state saying so is held back from the screen, which still offers Tomorrow.
+    relay.hold()
+    let ticked = task("t1", "Water the plants", status: "done", version: 2)
+    await h.server.add([
+      .workspace(.full(try copy(revision: 2, pages: [todayPage], tasks: [ticked, read]), owner: "one"))
+    ])
+    await h.model.refresh()
+    try await soon { !relay.kept.isEmpty }
+    // Were the command sent, the server would take his words, then the move.
+    let typed = [
+      line("a", "Morning"), row("r1", "t1", "Water the plants"), row("r2", "t2", "Read the lease"),
+      line("b", "Walk the dog"),
+    ]
+    await h.server.add([
+      savedAs(try changes(from: 2, to: 3, pages: [page(today, typed)])),
+      applied(try movedToTomorrow(from: 3, operationId: nil)),
+    ])
+
+    // Typed, and Tomorrow swiped in the same turn: the action waits for his words to reach the engine, and the state
+    // that says so comes after the one with the tick.
+    try day.type(" the dog", atEndOf: "Walk")
+    try day.swipe("Water the plants", "Tomorrow")
+    try await soon { relay.kept.contains { !$0.drafts.isEmpty } }
+    relay.release()
+    try await soon { day.notice != nil }
+
+    #expect(day.notice == Notice(text: "Not done · your text is kept", kind: .failed, undoing: nil))
+    #expect(await h.server.sent.isEmpty, "no plan-task")
+    #expect(day.editor.actingRow == nil)
+    // His words are saved by the usual path.
+    await h.model.saveNow().value
+    let sent = await h.server.sent
+    #expect(sent.map { type(of: $0) } == ["save-editor"])
+    #expect(
+      words(of: sent.first?.objectValue?["document"]?.stringValue)
+        == ["Morning", "Water the plants", "Read the lease", "Walk the dog"])
+    day.close()
+  }
+
+  @Test func a_row_he_deleted_while_his_words_went_sends_nothing() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    let removed = [line("a", "Morning"), row("r2", "t2", "Read the lease"), line("b", "Walk")]
+    await h.server.add([
+      savedAs(try changes(from: 1, to: 2, pages: [page(today, removed)])),
+      applied(try movedToTomorrow(from: 2, operationId: nil)),
+    ])
+
+    // Tomorrow swiped, and in the same turn, before his words are handed over, he removes the row's line.
+    try day.swipe("Water the plants", "Tomorrow")
+    let watering = try day.line("Water the plants")
+    #expect(watering.becomeFirstResponder())
+    watering.selectedRange = NSRange(location: 0, length: (watering.text as NSString).length)
+    watering.deleteBackward()
+    watering.deleteBackward()
+    #expect(!day.words.contains("Water the plants"), "the row is gone from the screen")
+    try await soon { day.notice != nil }
+
+    #expect(day.notice == Notice(text: "Not done · your text is kept", kind: .failed, undoing: nil))
+    #expect(await h.server.sent.isEmpty, "no plan-task")
+    #expect(day.editor.actingRow == nil)
+    await h.model.saveNow().value
+    let sent = await h.server.sent
+    #expect(sent.map { type(of: $0) } == ["save-editor"])
+    #expect(words(of: sent.first?.objectValue?["document"]?.stringValue) == ["Morning", "Read the lease", "Walk"])
+    day.close()
+  }
+
+  @Test func an_action_still_offered_is_sent_as_before() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    let typed = [
+      line("a", "Morning"), row("r1", "t1", "Water the plants now"), row("r2", "t2", "Read the lease"),
+      line("b", "Walk"),
+    ]
+    await h.server.add([
+      savedAs(try changes(from: 1, to: 2, pages: [page(today, typed)])),
+      applied(try movedToTomorrow(from: 2, operationId: nil)),
+    ])
+
+    // He edits the row's own words and moves it from its circle's menu in the same turn: it is the same row, and
+    // still offers the move, once his words are handed over.
+    try day.type(" now", atEndOf: "Water the plants")
+    try day.menu("Water the plants now", "Tomorrow · Fri, Nov 27")
+    try await soon { day.notice != nil }
+
+    #expect(day.notice?.text == "Moved to Fri, Nov 27")
+    let sent = await h.server.sent
+    #expect(sent.map { type(of: $0) } == ["save-editor", "plan-task"])
+    let saved = words(of: sent.first?.objectValue?["document"]?.stringValue)
+    #expect(saved == ["Morning", "Water the plants now", "Read the lease", "Walk"])
+    #expect(sent.last == Command.planTask(taskId: "t1", date: tomorrow, from: today, today: today))
+    day.close()
+  }
+
+  @Test func a_choice_from_more_after_typing_keeps_the_indexes_the_screen_holds() async throws {
+    let h = try await harness(pages: [todayPage], tasks: [water, read])
+    let day = try RowScreen(h.model)
+    let typed = [
+      line("a", "Morning"), row("r1", "t1", "Water the plants"), row("r2", "t2", "Read the lease"), line("b", "Walk!"),
+    ]
+    await h.server.add([
+      savedAs(try changes(from: 1, to: 2, pages: [page(today, typed)])),
+      applied(try changes(from: 2, to: 3, tasks: [task("t1", "Water the plants", status: "cancelled", version: 2)])),
+    ])
+
+    // Typed, and a choice made from More in the same turn: the workspace with his words is one no state has drawn.
+    try day.type("!", atEndOf: "Walk")
+    try day.swipe("Water the plants", "More")
+    let cached = day.screen.indexedWorkspaces
+    try day.choose("Cancel task")
+    #expect(day.screen.indexedWorkspaces == cached, "the check read the indexes without adding to them")
+
+    try await soon { day.notice != nil }
+    #expect(await h.server.sent.map { type(of: $0) } == ["save-editor", "task-status"])
+    day.close()
+  }
+
   @Test func a_request_while_something_is_presented_does_nothing() async throws {
     let h = try await harness(pages: [todayPage], tasks: [water, read])
     let day = try RowScreen(h.model)
@@ -696,7 +820,8 @@ private func type(of action: JSONValue) -> String? { action.objectValue?["type"]
     try day.type("Buy milk", atEndOf: "")
     #expect(h.model.state.workspace?.task("editor-task:r1") == nil)
     let acted = await h.model.act(
-      .move(tomorrow), taskId: "editor-task:r1", pageId: "day:2026-11-26", pageDate: today, owner: "one")
+      .move(tomorrow), taskId: "editor-task:r1", pageId: "day:2026-11-26", pageDate: today, owner: "one",
+      still: { true })
 
     guard case .done(let text, _) = acted else {
       Issue.record("not done: \(acted)")

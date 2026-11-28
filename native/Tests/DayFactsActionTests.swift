@@ -282,6 +282,49 @@ private func planTask(_ taskId: String, on date: LocalDate) -> JSONValue {
     day.close()
   }
 
+  @Test func a_strip_action_whose_to_do_was_brought_back_meanwhile_sends_nothing() async throws {
+    let relay = StateRelay()
+    let h = try await harness(relay: relay)
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    #expect(listed(day) == ["t-aside"])
+    // Another device brought it back (it is set aside no more; today's page is as it was, so his words are not behind
+    // it): the state saying so is held back from the screen, which still lists it.
+    relay.hold()
+    await h.server.add([
+      .workspace(
+        .full(
+          try copy(revision: 2, pages: [todayPage], tasks: [water, task("t-aside", "Fix the bike", version: 2)]),
+          owner: "one"))
+    ])
+    await h.model.refresh()
+    try await soon { !relay.kept.isEmpty }
+    // Were the command sent, the server would take his words, then the plan.
+    await h.server.add([
+      savedAs(try changes(from: 2, to: 3, pages: [page(today, todayLines(walk: "Walk the dog"))])),
+      applied(try broughtBack(from: 3, walk: "Walk the dog", undo: nil)),
+    ])
+
+    // Typed, and Bring back tapped in the same turn: the action waits for his words to reach the engine, and the state
+    // that says so comes after the one that brought the to-do back.
+    try day.type(" the dog", atEndOf: "Walk")
+    day.factsModel.bringBack("t-aside")
+    try await soon { relay.kept.contains { !$0.drafts.isEmpty } }
+    relay.release()
+    try await soon { day.notice != nil }
+
+    #expect(day.notice == Notice(text: "Not done · your text is kept", kind: .failed, undoing: nil))
+    #expect(await h.server.sent.isEmpty, "no plan-task")
+    #expect(day.factsModel.acting == nil && day.factsModel.enabled)
+    // His words are saved by the usual path.
+    await h.model.saveNow().value
+    let sent = await h.server.sent
+    #expect(sent.map { type(of: $0) } == ["save-editor"])
+    #expect(
+      words(of: sent.first?.objectValue?["document"]?.stringValue) == ["Morning", "Water the plants", "Walk the dog"])
+    day.close()
+  }
+
   @Test func a_day_picked_after_the_to_do_left_the_list_sends_nothing() async throws {
     let h = try await harness()
     let day = try RowScreen(h.model)
