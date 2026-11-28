@@ -28,8 +28,9 @@ what must stay possible. The builder's check with the rulings already made is
 `.superpowers/sdd/native-phase-1/web-facts-1d.md` §1 to §3 and §6 to §8. Where either disagrees with the code, the code
 wins.
 
-**Status (2026-11-27):** Not started. A spike on guest rows in the list is running; Tasks 11 and 12 carry "Pending the
-spike:" lines naming what its report may change, and are ordered after every task that does not need it.
+**Status (2026-11-27):** Not started. The spike on guest rows in the list has reported
+(`.superpowers/sdd/native-phase-1d2a/spike-report.md`; its code on the never-merged branch
+`spike/native-1d2-guest-rows`); Tasks 11 and 12 are written from it and the controller's rulings on what it left open.
 
 ## Questions the plan raised, answered (2026-11-27)
 
@@ -122,7 +123,9 @@ The controller may overrule any of these; each names the option taken first.
   `moreOpen`, `moreOpenAfterId` and each suggestion's skipped days; the line's words already cover `Suggestions ready ·
   Show`; `AppModel.plan` serves `N more open`'s `Added`.
 - Never start anything on, or point a test at, port 3000, and never read `.daythread-local/`. Simulator: only
-  `name=iPhone 17,OS=26.5`, never launched against production. Screenshots are of seeded data only.
+  `name=iPhone 17,OS=26.5`, never launched against production. Screenshots are of seeded data only. Before an
+  `xcodebuild` run, wait until `pgrep -x xcodebuild` is empty twice, 15 seconds apart (not `-f`, which matches the
+  waiting command itself).
 - Commit messages: `feat(native): …`, `test(native): …`, `docs(native): …`, English only.
 
 ### The strings this slice shows
@@ -161,10 +164,13 @@ The middle dot is U+00B7 everywhere. `Skipped` stays 10 seconds; `Applied` 8, `U
 
 1. **Suggestions arriving, leaving or moving above the line he types in**: a state that brings a draft while the
    keyboard is up, an apply's state taking a suggestion out above his line, a merge that moves an anchor, a Retry's
-   draft replacing a failed one, a composition in progress through any of these. His line stays where it is on the
-   screen, the keyboard stays, the marked text stays. Tests in Task 11
-   (`guests_arriving_above_the_typed_line_keep_it_where_it_is`, `…_leaving_…`,
-   `guests_changing_while_he_composes_keep_his_marked_text`) and Task 12
+   draft replacing a failed one, a composition in progress through any of these, guests of very different heights
+   far off screen, a change while the list still decelerates. His line stays where it is on the screen, the keyboard
+   stays, the marked text stays (in a merge that takes his line away, only the caret's landing on a line is promised).
+   Tests in Task 11 (`guests_arriving_above_the_typed_line_keep_it_where_it_is`, `…_leaving_…`,
+   `guests_of_very_different_heights_keep_the_typed_line`, `a_guest_change_while_the_list_decelerates_keeps_the_typed_line`,
+   `guests_changing_while_he_composes_keep_his_marked_text`,
+   `a_merge_that_takes_the_typed_line_away_with_guests_changing_leaves_the_caret_on_a_line`) and Task 12
    (`a_state_that_brings_suggestions_keeps_the_typed_line_where_it_is`).
 2. **A tap on a suggestion that changed after it was drawn**: applied or skipped on the web, its to-do ticked or set
    aside here or elsewhere, its anchor line deleted by his typing, the whole draft replaced by Retry. Nothing wrong is
@@ -538,7 +544,9 @@ public struct DraftView: Hashable, Sendable {
     public let skipped: [LocalDate]
     /// Under the words: `skippedLabel`'s `text` when skipped, else `shortLabel(since)` (`Thu 11/19`), else nil.
     public let detail: String?
-    /// `Suggestion, <words>, <skippedLabel's full or the age>`, or `Suggestion, <words>`.
+    /// The detail as VoiceOver reads it: `skippedLabel`'s `full` when skipped; nil (read as shown) otherwise.
+    public let spokenDetail: String?
+    /// `Suggestion, <words>, <spokenDetail ?? detail>`, or `Suggestion, <words>` (what the guest row's cell reads).
     public let spoken: String
     public var applyLabel: String { get }   // `Apply <words>`
     public var skipLabel: String { get }    // `Skip <words>`
@@ -625,8 +633,9 @@ public enum DraftLine: Hashable, Sendable {
     `draft/skipped-labels.json`.
   - `DraftViewTests.a_suggestions_detail_and_spoken_words`: a carried to-do made `2026-11-19`: detail `Thu 11/19`,
     spoken `Suggestion, Call the dentist, Thu 11/19`; skipped `2026-11-21`, `2026-11-22` on `2026-11-26`: detail
-    `skipped Sat, Sun`, spoken `Suggestion, Water the ferns, skipped Sat 11/21, Sun 11/22`; a new line with no `since`:
-    detail nil, spoken `Suggestion, Pack the charger`; `applyLabel` `Apply Pack the charger`, `skipLabel`
+    `skipped Sat, Sun`, spokenDetail `skipped Sat 11/21, Sun 11/22`, spoken `Suggestion, Water the ferns, skipped Sat
+    11/21, Sun 11/22`; the age's spokenDetail nil; a new line with no `since`: detail nil, spoken `Suggestion, Pack the
+    charger`; `applyLabel` `Apply Pack the charger`, `skipLabel`
     `Skip Pack the charger`.
   - `DraftViewTests.a_draft_on_a_drawn_page_reads_his_unsaved_words` (`workspace.drawing(draft:of:)` with a typed row of
     the suggested to-do: the suggestion is not shown; a typed line above the anchor moves nothing else).
@@ -1157,119 +1166,174 @@ extension DayViewController {
 
 ### Task 11: Editor: guest rows
 
-Pending the spike: this task's interface is §13.5's; the spike's report may change the names marked below, the steps
-that build them, and the marks of a bullet and a line. Its behaviour tests stand as written, whatever the
-implementation.
+Built from the spike's findings (`.superpowers/sdd/native-phase-1d2a/spike-report.md`; its code on the never-merged
+branch `spike/native-1d2-guest-rows`, worktree `agent-a657377556df7dd9a`: read `GuestRow.swift`,
+`DocumentViewController.swift` and `GuestRowsSpikeTests.swift` there for the shapes and the test technique, among it
+the presentation-layer sampling of Q3). Nothing of the spike is copied: this task builds it, tests first, without the
+spike's knobs (`keepingTheLine`, `spikeGuestMarkOnFirstLine`, `restructures`).
 
 **Files:**
-- Create: `native/Packages/DaythreadEditor/Sources/DaythreadEditor/GuestRow.swift`, `…/DaythreadEditor/Cells/GuestCell.swift`
-- Modify: `…/DaythreadEditor/DocumentViewController.swift` (the list's items, `draw`, `typed(in:caret:)`'s fast check,
-  the cell kinds, `actingRow`, the tap under the last line, keeping the typed line in place), `…/DaythreadEditor/BlockRows.swift`
-  (`RowIDs` reserved for lines only, if the spike keeps one namespace)
+- Create: `native/Packages/DaythreadEditor/Sources/DaythreadEditor/GuestRow.swift` (`GuestRow`, the internal
+  `ListItem`), `…/DaythreadEditor/Cells/GuestRowCell.swift`
+- Modify: `…/DaythreadEditor/DocumentViewController.swift` (the data source's item type, `draw`, `edit`, `replace`,
+  `show`, `setGuestRows`, `actingRow`, `scroll(toRow:)`, `headerDidChange`, `place(caretIn:)`, `cell(for:)`, the swipe
+  provider, `takesTapUnderTheLastLine`, the guest cell's registration), `…/DaythreadEditor/BlockRows.swift`
+  (`lastRowID(ofBlock:in:)` only)
 - Test: `native/Packages/DaythreadEditor/Tests/DaythreadEditorTests/GuestRowTests.swift` (in the `OnScreen` suite)
 
 **Interfaces:**
-- Consumes: Task 6's signatures.
+- Consumes: Task 6's `index:` parameters.
 - Produces:
 
 ```swift
-/// A row of the list that is not a line of the page: it has no place in the document, the caret never enters it, it
-/// is not selected, copied, saved, dragged or counted as a line. The list knows nothing of what it stands for.
-public struct GuestRow: Hashable, Sendable, Identifiable {
+/// A row of the page's list that is not a line of the page's document: the caret never enters it, it is not saved,
+/// selected, copied, dragged or counted as a line. The host says where it goes and what it shows; the list knows
+/// nothing of what it stands for and reports which of its actions was used.
+public struct GuestRow: Hashable, Sendable {
+  public enum Kind: Hashable, Sendable { case todo, bullet, line }
   public enum Place: Hashable, Sendable {
-    /// After the top-level block of that id and every row nested under it; nil: before the page's first row.
-    case after(String?)
-    // 1d.2b adds `case replacing(String)`.
+    /// After the line (a row of the list) of that id; nil: before the page's first line.
+    case after(lineID: String?)
+    // 1d.2b adds `case replacing(lineID: String)`; nothing here may assume `after` is the only case forever.
   }
-  public enum Mark: Hashable, Sendable { case todo, bullet, line }
-  /// A plain button at the row's trailing end: a system symbol, its accessibility label, and the name of its
-  /// accessibility action. 1d.3 adds a menu, and a tap on the row.
+  /// A trailing button: a system symbol, its label (`Apply Buy milk`, for Voice Control and Full Keyboard Access),
+  /// and the name of the row's custom action for VoiceOver (`Apply`). 1d.3 adds a menu, and a tap on the row.
   public struct Action: Hashable, Sendable {
     public let id: String
     public let symbol: String
     public let label: String
-    public let actionName: String
-    public init(id: String, symbol: String, label: String, actionName: String)
+    public let spokenName: String
+    public init(id: String, symbol: String, label: String, spokenName: String)
   }
   public let id: String
   public let place: Place
-  public let mark: Mark
+  public let kind: Kind
+  /// The column it is drawn in, as a line's depth.
+  public let depth: Int
   public let words: String
-  /// The small second line; nil for none.
-  public let detail: String?
-  /// What VoiceOver reads for the row.
-  public let spoken: String
+  /// The small text under the words (`Thu 11/19`); "" for none.
+  public let detail: String
+  /// The small text as VoiceOver reads it; nil: as shown.
+  public let spokenDetail: String?
   public let actions: [Action]
-  public init(id: String, place: Place, mark: Mark, words: String, detail: String?, spoken: String, actions: [Action])
+  public init(id: String, place: Place, kind: Kind, depth: Int = 0, words: String, detail: String,
+    spokenDetail: String? = nil, actions: [Action])
 }
 
+/// Internal: an item of the list, a line (a row of `BlockRows`) or a guest; a guest's id is never read as a line's.
+enum ListItem: Hashable, Sendable { case line(String), guest(String) }
+
 extension DocumentViewController {
-  // Pending the spike: whether the guests ride on these three calls or on one of their own; the names.
-  /// The page and its guests in one call, so a guest can leave in the update that brings the row it became.
-  public func show(page: Page, in workspace: Workspace, index: TodoIndex? = nil, guests: [GuestRow] = [])
-  public func edit(page: Page, in workspace: Workspace, index: TodoIndex? = nil, guests: [GuestRow] = [], afresh: Bool = false)
-  public func replace(document: String, in workspace: Workspace, index: TodoIndex? = nil, guests: [GuestRow] = [])
+  /// As Task 6's, and `guests`: nil keeps the guests shown (the day screen calls these on every state), [] removes
+  /// them. The page and its guests in one call, so a guest can leave in the update that brings the row it became.
+  public func show(page: Page, in workspace: Workspace, index: TodoIndex? = nil, guests: [GuestRow]? = nil)
+  public func edit(page: Page, in workspace: Workspace, index: TodoIndex? = nil, afresh: Bool = false,
+    guests: [GuestRow]? = nil)
+  public func replace(document: String, in workspace: Workspace, index: TodoIndex? = nil, guests: [GuestRow]? = nil)
   /// Only the guests changed; the page's lines are not touched.
-  public func show(guests: [GuestRow])
-  public private(set) var guests: [GuestRow]
-  /// Which action of which guest he used.
+  public func setGuestRows(_ guests: [GuestRow])
+  /// Which action of which guest he used, by its button or its custom action.
   public var onGuestAction: ((_ guestID: String, _ actionID: String) -> Void)?
-  /// As before, and a guest's id dims that guest; while it is set, every guest's buttons are held.
+  /// As before, and a guest's id dims that guest; while it is set, every guest's actions report nothing.
   public var actingRow: String?
+  /// The list's items in order (tests read it).
+  var orderedItems: [ListItem] { get }
+}
+
+extension BlockRows {
+  /// The row id (as the list names rows, `#2` for a repeated id) of the last row of the top-level block `blockID` and
+  /// everything nested under it; nil when `blocks` has no such top-level block. What a host passes as `after(lineID:)`
+  /// for "after the block".
+  public static func lastRowID(ofBlock blockID: String, in blocks: [Block]) -> String?
 }
 ```
 
-  Pending the spike: the list's item type (§13.5 proposes `enum ListItem: Hashable { case line(String), guest(String) }`
-  in place of the row ids, so no id is read as a line's); how `typed(in:caret:)` compares lines with guests present (it
-  must not rebuild the list on a keystroke); how the offset is corrected for items added above the cell that holds
-  the keyboard (as `headerDidChange` does); whether a guest's cell is a list cell with a `UIListContentConfiguration`
-  and buttons in an accessory or a cell of its own; VoiceOver's element and order.
+  **The items.** `orderedIDs` stays the page's lines only, so `typed(in:caret:)`, `restructure`,
+  `caret(afterLeaving:)`, `row(after:going:)` and the pinned row's "above" logic do not change; `orderedItems` holds
+  the list's items: the lines in order, each guest after its line (several on one line in the order given; `nil`
+  before the first line); a guest whose line is not in the list is not drawn (Question 11). **A keystroke never
+  compares the list's items**: the typing comparison stays on the lines' ids. `draw` builds the items from the rows
+  and the guests, reconfigures only changed rows and changed guests (never the pinned row), and touches no item not
+  listed both before and after.
 
-  **The look** (§13.5): the words in the secondary label colour, wrapping; the detail under them at footnote size in the
-  secondary colour (as a row's marks line); a to-do's mark the `circle.dashed` symbol where a row has its circle; a
-  bullet's and a line's mark as the spike's screenshots decide (pending the spike: a dashed dot, or secondary ink
-  alone); no background, no box; each action a plain 44-by-44-point button with its symbol. No swipe, no context menu,
-  no drag.
+  **Keeping the typed line** (the spike's measured result: 0.00 points, against 138 to 140 for every animated
+  variant): when guests come, go or change while a line holds the keyboard, the change is applied without animation
+  and the list's offset corrected in the same turn by as much as that line moved, clamped as `revealCaret` clamps it
+  (as `headerDidChange` does); otherwise it animates as the list's other changes do. In a `replace` whose merge also
+  takes the typed line away (the `leaving` and `rebuilt` paths) the line's place is not kept; the caret's successor is
+  a line, never a guest.
 
-- [ ] **Step 1: Write the failing tests** (`GuestRowTests`, on screen, 390 × 844; a page `h1` heading `TODO`, `t1` a
-  to-do with `n1` nested under it, `t2` an empty to-do, `h2` heading `Notes`, `p1`…`p40` lines):
-  - `a_guest_goes_after_its_block_and_what_is_nested_under_it` (`after("t1")`: the row after `n1`).
-  - `a_guest_after_nothing_is_the_first_row`; `guests_on_one_block_keep_the_order_given`.
-  - `a_guest_whose_block_is_not_in_the_list_is_not_drawn` (Question 11).
-  - `a_guest_is_no_line_of_the_page`: adding and removing guests calls `onChange` never and leaves `document`
-    unchanged; arrow down from `n1` goes to `t2`; Return at the end of `n1` makes a line before the guest's place
-    ends; Backspace at the start of `t2` joins it to `n1`; a tap on a guest's words makes no first responder; select
-    all and copy hold no guest's words; a tap under the last row, when a guest is last, puts the caret at the end of
-    the last line.
-  - `a_keystroke_with_guests_present_rebuilds_nothing` (typing in `p20` with three guests above: no snapshot apply,
-    no guest cell reconfigured).
-  - `the_host_is_told_which_action_was_used` (a tap on the `checkmark` button: `onGuestAction("g1", "apply")`).
-  - `a_guests_buttons_are_44_points_and_labelled` (`Apply Book the flights`, `Skip Book the flights`).
-  - `voiceover_reads_a_guest_as_its_spoken_words_with_its_actions` (the element's label `Suggestion, Book the flights,
-    Thu 11/19`; custom actions `Apply` and `Skip`, each reporting as the buttons do). Pending the spike: which element.
-  - `guests_arriving_above_the_typed_line_keep_it_where_it_is` (Review Focus 1): the caret in `p30`, the list scrolled
-    so it shows; three guests added after `t1` and `t2` in an animated update: `p30`'s frame in the window the same
-    within 0.5, still first responder, its selected range unchanged.
+  **The cell** (`GuestRowCell`), not the stock list content configuration (at the largest size it flows the words back
+  to the margin under the mark): the words in a label pinned to the text guide as `LineBlockCell` pins its text, so they
+  keep the column of his row of that kind at every text size, in the secondary label colour, wrapping; `detail` under
+  them at footnote size in the secondary colour (as a row's marks line); the mark on the first line as `TodoBlockCell`
+  places its circle (`circle.dashed` for a to-do; a small dashed dot for a bullet, drawn where a bullet has its dot;
+  none for a line); no background, no box. The buttons, one per action, plain, each a 44-by-44-point target whose
+  symbol is not clipped, the symbol in the secondary colour at the body's text style (quieter than the words): on the
+  first line, trailing, at the ordinary sizes; under the words from the accessibility sizes, as `Plan for today` goes
+  there. No swipe, no context menu, no drag. For VoiceOver the cell is one element labelled `Suggestion, <words>,
+  <spokenDetail ?? detail>` (`Suggestion, <words>` when both are empty), its custom actions the actions'
+  `spokenName`s, each reporting through `onGuestAction` as its button does; the buttons' own labels stay for Voice
+  Control and Full Keyboard Access. (The word `Suggestion` is the list's name for a guest row, as §13.5 has it.)
+
+  **A tap under the last line** with a guest last: as now, the caret goes to the end of the last line. When the page
+  ends with a divider and a guest follows it, the paragraph made there lands after the guest: accepted, and recorded
+  in the parity table (Task 14).
+
+- [ ] **Step 1: Write the failing tests** (`GuestRowTests`, on screen, 390 × 844, as the spike's suite builds its
+  screen; a page `h1` heading `TODO`, `t1` a to-do with `n1` nested under it, `t2` an empty to-do, `b1` a bullet,
+  `h2` heading `Notes`, `p1`…`p40` lines; guests with actions `apply` (`checkmark`) and `skip` (`xmark`)):
+  - `guests_follow_their_lines` (`after(lineID: "n1")`, `after(lineID: nil)`, two on `t2`: `orderedItems` in that
+    order; `BlockRows.lastRowID(ofBlock: "t1", in:)` is `n1`; of a block with a repeated id, its `#2` row).
+  - `a_guest_whose_line_is_not_in_the_list_is_not_drawn`; `a_guest_with_a_lines_id_is_drawn_as_a_guest`.
+  - `a_guest_is_no_line_of_the_page`: setting guests calls `onChange` never and leaves `document` unchanged; arrow down
+    from `n1` goes to `t2`; Backspace at the start of `t2` joins it to `n1`; a tap on a guest's words makes no first
+    responder; select all and copy hold no guest's words.
+  - `nil_keeps_the_guests_and_an_empty_list_removes_them` (`replace(…, guests: nil)` after `setGuestRows`: still
+    there; `guests: []`: gone).
+  - `typing_with_guests_takes_the_fast_path` (50 keystrokes in `p20` of a 300-line page with three guests, one directly
+    above: no restructure, no snapshot apply, no guest cell reconfigured, as without guests).
+  - `the_host_is_told_which_action_was_used` (the `checkmark` button: `onGuestAction("g1", "apply")`; the custom
+    action `Skip`: `("g1", "skip")`).
+  - `voiceover_reads_a_guest_as_one_element_with_its_actions` (label `Suggestion, Book the flights, Thursday 11/19` with
+    `spokenDetail` `Thursday 11/19`; `Suggestion, Pack the charger` with no detail; custom actions `Apply`, `Skip`; the
+    buttons' labels `Apply Book the flights`, `Skip Book the flights`). Its place in VoiceOver's order is Task 14's.
+  - `the_words_keep_the_column_of_his_rows` at `.large` and `.accessibilityExtraExtraExtraLarge` (a to-do guest's words
+    start where `t2`'s text starts, a bullet guest's where `b1`'s does, a line guest's where `p1`'s does, within 1
+    point; the spike's failing assertion, made real).
+  - `the_mark_is_level_with_the_first_line` (the dashed circle's and the dot's centre within 1 point of the words'
+    first line's centre, at both sizes; a line guest has no mark).
+  - `the_buttons_are_44_points_and_never_clip_their_symbols` (at both sizes: each button 44 × 44 or more, its symbol's
+    frame inside it; on the first line at `.large`, under the words at `.accessibilityExtraExtraExtraLarge`; the
+    symbol's point size no larger than the words').
+  - `guests_arriving_above_the_typed_line_keep_it_where_it_is` (Review Focus 1): the caret in `p30` of a 60-line page,
+    scrolled to show it; three guests set above it: sampled every 1/120 s for 0.6 s, the line's drawn place deviates
+    less than 0.5 point; still first responder, the same cell, its selected range unchanged, no keyboard drop.
   - `guests_leaving_above_the_typed_line_keep_it_where_it_is` (the same, removed).
-  - `guests_changing_while_he_composes_keep_his_marked_text` (`setMarkedText("今")` in `p30`; guests change: the marked
-    range unchanged, his cell not reconfigured).
-  - `a_page_and_its_guests_in_one_call_swap_a_guest_for_its_row_in_one_update` (`replace(document:` gaining a row
-    after `t2` `, guests:` without the guest that was there `)`: one snapshot apply; the new row where the guest was).
-  - `the_acting_row_can_be_a_guest` (`actingRow = "g1"`: drawn dimmed; every guest's buttons do nothing).
+  - `guests_of_very_different_heights_keep_the_typed_line` (guests far off screen above, one of six lines of words and
+    one of one, the list's estimates off: the line within 0.5 point).
+  - `a_guest_change_while_the_list_decelerates_keeps_the_typed_line` (a fling, then a change: the scroll stops and the
+    line is where it was; accepted, as `headerDidChange` does).
+  - `without_a_line_typed_in_a_guest_change_animates` (no first responder: the apply is animated).
+  - `guests_changing_while_he_composes_keep_his_marked_text` (composing `jin` in `p15`; guests added, one's words
+    changed, all removed: his cell never reconfigured, the marked text intact, committing writes the character).
+  - `a_page_and_its_guests_in_one_call_swap_a_guest_for_its_row_in_one_update` (`replace(document:` gaining a row after
+    `t2` `, guests:` without the guest that was there `)`: one snapshot apply; the new row where the guest was).
+  - `a_merge_that_takes_the_typed_line_away_with_guests_changing_leaves_the_caret_on_a_line` (the caret in `p10`; a
+    `replace` without `p10` and with a guest after `p9`: no crash; the caret in a line, never in a guest).
+  - `the_acting_row_can_be_a_guest` (`actingRow = "g1"`: drawn dimmed; every guest's actions report nothing).
   - `a_guest_has_no_swipe_and_no_menu`.
-  - `a_guest_at_the_largest_text_size_wraps_and_keeps_its_buttons` (`accessibilityExtraExtraExtraLarge`: the words
-    wrap, the buttons 44 points, nothing cut).
-- [ ] **Step 2:** The editor's `xcodebuild test … -only-testing:DaythreadEditorTests/OnScreen/GuestRowTests`. Expected:
-  fail. Commit `test(native): rows in the list that are not lines of the page (red)`.
-- [ ] **Step 3:** Implement, following the spike's report where this task says "pending".
-- [ ] **Step 4:** The editor's tests in full (every earlier test unchanged), the app's unit tests, the Mac Catalyst
-  build. Expected: pass.
+  - `a_tap_under_the_last_line_with_a_guest_last` (the caret at the end of the last line; with a closing divider last,
+    the new paragraph is after the guest).
+- [ ] **Step 2:** The editor's `xcodebuild test … -only-testing:DaythreadEditorTests/OnScreen/GuestRowTests` (before it,
+  `pgrep -x xcodebuild` empty twice, 15 seconds apart). Expected: fail. Commit `test(native): rows in the list that are
+  not lines of the page (red)`.
+- [ ] **Step 3:** Implement.
+- [ ] **Step 4:** The editor's `swift test` and its whole `xcodebuild test` (every earlier test unchanged), the app's
+  unit tests, the Mac Catalyst build. Expected: pass.
 - [ ] **Step 5: Commit** `feat(native): guest rows in the page's list`.
 
 ### Task 12: UI: the suggestions in the page
-
-Pending the spike: the calls named in Task 11's "Pending the spike" lines, and how the screen hands guests over when
-only they change.
 
 **Files:**
 - Modify: `native/Packages/DaythreadUI/Sources/DaythreadUI/DayViewController.swift` (`showDay`, `edit`, `replaceList`,
@@ -1277,26 +1341,31 @@ only they change.
 - Test: `native/Tests/DraftSuggestionTests.swift`
 
 **Interfaces:**
-- Consumes: Tasks 3, 9, 10 and 11.
+- Consumes: Tasks 3, 9, 10 and 11 (`GuestRow`, `BlockRows.lastRowID(ofBlock:in:)`, `edit`/`replace` with `guests:`,
+  `setGuestRows`, `onGuestAction`).
 - Produces:
 
 ```swift
 extension DraftView.Suggestion {
-  /// The guest row it is drawn as: `place` `.after(anchorId)` (a fill too, in 1d.2a), `mark` as its own, `words`,
-  /// `detail`, `spoken`, actions `apply` (`checkmark`, `applyLabel`, `Apply`) and `skip` (`xmark`, `skipLabel`, `Skip`).
-  var guest: GuestRow { get }
+  /// The guest row it is drawn as on a page of `blocks` (the top-level blocks the list draws): `place`
+  /// `.after(lineID: BlockRows.lastRowID(ofBlock: anchorId, in: blocks))`, a fill too in 1d.2a (nil anchor: `after(lineID:
+  /// nil)`; an anchor the blocks do not hold: nil, not drawn); `kind` its mark; `depth` 0; `words`; `detail` its
+  /// `detail ?? ""`; `spokenDetail` its `spokenDetail`; actions `apply` (`checkmark`, `applyLabel`, `Apply`) and `skip`
+  /// (`xmark`, `skipLabel`, `Skip`).
+  func guest(on blocks: [Block]) -> GuestRow?
 }
 ```
 
-  `showDay` hands the list the guests of `draftView` (none on any other day, in Trash, with no workspace) in the same
-  call that hands it the page (`edit`, `replace`); when the page's words stay and only the guests changed, through the
-  guests-only call. `onGuestAction` calls `suggestionTapped(id, actionID == "apply" ? .apply : .skip)`. `actionOut =
-  .suggestion(id)` sets `document.actingRow = id`.
+  `showDay` works the guests out from `draftView` and the blocks the list is handed (his words when they stay, the
+  page's otherwise), once per state, and hands them in the same call that hands the list the page (`edit`, `replace`),
+  or through `setGuestRows` when the page's words stay and only the guests changed; `[]` on any other day, in Trash,
+  with no workspace. `onGuestAction` calls `suggestionTapped(id, actionID == "apply" ? .apply : .skip)`.
+  `actionOut = .suggestion(id)` sets `document.actingRow = id`.
 
 - [ ] **Step 1: Write the failing tests** (`DraftSuggestionTests`, hosted; the draft of Task 10's tests, with `i2`'s
   to-do made `2026-11-19` and skipped on `2026-11-21` and `2026-11-22`):
-  - `the_suggestions_are_drawn_where_the_view_places_them` (the guests, in the list's order, are `draftView`'s
-    suggestions, each after its anchor's block and its nested rows; their count is the line's).
+  - `the_suggestions_are_drawn_where_the_view_places_them` (the guests in `orderedItems` are `draftView`'s suggestions,
+    each after the last row of its anchor's block; their count is the line's).
   - `a_fill_suggestion_is_drawn_after_its_empty_row` (`i1` after the empty to-do slot; the slot still a row).
   - `a_suggestion_shows_its_age_or_its_skipped_days` (`i1`'s detail is the short label of its to-do's `createdOn`;
     `i3`, a new to-do, has none and is spoken `Suggestion, Renew the passport`; `i2`'s `skipped Sat, Sun`, spoken
@@ -1310,6 +1379,8 @@ extension DraftView.Suggestion {
     `Notes` heading: its frame in the window unchanged, the keyboard up).
   - `a_merge_moves_the_suggestions_with_the_page` (a line inserted above the anchor on the server while he types: after
     the merge, the guests follow the anchor).
+  - `a_suggestion_whose_anchor_he_deleted_waits_for_the_next_state` (Question 11: the anchor line removed by his typing:
+    not drawn; the next state places it at the planning end).
   - `the_tapped_suggestion_is_dimmed_and_every_suggestion_held` (`i2` applying: its guest dimmed; a tap on `i3`'s
     `checkmark` sends nothing).
   - `an_account_change_takes_the_suggestions_away`.
@@ -1318,7 +1389,7 @@ extension DraftView.Suggestion {
 - [ ] **Step 2:** The app unit test command with `-only-testing:DaythreadTests/DraftSuggestionTests`. Expected: fail.
   Commit `test(native): the draft's suggestions as rows in today's page (red)`.
 - [ ] **Step 3:** Implement. Add to `native-system.md` the suggestion row (the marks, the secondary ink, the age and
-  `skipped Sat, Sun`, the two buttons always shown, also with a pointer: recorded, VoiceOver's words and actions).
+  `skipped Sat, Sun`, the two quiet buttons always shown, also with a pointer: recorded, VoiceOver's words and actions).
 - [ ] **Step 4:** The app's unit tests in full; the Mac Catalyst build. Expected: pass.
 - [ ] **Step 5: Commit** `feat(native): the draft's suggestions in today's page`.
 
@@ -1391,6 +1462,9 @@ A measurement, not a budget; no red commit.
   - `test_dismiss_then_undo` (`Skipped 5`; `Undo`: back).
   - `test_the_typed_line_stays_through_an_apply` (the caret at the end of a line under `Notes`; `Apply` on a suggestion
     above it: the line's frame unchanged within 1 point, the keyboard up).
+  - `test_voiceover_order_puts_each_suggestion_after_its_line` (the accessibility tree's elements in order: each
+    `Suggestion, …` element right after the elements of the last line of its anchor's block, none inside a line's;
+    each with the custom actions `Apply` and `Skip`). The spike could read the order only from the cells.
   - `MorningUITests.test_a_failed_draft_says_couldnt_draft_with_retry` (`Couldn’t draft` and `Retry`; `Retry`: the
     line says `Preparing…` or `Couldn’t draft` again, and the strip's parts are still there).
 - [ ] **Step 2:** `native/scripts/ui-test.sh -only-testing:DaythreadUITests/DraftUITests` and
@@ -1403,13 +1477,15 @@ A measurement, not a budget; no red commit.
   test's host, or a slowed seed), `Couldn’t draft · Retry` on the morning server, the notices `Applied` and `Skipped`
   with `Undo`, `Not applied · changed elsewhere`, a suggestion with `skipped Sat, Sun`, VoiceOver's reading of a
   suggestion (the accessibility inspector's), the keyboard up with suggestions above the typed line. Look at each; if a
-  line suggestion cannot be told from his own lines, say so in the report (the spike's question on the line's mark).
+  line suggestion (no mark, secondary ink, its detail and buttons) cannot be told from his own lines, say so in the
+  report.
 - [ ] **Step 5:** Update the documents: every string of 1d.2a in `native-system.md` (checked against §13.4 and §13.8);
   `native-parity.md` (each web behaviour of the survey's §1 to §3 as done, left out with its reason, 1d.2b or 1d.3;
   the commands the app now sends, `set-draft` passed through, `apply-draft`, `skip-draft`, `reopen-draft`, each
   `readsBeyond: true`; the route; where the app differs: rewording before applying, the no-model state, the decided
   looks drawn ahead, the one-second struck-through hold, the per-row note after a partial Apply all, the warning
-  colour, the buttons hidden until hover, a fill drawn after its slot until 1d.2b, `today` the account's day);
+  colour, the buttons hidden until hover, a fill drawn after its slot until 1d.2b, `today` the account's day, a
+  paragraph made by a tap under a closing divider landing after a guest that follows it);
   `PRODUCT.md`; the README (the fourth server, the cost numbers); this plan's status. Commit `docs(native): what phase
   1d.2a holds, with screenshots`.
 
@@ -1442,8 +1518,8 @@ Nothing in this task is code, and Brian does the tapping: the app writes to his 
 - **Task 7** needs Task 6 (both edit `DayViewController.swift`). **Task 8** needs Tasks 3, 5 and 7. **Task 9** needs 8.
   **Task 10** needs 4 and 9. Tasks 7 to 10 each edit `DayViewController.swift` and `AppModel.swift`, so they run in
   order.
-- **Waiting for the spike: Tasks 11 and 12.** Task 11 (the editor only) can start once the spike has reported and
-  Task 6 is in; it touches no file Tasks 7 to 10 touch, so it can be built beside them. Task 12 needs 10 and 11.
+- **Task 11** (the editor only) needs Task 6 (both edit `DocumentViewController.swift`); it touches no file Tasks 7
+  to 10 touch, so it can be built beside them. **Task 12** needs 10 and 11.
 - **Task 13** needs 12. **Task 14** needs all. **Task 15** is his.
 - **Two pull requests**: Task 1 alone, then Tasks 2 to 14.
 - Departures from the scope this plan was written from: the draft's notices and commands move on the web too
