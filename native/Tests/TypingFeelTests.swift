@@ -258,12 +258,21 @@ final class TypingFeelTests: XCTestCase {
   func test_a_main_thread_held_past_the_threshold_has_its_stack_printed_once() async throws {
     let before = StackDump.count.load(ordering: .relaxed)
     // The test's own heartbeat stands in for the one of set-up: two would each print the stack.
-    heartbeat?.stop()
+    await heartbeat?.stop()
     heartbeat = Heartbeat(stackAfter: .seconds(1))
     Task { Self.stallTheMainThread(for: .seconds(6)) }
     // Runs once the stall is over: the main actor takes the stall's job first.
     try await Task.sleep(nanoseconds: 10_000_000)
     XCTAssertEqual(StackDump.count.load(ordering: .relaxed) - before, 1, "the stack was printed once, not more")
+  }
+
+  /// A signal that arrives when no heartbeat is armed (one that was sent as its test ended) prints nothing, and the
+  /// process lives: the handler stays installed for the life of the process.
+  func test_a_signal_with_no_heartbeat_armed_prints_nothing_and_the_process_lives() async throws {
+    await heartbeat?.stop()
+    let before = StackDump.count.load(ordering: .relaxed)
+    pthread_kill(pthread_self(), SIGUSR1)
+    XCTAssertEqual(StackDump.count.load(ordering: .relaxed), before, "nothing printed while nothing is armed")
   }
 
   @MainActor private final class Arrival {
