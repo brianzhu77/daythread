@@ -136,14 +136,17 @@ func turns() async throws {
 
 /// The day screen in a phone-sized window (or `width` points wide), its rows read and acted on as he does: a swipe's
 /// action, an item of the circle's menu, a tap on a button. Its notice never leaves on its own, so a test reads it at
-/// leisure. `size`: the reader's text size, when not the default.
+/// leisure, unless `noticeSleep` is the test's. `size`: the reader's text size, when not the default.
 @MainActor
 struct RowScreen {
   let window: UIWindow
   let screen: DayViewController
 
-  init(_ model: AppModel, on day: LocalDate? = nil, width: CGFloat = 402, size: UIContentSizeCategory? = nil) throws {
-    screen = DayViewController(model: model, noticeSleep: neverEnding)
+  init(
+    _ model: AppModel, on day: LocalDate? = nil, width: CGFloat = 402, size: UIContentSizeCategory? = nil,
+    noticeSleep: @escaping @Sendable (Duration) async throws -> Void = neverEnding
+  ) throws {
+    screen = DayViewController(model: model, noticeSleep: noticeSleep)
     window = try testWindow(width: width)
     let navigation = UINavigationController(rootViewController: screen)
     if let size { navigation.traitOverrides.preferredContentSizeCategory = size }
