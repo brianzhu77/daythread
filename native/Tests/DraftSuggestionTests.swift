@@ -550,6 +550,11 @@ enum SuggestionArrival: String, CaseIterable, Sendable {
       day.window.windowLevel = .alert + 1
       day.window.overrideUserInterfaceStyle = look.style
       try await settled(day)
+      if look.size.isAccessibilityCategory {
+        // At the largest size the suggestions lie under the fold: the page is scrolled to them.
+        day.editor.scroll(toRow: "w1", animated: false)
+        try await settled(day)
+      }
       if look.acting {
         await h.server.hold()
         day.screen.suggestionTapped("i2", .apply)
