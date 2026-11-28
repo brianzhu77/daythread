@@ -158,6 +158,22 @@ The middle dot is U+00B7 everywhere. `Skipped` stays 10 seconds; `Applied` 8, `U
 - **Apply all cannot exceed the command's 50 ids** (`command-schema.ts:130`): `set-draft` stores at most 50 items
   (`:127`) and a remake adds only decided items to them (`remadeItems`, `day-draft.ts:172-179`), so at most 50 are
   open. Nothing is cut; Task 10 asserts no more than 50 are sent and records it if a case ever finds more.
+- **Swift's `lowercased()` is not JavaScript's `toLocaleLowerCase()`** (found in Task 2): `"ΟΔΟΣ".lowercased()` ends
+  in `σ` where JavaScript, and so the case file, end in the final sigma `ς` (U+03C2). `sameWords` lowercases scalar by
+  scalar with `lowercaseMapping` and applies Unicode's Final_Sigma rule itself; `İ` gives `i` and U+0307 on both.
+- **A `since` or `until` the calendar does not hold** (`2026-02-30`, which the web's pattern accepts in a hand-made
+  `set-draft`) reads as absent in the app: the suggestion shows no age (found in Task 2's review).
+- **"While the save is held" is not when the re-check runs** (Task 7's brief): handing his words over only stores them
+  in the engine, and the save is sent later, inside the pass. The tests hold back a load's state instead, so that it
+  reaches the model before the state that ends the hand-over.
+- **A merge costs the screen two indexes, not one** (Task 7): one for the behind state with his words drawn in, whose
+  facts are read when it is drawn, and one for the merged page handed to the list. It was three.
+- **A row action whose today changed while his words were handed over is not sent** (Task 7's review; §11.4 is silent
+  on it): the command would be built in yesterday's terms. He reads `Not done · your text is kept`, as for the strip.
+- **A 401 on the ask also asks for a pass** (Task 5's review; the brief said "outside passes"): the ask is still not
+  made inside a pass and holds none, but the session it found refused is ended by a pass's own path.
+- **The word VoiceOver reads before a guest row's words comes from the host** (`GuestRow.spokenKind`), so the list has
+  no word of its own for a suggestion (§13.5: the editor knows nothing of drafts).
 - A correction found while building is written here with its reason before the code that follows it.
 
 ## Review Focus
