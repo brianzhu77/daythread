@@ -381,15 +381,15 @@ import Testing
           TestWorkspace.day("2026-11-25", rows: [Self.heading("h25")]),
           Self.draftPage(of: "day:2026-11-25", recipe: 4, [Self.line("x", "Gym", state: "skipped")]),
           TestWorkspace.day("2026-11-26", rows: [Self.heading("h")]),
-          Self.draftPage(of: "day:2026-11-26", []),
+          Self.draftPage(of: "day:2026-11-26", [Self.line("i", "Gym", extra: #","from":"b1""#)]),
         ])
-      let carried = Self.line("i", "Gym", extra: #","from":"b1""#)
-      let item = try #require(
-        DayDraft(document: #"{"status":"ready","recipe":5,"items":[\#(carried)]}"#)?.items.first)
+      // The item as the draft view hands it on: from today's stored draft, as the index read it.
+      let index = TodoIndex(workspace)
+      let item = try #require(index.dayDraft(of: "day:2026-11-26")?.items.first)
       let page = try #require(workspace.page("day:2026-11-26"))
       let parses = Parses()
       let elsewhere = DaythreadCore.decidedElsewhere(
-        in: workspace, index: TodoIndex(workspace), dayPage: page,
+        in: workspace, index: index, dayPage: page,
         parse: { page in
           parses.ids.append(page.id)
           return Document.blocks(page.document)
@@ -406,7 +406,8 @@ import Testing
       "day:2026-11-27", type: "daily", date: "2026-11-27", trashedAt: "2026-11-28T00:00:00.000Z", blocks: ["b1"])
     let earlier = try decided(first: [trashed])
     #expect(!earlier.decided, "the first page holding it is dated the 27th")
-    #expect(earlier.parsed == ["day:2026-11-27"], "only pages the index does not hold, before its hit; parsed \(earlier.parsed)")
+    #expect(
+      earlier.parsed == ["day:2026-11-27"], "only pages the index does not hold, before its hit; parsed \(earlier.parsed)")
   }
 
   // MARK: Helpers

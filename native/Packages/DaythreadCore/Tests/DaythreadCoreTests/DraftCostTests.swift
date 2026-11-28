@@ -20,7 +20,8 @@ struct DraftCostTests {
       let index = TodoIndex(workspace)
       let page = try #require(workspace.page("day:2026-11-26"))
       #expect(DraftView.of(page: page, in: workspace, index: index) != nil)
-      print("draft view, 365 drafts, \(name): \(Self.median { _ = DraftView.of(page: page, in: workspace, index: index) }) ms")
+      let time = Self.median { _ = DraftView.of(page: page, in: workspace, index: index) }
+      print("draft view, 365 drafts, \(name): \(time) ms")
     }
   }
 
