@@ -24,9 +24,14 @@ import Testing
   @Test func same_words_are_the_webs() throws {
     let cases = try Fixtures.cases("draft/same-words.json")
     #expect(cases.count == 15)
-    for entry in cases {
-      let text = try #require(entry["text"]?.stringValue)
-      #expect(sameWords(text) == entry["words"]?.stringValue, "sameWords of \(text.debugDescription)")
+    for (number, entry) in cases.enumerated() {
+      let name = "case \(number)"
+      let text = try #require(entry["text"]?.stringValue, "text: \(name)")
+      let expected = try #require(entry["words"]?.stringValue, "words: \(name)")
+      // Swift's `==` would take a decomposed `é` for a composed one; the web's `===` does not.
+      #expect(
+        sameWords(text).hasSameCodeUnits(as: expected),
+        "sameWords: \(name), \(text.debugDescription) gave \(sameWords(text).debugDescription)")
     }
   }
 

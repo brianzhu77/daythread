@@ -166,6 +166,16 @@ extension Fixtures {
   static func cases(_ path: String) throws -> [JSONObject] {
     try #require(try json(path).arrayValue).compactMap(\.objectValue)
   }
+
+  /// A case's `workspace`, read as the app reads one from the server.
+  static func workspace(of entry: JSONObject, _ name: String) throws -> Workspace {
+    try #require(entry["workspace"].flatMap(Workspace.init), "workspace: \(name)")
+  }
+
+  /// A case's list of `yyyy-MM-dd` strings, each a calendar day.
+  static func days(_ value: JSONValue?, _ name: String) throws -> [LocalDate] {
+    try (value?.arrayValue ?? []).map { try #require($0.stringValue.flatMap(LocalDate.init), "a day: \(name)") }
+  }
 }
 
 /// A shared case of `actions/`: one row command and what the server answered, or refused.

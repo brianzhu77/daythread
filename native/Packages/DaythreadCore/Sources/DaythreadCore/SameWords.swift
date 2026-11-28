@@ -1,6 +1,8 @@
 /// Words compared for "the same line": case, spacing and a trailing stop don't count (`sameWords`,
 /// `day-draft.ts:70`). Lower-cased as JavaScript's `toLocaleLowerCase` does in an English locale, every run of `\s`
-/// one space, a trailing run of `\s . 。 ! ！` dropped, trimmed as `String#trim`.
+/// one space, a trailing run of `\s . 。 ! ！` dropped, trimmed as `String#trim`. The web's `toLocaleLowerCase()`
+/// follows the browser's language, so a browser set to Turkish, Azeri or Lithuanian may read two lines as the same
+/// (`I` and `ı`, say) where the app does not.
 func sameWords(_ text: String) -> String {
   var scalars = String.UnicodeScalarView()
   var inRun = false
