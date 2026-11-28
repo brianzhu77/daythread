@@ -26,7 +26,9 @@ public struct DraftTicket: Hashable, Sendable {
     self.seen = seen
   }
 
-  /// `draftTicket`: read from `draft` and `index` of the state that holds the skip's answer.
+  /// `draftTicket`: read from `draft` and `index` of the state that holds the skip's answer. The web reads each
+  /// to-do's planned day before the skip; `skip-draft` changes no plan, so the two agree unless another device moved
+  /// the to-do in between, when the app's reopen is accepted where the web's would be refused.
   public static func of(itemIds: [String], skippedBy: String, draft: DayDraft?, index: TodoIndex) -> DraftTicket {
     let seen = (draft?.items ?? []).compactMap { item -> Seen? in
       guard let taskId = item.taskId, !taskId.isEmpty, itemIds.contains(where: { $0.hasSameCodeUnits(as: item.id) })
@@ -43,7 +45,9 @@ public enum DraftNotice {
   public static func skipped(_ count: Int) -> String { count == 1 ? "Skipped" : "Skipped \(count)" }
 
   /// The server's count when its receipt reads `Applied` / `Applied N` (or `Skipped` / `Skipped N`): fewer than
-  /// asked when some were done since. A reply with no readable receipt says what was asked.
+  /// asked when some were done since. The web shows the asked count for a skip, because it draws the skip before the
+  /// answer; the app waits for the answer, so it shows the server's count for both. A receipt that does not read as
+  /// the decision, or none, says what was asked.
   public static func text(after decision: DraftDecision, receipt: Receipt?, asked: Int) -> String {
     let word = decision == .apply ? "Applied" : "Skipped"
     let make = decision == .apply ? applied : skipped
@@ -52,7 +56,8 @@ public enum DraftNotice {
     let prefix = word + " "
     if message.utf8.starts(with: prefix.utf8) {
       let digits = String(message.dropFirst(prefix.count))
-      if digits.utf8.allSatisfy({ $0 >= 0x30 && $0 <= 0x39 }), let count = Int(digits), count >= 1 {
+      // No leading zero: the server writes `Applied 2`, never `Applied 02`.
+      if digits.utf8.first != 0x30, digits.utf8.allSatisfy({ $0 >= 0x30 && $0 <= 0x39 }), let count = Int(digits), count >= 1 {
         return make(count)
       }
     }
