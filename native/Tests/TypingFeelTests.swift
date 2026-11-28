@@ -37,25 +37,21 @@ final class TypingFeelTests: XCTestCase {
   /// What each keystroke's calls and wait covered, with the clock, so a held main thread is named by what it was in.
   private var spans: [CallSpan] = []
 
-  /// The signal handler that was in place before this test's, put back at tear-down.
-  private var previousAction = sigaction()
-
-  /// The handler that prints a held main thread's stack is installed for each test and the main thread's identity
-  /// kept for the heartbeat to signal; set-up runs on the main thread.
+  /// The handler that prints a held main thread's stack is installed once for the process, at the first set-up, and
+  /// never restored: a signal that arrives after a test ended finds the handler (which does nothing unless a heartbeat
+  /// is armed), not the default action, which would end the process. The main thread's identity is kept for the
+  /// heartbeat to signal; set-up runs on the main thread.
   override func setUp() async throws {
+    StackDump.installOnce()
     StackDump.mainThread.store(UInt(bitPattern: pthread_self()), ordering: .relaxed)
-    var action = sigaction()
-    action.__sigaction_u.__sa_handler = StackDump.handler
-    sigemptyset(&action.sa_mask)
-    sigaction(SIGUSR1, &action, &previousAction)
     heartbeat = Heartbeat()
   }
 
   /// The server is never released: once the engine's save of what was typed is waiting on it, the engine touches the
   /// store no more, and the store goes.
   override func tearDown() async throws {
-    heartbeat?.stop()
-    sigaction(SIGUSR1, &previousAction, nil)
+    // Awaited: once it returns, no ping and no signal can follow the test.
+    await heartbeat?.stop()
     await server?.callHeld()
     if let storeURL {
       for suffix in ["", "-shm", "-wal"] {
@@ -584,20 +580,36 @@ final class TypingFeelTests: XCTestCase {
     return budgetEnforced ? .fail : .warn
   }
 
-  /// What a signal to the main thread does: counts itself, writes a line and the thread's stack to standard error.
-  /// Nothing but calls that are safe in a signal handler, no Swift allocation and no locks, and nothing captured: the
-  /// handler reads only these file-scope atomics.
+  /// What a signal to the main thread does while a heartbeat is armed: counts itself, writes a line and the thread's
+  /// stack to standard error; unarmed it does nothing. It captures nothing, allocates nothing on the heap (64 frames
+  /// sit on the stack), takes no Swift lock and reads only these atomics. It is not strictly async-signal-safe:
+  /// `backtrace_symbols_fd` can take the loader's lock, which is tolerated for a debugging aid that fires only in a
+  /// run already stalled for seconds.
   private enum StackDump {
     static let count = Atomic<Int>(0)
+    /// Whether a test's heartbeat is running: set by its start, cleared when its `stop` has returned.
+    static let armed = Atomic<Bool>(false)
     /// The main thread's `pthread_t`, as an integer, kept at set-up.
     static let mainThread = Atomic<UInt>(0)
 
+    /// Run once for the process: the lazy initializer of a static is thread-safe and runs once.
+    private static let installed: Void = {
+      var action = sigaction()
+      action.__sigaction_u.__sa_handler = handler
+      sigemptyset(&action.sa_mask)
+      action.sa_flags = SA_RESTART
+      sigaction(SIGUSR1, &action, nil)
+    }()
+
+    static func installOnce() { installed }
+
     static let handler: @convention(c) (Int32) -> Void = { _ in
+      guard StackDump.armed.load(ordering: .relaxed) else { return }
       StackDump.count.add(1, ordering: .relaxed)
       let line: StaticString = "TypingFeel: main thread stack while held\n"
       write(2, line.utf8Start, line.utf8CodeUnitCount)
-      withUnsafeTemporaryAllocation(of: UnsafeMutableRawPointer?.self, capacity: 128) { frames in
-        let count = backtrace(frames.baseAddress, 128)
+      withUnsafeTemporaryAllocation(of: UnsafeMutableRawPointer?.self, capacity: 64) { frames in
+        let count = backtrace(frames.baseAddress, 64)
         backtrace_symbols_fd(frames.baseAddress, count, 2)
       }
     }
@@ -658,7 +670,7 @@ final class TypingFeelTests: XCTestCase {
   /// something.
   ///
   /// It also asks the main queue every 250 ms (one empty block, run when the main thread next takes work off its
-  /// queue, never inside a timed call) and, when an ask has gone unanswered for `stackAfter`, signals the main thread
+  /// queue: not inside a timed call, unless a call runs a nested run loop) and, when an ask has gone unanswered for `stackAfter`, signals the main thread
   /// once so its stack is printed (`StackDump`): the stack of a main thread held for long says what held it.
   private final class Heartbeat: Sendable {
     private struct Beats {
@@ -674,6 +686,7 @@ final class TypingFeelTests: XCTestCase {
     private let beating = Mutex<Task<Void, Never>?>(nil)
 
     init(stackAfter: Duration = .seconds(5)) {
+      StackDump.armed.store(true, ordering: .relaxed)
       // The task ends at `stop`, which lets go of the beat.
       let task = Task.detached { [self] in
         while !Task.isCancelled {
@@ -716,8 +729,13 @@ final class TypingFeelTests: XCTestCase {
       }
     }
 
-    func stop() {
-      beating.withLock { $0?.cancel() }
+    /// Cancels the beat and waits for its task to finish, so no ask and no signal follows the return; then disarms the
+    /// stack dump. Calling it again does nothing.
+    func stop() async {
+      let task = beating.withLock { $0 }
+      task?.cancel()
+      await task?.value
+      StackDump.armed.store(false, ordering: .relaxed)
     }
   }
 
