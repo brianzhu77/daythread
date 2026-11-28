@@ -25,7 +25,15 @@ The web's behaviour, with exact strings, is in `.superpowers/sdd/native-phase-1/
 app has today in `.superpowers/sdd/native-phase-1/native-facts-1d.md`. Where either disagrees with the code, the code
 wins.
 
-**Status (2026-11-27):** Planned; no task built.
+**Status (2026-11-27):** Tasks 1 to 8 built; the strip seen on the simulator against its own seeded server (3743),
+with the screenshots in `tests/evidence/native-phase-1d/`. Task 9 (on his data) is his, to come. Found on the
+simulator in Task 8 and fixed: each `Not today` row's menu was an 18-by-5-point target, and a tap that missed it by
+12 points brought the to-do back (`Bring back` beside it took the touch); it is now 44 by 44. Seen and left for the
+final round: while a strip action is out, a page row's swipe and its circle's menu still open, and a choice made in
+them is dropped without a word (a row's own action hides them while it is out). Task 8's seed puts the two events
+under the day template's own `Events` heading, not a second heading after the template's blocks (the template
+already has one, and the events line scrolls to the first), and adds a to-do due the day before yesterday, on
+today's page, so yesterday has a `Due soon`.
 
 ## Questions the plan raised, answered (2026-11-27)
 
@@ -109,6 +117,23 @@ wins.
   (`sizingOptions = [.intrinsicContentSize, .preferredContentSize]`, read in
   `preferredContentSizeDidChange(forChildContentContainer:)`), not through `DayHeaderView.onResize`: the header's
   bounds change only after the list has laid it out again, so `onResize` never sees the strip grow first.
+- **The strip's hosting controller is a child of the list's controller, not of the day screen** (Task 5). Its view
+  lies in the list's header, and UIKit refuses a child whose view is inside another controller's view
+  (`UIViewControllerHierarchyInconsistency`: it "should have parent view controller" `DocumentViewController`). The
+  day screen adds it to `document` (`document.addChild`) and keeps the model; so
+  `preferredContentSizeDidChange(forChildContentContainer:)` reaches the list's controller, which the day screen
+  does not override, and the height's changes are read instead from a subclass of the hosting controller
+  (`DayFactsHostingController`) that observes its own `preferredContentSize`. The plan's other choice stands: the
+  hosting controller's height follows the header's width in the list's self-sizing header (measured at 320, 402 and
+  1024 points), so `UIHostingConfiguration` is not needed.
+- **The events line takes up to three lines at the accessibility text sizes** (Task 5, Brian's ruling in review).
+  §12.3 says it is one line, cut with an ellipsis, `+N more` and the chevron never cut; at
+  `accessibilityExtraExtraExtraLarge` on a phone that left one letter of the words (`L… +1 more ›`). From the
+  accessibility sizes `+N more` and the chevron go on a line of their own under the words, at the words' leading
+  edge (after the symbol's column), so the words have the line's whole width after the symbol and take up to three
+  lines, cut at the tail after that; a word that fits on a line is never broken. Below those sizes it is one line,
+  `+N more` and the chevron uncut at its end, as §12.3 says. The line is still one button when it is one, and
+  VoiceOver's words are unchanged.
 - A correction found while building is written here with its reason before the code that follows it.
 
 ## Review Focus
@@ -845,5 +870,92 @@ Nothing in this task is code, and Brian does the tapping: the app writes to his 
 
 ## Cost, measured
 
-To be written by Task 7: the medians of `TodoIndex(workspace)` and of `DayFacts.of` on the large workspace, and the
-two typing medians with the strip on screen, with the machine, the simulator and the date.
+Measured 2026-11-27 on an Apple M4 Mac (macOS 27.0.1, Xcode 27.2), the iPhone 17 simulator on iOS 26.5, a Debug
+build, `TEST_RUNNER_DAYTHREAD_FEEL_BUDGET=1 xcodebuild test ... -only-testing:DaythreadTests/TypingFeelTests` (the
+README's command), nothing else running (`pgrep -fl xcodebuild` empty before each run). Each figure is the median of a
+run's five inner runs; the spread is the lowest and highest of the invocations.
+
+The facts on a large workspace (`test_the_strips_facts_on_a_large_workspace`: 3,000 to-dos on 300 day pages of 10
+rows, 200 chips, 100 set aside, 100 due with no row today), milliseconds, five invocations:
+
+| | medians per invocation | spread |
+|---|---|---|
+| `TodoIndex(workspace)` | 56.905, 57.162, 54.225, 55.450, 53.773 | 53.8 to 57.2 |
+| `DayFacts.of(day: today, ...)` | 3.617, 3.403, 3.426, 3.382, 3.278 | 3.3 to 3.6 |
+
+The index is about 55 ms on a workspace of this size (300 pages), nearly all of a state's cost for the facts: it parses
+every page's document. Whether the strip adds it depends on the path the state takes in the day screen (`showDay`,
+`drawnWith`, `DayViewController.todoIndex(of:)`). While his words stay on the page (the typing path), the screen's
+`ListReading` of the drawn workspace has already built its index, and the facts take it from the screen's two-slot
+cache: there the index is not the strip's addition, and what the strip adds is `DayFacts.of` itself, about 3.4 ms, and
+the strip's drawing (below). When the list takes the page as the server has it, when another page is opened, and on a
+day with no page, nothing on the screen has read that workspace yet: the facts build a whole index for it, about 55 ms a
+state on this workspace in Debug, which the typing figures below do not show. The editor builds its own index of the
+same workspace for the rows it draws (`DocumentViewController`'s `TodoIndex`); sharing one index between the editor and
+the screen is a follow-up for slice 1d.2. The typing fixture is not this workspace: it holds the same 3,000 to-dos on
+about 30 pages.
+
+Typing with the strip on screen (100 set aside, 100 due, 200 chips on the past pages), milliseconds per keystroke to
+the list laid out, five invocations (the budget's figures, 7.040 and 2.671, were measured before slice 1c made the
+fixture heavier; the limit is 1.5 times them, 10.56 and 4.01):
+
+| | medians per invocation | spread |
+|---|---|---|
+| 300 lines, line 150 | 9.472, 9.291, 9.274, 9.298, 9.377 | 9.27 to 9.47 |
+| 10 lines, line 5 | 3.287, 3.278, 3.248, 3.344, 3.349 | 3.25 to 3.35 |
+
+The same, before the fixture gained the strip (this branch's base, three invocations): 300 lines 9.973, 9.301,
+9.373; 10 lines 3.651, 3.181, 3.197. The keystroke's own cost is unchanged within the noise.
+
+Per keystroke to the engine's state drawn (not budgeted), where the strip's cost shows, milliseconds:
+
+| | before the strip | with the strip |
+|---|---|---|
+| 300 lines | 164.089, 159.142, 159.443 | 170.317, 173.486, 175.487, 174.158, 171.303 |
+| 10 lines | 87.185, 83.644, 82.977 | 88.475, 88.817, 89.035, 89.555, 89.623 |
+
+So the strip costs about 14 ms a state on the 300-line page (about 160 to about 173) and about 6 ms on the 10-line one
+(about 84 to about 89): the facts' 3.4 ms, the index now holding 200 chips, and the strip's rows being drawn. Both
+typing tests held their budget (the 300-line median is about 89 percent of its limit, the 10-line one 82 percent). The remedy
+of §12.6 (keeping each page's part of the index between states) was not needed on the typing path; that is a conclusion
+about the typing path only, not about the paths above where the facts build an index of their own.
+
+A reading for the budget: on this machine the 300-line median is 9.27 to 9.47 ms against a limit of 10.56 ms derived
+from a fixture that was lighter, so the margin is about 10 to 12 percent; runs on the same machine while other builds ran
+have read up to 10.3. The limit was not changed.
+
+## Decisions made while building (2026-11-27)
+
+The calls I made on Brian's behalf while the plan ran, in the order they were made, each with what it costs if
+it is wrong. The design (`native-phase-1.md` §12) and this plan's Corrections hold the ones that changed what
+the app does.
+
+| Decision | Why | If it is wrong |
+|---|---|---|
+| Slice 1d is built and merged in two parts: 1d.1 "above the page", then 1d.2 "the day draft" | The two differ greatly in size and risk, and each is usable alone | The draft, the heart of the morning, arrives one pull request later |
+| The strip is a SwiftUI view hosted in the day's header (`Label`, `GroupBox`, `DisclosureGroup`, `Menu`), not new sections of the page's list | The list's index assumptions and the typing feel stay untouched; the parts are the system's own | One view is rewritten in UIKit |
+| `Bring back` and `Another day` are sent and waited for, like a row's actions (the web draws them ahead) | Nothing but a tick is predicted | They need a connection |
+| The events rows under the `Events` heading wait for 1d.2; the events line scrolls to the heading only | Those rows are not lines of the page, which 1d.2 brings | An event written on another page is named in the line but not listed in the page until 1d.2 |
+| "Today" for the strip is the app's today (the workspace's zone), not the device's clock as on the web | One notion of today in the app | A device in another zone than the account disagrees with the web around midnight |
+| Nothing in the strip is red | The web's strip marks no passed date | One colour |
+| A set-aside to-do with an empty tag reads `Not today` in `Due soon`; the web's trailing separator is corrected in this slice's web pull request | `Not today · ` with nothing after it is a defect on the web | One line reverted on the web |
+| The strip shows wherever the web shows it; a later day without a page shows none | The rule is the web's | One condition |
+| With no `Events` heading the events line is words, not a button | The web's button does nothing then | One condition |
+| While a line holds the keyboard, a change of the strip's height moves the list so the typed line stays put | A row that moves while he types is slice 1c's anti-goal | A few lines in the editor |
+| One action at a time for the whole screen (rows and strip), held as one state with the action's origin | Two commands in flight could each overtake the other's Undo | A second action waits for the first's answer |
+| Events are collected in the index's one pass; their cost is measured, not budgeted | No second read of the documents | A slow strip on a very large workspace until each page's part is kept between states |
+| `Pick date…` from the strip allows today (then `On today`) | The web does | One condition |
+| A third seeded server (port 3743) for the morning's UI tests | The earlier UI tests' worlds do not move | One more server start for each run |
+| VoiceOver reads the events line as its words then `, +N more`; a row as `<words>, <tag>`; the menu as `More for <words>`; the button as `Bring back <words>` | Rows' controls could not be told apart otherwise | A string each |
+| `Due soon` has no fold | The web has none | A long list pushes the page down (a screenshot with twenty rows is in the evidence) |
+| Every row of `Due soon` and `Not today` is at least 44 points tall | The web's rhythm; legible at large sizes | One number |
+| The strip's controls are quiet: secondary colours, a bordered `Bring back` with a primary-colour title | The web's strip is quiet; the system's accent made four blue controls a row | One tint |
+| At the accessibility text sizes the events line's words take the whole width (up to three lines), `+N more` and the chevron under them | Beside them the words had about 100 points and broke mid-word | A layout branch |
+| The fold's chevron stays as the system draws it | A custom disclosure style would be a control of our own | Nothing |
+| The typing budget's limit stays (10.56 / 4.01 ms) | Run alone the test holds it with 10 to 12 percent to spare; it is enforced only when asked for | A regression under that margin on the 300-line page goes unseen; re-basing is Brian's call |
+| While any action is out the page's rows offer no swipe; the circle's menu is not disabled | Reconfiguring cells while he composes breaks the input-method rule | A circle-menu choice made during another action is dropped silently, as in 1c |
+| The second index build a state when a server state replaces the list, or on a day with no page, is left for 1d.2 | About 55 ms on 3,000 to-dos in Debug, off the typing path; sharing one index crosses the editor's interface | A slow strip on a very large workspace on those paths |
+| The whole-branch review ran on the sources while the simulator pass was still being built | The simulator pass changes tests and documents; waiting cost an hour | A source change made by the simulator pass is seen by its own review only |
+| Each `Not today` row's menu is a 44-point target around its ellipsis | On the simulator a tap 12 points off the symbol hit `Bring back` beside it | Each `Not today` row is about 10 points taller |
+| When the list is at its top and the strip gets shorter, the rows move up with it | A list cannot scroll above its top, and the change follows his own tap | An inset that holds the line, at the price of a gap under the header |
+| No landscape screenshot of the strip | The simulator did not turn the app in any run; the test skips and names the unit test that holds the width | A landscape fault in the strip is seen first in Brian's hand check |

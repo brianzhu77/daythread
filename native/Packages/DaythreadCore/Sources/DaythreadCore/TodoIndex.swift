@@ -37,13 +37,17 @@ public struct TodoIndex: Sendable {
   /// By day page id: the to-dos its draft applied; only for day pages that hold a plan row.
   private var appliedByDayPage: [CodeUnitKey: Set<CodeUnitKey>] = [:]
 
+  /// Every chip event, in the order each id was first met; see `events(on:)`.
+  private(set) var eventsInFirstMetOrder: [DayEvent] = []
+
   public init(_ workspace: Workspace) {
     var daysWithPlanRows: [String] = []
+    var chips = EventCollector()
     for page in workspace.pages where Self.isLive(page) {
       // A document that does not parse reads as no blocks (`pageNodes`).
       let day = page.type == "daily" ? page.date : nil
       var holdsPlanRow = false
-      for (taskId, row) in Self.rows(in: Document.blocks(page.document), of: page, day: day) {
+      for (taskId, row) in Self.rows(in: Document.blocks(page.document), of: page, day: day, chips: &chips) {
         let key = CodeUnitKey(taskId)
         rowsByTask[key, default: []].append(row)
         guard row.role == .plan, let day else { continue }
@@ -53,6 +57,8 @@ public struct TodoIndex: Sendable {
       }
       if holdsPlanRow { daysWithPlanRows.append(page.id) }
     }
+    // Titles need every page, so only a workspace that holds a chip pays for reading them.
+    if !chips.isEmpty { eventsInFirstMetOrder = chips.events(pages: workspace.pages) }
     readDrafts(of: daysWithPlanRows, in: workspace)
     readRepeats(in: workspace)
     readBlockers(in: workspace)
@@ -64,14 +70,18 @@ public struct TodoIndex: Sendable {
     (page.trashedAt?.isEmpty ?? true) && page.type != "template" && !page.isDraft
   }
 
-  /// Every to-do row of the blocks, a row before the rows nested under it (`flatNodes`, `isTaskRow`).
-  private static func rows(in blocks: [Block], of page: Page, day: LocalDate?) -> [(taskId: String, row: TaskRow)] {
+  /// Every to-do row of the blocks, a row before the rows nested under it (`flatNodes`, `isTaskRow`). The same
+  /// walk hands each block's chips to `chips`, so no document is read twice.
+  private static func rows(
+    in blocks: [Block], of page: Page, day: LocalDate?, chips: inout EventCollector
+  ) -> [(taskId: String, row: TaskRow)] {
     var found: [(taskId: String, row: TaskRow)] = []
     for block in blocks {
       if block.type == "task", let taskId = block.props["taskId"]?.stringValue {
         found.append((taskId, TaskRow(pageId: page.id, day: day, blockId: block.id, role: RowRole(block.props["role"]))))
       }
-      found += rows(in: block.children, of: page, day: day)
+      chips.read(block, on: page, pageDate: day)
+      found += rows(in: block.children, of: page, day: day, chips: &chips)
     }
     return found
   }

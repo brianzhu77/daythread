@@ -3,11 +3,19 @@
   import DaythreadEditor
   import DaythreadSync
   import Observation
+  import SwiftUI
   import UIKit
 
   /// One day: its header (the page's first row), its page or what a day without one says, the quiet controls to reach
   /// other days, the changes not saved, and the More menu. Changing the day replaces the page in place; nothing is
   /// pushed.
+  /// Where the action out on the day screen came from (§12.4): what is dimmed, and what its notice's Undo dims again.
+  enum ActionOrigin: Equatable {
+    /// The row's id.
+    case row(String)
+    case strip(taskId: String)
+  }
+
   @MainActor
   final class DayViewController: UIViewController {
     enum AccountRow: Equatable {
@@ -105,6 +113,14 @@
       self?.spaceUnderHeader ?? .zero
     }
     private(set) lazy var headerView = DayHeaderView { [weak self] in self?.pickDay() }
+    /// The strip above the page: what it shows, its fold, and what it was asked.
+    let factsModel = DayFactsModel()
+    /// The strip, in the header under the title. Its height is its own, reported as its preferred content size.
+    private lazy var factsHost = DayFactsHostingController(rootView: DayFactsView(model: factsModel))
+    /// The strip's view, in the header.
+    var factsView: UIView { factsHost.view }
+    /// How many times the facts were worked out (tests read it).
+    private(set) var factsReads = 0
     private let heldButton = UIBarButtonItem(image: UIImage(systemName: "exclamationmark.triangle"))
     private let moreButton = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
     private lazy var previousButton = symbolButton("chevron.left", label: "Previous day") { $0.step(by: -1) }
@@ -116,11 +132,12 @@
     /// The day shown.
     var date: LocalDate { shownDate ?? model.today }
 
-    /// What a row action's notice is of: the row it was made on, its page and account, and the operation an Undo
-    /// would undo.
+    /// What an action's notice is of: where it was made (a row, or the strip), the page it did not overtake (nil: it
+    /// had none to wait for), the day and account it was made under, and the operation an Undo would undo.
     private struct Acted {
-      let rowID: String
-      let pageId: String
+      let origin: ActionOrigin
+      let pageId: String?
+      let date: LocalDate
       let owner: String
       let operationId: String
     }
@@ -130,11 +147,23 @@
     let notice: NoticeView
     /// The notice showing is of this action; nil when it offers no Undo.
     private var noticeOf: Acted?
-    /// A row action or an Undo is out: no other runs until it is answered (§11.4, one at a time).
-    private var acting = false
+    /// The action or Undo out on the screen, and where it came from: no other runs until it is answered (§12.4, one
+    /// at a time for the whole screen). Setting it dims its row (of the page, or of the strip), disables the strip and
+    /// holds every row's actions on whatever day is shown; leaving the day takes the dimming away while it stays out.
+    private var actionOut: ActionOrigin? {
+      didSet {
+        guard actionOut != oldValue else { return }
+        if case .row(let rowID) = actionOut { document.actingRow = rowID } else { document.actingRow = nil }
+        document.pausesRowActions = actionOut != nil
+        if case .strip(let taskId) = actionOut { factsModel.acting = taskId } else { factsModel.acting = nil }
+        updateStripEnabled()
+      }
+    }
     /// The indexes the last `ListReading`s were read with, newest first, and the workspaces they are of: the list's
     /// workspace and a state's are read again at the next state, at no cost.
     private var readingIndexes: [(workspace: Workspace, index: TodoIndex)] = []
+    /// The workspaces `readingIndexes` holds, newest first (tests read it).
+    var indexedWorkspaces: [Workspace] { readingIndexes.map(\.workspace) }
 
     /// `noticeSleep`: how the notice waits out its time (tests hold it).
     init(model: AppModel, noticeSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep) {
@@ -181,6 +210,22 @@
       }
       document.headerView = headerView
       headerView.onResize = { [weak self] in self?.emptyBackground.setNeedsLayout() }
+      factsHost.sizingOptions = [.intrinsicContentSize, .preferredContentSize]
+      factsHost.safeAreaRegions = []
+      factsHost.view.backgroundColor = .clear
+      factsHost.onPreferredContentSizeChange = { [weak self] in self?.stripHeightChanged() }
+      // Its view lies in the list's header: UIKit requires the controller whose view holds it to be its parent.
+      document.addChild(factsHost)
+      headerView.hold(facts: factsHost.view)
+      factsHost.didMove(toParent: document)
+      factsModel.onBringBack = { [weak self] taskId in self?.stripRequested(taskId, on: nil) }
+      factsModel.onAnotherDay = { [weak self] taskId, date in self?.stripRequested(taskId, on: date) }
+      factsModel.onPickDate = { [weak self] taskId in self?.presentStripDatePicker(for: taskId) }
+      factsModel.onEvents = { [weak self] in
+        guard let self, let heading = factsModel.facts.eventsHeadingId else { return }
+        // The caret stays where it is: with the keyboard up he sees the heading, and his line where the scroll put it.
+        document.scroll(toRow: heading, animated: true)
+      }
       registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (self: Self, _) in self.setNeedsUpdateProperties() }
 
       addChild(document)
@@ -221,6 +266,14 @@
       } else {
         host.bringSubviewToFront(notice)
       }
+      // A change of the strip's height that came while the screen was away is laid out now.
+      if headerLayoutPending { stripHeightChanged() }
+    }
+
+    /// The header's deferred layout is not run for a screen that is gone; it waits until the screen appears again.
+    override func viewDidDisappear(_ animated: Bool) {
+      super.viewDidDisappear(animated)
+      NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(layOutHeader), object: nil)
     }
 
     /// UIKit calls this again whenever what it reads from `model` changes; a change of day or of an empty state's
@@ -278,19 +331,28 @@
 
     /// Draws the day from what the model draws: its page, edited, or an empty one under what the day says instead.
     private func showDay() {
-      guard let workspace = model.workspace else { return }
+      guard let workspace = model.workspace else {
+        // No copy is shown (signed out, or another account's): nothing of the last account's is said above the page.
+        showFacts(.none)
+        updateStripEnabled()
+        return
+      }
       let date = date
       let content = DayContent.content(for: date, today: model.today, in: workspace)
       self.content = content
       if case .page = content, failed?.date == date { failed = nil }
+      let drawnWith: Workspace
       if case .page(let page) = content {
-        edit(page, in: workspace)
+        drawnWith = edit(page, in: workspace)
       } else {
         // Until the engine has made today's page, an empty one stands in for it. Shown first: what he was composing
         // on the page before is reported for that page.
         if let page = Self.emptyPage(on: date) { document.show(page: page, in: workspace) }
         closePage()
+        drawnWith = workspace
       }
+      updateFacts(from: drawnWith, on: date)
+      updateStripEnabled()
 
       emptyState = emptyState(for: content, on: date)
       if let emptyState { emptyView.configuration = emptyState }
@@ -301,10 +363,11 @@
           // He left the day: what he wrote there goes now, not after the wait.
           model.saveNow()
           // What a row action of that day says, and its dimmed row, stay with that day; an action still out is
-          // answered, and said nowhere.
+          // answered, and said nowhere, and holds this day's rows' actions until then.
           notice.dismiss()
           noticeOf = nil
           document.actingRow = nil
+          factsModel.acting = nil
         }
         drawnDate = date
       }
@@ -319,7 +382,11 @@
     ///
     /// The same page of another account (the engine moved to that account's copy on its own) is another page, whether
     /// or not the screen is ahead: the words on screen are the first account's.
-    private func edit(_ page: Page, in workspace: Workspace) {
+    ///
+    /// Returns the workspace the page is drawn against: `workspace` when the list takes the page, else `workspace` with
+    /// his words drawn in.
+    @discardableResult
+    private func edit(_ page: Page, in workspace: Workspace) -> Workspace {
       let owner = model.state.owner
       guard let open = openPage, open.id.utf8.elementsEqual(page.id.utf8), open.owner == owner,
         let mine = document.document
@@ -333,7 +400,7 @@
         listWorkspace = workspace
         saysMerged = false
         mergeIfBehind()
-        return
+        return workspace
       }
       let ahead = merging || model.isWriting(page.id)
       let draft = model.state.drafts.first { $0.id.utf8.elementsEqual(page.id.utf8) }
@@ -341,10 +408,12 @@
       // what was saved, even when that is what the screen already shows.
       if !ahead, draft == nil { openPage?.startedFrom = page.document }
       // A draft behind the server's page is the stored one, older than the screen: it is merged, never taken.
+      let drawnWith: Workspace
       if !ahead, draft?.state != .behind, !page.document.utf8.elementsEqual(mine.utf8) {
         replaceList(with: page.document, in: workspace)
         if draft != nil { openPage?.startedFrom = page.document }
         listWorkspace = workspace
+        drawnWith = workspace
       } else {
         // His words stay; the list is handed the new workspace only when it would draw a row of them differently.
         let drawn = workspace.drawing(draft: mine, of: page.id)
@@ -352,8 +421,54 @@
           replaceList(with: mine, in: drawn)
           listWorkspace = drawn
         }
+        drawnWith = drawn
       }
       mergeIfBehind()
+      return drawnWith
+    }
+
+    // MARK: The strip above the page
+
+    /// Works the day's facts out from `workspace`, the one the page is drawn against, with the index of that same
+    /// value (`DayFacts.of` does not check that they agree). While his words stay on the page, the list's reading has
+    /// already built that index; when the list takes the page, or on a day without one, `todoIndex(of:)` builds it
+    /// here (and keeps it for the next state). Only `showDay` calls this, when a state or the day is drawn: a
+    /// keystroke draws neither.
+    private func updateFacts(from workspace: Workspace, on date: LocalDate) {
+      factsReads += 1
+      showFacts(DayFacts.of(day: date, in: workspace, index: todoIndex(of: workspace), today: model.today))
+    }
+
+    /// The strip's controls work while no action is out and today's page is not being made (§12.4).
+    private func updateStripEnabled() {
+      let enabled = actionOut == nil && content != .askingForToday
+      if factsModel.enabled != enabled { factsModel.enabled = enabled }
+    }
+
+    /// Hands `facts` to the strip when they differ from those it shows; the strip takes no room when they are empty.
+    private func showFacts(_ facts: DayFacts) {
+      factsModel.show(facts)
+      let hidden = facts.isEmpty
+      guard factsView.isHidden != hidden else { return }
+      factsView.isHidden = hidden
+      stripHeightChanged()
+    }
+
+    /// The list lays its header out again on the run loop's next turn, once for all the strip's changes until then:
+    /// never inside its own layout pass or a snapshot's apply.
+    private func stripHeightChanged() {
+      headerLayoutPending = true
+      NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(layOutHeader), object: nil)
+      perform(#selector(layOutHeader), with: nil, afterDelay: 0, inModes: [.common])
+    }
+
+    /// A header layout was asked for and has not run.
+    private var headerLayoutPending = false
+
+    @objc private func layOutHeader() {
+      headerLayoutPending = false
+      document.headerDidChange()
+      emptyBackground.setNeedsLayout()
     }
 
     /// What the list reads of `workspace` for `document`, at the model's today. The index is built again only for
@@ -478,7 +593,7 @@
     /// The list's report of a row's action (`native-phase-1.md` §11.3, §11.4). Nothing while another is out.
     private func rowRequested(_ request: RowRequest) {
       // Nor while a sheet, the calendar or an alert is up: another could not be presented over it.
-      guard !acting, document.actingRow == nil, presentedViewController == nil else { return }
+      guard actionOut == nil, presentedViewController == nil else { return }
       switch request.kind {
       case .more: presentMore(request)
       case .action(.pickDate): presentDatePicker(for: request)
@@ -556,12 +671,12 @@
     /// §11.4: what he composes is committed, the row is dimmed while the command is out, and the notice says what
     /// happened; `Undo` only while the server would take it.
     private func run(_ action: RowAction, on request: RowRequest) {
-      guard !acting, document.actingRow == nil, let open = openPage, let owner = open.owner,
+      guard actionOut == nil, let open = openPage, let owner = open.owner,
         case .page(let page)? = content, let pageDate = page.date
       else { return }
       document.commitComposition()
-      acting = true
-      document.actingRow = request.rowID
+      let origin = ActionOrigin.row(request.rowID)
+      actionOut = origin
       // The command about to go takes the server's slot: an Undo of the action before would be refused.
       notice.withdrawUndo()
       noticeOf = nil
@@ -569,22 +684,26 @@
         let acted = await model.act(
           action, taskId: request.taskId, pageId: open.id, pageDate: pageDate, owner: owner)
         guard let self else { return }
-        self.acting = false
-        self.document.actingRow = nil
+        self.actionOut = nil
         // Said only on the page it was made on, under the account it was made under: he may have gone to another
         // day meanwhile, or the copy shown may be another account's.
         guard self.openPage?.id == open.id, self.openPage?.owner == owner, model.state.owner == owner else { return }
-        switch acted {
-        case .done(let text, let operationId):
-          let offers = model.offersUndo(operationId)
-          self.notice.show(Notice(text: text, kind: .done, undoing: offers ? operationId : nil))
-          if offers {
-            self.noticeOf = Acted(rowID: request.rowID, pageId: open.id, owner: owner, operationId: operationId)
-            self.followUndo(operationId)
-          }
-        case .notDone:
-          self.notice.show(Notice(text: RowNotice.notDone, kind: .failed, undoing: nil))
+        self.say(acted, of: origin, pageId: open.id, date: pageDate, owner: owner)
+      }
+    }
+
+    /// The notice of an action's answer, on the screen it was made on; `Undo` only while the server would take it.
+    private func say(_ acted: RowActed, of origin: ActionOrigin, pageId: String?, date: LocalDate, owner: String) {
+      switch acted {
+      case .done(let text, let operationId):
+        let offers = model.offersUndo(operationId)
+        notice.show(Notice(text: text, kind: .done, undoing: offers ? operationId : nil))
+        if offers {
+          noticeOf = Acted(origin: origin, pageId: pageId, date: date, owner: owner, operationId: operationId)
+          followUndo(operationId)
         }
+      case .notDone:
+        notice.show(Notice(text: RowNotice.notDone, kind: .failed, undoing: nil))
       }
     }
 
@@ -606,7 +725,7 @@
 
     /// `Undo` runs like an action: its row is dimmed while it is out, when it is still on the page.
     private func undo(_ operationId: String) {
-      guard !acting, document.actingRow == nil, let acted = noticeOf, acted.operationId == operationId else { return }
+      guard actionOut == nil, let acted = noticeOf, acted.operationId == operationId else { return }
       noticeOf = nil
       // What he composes is committed first: his words would take the server's slot before the Undo reached it, so
       // once they are reported the Undo is not offered and nothing is sent.
@@ -616,16 +735,115 @@
         notice.withdrawUndo()
         return
       }
-      acting = true
-      let onPage = document.document.flatMap { Self.block(acted.rowID, in: $0) } != nil
-      if onPage { document.actingRow = acted.rowID }
+      actionOut = acted.origin
+      // It dims again only what is there to dim: the row on the page, the to-do in the strip's list.
+      switch acted.origin {
+      case .row(let rowID):
+        if document.document.flatMap({ Self.block(rowID, in: $0) }) == nil { document.actingRow = nil }
+      case .strip(let taskId):
+        if !factsModel.facts.lists(taskId) { factsModel.acting = nil }
+      }
       Task { [weak self, model] in
         let said = await model.undo(operationId, pageId: acted.pageId, owner: acted.owner)
         guard let self else { return }
-        self.acting = false
-        self.document.actingRow = nil
-        guard self.openPage?.id == acted.pageId, model.state.owner == acted.owner else { return }
+        self.actionOut = nil
+        guard self.stillShows(acted), model.state.owner == acted.owner else { return }
         self.notice.show(said)
+      }
+    }
+
+    /// Whether the screen still shows where `acted` was made: the row's page, or the strip's today.
+    private func stillShows(_ acted: Acted) -> Bool {
+      switch acted.origin {
+      case .row: openPage?.id == acted.pageId
+      case .strip: date == acted.date && date == model.today
+      }
+    }
+
+    // MARK: The strip's actions
+
+    /// `Bring back` (`day` nil: today) or a day of `Another day`. Nothing while something is presented: another could
+    /// not be presented over it.
+    private func stripRequested(_ taskId: String, on day: LocalDate?) {
+      guard presentedViewController == nil else { return }
+      plan(taskId, on: day ?? model.today)
+    }
+
+    /// `Pick date…` of a `Not today` row: the calendar a row's `Pick date…` opens (nothing selected, no day before
+    /// today, today selectable), from the row's menu button; a sheet on the phone.
+    private func presentStripDatePicker(for taskId: String) {
+      guard actionOut == nil, presentedViewController == nil, date == model.today, isListedAside(taskId) else { return }
+      let workspace = model.workspace
+      let picker = DayPickerViewController(
+        selected: nil, notBefore: model.today, written: workspace?.writtenDays() ?? [],
+        weekStartsOnMonday: workspace?.weekStartsOnMonday ?? false,
+        timezone: workspace?.timezone ?? TimeZone.current.identifier
+      ) { [weak self] day in
+        guard let self else { return }
+        self.dismiss(animated: true)
+        // The calendar can stay open for as long as he likes: `plan` reads the list and today again.
+        self.plan(taskId, on: day)
+      }
+      picker.modalPresentationStyle = .popover
+      if let popover = picker.popoverPresentationController {
+        popover.sourceView = factsView
+        popover.sourceRect =
+          factsModel.menuFrames[taskId]
+          ?? CGRect(x: factsView.bounds.midX, y: factsView.bounds.midY, width: 0, height: 0)
+        let sheet = popover.adaptiveSheetPresentationController
+        sheet.detents = [.medium(), .large()]
+        sheet.selectedDetentIdentifier = DayPickerViewController.firstDetent(
+          for: traitCollection.preferredContentSizeCategory)
+      }
+      present(picker, animated: true)
+    }
+
+    /// Whether `taskId` is a row of `Not today` as the facts are worked out now, from what the screen draws (as
+    /// `showDay` works them out): a menu or a calendar opened earlier may hold a to-do brought back, ticked or deleted
+    /// since.
+    private func isListedAside(_ taskId: String) -> Bool {
+      guard let workspace = model.workspace else { return false }
+      let today = model.today
+      var drawn = workspace
+      if case .page(let page) = DayContent.content(for: today, today: today, in: workspace), let open = openPage,
+        open.id.utf8.elementsEqual(page.id.utf8), open.owner == model.state.owner, let mine = document.document
+      {
+        drawn = workspace.drawing(draft: mine, of: page.id)
+      }
+      // A workspace with words typed since the last state is in no cache: its index is built here and let go, so a tap
+      // does not evict the list's.
+      let index = readingIndexes.first { $0.workspace == drawn }?.index ?? TodoIndex(drawn)
+      return DayFacts.of(day: today, in: drawn, index: index, today: today).lists(taskId)
+    }
+
+    /// §12.4: plans `taskId` on `day` from the strip, on today's screen only, sent and waited for as a row's action
+    /// is; nothing when the to-do has left the list or `day` is before today, both as they are now.
+    private func plan(_ taskId: String, on day: LocalDate) {
+      let today = model.today
+      guard actionOut == nil, date == today, !(day < today), let owner = model.state.owner,
+        let workspace = model.workspace, isListedAside(taskId)
+      else { return }
+      // In Trash there is no page to wait for; while it is being made, nothing is sent.
+      let pageId: String?
+      switch DayContent.content(for: today, today: today, in: workspace) {
+      case .page(let page): pageId = page.id
+      case .askingForToday: return
+      case .inTrash, .noPage, .notYet: pageId = nil
+      }
+      document.commitComposition()
+      let origin = ActionOrigin.strip(taskId: taskId)
+      actionOut = origin
+      // The command about to go takes the server's slot: an Undo of the action before would be refused.
+      notice.withdrawUndo()
+      noticeOf = nil
+      Task { [weak self, model] in
+        let acted = await model.plan(
+          taskId, on: day, notOvertaking: pageId, owner: owner, notice: DayFacts.planNotice(date: day, today: today))
+        guard let self else { return }
+        self.actionOut = nil
+        // Said only while the screen shows the today it was made on, under the account it was made under.
+        guard self.date == today, model.today == today, model.state.owner == owner else { return }
+        self.say(acted, of: origin, pageId: pageId, date: today, owner: owner)
       }
     }
 
@@ -874,6 +1092,13 @@
       scheduledChange = nil
       setNeedsUpdateProperties()
       Task { await model.refresh() }
+    }
+  }
+
+  extension DayFacts {
+    /// Whether `taskId` is a row of `Not today`.
+    fileprivate func lists(_ taskId: String) -> Bool {
+      notToday?.rows.contains { $0.taskId.utf8.elementsEqual(taskId.utf8) } ?? false
     }
   }
 

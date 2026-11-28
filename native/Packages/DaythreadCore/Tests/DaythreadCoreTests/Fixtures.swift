@@ -227,3 +227,38 @@ extension RowAction {
     }
   }
 }
+
+/// A shared case of `facts-actions/`: the strip's `Bring back` or `Another day` for a to-do set aside, and what the
+/// server answered.
+struct FactsActionCase {
+  var name: String
+  var before: Workspace
+  var taskId: String
+  var date: LocalDate
+  var today: LocalDate
+  var action: JSONValue
+  var after: Workspace
+  var notice: String
+}
+
+extension Fixtures {
+  static func factsActionNames() throws -> [String] {
+    try FileManager.default.contentsOfDirectory(atPath: core.appending(path: "facts-actions").path)
+      .filter { $0.hasSuffix(".json") }
+      .map { String($0.dropLast(".json".count)) }
+      .sorted()
+  }
+
+  static func factsActionCase(_ name: String) throws -> FactsActionCase {
+    let object = try #require(try json("facts-actions/\(name).json").objectValue)
+    return FactsActionCase(
+      name: name,
+      before: try #require(object["before"].flatMap(Workspace.init), "before: \(name)"),
+      taskId: try #require(object["taskId"]?.stringValue, "taskId: \(name)"),
+      date: try #require(object["date"]?.stringValue.flatMap(LocalDate.init), "date: \(name)"),
+      today: try #require(object["today"]?.stringValue.flatMap(LocalDate.init), "today: \(name)"),
+      action: try #require(object["action"], "action: \(name)"),
+      after: try #require(object["after"].flatMap(Workspace.init), "after: \(name)"),
+      notice: try #require(object["notice"]?.stringValue, "notice: \(name)"))
+  }
+}

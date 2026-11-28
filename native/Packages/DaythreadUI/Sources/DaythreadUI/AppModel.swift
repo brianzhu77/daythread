@@ -648,9 +648,7 @@ extension AppModel {
       // and a notice words its Due date from it.
       let task = workspace?.task(taskId)
     else { return .notDone }
-    guard case .applied(let answer) = await engine.perform(action: command, notOvertaking: pageId),
-      await stateHolding(answer.published, madeUnder: owner)
-    else { return .notDone }
+    guard let answer = await performWaited(command, notOvertaking: pageId, owner: owner) else { return .notDone }
     // Only the off item's words read where the to-do is planned after the answer; no other action pays for it.
     let plannedAfter = action == .notToday ? workspace.flatMap { TodoIndex($0).plannedOn(taskId) } : nil
     let receipt = answer.receipt.flatMap(Receipt.init) ?? Self.noReceipt
@@ -659,9 +657,36 @@ extension AppModel {
     return .done(text: text, operationId: answer.operationId)
   }
 
-  /// Sends `undo` the same way. Returns `Undone`, `Can't undo · changed since` (the server's
-  /// "Cannot undo after later changes"), or `Couldn't undo · your text is kept`.
-  func undo(_ operationId: String, pageId: String, owner: String) async -> Notice {
+  /// §12.4: plans a to-do that is not a row of the page shown (`plan-task` with no `from`): the strip's `Bring back`
+  /// and `Another day`, and 1d.2's `N more open`. As `act`: his words handed over first, then the command sent and
+  /// waited for, `pageId` not overtaken (nil: no page to wait for); returns once a state holding the answer has
+  /// arrived. `notice` is the words of a done answer. `.notDone` when the to-do is not in the workspace, for another
+  /// owner, or when it fails, is refused or is not sent.
+  public func plan(_ taskId: String, on date: LocalDate, notOvertaking pageId: String?, owner: String, notice: String)
+    async -> RowActed
+  {
+    let today = today
+    // Read once his words are: a to-do typed a moment ago is in the workspace by then.
+    guard await handOverHisWords(owner: owner), workspace?.task(taskId) != nil else { return .notDone }
+    let command = Command.planTask(taskId: taskId, date: date, from: nil, today: today)
+    guard let answer = await performWaited(command, notOvertaking: pageId, owner: owner) else { return .notDone }
+    return .done(text: notice, operationId: answer.operationId)
+  }
+
+  /// §11.4 steps 3 and 4: performs `command` with `pageId` not overtaken, and returns its answer once a state holding
+  /// it has arrived under `owner`; nil when it was not applied, or that state is not `owner`'s.
+  private func performWaited(_ command: JSONValue, notOvertaking pageId: String?, owner: String) async
+    -> Performed.Answer?
+  {
+    guard case .applied(let answer) = await engine.perform(action: command, notOvertaking: pageId),
+      await stateHolding(answer.published, madeUnder: owner)
+    else { return nil }
+    return answer
+  }
+
+  /// Sends `undo` the same way; `pageId` nil for an action that had no page to wait for. Returns `Undone`, `Can't
+  /// undo · changed since` (the server's "Cannot undo after later changes"), or `Couldn't undo · your text is kept`.
+  func undo(_ operationId: String, pageId: String?, owner: String) async -> Notice {
     let couldNot = Notice(text: RowNotice.couldntUndo, kind: .failed, undoing: nil)
     guard await handOverHisWords(owner: owner) else { return couldNot }
     switch await engine.perform(action: Command.undo(targetOperationId: operationId), notOvertaking: pageId) {

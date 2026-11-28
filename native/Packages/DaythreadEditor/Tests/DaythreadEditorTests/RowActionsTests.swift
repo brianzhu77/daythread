@@ -397,6 +397,26 @@
         #expect(requests.map(\.rowID) == ["other"])
       }
 
+      @Test func while_row_actions_are_paused_no_row_offers_a_swipe_or_reports_a_choice() throws {
+        let (screen, requests) = try everyKind()
+
+        screen.controller.pausesRowActions = true
+        screen.window.layoutIfNeeded()
+        #expect(swipe(screen, 0) == nil)
+        #expect(swipe(screen, 1) == nil)
+        #expect(swipe(screen, 3) == nil)
+        try menuItem(try cell(screen, 0).circle.menu, "Not today").performWithSender(nil, target: nil)
+        #expect(requests().isEmpty)
+        #expect(colour(try cell(screen, 0).line, at: 0) == .label, "the flag alone dims no row")
+        #expect(colour(try cell(screen, 1).line, at: 0) == .label)
+
+        screen.controller.pausesRowActions = false
+        #expect(swipeTitles(screen, 0) == ["Tomorrow", "Not today", "More"])
+        #expect(swipeTitles(screen, 1) == ["Plan for today", "More"])
+        try menuItem(try cell(screen, 0).circle.menu, "Not today").performWithSender(nil, target: nil)
+        #expect(requests().map(\.rowID) == ["plan"])
+      }
+
       // MARK: a row whose actions change
 
       @Test func a_row_whose_actions_change_keeps_its_cell_and_caret() throws {

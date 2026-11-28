@@ -8,6 +8,8 @@
     let relativeLabel = UILabel()
     let titleButton: UIButton
     let statusLabel = UILabel()
+    /// The title's stack, then what goes under it.
+    private let outer = UIStackView()
     /// Called when the header's height changes: what is laid out under it follows.
     var onResize: (() -> Void)?
     private var laidOutHeight: CGFloat = 0
@@ -67,22 +69,34 @@
       statusLabel.textColor = .secondaryLabel
       statusLabel.numberOfLines = 0
 
-      let stack = UIStackView(arrangedSubviews: [relativeLabel, titleButton, statusLabel])
-      stack.axis = .vertical
-      stack.alignment = .leading
-      stack.spacing = 2
-      stack.setCustomSpacing(4, after: titleButton)
-      stack.translatesAutoresizingMaskIntoConstraints = false
-      addSubview(stack)
+      let titles = UIStackView(arrangedSubviews: [relativeLabel, titleButton, statusLabel])
+      titles.axis = .vertical
+      titles.alignment = .leading
+      titles.spacing = 2
+      titles.setCustomSpacing(4, after: titleButton)
+      // The titles keep their own widths; what goes under them (the strip, 1d.2's draft line above it) takes the
+      // header's whole width inside its margins.
+      outer.addArrangedSubview(titles)
+      outer.axis = .vertical
+      outer.alignment = .fill
+      outer.spacing = UIStackView.spacingUseSystem
+      outer.translatesAutoresizingMaskIntoConstraints = false
+      addSubview(outer)
       directionalLayoutMargins.top = 8
       directionalLayoutMargins.bottom = 16
       let margins = layoutMarginsGuide
       NSLayoutConstraint.activate([
-        stack.topAnchor.constraint(equalTo: margins.topAnchor),
-        stack.leadingAnchor.constraint(equalTo: margins.leadingAnchor),
-        stack.trailingAnchor.constraint(lessThanOrEqualTo: margins.trailingAnchor),
-        stack.bottomAnchor.constraint(equalTo: margins.bottomAnchor),
+        outer.topAnchor.constraint(equalTo: margins.topAnchor),
+        outer.leadingAnchor.constraint(equalTo: margins.leadingAnchor),
+        outer.trailingAnchor.constraint(equalTo: margins.trailingAnchor),
+        outer.bottomAnchor.constraint(equalTo: margins.bottomAnchor),
       ])
+    }
+
+    /// Puts `view` under the title's stack, the header's full width inside its margins; hidden, it takes no room.
+    func hold(facts view: UIView) {
+      guard view.superview !== outer else { return }
+      outer.addArrangedSubview(view)
     }
 
     @available(*, unavailable)

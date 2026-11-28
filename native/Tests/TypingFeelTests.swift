@@ -53,6 +53,48 @@ final class TypingFeelTests: XCTestCase {
     try checkBudget(median, against: Self.measuredMedian.shortPage)
   }
 
+  /// The strip's cost on a large workspace (`native-phase-1.md` §12.6): 3,000 to-dos on 300 day pages of 10 rows, 200
+  /// chips, 100 to-dos set aside and 100 due with no row today. Prints the time to build the index and the time of
+  /// the facts of today read from it, per run and their medians; not budgeted.
+  func test_the_strips_facts_on_a_large_workspace() throws {
+    let todayRows = (1...10).map { Self.todoRow("line-\($0)", "todo-\($0)", on: Self.today, words: Self.words(of: $0)) }
+    let workspace = try Self.workspace(
+      todayLines: todayRows, todayTasks: (1...10).map { Self.todo("todo-\($0)") }, pastRows: 10, chips: 200,
+      chipsToday: 3)
+    XCTAssertEqual(workspace.pages.count, 300)
+    XCTAssertEqual(workspace.tasks.count, 3_000)
+
+    let clock = ContinuousClock()
+    var indexRuns: [Double] = []
+    var factsRuns: [Double] = []
+    var facts = DayFacts.none
+    for _ in 0..<Self.runs {
+      var index: TodoIndex?
+      let indexTime = clock.measure { index = TodoIndex(workspace) }
+      let built = try XCTUnwrap(index)
+      let factsTime = clock.measure {
+        facts = DayFacts.of(day: Self.today, in: workspace, index: built, today: Self.today)
+      }
+      indexRuns.append(indexTime / .milliseconds(1))
+      factsRuns.append(factsTime / .milliseconds(1))
+      print("TypingFeel: facts index \(Self.shown(indexRuns.suffix(1))) ms, facts \(Self.shown(factsRuns.suffix(1))) ms")
+    }
+    print(
+      "TypingFeel: facts index median \(Self.shown([Self.median(indexRuns)])) ms, facts median",
+      "\(Self.shown([Self.median(factsRuns)])) ms, of 3,000 to-dos on 300 pages")
+    XCTAssertEqual(facts.notToday?.rows.count, 100, "the to-dos set aside")
+    XCTAssertEqual(facts.dueSoon.count, 100, "the to-dos due with no row today")
+    XCTAssertNotNil(facts.events, "the events of today")
+  }
+
+  /// The fixture holds the strip the typing tests are to type under: 100 set aside, 100 due, and events today.
+  private static func expectTheStrip(of workspace: Workspace) {
+    let facts = DayFacts.of(day: today, in: workspace, index: TodoIndex(workspace), today: today)
+    XCTAssertEqual(facts.notToday?.rows.count, 100, "the to-dos set aside")
+    XCTAssertEqual(facts.dueSoon.count, 100, "the to-dos due with no row today")
+    XCTAssertNotNil(facts.events, "the events of today")
+  }
+
   private func checkBudget(_ median: Double, against measured: Double) throws {
     guard ProcessInfo.processInfo.environment["DAYTHREAD_FEEL_BUDGET"] == "1" else { return }
     let budget = try XCTUnwrap(measured > 0 ? measured * 1.5 : nil, "no median measured yet to hold the budget to")
@@ -87,7 +129,7 @@ final class TypingFeelTests: XCTestCase {
     var typed = words
     var stored = try XCTUnwrap(model.workspace?.dayPage(Self.today)?.document.utf8.count)
     let clock = ContinuousClock()
-    for _ in 0..<Self.runs {
+    for runIndex in 0..<Self.runs {
       line.selectedRange = NSRange(location: (line.text as NSString).length, length: 0)
       var laidOut = Duration.zero
       var drawn = Duration.zero
@@ -103,7 +145,16 @@ final class TypingFeelTests: XCTestCase {
         // nothing that would be counted against the app.
         stored += 1
         let expected = stored
-        try await until { model.workspace?.dayPage(Self.today)?.document.utf8.count == expected }
+        try await until(
+          "the engine's state reached the screen",
+          held: {
+            let length = model.workspace?.dayPage(Self.today)?.document.utf8.count
+            let state = model.state
+            return "the page's document \(length.map(String.init) ?? "absent") bytes long, \(expected) expected; "
+              + "state number \(state.published), \(state.drafts.count) drafts \(state.drafts.map { "\($0.state)" }); "
+              + "keystroke \(index + 1) of run \(runIndex + 1)"
+          }
+        ) { model.workspace?.dayPage(Self.today)?.document.utf8.count == expected }
         window.layoutIfNeeded()
         drawn += clock.now - start
       }
@@ -130,64 +181,132 @@ final class TypingFeelTests: XCTestCase {
   /// Waits, a millisecond at a time, for `condition`, the main actor's other work running meanwhile; fails after
   /// thirty seconds. The wait is long because it is not what is measured: on CI's machines one keystroke's state
   /// has taken more than two seconds to be drawn on the 300-line page, which failed the run without any defect.
-  private func until(_ condition: () -> Bool) async throws {
+  ///
+  /// A failure says what the model held when it gave up (`held`), then waits a further two minutes and reads again, so
+  /// the log tells a state that came late from one that did not come. A failed wait records the failure and throws,
+  /// which ends the test: the keystrokes after it are not measured.
+  private func until(_ what: String, held: () -> String = { "" }, _ condition: () -> Bool) async throws {
     let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(30))
+    let started = clock.now
+    let deadline = started.advanced(by: .seconds(30))
     while !condition(), clock.now < deadline {
       try await Task.sleep(nanoseconds: 1_000_000)
     }
-    XCTAssertTrue(condition(), "the engine's state reached the screen")
+    guard !condition() else { return }
+    let gaveUp = clock.now
+    let heldThen = held()
+    let furtherDeadline = gaveUp.advanced(by: .seconds(120))
+    while !condition(), clock.now < furtherDeadline {
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+    let outcome =
+      condition()
+      ? "it arrived late, \(Self.seconds(clock.now - gaveUp)) s after the first wait ended"
+      : "it had still not arrived after a further \(Self.seconds(clock.now - gaveUp)) s; the model then held \(held())"
+    let message = "\(what): not there after \(Self.seconds(gaveUp - started)) s; the model held \(heldThen); \(outcome)"
+    XCTFail(message)
+    // The test ends here: another wait after a failed one would cost the same again for every keystroke left.
+    throw WaitFailed(message: message)
+  }
+
+  private struct WaitFailed: Error, CustomStringConvertible {
+    let message: String
+    var description: String { message }
+  }
+
+  private static func seconds(_ duration: Duration) -> String {
+    String(format: "%.1f", duration / .milliseconds(1) / 1_000)
   }
 
   // MARK: The page
 
   private static func words(of line: Int) -> String { "Line \(line) of the day, with a few words in it" }
 
+  private static let dayBefore = LocalDate("2026-11-24")!
+
+  /// A line holding a to-do's row, planned on `day`.
+  private static func todoRow(_ id: String, _ taskId: String, on day: LocalDate, words: String) -> String {
+    #"{"id":"\#(id)","type":"task","props":{"taskId":"\#(taskId)","role":"plan","planDate":"\#(day.value)"},"content":[{"type":"text","text":"\#(words)","styles":{}}],"children":[]}"#
+  }
+
+  /// A to-do due tomorrow, so on no strip of today; `paused` sets it aside, `deadline` moves its due date.
+  private static func todo(_ id: String, paused: Bool = false, deadline: LocalDate? = nil) -> JSONValue {
+    .object([
+      "id": .string(id), "title": .string("A to-do"), "status": .string("open"), "paused": .bool(paused),
+      "version": .number("1"), "deadlineOn": .string((deadline ?? LocalDate("2026-11-26")!).value),
+      "attentionOn": .null,
+    ])
+  }
+
+  private static func dayPage(_ day: LocalDate, _ lines: [String]) -> JSONValue {
+    .object([
+      "id": .string("day:\(day.value)"), "type": .string("daily"), "date": .string(day.value),
+      "title": .string(""), "document": .string("[\(lines.joined(separator: ","))]"),
+    ])
+  }
+
+  /// A line holding one date chip: an event on `date`.
+  private static func chipLine(_ number: Int, on date: LocalDate) -> String {
+    #"{"id":"chip-\#(number)","type":"paragraph","props":{},"content":[{"type":"dateMention","props":{"eventId":"event-\#(number)","date":"\#(date.value)"}}],"children":[]}"#
+  }
+
+  /// A workspace of 3,000 to-dos on today's page (`todayLines`, with the to-dos whose rows they hold) and on the
+  /// `pastRows` rows a day of the days before it, with the strip's facts on today: of the past to-dos the first 100 are
+  /// set aside and the next 100 are due the day before today, so none has a row today; and `chips` lines each holding
+  /// a date chip, spread over the past pages, the first `chipsToday` dated today.
+  private static func workspace(
+    todayLines: [String], todayTasks: [JSONValue], pastRows: Int, chips: Int, chipsToday: Int
+  ) throws -> Workspace {
+    var tasks = todayTasks
+    var past: [(day: LocalDate, lines: [String])] = []
+    var pastCount = 0
+    var day = today
+    while tasks.count < 3_000 {
+      day = try XCTUnwrap(day.adding(days: -1))
+      let rows = (0..<min(pastRows, 3_000 - tasks.count)).map { index in
+        let id = "past-\(day.value)-\(index)"
+        let task: JSONValue
+        switch pastCount {
+        case 0..<100: task = todo(id, paused: true)
+        case 100..<200: task = todo(id, deadline: dayBefore)
+        default: task = todo(id)
+        }
+        pastCount += 1
+        tasks.append(task)
+        return todoRow(id, id, on: day, words: "Something to do")
+      }
+      past.append((day, rows))
+    }
+    for chip in 0..<chips {
+      let page = chip * past.count / chips
+      past[page].lines.append(chipLine(chip, on: chip < chipsToday ? today : past[page].day))
+    }
+    let pages = [dayPage(today, todayLines)] + past.map { dayPage($0.day, $0.lines) }
+    return try XCTUnwrap(
+      Workspace(
+        .object([
+          "revision": .number("1"), "timezone": .string("UTC"), "pages": .array(pages), "tasks": .array(tasks),
+        ])))
+  }
+
   /// A model signed in as `one`, on a store on disk holding today's page of `count` lines, its engine past its first
   /// pass; from then on the server holds every call, saves included, and answers none.
   /// Every third line of the page (the first, the fourth, …) is a to-do due tomorrow, so its row draws a marks line;
   /// the lines typed into (the 150th, the 5th) are not. The workspace holds 3,000 to-dos in all: the rest are
-  /// planned on the 30 days before, 100 a day, so the rows' facts read an index of a workspace that size.
+  /// planned on the days before, 100 a day, so the rows' facts read an index of a workspace that size. The strip
+  /// above the page is on screen too: 100 of those to-dos are set aside, 100 are due and have no row today, and the
+  /// past pages hold 200 chips, 2 of them dated today.
   private func model(page count: Int) async throws -> AppModel {
-    func todo(_ id: String) -> JSONValue {
-      .object([
-        "id": .string(id), "title": .string("A to-do"), "status": .string("open"), "paused": .bool(false),
-        "version": .number("1"), "deadlineOn": .string("2026-11-26"), "attentionOn": .null,
-      ])
-    }
-    func todoRow(_ id: String, _ taskId: String, on day: LocalDate, words: String) -> String {
-      #"{"id":"\#(id)","type":"task","props":{"taskId":"\#(taskId)","role":"plan","planDate":"\#(day.value)"},"content":[{"type":"text","text":"\#(words)","styles":{}}],"children":[]}"#
-    }
-    func dayPage(_ day: LocalDate, _ lines: [String]) -> JSONValue {
-      .object([
-        "id": .string("day:\(day.value)"), "type": .string("daily"), "date": .string(day.value),
-        "title": .string(""), "document": .string("[\(lines.joined(separator: ","))]"),
-      ])
-    }
     var tasks: [JSONValue] = []
     let lines = (1...count).map { index in
       guard index % 3 == 1 else {
         return #"{"id":"line-\#(index)","type":"paragraph","props":{},"content":[{"type":"text","text":"\#(Self.words(of: index))","styles":{}}],"children":[]}"#
       }
-      tasks.append(todo("todo-\(index)"))
-      return todoRow("line-\(index)", "todo-\(index)", on: Self.today, words: Self.words(of: index))
+      tasks.append(Self.todo("todo-\(index)"))
+      return Self.todoRow("line-\(index)", "todo-\(index)", on: Self.today, words: Self.words(of: index))
     }
-    var pages = [dayPage(Self.today, lines)]
-    var day = Self.today
-    while tasks.count < 3_000 {
-      day = try XCTUnwrap(day.adding(days: -1))
-      let rows = (0..<min(100, 3_000 - tasks.count)).map { index in
-        let id = "past-\(day.value)-\(index)"
-        tasks.append(todo(id))
-        return todoRow(id, id, on: day, words: "Something to do")
-      }
-      pages.append(dayPage(day, rows))
-    }
-    let copy = try XCTUnwrap(
-      Workspace(
-        .object([
-          "revision": .number("1"), "timezone": .string("UTC"), "pages": .array(pages), "tasks": .array(tasks),
-        ])))
+    let copy = try Self.workspace(todayLines: lines, todayTasks: tasks, pastRows: 100, chips: 200, chipsToday: 2)
+    Self.expectTheStrip(of: copy)
 
     let url = FileManager.default.temporaryDirectory.appendingPathComponent("typing-feel-\(UUID().uuidString).store")
     storeURL = url
@@ -203,7 +322,10 @@ final class TypingFeelTests: XCTestCase {
     let engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: SyncEngine.sleep, now: { noon })
     let model = AppModel(engine: engine, now: { noon })
     model.start()
-    try await until { model.state.phase == .ready && model.workspace != nil }
+    try await until(
+      "the model signed in and showed the copy",
+      held: { "phase \(model.state.phase), \(model.workspace == nil ? "no copy" : "a copy")" }
+    ) { model.state.phase == .ready && model.workspace != nil }
     await engine.settled()
     await server.hold()
     return model
