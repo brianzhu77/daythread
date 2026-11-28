@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 
 @testable import Daythread
 
@@ -40,5 +41,38 @@ import Testing
     #expect(AppDelegate.storeFileName(for: local, explicitName: "test-1") == "test-1.store")
     #expect(AppDelegate.storeFileName(for: local, explicitName: nil) == "workspace-http---127.0.0.1-3741.store")
     #expect(AppDelegate.storeFileName(for: local, explicitName: "../x") == "workspace-http---127.0.0.1-3741.store")
+  }
+}
+
+/// The app that hosts the unit tests reaches no server: a Debug build's `Info.plist` names the developer's own
+/// server on port 3000, which a test run must never touch, whatever starts a request (launch, becoming active, a
+/// retry). A Release build always uses its `Info.plist` value; these tests run in a Debug build and cannot reach that
+/// branch.
+@Suite struct DebugServerTests {
+  private let developers = "http://127.0.0.1:3000"
+
+  @Test func hostingTestsWithNoArgumentReachesNoServer() {
+    #expect(AppDelegate.debugServer(hostingTests: true, argument: nil, infoValue: developers) == "http://127.0.0.1:9")
+  }
+
+  @Test func hostingTestsWithAnArgumentUsesTheArgument() {
+    let given = "http://127.0.0.1:3741"
+    #expect(AppDelegate.debugServer(hostingTests: true, argument: given, infoValue: developers) == given)
+  }
+
+  @Test func notHostingTestsUsesTheArgumentOrElseInfoPlist() {
+    #expect(AppDelegate.debugServer(hostingTests: false, argument: nil, infoValue: developers) == developers)
+    let given = "http://127.0.0.1:3741"
+    #expect(AppDelegate.debugServer(hostingTests: false, argument: given, infoValue: developers) == given)
+  }
+
+  /// This process hosts the tests (the sign the app reads is set here), and the delegate it launched with was put
+  /// together for the discard port. The scheme's test action also passes `-DaythreadServerURL http://127.0.0.1:9`, so
+  /// this holds through `xcodebuild -scheme Daythread` either way; the rule above holds it for any other way the
+  /// tests are run.
+  @MainActor @Test func theHostingAppTalksToTheDiscardPort() throws {
+    #expect(ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil)
+    let app = try #require(UIApplication.shared.delegate as? AppDelegate)
+    #expect(ServerOrigin(app.server) == ServerOrigin(try #require(URL(string: "http://127.0.0.1:9"))))
   }
 }

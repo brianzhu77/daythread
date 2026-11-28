@@ -2949,6 +2949,209 @@ private func applied(_ changes: WorkspaceChanges) -> FakeTransport.Reply {
   }
 }
 
+// MARK: - Asking the server for the day's draft
+
+/// Today at `noon`, whose page every copy here holds.
+private let draftDay = LocalDate("2026-11-25")!
+
+/// A `set-draft` as the route hands it over: keys in the server's order, a number token `JSON.stringify` keeps.
+private let setDraftText =
+  #"{"type":"set-draft","pageId":"day:2026-11-25","status":"ready","moreOpen":[],"allowedTaskIds":["t1"],"recipe":5,"#
+  + #""items":[{"id":"i1","anchor":"","place":"after","taskId":"t1","source":"model","state":"open","#
+  + #""block":{"id":"b1","type":"task","props":{"level":1.0},"content":[]}}]}"#
+
+@Suite struct SyncEngineDayDraftTests {
+  @Test func day_draft_asks_with_the_session_and_answers_the_reply() async throws {
+    let reply = DayDraftReply(setDraft: setDraftText, owner: "user-1", modelOn: true, remakeFailed: false)
+    // Another account's reply is handed over as it came: the model compares its owner with the account it asked under.
+    let elsewhere = DayDraftReply(setDraft: nil, owner: "someone", modelOn: false, remakeFailed: false)
+    let gate = Gate()
+    let h = try await Harness(opening + [.gated(gate), .dayDraft(reply), .dayDraft(elsewhere)], copy: try workspace(5))
+    await h.engine.start()
+    // A pass is out, waiting for the server: the ask neither waits for it nor queues behind it.
+    let refreshing = Task { await h.engine.refresh() }
+    await gate.reached()
+
+    #expect(await h.engine.dayDraft(for: draftDay) == .reply(reply))
+    #expect(await h.engine.dayDraft(for: draftDay) == .reply(elsewhere))
+
+    let asks = await h.calls.compactMap { call -> (String?, LocalDate, String)? in
+      if case .dayDraft(let token, let date, let operationId) = call { (token, date, operationId) } else { nil }
+    }
+    #expect(asks.count == 2)
+    for (token, date, operationId) in asks {
+      #expect(token == "tok-1")
+      #expect(date == draftDay)
+      #expect(UUID(uuidString: operationId) != nil)
+      #expect(operationId == operationId.lowercased())
+    }
+    #expect(asks.first?.2 != asks.last?.2, "an operation id for each ask")
+    await gate.open(.workspace(.unchanged(revision: 5, owner: "user-1")))
+    await refreshing.value
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func day_draft_asks_nothing_signed_out_or_before_the_first_load() async throws {
+    // Before the first load nothing is shown.
+    let starting = try await Harness(opening, copy: try workspace(5))
+    #expect(await starting.engine.dayDraft(for: draftDay) == .signedOut)
+    #expect(await starting.calls == [])
+
+    // No session over a copy that is not the Mac's: sign-in is shown without a request.
+    let out = try await Harness(session: nil, copy: try workspace(5))
+    await out.engine.start()
+    #expect(await current(out.engine)?.phase == .signedOut)
+    #expect(await out.engine.dayDraft(for: draftDay) == .signedOut)
+    #expect(await out.calls == [])
+  }
+
+  @Test func day_draft_offline_leaves_the_state_alone() async throws {
+    let h = try await Harness(opening, copy: try workspace(5))
+    await h.engine.start()
+    let before = await numbered(h.engine)
+    let passes = await h.engine.passRequests
+    await h.store.forget()
+    await h.transport.goOffline()
+
+    #expect(await h.engine.dayDraft(for: draftDay) == .offline)
+
+    let after = await numbered(h.engine)
+    #expect(after == before, "no state published")
+    #expect(after?.offline == false)
+    #expect(after?.failure == nil)
+    #expect(await h.engine.passRequests == passes, "no pass asked for")
+    #expect(try await h.entries == [])
+    #expect(await h.log == [], "nothing stored")
+  }
+
+  @Test func day_draft_not_found_and_other_failures() async throws {
+    let h = try await Harness(
+      opening + [
+        .failure(TransportError.refused(status: 404, reason: "not-found")),
+        // A server without the route answers its path with a plain-text 404.
+        .failure(TransportError.refused(status: 404, reason: nil)),
+        .failure(TransportError.refused(status: 400, reason: "bad-request")),
+        .failure(TransportError.server(status: 500)),
+        .failure(TransportError.wait(seconds: 30)),
+        .failure(TransportError.unreadable),
+      ], copy: try workspace(5))
+    await h.engine.start()
+    let before = await numbered(h.engine)
+    let passes = await h.engine.passRequests
+
+    #expect(await h.engine.dayDraft(for: draftDay) == .notFound)
+    for _ in 0..<5 { #expect(await h.engine.dayDraft(for: draftDay) == .failed) }
+
+    #expect(await numbered(h.engine) == before, "the state's failure is the passes' alone")
+    #expect(await h.engine.passRequests == passes, "no pass asked for")
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_401_on_the_ask_signs_out_through_a_pass() async throws {
+    let h = try await Harness(
+      opening + [.failure(TransportError.signedOut), .failure(TransportError.signedOut)], copy: try workspace(5))
+    await h.engine.start()
+    let passes = await h.engine.passRequests
+
+    #expect(await h.engine.dayDraft(for: draftDay) == .signedOut)
+    #expect(await h.engine.passRequests == passes + 1, "a pass that loads is asked for, not waited for")
+
+    // The pass meets the same 401 and signs out as any call's 401 does.
+    await h.engine.settled()
+    #expect(await h.calls.last == .workspace(token: "tok-1", have: 5))
+    #expect(await current(h.engine)?.phase == .signedOut)
+    #expect(try h.tokens.read() == nil)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func an_answer_after_a_sign_in_as_another_account_is_signed_out() async throws {
+    let reply = DayDraftReply(setDraft: setDraftText, owner: "user-1", modelOn: true, remakeFailed: false)
+    let gate = Gate()
+    let h = try await Harness(
+      opening + [.gated(gate), .session(second), .workspace(.full(try workspace(7), owner: "user-2"))],
+      copy: try workspace(5))
+    await h.engine.start()
+    let asking = Task { await h.engine.dayDraft(for: draftDay) }
+    await gate.reached()
+
+    try await h.engine.signIn(email: two, password: "pw", timezone: "UTC")
+    #expect(await current(h.engine)?.owner == "user-2")
+    await gate.open(.dayDraft(reply))
+
+    #expect(await asking.value == .signedOut)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func an_answer_after_a_load_under_another_owner_is_signed_out() async throws {
+    let reply = DayDraftReply(setDraft: setDraftText, owner: "user-1", modelOn: true, remakeFailed: false)
+    let gate = Gate()
+    let h = try await Harness(
+      opening + [.gated(gate), .workspace(.full(try workspace(6), owner: "user-2"))], copy: try workspace(5))
+    await h.engine.start()
+    let asking = Task { await h.engine.dayDraft(for: draftDay) }
+    await gate.reached()
+
+    // The same session, epoch and phase; only the copy shown is now another account's.
+    await h.engine.refresh()
+    #expect(await current(h.engine)?.owner == "user-2")
+    await gate.open(.dayDraft(reply))
+
+    #expect(await asking.value == .signedOut)
+    #expect(await h.transport.unscripted == [])
+  }
+
+  @Test func a_day_draft_answered_after_a_sign_out_began_is_dropped() async throws {
+    let reply = DayDraftReply(setDraft: setDraftText, owner: "user-1", modelOn: true, remakeFailed: false)
+    let gate = Gate()
+    let h = try await Harness(opening + [.gated(gate), .done], copy: try workspace(5))
+    await h.engine.start()
+    let asking = Task { await h.engine.dayDraft(for: draftDay) }
+    await gate.reached()
+
+    await h.engine.signOut(discardingUnsent: true)
+    await gate.open(.dayDraft(reply))
+
+    #expect(await asking.value == .signedOut)
+  }
+
+  @Test func a_set_draft_text_goes_through_perform_unchanged() async throws {
+    let gate = Gate()
+    let h = try await Harness(opening + [.gated(gate)], copy: try board(5, rows: [row("t1")]))
+    await h.engine.start()
+    let action = try JSON.parse(setDraftText)
+    let performing = Task { await h.engine.perform(action: action) }
+    await gate.reached()
+
+    guard case .send(_, let operationId, let sent, let owner, let basis)? = await h.transport.sends.last else {
+      await gate.open(offline)
+      Issue.record("not sent")
+      return
+    }
+    #expect(sent == action)
+    #expect(JSON.write(sent) == setDraftText, "its key order and number tokens")
+    #expect(owner == "user-1")
+    #expect(basis == OutboxBasis(baseRevision: 5, ownRevisions: [], readsBeyond: true))
+    await gate.open(applied(try addingDay(from: 5, to: 6, "2026-11-25", undo: marker(operationId, 6))))
+
+    let answer = try #require(await performing.value.answer)
+    #expect(answer.operationId == operationId)
+    #expect(await current(h.engine)?.undoSlot == UndoMarker(operationId: operationId, revision: 6))
+    #expect(try await h.entries == [])
+  }
+
+  @Test func a_set_draft_refused_as_already_drafted_answers_the_refusal() async throws {
+    let h = try await Harness(
+      opening + [
+        .outcome(.refused(message: "This day already has its draft", owner: "user-1")),
+        .workspace(.unchanged(revision: 5, owner: "user-1")),
+      ], copy: try board(5, rows: [row("t1")]))
+    await h.engine.start()
+
+    #expect(await h.engine.perform(action: try JSON.parse(setDraftText)) == .refused("This day already has its draft"))
+    #expect(await h.transport.unscripted == [])
+  }
+}
+
 /// States a callback saw, in order.
 actor Seen {
   private(set) var all: [SyncState] = []

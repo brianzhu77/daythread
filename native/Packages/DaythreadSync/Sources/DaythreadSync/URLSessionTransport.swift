@@ -114,7 +114,40 @@ public struct URLSessionTransport: ServerTransport {
     return outcome
   }
 
+  /// The server cuts its own model call at 45 seconds, so an answer comes well inside this. It is the same number as
+  /// the model's "no answer in 60 seconds" (§13.3) on purpose: the request ends when the ask is counted as lost, and
+  /// does not depend on the session's default.
+  static let dayDraftTimeout: TimeInterval = 60
+
+  public func dayDraft(token: String?, date: LocalDate, operationId: String) async throws -> DayDraftReply {
+    let body: JSONValue = .object(["date": .string(date.value), "operationId": .string(operationId)])
+    let reply = try await perform(.post, "day-draft", token: token, body: body, timeout: Self.dayDraftTimeout)
+    guard let reply = Self.dayDraftReply(of: reply) else { throw TransportError.unreadable }
+    return reply
+  }
+
   // MARK: Replies
+
+  private static func dayDraftReply(of reply: JSONValue) -> DayDraftReply? {
+    guard let object = reply.objectValue, let owner = object["owner"]?.stringValue,
+      let modelOn = flag(object["modelOn"]), let remakeFailed = flag(object["remakeFailed"])
+    else { return nil }
+    let setDraft: String?
+    switch object["setDraft"] {
+    case .null?: setDraft = nil
+    case let value?:
+      guard let text = value.stringValue else { return nil }
+      setDraft = text
+    case nil: return nil
+    }
+    return DayDraftReply(setDraft: setDraft, owner: owner, modelOn: modelOn, remakeFailed: remakeFailed)
+  }
+
+  /// A flag the reply may leave out, which then reads as false; nil when it is there but not a boolean.
+  private static func flag(_ value: JSONValue?) -> Bool? {
+    guard let value else { return false }
+    return value.boolValue
+  }
 
   /// A save's 200 is the command's applied reply without its `status`; its refusals are 409s told apart by `error`.
   private static func saveOutcome(status: Int, of reply: JSONValue) -> SaveOutcome? {
@@ -168,18 +201,20 @@ public struct URLSessionTransport: ServerTransport {
   /// The body of a 2xx reply, parsed (`.null` when the caller does not read it).
   private func perform(
     _ method: Method, _ path: String, token: String? = nil, query: [URLQueryItem] = [],
-    body: JSONValue? = nil, readsBody: Bool = true
+    body: JSONValue? = nil, readsBody: Bool = true, timeout: TimeInterval? = nil
   ) async throws -> JSONValue {
-    try await exchange(method, path, token: token, query: query, body: body, readsBody: readsBody).body
+    try await exchange(method, path, token: token, query: query, body: body, readsBody: readsBody, timeout: timeout)
+      .body
   }
 
   /// As `perform`, with the status, and with the replies of the statuses in `reading` returned rather than thrown
-  /// when their body reads: they are answers the caller tells apart.
+  /// when their body reads: they are answers the caller tells apart. `timeout` replaces the session's own.
   private func exchange(
     _ method: Method, _ path: String, token: String? = nil, query: [URLQueryItem] = [],
-    body: JSONValue? = nil, readsBody: Bool = true, reading: Set<Int> = []
+    body: JSONValue? = nil, readsBody: Bool = true, reading: Set<Int> = [], timeout: TimeInterval? = nil
   ) async throws -> (status: Int, body: JSONValue) {
     var request = URLRequest(url: try url(path, query: query))
+    if let timeout { request.timeoutInterval = timeout }
     request.httpMethod = method.rawValue
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
