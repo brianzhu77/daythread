@@ -908,8 +908,8 @@ page, the Not today list, events and Due soon above the page". Two things the ta
   draft readings, six commands, rows in the list that are not lines of the page, and its own notices.
 
 So 1d is built and merged in two parts, each of which he can use: **1d.1, above the page** (§12.1 to §12.6),
-then **1d.2, the day draft** (§12.7, an outline: it gets its full design when 1d.1 is in, as each slice was
-written against what the one before it built).
+then **1d.2, the day draft** (§13, written when 1d.1 was in, as each slice was written against what the one
+before it built).
 
 ### 12.1 Goals, non-goals, anti-goals (1d.1)
 
@@ -1060,25 +1060,268 @@ The web's phone layout, with the system's parts (rule: the system component, con
   these actions offline; a tap on a `Due soon` row (the web has none); remembering the fold; limits or "more"
   for long lists (the web has none; seen on his data and decided then).
 
-### 12.7 The day draft (1d.2), in outline
+### 12.7 The day draft
 
-What is known, so that 1d.1 is built without closing a door:
+The day draft has its own section, §13, written when 1d.1 was in.
 
-- **The route** `POST /api/v1/day-draft` wraps `prepareDayDraft`: the request names the date and an operation
-  id; the reply is the `set-draft` command as text (or none: the day already has its draft), the owner, whether
-  this account has a model, and whether a remake failed. The app then sends that command as its own write. An
-  account with no model gets a draft marked failed that still holds what the app itself carries; the web says
-  `Couldn’t draft · Retry` for it.
-- **The readings to port**, pure and already tested on the web: `draftView` and what it leans on (where an item
-  sits, the planning part of a page, what is offered, what another day's draft decided or took over, the days
-  a to-do was skipped), checked against shared cases.
-- **Bands** are rows that are not lines of the page: an open suggestion drawn in the page after its anchor, in
-  muted ink with a dashed box, with Apply and Skip. The list today has no such row; this is the part to spike
-  first, as the swipe was in 1c. The same kind of row serves the events rows under `Events` and `N more open`.
-- **The commands**: `apply-draft`, `skip-draft`, `snooze-draft`, `move-draft`, `reopen-draft`, and `plan-task`
-  for `N more open`, each with its notice (`Applied` with `Undo`; `Skipped` with `Undo` and `Move to`; `Moved to
-  …`). Each takes the server's one Undo slot, `set-draft` included.
-- **Open questions for that design**: whether a band's words can be edited before applying (the web's can, for
-  a new line or to-do); what the page says for an account with no model; when the app asks (on opening today,
-  once, with what retry); bands arriving while he types (the web holds them for three seconds behind
-  `Suggestions ready · Show`).
+## 13. Slice 1d.2: the day draft
+
+Written 2026-11-27 against the web as it is (the survey `web-facts-1d.md`, sections 1 to 3 and 6) and the app
+after 1d.1, and checked against the code by a builder before the plan (four corrections came of it: the
+route's 404, when `Couldn’t draft` shows, what holds `set-draft` back, and the empty row under the caret). On the web, when he opens today's page the app asks the server
+for the day's draft once; what comes back is drawn inside the page as suggestions he applies or skips one at a
+time, or all at once. This slice brings that to the app.
+
+It is about twice the size of 1d.1, and one part of it reaches the typing path. So it is built and merged in
+parts, each of which he can use, after a narrow spike (§13.5) that the plan waits for:
+
+- **1d.2a, the draft** : the route, the readings, asking, the draft's line under the title, the suggestions as
+  rows in the page, Apply, Skip, Apply all, Dismiss, their notices and Undo. A suggestion that would fill an
+  empty row is drawn after that row.
+- **1d.2b, the draft among his typing**: a suggestion drawn in the place of the empty row it would fill, the
+  hold of suggestions that arrive while he types, and `N more open`.
+- **1d.3, moving from the draft and the events rows** (§13.9, an outline): `Move to` from the `Skipped` notice,
+  `Another day` on a suggestion he skipped on earlier days, and the rows under `Events` for events written on
+  other pages. 1d.2 already reads and shows everything those need; 1d.3 adds their controls and commands.
+
+§13.1 to §13.8 describe 1d.2a and 1d.2b together; where a rule belongs to 1d.2b it says so.
+
+### 13.1 Goals, non-goals, anti-goals (1d.2)
+
+Goals: on today's page, in the morning, he sees what the web's phone layout shows: a line under the title that
+says where the draft stands (`Preparing…`, `3 suggestions · Apply all · Dismiss`, `Couldn’t draft · Retry`,
+`Offline`), each open suggestion as a row in the page where it would land, and `N more open` at the end of the
+planning part. He applies or skips one, or all. A suggestion that the web would show, the app shows, in the same
+place and order; one the web would hide, the app hides.
+
+Non-goals: rewording a suggestion before applying it (the web lets him type in a line or new to-do suggestion;
+here he applies it and edits the row, which is then an ordinary line of the page); moving a to-do to another
+day from the draft, and the events rows (1d.3); a quiet state for an account with no model (the web says
+`Couldn’t draft · Retry` for it, and so does the app); the draft on any day but today; making the draft
+without the server.
+
+Anti-goals: a suggestion that becomes part of the page's document, is saved, copied or typed into before he
+applies it; a row that moves under the line he is typing in; the draft's arrival costing a keystroke; a model
+call the web would not have made (a second ask for a draft that stands); the draft's arrival taking away an
+`Undo` he is being offered.
+
+### 13.2 The route
+
+`POST /api/v1/day-draft`, a thin wrapper of the server function the web already calls (`prepareDayDraft`), with
+the same reading of the account as the other v1 routes.
+
+- Request: `{ "date": "YYYY-MM-DD", "operationId": "<1 to 200 characters>" }`. The operation id is only logged.
+- Reply `200`: `{ "setDraft": <string or null>, "owner": <string>, "modelOn": <boolean>, "remakeFailed":
+  <boolean> }`. `setDraft` is the `set-draft` command as JSON text, exactly as the web's client receives it.
+  The server stores nothing: the app sends that command itself, through `/api/v1/commands`.
+- Errors are the v1 routes' own: `401` signed out, `415` not JSON, `400` a body that does not read. A date with
+  no live day page answers `404 { "error": "not-found" }`, which is new: no v1 route has a 404 body today, and
+  the function throws a plain error there that a v1 handler would turn into a 500 (which the app reads as "the
+  server failed, try later"). So the decision table of `prepareDayDraft` moves into a plain server function
+  (workspace, account and model in; reply out) that both the web's server function and this route call. An
+  unexpected throw stays a 500.
+- It is a change under `src/` and is its own pull request, merged first, as 1d.1's web change was. The same
+  pull request moves the two wordings the app must share out of React files into plain functions the fixture
+  script can run (`skippedLabel`, and the draft line's words), and adds the shared cases of §13.7.
+
+### 13.3 When the app asks, and what it does with the answer
+
+The rules are the web's (`use-day-draft.ts`), with the app's today in place of the device's date.
+
+- **It asks** when today's page is on screen, the app is online and signed in, today's page exists, and no
+  draft stands for it. A draft stands when it is stored (its JSON reads) and is not stale; it is stale when it
+  is settled (marked ready, or any item decided) and its recipe is older than the current one. So a stored
+  draft marked failed stands (reopening the app does not pay for another try; `Retry` does), and so does an
+  unsettled one of any recipe.
+- **At most twice** by itself for each day page in a run of the app: once when the page is first shown, and, if
+  that ask failed or got no answer in 60 seconds, once more the next time he comes back to today's page (the app
+  returning to the foreground, or today shown again). `Retry` always asks. A stale draft's suggestions stay on
+  screen while it is asked for again.
+- **The recipe** is a number the web raises when the draft's making changes (5 today). The app carries the same
+  number, and a shared case holds the web's, so a raise on the web fails the app's tests until the app follows.
+- **The answer.** A reply whose `owner` is not the workspace's owner is dropped. `remakeFailed` counts as a
+  failed ask. `setDraft` null means the server's draft already stands: nothing to send, and the app loads the
+  workspace so that a draft another device made shows now. Otherwise the app sends the command as its own write,
+  waited for and not kept in the outbox, with no notice; if the send fails it is tried once more. A refusal
+  `This day already has its draft` is success (another device's draft won). Any other refusal, a `400` among
+  them (the command has limits of 50 items, 200 `moreOpen` and 500 allowed to-dos that the server's maker does
+  not keep to), is a failed ask.
+- **`set-draft` takes the server's one Undo**, like any command. So the app holds it back while an action is
+  out, and while a notice offers an `Undo` that the server's slot holds (after an apply, an add, a row's or the
+  strip's action). It sends as soon as that `Undo` is withdrawn or the notice is dismissed or times out. A
+  `Skipped` notice does not hold it: its `Undo` does not use the slot. (The web sends at once and the `Undo` he
+  is looking at then fails.) With VoiceOver on, a notice with a button does not time out; the draft then waits
+  for him to dismiss it, which is the right order for someone still deciding.
+- **Where it lives.** The model owns the ask (so "once for a page in a run" survives a screen being rebuilt) and
+  learns of the app returning to the foreground; the screen tells it whether the Undo slot is being held.
+- **The page never waits.** Typing, ticking and every row action go on while the draft is asked for. Nothing
+  about the ask is stored on the device; an ask in flight when the app is closed is simply asked again.
+
+### 13.4 The draft's line
+
+One line directly under the day's title and status line, above the events line (the web's order), only on
+today. It is the first row of the strip of 1d.1 (the same SwiftUI view, the same rules for the typed line when
+its height changes).
+
+| State | When | Shows |
+|---|---|---|
+| nothing | no draft stored and no ask in flight; or a ready draft with no open suggestion | no line |
+| preparing | an ask is in flight and no suggestion is shown | the system's small progress view, `Preparing…` |
+| held (1d.2b) | suggestions arrived while he was typing (§13.6) | `Suggestions ready`, button `Show` |
+| open | at least one suggestion is shown | `1 suggestion` / `N suggestions`, buttons `Apply all` and `Dismiss` |
+| failed | an ask in this run failed or got no answer in 60 seconds and nothing is stored; or the stored draft is marked failed and he has decided none of its items | `Couldn’t draft`, button `Retry` (after the open state's words when there are suggestions too) |
+| offline | offline and no draft stored | `Offline` |
+
+- The words are secondary text at the strip's size; the buttons are plain system buttons, `Apply all` and `Show`
+  in the accent colour (they are the line's one primary action), `Dismiss` and `Retry` quiet. Each is at least
+  44 points tall. At the accessibility sizes the buttons go under the words.
+- `N` counts the suggestions shown in the page, not the stored items.
+- While a second ask runs after a failed one, the line says `Preparing…` again.
+- `Couldn’t draft` is secondary text like the rest (the web colours it as a warning): recorded.
+- VoiceOver reads the line as its words; each button is its own element.
+
+### 13.5 The suggestions in the page
+
+A suggestion is a row of the page's list that is not a line of the page: it has no place in the document, the
+caret never enters it, it is not selected, copied, saved, dragged or counted as a line. It sits where applying
+it would put its row.
+
+- **Which and where** is the web's `draftView`, read again against the page and the to-dos as they are each
+  time the engine's state changes or a page is merged (never for a keystroke: a suggestion's place may lag his
+  typing by one save): an open item whose to-do is done, cancelled, set aside, planned for a later day or
+  already a row on the page is not shown; a line decided in another day's draft, or taken over by a later one,
+  is not shown; one with no safe place is not shown. An item goes after its anchor's whole block (the line and
+  what is nested under it). One with no anchor, a gone anchor or an anchor outside the planning part goes right
+  after the planning heading and the run of to-do rows directly under it, and is not shown if that falls outside
+  the planning part. Several on one anchor keep the draft's order.
+- **A suggestion that fills an empty row** of the right kind: in 1d.2a it is drawn after that row. In 1d.2b it
+  is drawn in the row's place and the empty row is not shown while it is, unless that row holds the caret: the
+  row he is in is never taken out of the list, and the suggestion is drawn after it until the caret leaves.
+- **What one shows.** Three kinds, by what it would become: a to-do (the system's dashed circle where a row has
+  its circle; the web's is a dashed box, as its rows have boxes), a bullet (a dashed dot), a plain line (the
+  web underlines it with dashes; here secondary ink alone, unless the spike's screenshots show it cannot be told
+  from his own lines). The words in secondary colour: a carried to-do's current title, a new to-do's or line's
+  own words. In the marks' place under the words, the age: the short date of the day the to-do was made
+  (`Thu 11/19`), or of the day a carried line was written. A carried to-do he skipped on earlier days shows
+  `skipped Sat, Sun` there instead (the web's wording, up to three days, then `skipped 5 times`); its `Another
+  day` control comes with 1d.3.
+- **Its two controls**, at the row's trailing end, always visible, each a 44-point plain button with a system
+  symbol: `checkmark` (label `Apply <words>`) and `xmark` (label `Skip <words>`). There is no swipe and no menu
+  on a suggestion, and the buttons are always visible, also with a pointer (the web hides them until hover
+  there): recorded. VoiceOver reads the row as `Suggestion, <words>, <age or skipped days>` (the skipped days in
+  their full form, `skipped Sat 11/21, Sun 11/22`) with `Apply` and `Skip` as its actions.
+- **How it is told from his own rows**: secondary ink and the dashed circle (or, for a bullet or line, a dashed
+  leading mark), nothing else; no box drawn around the row, no background. (The web's intent: "his row layout
+  in muted ink, a dashed box, dot or underline as the only not-yours-yet mark".)
+- **The list.** The editor gains rows of this kind as a general thing ("guest rows"). The host hands it the
+  page and its guest rows in one call, so that a suggestion can leave in the same update that brings the real
+  row. Each guest row has an id, the line it follows (or none: the start of the page) or replaces, a kind,
+  words, a second line of small text, and actions, each a button or a menu, with an optional tap on the row
+  itself (1d.2 uses two buttons; 1d.3 a menu and a tap); the host is told which was used. The editor knows
+  nothing of drafts. Its list's items become "a line of the page, or a guest", so no guest can be mistaken for a
+  line: today an id the editor does not know is drawn as a separator, a keystroke compares the page's lines with
+  the list's items (with a guest present every keystroke would rebuild the list), the row that can be dimmed
+  and the tap under the last line both assume lines only.
+- **The spike**, before the plan is fixed, as the swipe was in 1c. It answers: whether items added or removed
+  above the cell that holds the keyboard, in an animated update, keep the keyboard, and whether the list's
+  offset can be corrected with no visible jump; whether marked text survives an update that adds items
+  elsewhere; what VoiceOver's order and actions are on a row with no text view; and what the change of the
+  list's items costs on the typing path with guests present.
+- **`N more open`** (1d.2b) sits after the last block of the planning part (before a divider that closes it;
+  with no headings, after the last top-level block that holds a to-do row), when the draft lists to-dos that are
+  still offered and not on the page. A guest row with the system's disclosure chevron, folded when the page
+  opens (the fold is the screen's, forgotten when he leaves today, as `Not today`'s is); open, one guest row for
+  each to-do: dashed circle, title, age, and one `plus` button (label `Add <title> to today`). It shows for a
+  failed draft too, and not while preparing or held.
+
+### 13.6 Suggestions arriving while he types
+
+Rows appearing above the line he is typing in must not move it, and must not appear under his thumbs.
+
+- Whenever guest rows are added, removed or change while a line holds the keyboard, the list keeps that line
+  where it is on screen, as it does when the strip's height changes (§12.3). A composition in progress is not
+  disturbed: the cell being typed in is not reconfigured. (1d.2a; the list has this today only for the header.)
+- (1d.2b) When suggestions become ready while the page is on screen and a key was pressed in the last 3
+  seconds, they are held: the line says `Suggestions ready` with `Show`, and no suggestion row or `N more open`
+  is drawn. They are released by `Show` or by 3 seconds without a key. A page opened with its draft already
+  stored shows them at once. (The web's rule and timing.)
+
+### 13.7 The readings in the Core
+
+Pure, Foundation only, each checked against cases generated from the web's own functions:
+
+- The draft's document as a value (`status`, `items` with every field of §1.2 of the survey, `moreOpen`,
+  `recipe`), extending the small reader slice 1c made for `Since`. A draft whose JSON does not read is no draft
+  (the web's `draftOf`); beyond that the web checks no shape and has no case to match, so a field of the wrong
+  kind reads as absent. (The fixture script's hand-made draft with `moreOpen: false` is corrected in the web
+  pull request.)
+- `draftSettled`, `draftStale`, the planning part of a page (`planningRange`, its end, where `N more open`
+  goes), what is offered (`eligibleTask`, `offeredOn`, `plannedAfter`), where an item sits (`placeItem`,
+  `amongApplied`), what another day's draft decided or took over (`decidedElsewhere`, `takenOver`,
+  `sameWords`, which lowercases as JavaScript's `toLocaleLowerCase` and reads white space as JavaScript's
+  `\s`), the days a to-do was skipped (`skippedDays`) and their words (`skippedLabel`), and `draftView`
+  over them: the suggestions to show with their places, and the `N more open` list.
+- The draft line's state and words from the view, the ask's state and whether he is offline.
+- The commands: `apply-draft`, `skip-draft`, `reopen-draft` (and `set-draft` as text passed through unread).
+- Shared cases under `fixtures/core/draft/`: worlds built with the web's commands, covering at least every
+  test name of `tests/day-draft.test.ts` and `tests/draft-apply-order.test.ts` that is about what is shown and
+  where, the "not twice" cases across days, skipped-day counting, a draft that does not parse, and the recipe.
+
+### 13.8 What a tap does
+
+All are sent and waited for, like a row's actions (§11): one action at a time for the whole screen, they need
+a connection, nothing is drawn ahead. While one is out its row is dimmed and every suggestion's buttons, the
+line's buttons, the strip's controls and the rows' swipes are held.
+
+| Tap | Command | Notice |
+|---|---|---|
+| `checkmark` on a suggestion | `apply-draft` with that item | `Applied`, `Undo` (8 s) |
+| `Apply all` | `apply-draft` with every suggestion shown | `Applied` / `Applied N` (the server's count), `Undo` |
+| `xmark` on a suggestion | `skip-draft` with that item | `Skipped`, `Undo` (10 s) |
+| `Dismiss` | `skip-draft` with every suggestion shown | `Skipped` / `Skipped N`, `Undo` |
+| `plus` in `N more open` | `plan-task` for the page's day | `Added`, `Undo` |
+| `Retry` | asks again (§13.3) | none |
+| `Show` | releases the held suggestions | none |
+
+- **Undo** of an apply or an add is the server's `undo` of that operation, offered while the server's Undo slot
+  still holds it (§11). Undo of a skip is `reopen-draft` naming the skip's operation and, for every skipped
+  to-do, the day it was planned for when the skip was answered (none, written as JSON `null`, when it was not
+  planned); it does not depend on the Undo slot, so its button is not withdrawn when the slot changes. After
+  it the notice says `Undone`.
+- **A partial Apply all.** The server applies what it can and leaves the rest open; the notice says its count
+  (`Applied 2`), and what was left stays a suggestion if it is still shown. (The web also writes `Not applied ·
+  changed elsewhere` where each dropped one was: left out.)
+- **Refusals** read as the web's notes: `Not applied · changed elsewhere` (the server's `Nothing to apply`),
+  `Not skipped · changed elsewhere` (`Nothing to skip`), and for a refused undo or reopen the web's own `Can't
+  undo · edited since` here (a row's refused undo keeps slice 1c's `Can't undo · changed since`); offline and
+  the other failures as §11's. The refusal's reason has to reach the screen, which today learns only "not done".
+- **The `Skipped` notice stays 10 seconds** (the web's time for it; the other notices keep theirs).
+- After an apply the row is an ordinary line of the page, with the marks of 1c (`Since Nov 19` when it has been
+  carried seven days or more). The suggestion row leaves in the same list update that brings the real row, so
+  nothing jumps.
+- The `Skipped` notice has no `Move to` yet (1d.3).
+
+### 13.9 Moving from the draft, and the events rows (1d.3), in outline
+
+- `Move to` in the `Skipped` notice when a skipped item is a to-do: a second control in the notice that opens
+  the system menu of days (`Mon 11/30`, `Pick date…`), sending `snooze-draft`; its notice `Moved to Mon, Nov
+  30` with `Undo` (the server's `undo`), which brings the `Skipped` notice back.
+- `Another day` on a suggestion with skipped days: the same menu, sending `move-draft`; `Moved to …`, `Undo`.
+- The rows under the `Events` heading for events whose chip is on another page: guest rows with the time, the
+  title and where the line is (`in Notes`, a page's title), tapped to go there.
+
+### 13.10 Checks, and what is left out
+
+- Every shared case passes in the Core; the parity table lists each web behaviour of the survey's sections 1
+  to 3 as done, left out with its reason, or 1d.3.
+- UI tests on a seeded server whose draft is made by a hand-written `set-draft` (no model): the line's states,
+  suggestions in their places, apply, skip, apply all, dismiss, undo of each, `N more open`, held while typing,
+  and the typed line's place through every one of them. A failed draft (the seeded server has no model) shows
+  `Couldn’t draft · Retry` with `N more open`. `Preparing…` is seen in the app's unit tests with a held answer:
+  a server with no model answers at once.
+- The typing budget holds with a draft's suggestions on the page.
+- Left out, recorded: rewording a suggestion before applying; a quiet no-model state; the web's decided looks
+  drawn ahead (the app waits for the server); the 1-second struck-through hold of a skipped suggestion; the
+  web's focus hand-over between suggestions' buttons; the per-row note after a partial Apply all; the warning
+  colour of `Couldn’t draft`; the two buttons hidden until hover with a pointer; the darker ink of the opened
+  `N more open` rows.
