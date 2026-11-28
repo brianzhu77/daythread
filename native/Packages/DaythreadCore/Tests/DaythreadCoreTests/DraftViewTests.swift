@@ -381,6 +381,7 @@ import Testing
           TestWorkspace.day("2026-11-25", rows: [Self.heading("h25")]),
           Self.draftPage(of: "day:2026-11-25", recipe: 4, [Self.line("x", "Gym", state: "skipped")]),
           TestWorkspace.day("2026-11-26", rows: [Self.heading("h")]),
+          Self.draftPage(of: "day:2026-11-26", []),
         ])
       let carried = Self.line("i", "Gym", extra: #","from":"b1""#)
       let item = try #require(
@@ -398,14 +399,14 @@ import Testing
 
     let held = try decided(first: [])
     #expect(held.decided, "written on the 24th, so it could have been in the 25th's draft")
-    #expect(held.parsed == [], "the index already knows the first page holding the block")
+    #expect(held.parsed == [], "the index already knows the first page holding the block; parsed \(held.parsed)")
 
     // A page in Trash before it, which the index does not hold, is still the first page holding the block.
     let trashed = Self.page(
       "day:2026-11-27", type: "daily", date: "2026-11-27", trashedAt: "2026-11-28T00:00:00.000Z", blocks: ["b1"])
     let earlier = try decided(first: [trashed])
     #expect(!earlier.decided, "the first page holding it is dated the 27th")
-    #expect(earlier.parsed == ["day:2026-11-27"], "only the pages the index does not hold, and only before its hit")
+    #expect(earlier.parsed == ["day:2026-11-27"], "only pages the index does not hold, before its hit; parsed \(earlier.parsed)")
   }
 
   // MARK: Helpers
