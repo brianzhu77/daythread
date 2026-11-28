@@ -512,7 +512,10 @@
         // His words stay; the list is handed the new workspace only when it would draw a row of them differently, and
         // the guests alone when only they changed.
         let drawn = workspace.drawing(draft: mine, of: page.id)
-        let guests = suggestionGuests(on: mine, of: page.id, in: drawn)
+        // Behind, his words are merged next, and the merge hands the guests with the rows they became: placed now on
+        // his words, which do not hold those rows yet, an applied suggestion would leave before its row came.
+        let guests =
+          draft?.state == .behind ? handedGuests : suggestionGuests(on: mine, of: page.id, in: drawn)
         if reading(mine, on: page.date, in: drawn) != listWorkspace.map({ reading(mine, on: page.date, in: $0) }) {
           replaceList(with: mine, in: drawn, guests: guests)
           listWorkspace = drawn
@@ -730,7 +733,10 @@
         self.replaceList(
           with: merged.document, in: drawn,
           guests: self.suggestionGuests(on: merged.document, of: pageId, in: drawn))
-        if let page = drawn.page(pageId), self.draftView != nil { self.showDraft(of: page, in: drawn) }
+        // The line follows the merged workspace on today's page, also when a draft came or went with it.
+        if self.date == self.model.today, let page = drawn.page(pageId), page.date == self.model.today {
+          self.showDraft(of: page, in: drawn)
+        }
         self.listWorkspace = drawn
         self.openPage?.startedFrom = merged.document
         if merged.bothChanged {
