@@ -78,6 +78,10 @@ import Testing
     #expect(item.words == nil)
     #expect(odd.settled, "an item that is not open settles the draft")
 
+    let stateless = try #require(DayDraft(document: #"{"status":"failed","items":[{"id":"i"}]}"#))
+    #expect(stateless.items.first?.state != .open, "an item with no state is not open")
+    #expect(stateless.settled, "an item with no state settles the draft")
+
     #expect(DayDraft(document: "[]") == nil)
     #expect(DayDraft(document: "5") == nil)
     #expect(DayDraft(document: "") == nil)
@@ -93,7 +97,7 @@ import Testing
     #expect(draft.items.first?.words == "call mom")
   }
 
-  @Test func the_index_parses_each_draft_once_and_finds_it() throws {
+  @Test func the_index_finds_a_days_first_draft_not_in_trash_and_lists_every_draft_that_reads() throws {
     let day = "day:2026-11-26"
     func draftPage(_ id: String, _ status: String, trashedAt: String? = nil, parent: String? = day) -> JSONValue {
       TestWorkspace.page(
