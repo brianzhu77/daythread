@@ -53,6 +53,31 @@ final class TypingFeelTests: XCTestCase {
     try checkBudget(median, against: Self.measuredMedian.shortPage)
   }
 
+  /// The wait between keystrokes gives the state its time on the main actor, where the model receives it: a main
+  /// thread stalled by something else (on CI, the keyboard's predictions answered more than a minute late while the
+  /// whole app logged nothing for 36 s) is no state arriving late. Here the main thread is stalled past the wait's
+  /// deadline while the state is on its way, as the model's would be.
+  func test_a_main_thread_stalled_past_the_deadline_is_not_a_state_that_came_late() async throws {
+    let state = Arrival()
+    // Runs once the wait first sleeps, so the wait's own wake-up is queued behind it, before the state's.
+    Task { Self.stallTheMainThread(for: .milliseconds(1_500)) }
+    Task.detached {
+      try? await Task.sleep(nanoseconds: 200_000_000)
+      await MainActor.run { state.arrived = true }
+    }
+    try await until("the state reached the screen", deadline: .seconds(1)) { state.arrived }
+  }
+
+  @MainActor private final class Arrival {
+    var arrived = false
+  }
+
+  private static func stallTheMainThread(for duration: Duration) {
+    let clock = ContinuousClock()
+    let end = clock.now.advanced(by: duration)
+    while clock.now < end {}
+  }
+
   /// The strip's cost on a large workspace (`native-phase-1.md` §12.6): 3,000 to-dos on 300 day pages of 10 rows, 200
   /// chips, 100 to-dos set aside and 100 due with no row today. Prints the time to build the index and the time of
   /// the facts of today read from it, per run and their medians; not budgeted.
@@ -185,10 +210,12 @@ final class TypingFeelTests: XCTestCase {
   /// A failure says what the model held when it gave up (`held`), then waits a further two minutes and reads again, so
   /// the log tells a state that came late from one that did not come. A failed wait records the failure and throws,
   /// which ends the test: the keystrokes after it are not measured.
-  private func until(_ what: String, held: () -> String = { "" }, _ condition: () -> Bool) async throws {
+  private func until(
+    _ what: String, deadline patience: Duration = .seconds(30), held: () -> String = { "" }, _ condition: () -> Bool
+  ) async throws {
     let clock = ContinuousClock()
     let started = clock.now
-    let deadline = started.advanced(by: .seconds(30))
+    let deadline = started.advanced(by: patience)
     while !condition(), clock.now < deadline {
       try await Task.sleep(nanoseconds: 1_000_000)
     }
