@@ -25,6 +25,8 @@
     private var shownActions: [GuestRow.Action] = []
     /// Each button's size constraints, set from the symbol's size at the text size.
     private var buttonSizes: [(width: NSLayoutConstraint, height: NSLayoutConstraint)] = []
+    /// The view each button draws its symbol in, in the buttons' order.
+    private var symbolViews: [UIImageView] = []
 
     /// The touch target is larger than the glyph, never the other way round.
     private static let minimumTouchTarget: CGFloat = 44
@@ -88,13 +90,15 @@
     private func makeButtons(_ actions: [GuestRow.Action]) {
       for view in buttons.arrangedSubviews { view.removeFromSuperview() }
       buttonSizes = []
+      symbolViews = []
       for action in actions {
         let button = UIButton(
           configuration: .plain(), primaryAction: UIAction { [weak self] _ in _ = self?.report(action.id) })
         button.accessibilityLabel = action.label
         button.translatesAutoresizingMaskIntoConstraints = false
-        // The symbol is the button's own image view's, centred: the button's configuration placed a large symbol by
-        // its baseline and drew the checkmark out of the bottom of its target at the largest text size.
+        // The symbol is drawn in an image view of the cell's own, centred in the button, not as the configuration's
+        // image: at the largest text size the configuration set it by its baseline, about 4 points low, and the
+        // checkmark's ink left the bottom of its 44-point target.
         let symbol = UIImageView()
         symbol.translatesAutoresizingMaskIntoConstraints = false
         symbol.contentMode = .center
@@ -114,6 +118,7 @@
         )
         NSLayoutConstraint.activate([size.width, size.height])
         buttonSizes.append(size)
+        symbolViews.append(symbol)
         buttons.addArrangedSubview(button)
       }
       shownActions = actions
@@ -132,11 +137,10 @@
         return
       }
       let symbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body)
-      for (index, action) in shownActions.enumerated() where actionButtons.indices.contains(index) {
+      for (index, action) in shownActions.enumerated() where symbolViews.indices.contains(index) {
         let symbol = UIImage(systemName: action.symbol, withConfiguration: symbolConfiguration.withTraitCollection(traits))
-        let imageView = symbolView(of: actionButtons[index])
-        imageView?.image = symbol
-        imageView?.tintColor = ink
+        symbolViews[index].image = symbol
+        symbolViews[index].tintColor = ink
         let glyph = symbol?.size ?? .zero
         // A little room round the glyph: a symbol whose ink meets its frame's edge is drawn cut at that edge.
         buttonSizes[index].width.constant = max(Self.minimumTouchTarget, ceil(glyph.width) + Self.symbolRoom)
@@ -150,7 +154,7 @@
 
     /// The view that draws a button's symbol (tests read it).
     func symbolView(of button: UIButton) -> UIImageView? {
-      button.subviews.lazy.compactMap { $0 as? UIImageView }.first
+      actionButtons.firstIndex { $0 === button }.flatMap { symbolViews.indices.contains($0) ? symbolViews[$0] : nil }
     }
 
     /// What the words give up for the buttons: across beside them on the first line, down under them from the
