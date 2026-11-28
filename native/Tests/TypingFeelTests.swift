@@ -569,7 +569,8 @@ final class TypingFeelTests: XCTestCase {
     let tokens = MemoryTokenStore()
     try tokens.write(one)
     let engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: SyncEngine.sleep, now: { noon })
-    let model = AppModel(engine: engine, now: { noon })
+    let model = AppModel(
+      engine: engine, keepsChanges: true, now: { noon }, states: nil, asksForDayDrafts: false)
     model.start()
     try await until(
       "the model signed in and showed the copy",

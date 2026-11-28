@@ -99,6 +99,12 @@ actor TestServer: ServerTransport {
     for ask in waiting { ask.resume() }
   }
 
+  /// Lets the first waiting day draft through, and goes on holding the rest and the next.
+  func releaseFirstDraft() {
+    guard !heldDrafts.isEmpty else { return }
+    heldDrafts.removeFirst().resume()
+  }
+
   /// Returns once a day draft is waiting to be released.
   func draftHeld() async {
     if !heldDrafts.isEmpty { return }

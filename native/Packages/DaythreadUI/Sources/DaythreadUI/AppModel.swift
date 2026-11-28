@@ -59,8 +59,8 @@ public final class AppModel {
   @ObservationIgnored private var nextRecord = 0
   /// When each to-do was last ticked, for the double-tap guard.
   @ObservationIgnored private var lastTicks: [String: Date] = [:]
-  @ObservationIgnored private let engine: SyncEngine
-  @ObservationIgnored private let now: () -> Date
+  @ObservationIgnored let engine: SyncEngine
+  @ObservationIgnored let now: () -> Date
   @ObservationIgnored private var following: Task<Void, Never>?
   @ObservationIgnored private var auditedRevision: Int?
   /// The owner of the last state that showed a copy.
@@ -105,6 +105,35 @@ public final class AppModel {
   /// changes, so a keystroke behind another notifies nobody.
   private(set) var wordsOnTheirWay = false
 
+  // MARK: The day's draft (`AppModel+DayDraft.swift`)
+
+  /// This run's ask for each day page's draft, by page id; none is stored on the device.
+  var draftAsks: [String: DraftAsk] = [:]
+  /// The number of each page's latest ask: only it writes the page's ask, so a late answer leaves a newer one alone.
+  @ObservationIgnored var latestDraftAsks: [String: Int] = [:]
+  @ObservationIgnored var draftAsksMade = 0
+  /// The asks whose answer is in hand and whose outcome is not written yet, by number (`draftAsk(of:)`).
+  var answeredDraftAsks: Set<Int> = []
+  /// Counts the times the asks were forgotten (`forgetDraftAsks`): an answer of an earlier run sends nothing.
+  @ObservationIgnored var draftAskRun = 0
+  /// The answers whose `set-draft` waits for the Undo slot to be let go.
+  @ObservationIgnored var undoSlotWaits: [CheckedContinuation<Void, Never>] = []
+  /// False in hosted tests that do not script an ask: the model then never asks by itself.
+  @ObservationIgnored let asksForDayDrafts: Bool
+  /// How an ask waits out `DraftAsk.lostAfter`.
+  @ObservationIgnored let draftSleep: @Sendable (Duration) async throws -> Void
+
+  /// Set by the day screen: true while an action is out, or while the notice offers an `Undo` that the server's slot
+  /// holds. While true, an answer's `set-draft` waits (§13.3); it goes as soon as this is false.
+  public var holdsUndoSlot = false {
+    didSet {
+      guard !holdsUndoSlot, !undoSlotWaits.isEmpty else { return }
+      let waiting = undoSlotWaits
+      undoSlotWaits = []
+      for wait in waiting { wait.resume() }
+    }
+  }
+
   /// The web drops a second tap on the same to-do this soon after the first.
   private static let doubleTap: TimeInterval = 0.5
 
@@ -113,11 +142,17 @@ public final class AppModel {
   }
 
   /// `states`: what the model follows in place of the engine's own states, for tests that hand them over late.
-  init(engine: SyncEngine, keepsChanges: Bool, now: @escaping () -> Date, states: AsyncStream<SyncState>?) {
+  /// `asksForDayDrafts`: whether it asks for today's draft by itself; `draftSleep`: how an ask waits to be lost.
+  init(
+    engine: SyncEngine, keepsChanges: Bool, now: @escaping () -> Date, states: AsyncStream<SyncState>?,
+    asksForDayDrafts: Bool = true, draftSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep
+  ) {
     self.engine = engine
     self.keepsChanges = keepsChanges
     self.now = now
     givenStates = states
+    self.asksForDayDrafts = asksForDayDrafts
+    self.draftSleep = draftSleep
     today = LocalDate.today(in: TimeZone.current.identifier, at: now())
   }
 
@@ -126,6 +161,9 @@ public final class AppModel {
   isolated deinit {
     following?.cancel()
     endStateWaits()
+    // A send waiting for the slot keeps the model alive (its task holds it), so this is reached only with none
+    // waiting; kept so that no wait could ever be dropped unanswered.
+    for wait in undoSlotWaits { wait.resume() }
   }
 
   /// What screens draw: the engine's workspace with this model's not-yet-accepted actions replayed over it. Replaying
@@ -292,6 +330,7 @@ public final class AppModel {
       answeredWrites += 1
     }
     mergedAt = [:]
+    forgetDraftAsks()
     noteWordsOnTheirWay()
   }
 
@@ -731,7 +770,7 @@ extension AppModel {
 
   /// Returns once a state numbered `published` or more has arrived here, whichever came first, it or the answer
   /// that named it; true when that state is still `owner`'s.
-  private func stateHolding(_ published: Int, madeUnder owner: String) async -> Bool {
+  func stateHolding(_ published: Int, madeUnder owner: String) async -> Bool {
     await stateWhere({ $0.published >= published }, madeUnder: owner)
   }
 

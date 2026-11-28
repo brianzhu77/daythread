@@ -119,6 +119,31 @@ import Testing
     #expect(index.dayDrafts.first?.draft.status == .ready)
   }
 
+  @Test func the_workspace_reads_a_days_draft_as_the_index_does() throws {
+    func draftPage(_ day: String, _ document: String, trashedAt: String? = nil) -> JSONValue {
+      TestWorkspace.page("draft:\(day)", type: "draft", parentId: day, trashedAt: trashedAt, document: document)
+    }
+    func ready(_ status: String) -> String { #"{"status":"\#(status)","items":[],"moreOpen":[]}"# }
+    let workspace = try TestWorkspace.make(pages: [
+      // In Trash, then one that reads: the second.
+      draftPage("day:2026-11-26", ready("failed"), trashedAt: "2026-11-27T00:00:00.000Z"),
+      draftPage("day:2026-11-26", ready("ready")),
+      // The first does not parse: no draft, not the second.
+      draftPage("day:2026-11-25", "not json"),
+      draftPage("day:2026-11-25", ready("ready")),
+      // Two of one id that read: the first.
+      draftPage("day:2026-11-24", ready("failed")),
+      draftPage("day:2026-11-24", ready("ready")),
+    ])
+    let index = TodoIndex(workspace)
+    for day in ["day:2026-11-26", "day:2026-11-25", "day:2026-11-24", "day:2026-11-23"] {
+      #expect(workspace.dayDraft(of: day) == index.dayDraft(of: day), "\(day)")
+    }
+    #expect(workspace.dayDraft(of: "day:2026-11-26")?.status == .ready)
+    #expect(workspace.dayDraft(of: "day:2026-11-25") == nil)
+    #expect(workspace.dayDraft(of: "day:2026-11-24")?.status == .failed)
+  }
+
   @Test func a_draft_stands_when_stored_and_not_stale() throws {
     func standing(_ document: String?) throws -> Bool {
       let pages: [JSONValue] =

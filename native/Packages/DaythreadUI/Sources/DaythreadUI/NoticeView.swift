@@ -38,6 +38,8 @@ final class NoticeView: UIView {
   static let widest: CGFloat = 560
 
   var onUndo: ((_ operationId: String) -> Void)?
+  /// Called whenever what it shows changes: shown, its Undo withdrawn, timed out, swiped away, dismissed.
+  var onChange: ((Notice?) -> Void)?
   private(set) var shown: Notice?
 
   private let sleep: @Sendable (Duration) async throws -> Void
@@ -92,6 +94,7 @@ final class NoticeView: UIView {
     if voiceOver { announce(notice.text) }
     // A person using VoiceOver may need longer than the timer gives to reach the button.
     if !(voiceOver && notice.undoing != nil) { startTimer() }
+    onChange?(shown)
   }
 
   /// The `Undo` leaves for good; the words stay until their time is up.
@@ -102,6 +105,7 @@ final class NoticeView: UIView {
     apply(rest)
     // Counted from now, when the timer was held back for the button.
     if timer == nil { startTimer() }
+    onChange?(shown)
   }
 
   func dismiss() {
@@ -120,6 +124,7 @@ final class NoticeView: UIView {
         guard let self, shown == nil else { return }
         surface.isHidden = true
       })
+    onChange?(nil)
   }
 
   /// The surface, and nothing around it, takes touches.

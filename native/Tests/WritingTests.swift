@@ -175,7 +175,8 @@ private struct DayScreen {
     let tokens = MemoryTokenStore()
     try tokens.write(one)
     let engine = SyncEngine(transport: server, tokens: tokens, store: h.store, sleep: neverEnding, now: { noon })
-    let model = AppModel(engine: engine, now: { noon })
+    let model = AppModel(
+      engine: engine, keepsChanges: true, now: { noon }, states: nil, asksForDayDrafts: false)
     model.start()
     try await until { model.workspace != nil }
     let again = try DayScreen(model)
@@ -791,7 +792,8 @@ private struct DayScreen {
     let tokens = MemoryTokenStore()
     try tokens.write(one)
     let engine = SyncEngine(transport: server, tokens: tokens, store: store, sleep: neverEnding, now: { noon })
-    let model = AppModel(engine: engine, now: { noon })
+    let model = AppModel(
+      engine: engine, keepsChanges: true, now: { noon }, states: nil, asksForDayDrafts: false)
     model.start()
     try await until { model.workspace != nil }
     await engine.settled()
