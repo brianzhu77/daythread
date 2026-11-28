@@ -503,20 +503,41 @@ private struct DraftScreen {
   }
 
   @Test func a_skips_notice_does_not_hold_set_draft() async throws {
-    let h = try await harness()
+    // A stale draft (an older recipe) with one open suggestion of a to-do not on the page: shown, and asked for again.
+    let call = task("t2", "Call mum")
+    let suggestion =
+      #"{"id":"s2","anchor":"a","place":"after","taskId":"t2","state":"open","block":\#(row("g-s2", "t2", "Call mum"))}"#
+    let h = try await Harness(
+      copy: try copy(pages: [todayPage, draftPage(recipe: 4, items: [suggestion])], tasks: [water, call]),
+      clock: thursday, sleep: neverEnding, asksForDayDrafts: true, draftSleep: neverEnding)
     await h.server.holdDrafts()
     let day = try DraftScreen(h.model)
     await h.server.draftHeld()
-    // As `Skipped` will: an Undo that does not use the server's slot, so no action of the screen is behind it.
-    day.screen.notice.show(Notice(text: "Skipped", kind: .done, undoing: "op-skip"))
+    #expect(day.screen.draftView?.suggestions.map(\.id) == ["s2"])
+
+    // He skips it while the ask is out: the notice offers the skip's Undo, which does not use the server's slot.
+    let skipped = suggestion.replacingOccurrences(of: #""state":"open""#, with: #""state":"skipped""#)
+    await h.server.holdCommands()
+    day.screen.suggestionTapped("s2", .skip)
+    try await eventually { await h.server.waitingCalls > 0 }
+    let skip = try #require(await h.server.operationIds.last)
+    await h.server.add([
+      applied(
+        try changes(from: 1, to: 2, pages: [draftPage(recipe: 4, items: [skipped])], undo: skip),
+        receipt: .object(["message": .string("Skipped")]))
+    ])
+    await h.server.release()
+    try await soon { day.notice != nil }
+    #expect(day.notice == Notice(text: "Skipped", kind: .skipped, undoing: skip))
     #expect(!h.model.holdsUndoSlot)
 
-    await h.server.add([try drafted()])
+    // The ask's answer arrives: its `set-draft` goes without waiting for the notice.
+    await h.server.add([try drafted(from: 2)])
     await h.server.addDrafts([reply()])
     await h.server.releaseDrafts()
     try await soon { h.model.draftAsk(of: todayId) == .done }
     #expect(await setDrafts(h).count == 1)
-    #expect(day.notice?.undoing == "op-skip", "sent while the notice still shows")
+    #expect(day.notice?.undoing == skip, "sent while the skip's Undo still shows")
     day.close()
   }
 
