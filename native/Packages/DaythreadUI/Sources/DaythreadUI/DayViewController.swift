@@ -148,7 +148,11 @@
     /// what the last row action did.
     let notice: NoticeView
     /// The notice showing is of this action; nil when it offers no Undo.
-    private var noticeOf: Acted?
+    private var noticeOf: Acted? {
+      didSet { noteUndoSlot() }
+    }
+    /// What this screen last told the model of the server's Undo slot (`AppModel.holdsUndoSlot`).
+    private var holdsUndoSlot = false
     /// The action or Undo out on the screen, and where it came from: no other runs until it is answered (§12.4, one
     /// at a time for the whole screen). Setting it dims its row (of the page, or of the strip), disables the strip and
     /// holds every row's actions on whatever day is shown; leaving the day takes the dimming away while it stays out.
@@ -159,6 +163,7 @@
         document.pausesRowActions = actionOut != nil
         if case .strip(let taskId) = actionOut { factsModel.acting = taskId } else { factsModel.acting = nil }
         updateStripEnabled()
+        noteUndoSlot()
       }
     }
     /// The indexes the last `ListReading`s were read with, newest first, and the workspaces they are of: the list's
@@ -166,11 +171,19 @@
     private var readingIndexes: [(workspace: Workspace, index: TodoIndex)] = []
     /// The workspaces `readingIndexes` holds, newest first (tests read it).
     var indexedWorkspaces: [Workspace] { readingIndexes.map(\.workspace) }
+    /// The newest index `readingIndexes` holds (tests read what it parsed).
+    var newestIndex: TodoIndex? { readingIndexes.first?.index }
+    /// The account the indexes in `readingIndexes` were built under: another's lends its drafts to no index.
+    private var indexesOwner: String?
 
-    /// `noticeSleep`: how the notice waits out its time (tests hold it).
-    init(model: AppModel, noticeSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep) {
+    /// `noticeSleep`: how the notice waits out its time; `voiceOverRunning`: whether it takes VoiceOver as running
+    /// (tests hold both).
+    init(
+      model: AppModel, noticeSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep,
+      voiceOverRunning: @escaping @MainActor () -> Bool = { UIAccessibility.isVoiceOverRunning }
+    ) {
       self.model = model
-      notice = NoticeView(sleep: noticeSleep)
+      notice = NoticeView(sleep: noticeSleep, voiceOverRunning: voiceOverRunning)
       super.init(nibName: nil, bundle: nil)
     }
 
@@ -180,6 +193,8 @@
     isolated deinit {
       dayTimer?.invalidate()
       if let openPage { model.closed(openPage.id) }
+      // A screen gone holds no Undo slot: a `set-draft` waiting on it goes.
+      if holdsUndoSlot { model.holdsUndoSlot = false }
     }
 
     override func viewDidLoad() {
@@ -206,6 +221,7 @@
       document.onTick = { [weak self] taskId in self?.tick(taskId) }
       document.onRowAction = { [weak self] request in self?.rowRequested(request) }
       notice.onUndo = { [weak self] operationId in self?.undo(operationId) }
+      notice.onChange = { [weak self] _ in self?.noteUndoSlot() }
       document.onChange = { [weak self] document, singleDeleteIds in self?.wrote(document, singleDeleteIds) }
       document.onComposingChange = { [weak self] composing in
         if !composing { self?.compositionEnded() }
@@ -251,7 +267,7 @@
       // A timer counts no time while the device sleeps, so after a sleep it would fire late. The root view controller
       // checks the day and refreshes on activation; here only the timer is set again.
       NotificationCenter.default.addObserver(
-        self, selector: #selector(rearmDayTimer), name: UIScene.didActivateNotification, object: nil)
+        self, selector: #selector(becameActive), name: UIScene.didActivateNotification, object: nil)
     }
 
     /// On a phone the notice sits under the status bar, over the navigation bar's band (`NoticeView`), so it is held
@@ -342,6 +358,8 @@
       let date = date
       let content = DayContent.content(for: date, today: model.today, in: workspace)
       self.content = content
+      // Another day was drawn last: today, if it is today, is shown again (§13.3).
+      let cameBack = drawnDate != nil && drawnDate != date
       if case .page = content, failed?.date == date { failed = nil }
       let drawnWith: Workspace
       if case .page(let page) = content {
@@ -374,6 +392,10 @@
           factsModel.acting = nil
         }
         drawnDate = date
+      }
+      if date == model.today, case .page(let page) = content {
+        model.todayDrawn(page)
+        if cameBack { model.cameBackToToday(page) }
       }
     }
 
@@ -487,7 +509,11 @@
     /// of. A tap's own check may build one more and let it go (`indexForATap(of:)`).
     private func todoIndex(of workspace: Workspace) -> TodoIndex {
       if let cached = readingIndexes.first(where: { $0.workspace == workspace }) { return cached.index }
-      let index = TodoIndex(workspace)
+      // The newest index lends the drafts whose pages did not change (a year of drafts would cost a state about
+      // 100 ms to parse again); one built under another account lends nothing.
+      let owner = model.state.owner
+      let index = TodoIndex(workspace, reusing: owner == indexesOwner ? readingIndexes.first?.index : nil)
+      indexesOwner = owner
       indexesBuilt += 1
       // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time. The
       // list's is the one kept beside the new one, not merely the newer of the two before: a state drawn with his words
@@ -688,13 +714,14 @@
         || menu.swipe.contains { $0.action == action }
     }
 
-    /// The index a tap's check reads `workspace` with: the one kept, when it is of that workspace; otherwise one built
-    /// here and let go. A workspace with words typed since the last state is in no cache, and keeping its index would
-    /// evict the list's, so that the next state built two. One built here is counted in `indexesBuilt` too.
+    /// Once his words are handed over, the index of the state drawn next (kept for that draw); before, a tap's.
     private func checkIndex(of workspace: Workspace, afterHandOver: Bool) -> TodoIndex {
       afterHandOver ? todoIndex(of: workspace) : indexForATap(of: workspace)
     }
 
+    /// The index a tap's check reads `workspace` with: the one kept, when it is of that workspace; otherwise one built
+    /// here and let go. A workspace with words typed since the last state is in no cache, and keeping its index would
+    /// evict the list's, so that the next state built two. One built here is counted in `indexesBuilt` too.
     private func indexForATap(of workspace: Workspace) -> TodoIndex {
       if let kept = readingIndexes.first(where: { $0.workspace == workspace }) { return kept.index }
       indexesBuilt += 1
@@ -771,6 +798,15 @@
         noticeOf = nil
         notice.withdrawUndo()
       }
+    }
+
+    /// Tells the model whether the server's Undo slot is held here (§13.3): while an action is out, or while the notice
+    /// shown offers the `Undo` of the action it is of. A notice whose `Undo` does not use the slot holds nothing.
+    private func noteUndoSlot() {
+      let holds = actionOut != nil || noticeOf.map { notice.shown?.undoing == $0.operationId } ?? false
+      guard holds != holdsUndoSlot else { return }
+      holdsUndoSlot = holds
+      model.holdsUndoSlot = holds
     }
 
     /// `Undo` runs like an action: its row is dimmed while it is out, when it is still on the page.
@@ -1137,9 +1173,16 @@
       dayTimer = timer
     }
 
-    @objc private func rearmDayTimer() {
+    /// The app came to the foreground: the timer is set again, and with today shown he came back to it (§13.3). The
+    /// root view controller checks the day too, in an order not promised, so it is checked here first.
+    @objc func becameActive() {
       scheduledChange = nil
       setNeedsUpdateProperties()
+      model.checkToday()
+      guard viewIfLoaded?.window != nil, date == model.today, let workspace = model.workspace,
+        case .page(let page) = DayContent.content(for: model.today, today: model.today, in: workspace)
+      else { return }
+      model.cameBackToToday(page)
     }
 
     @objc private func dayMayHaveChanged() {
