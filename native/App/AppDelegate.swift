@@ -32,8 +32,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
 
   private static let productionURL = URL(string: "https://daythread.dogrod.com")
 
-  /// A Debug build: `-DaythreadServerURL <url>` (UI tests) when given, else the build's `DaythreadServerURL` from
-  /// `Info.plist`; a URL that does not parse stops it at launch. A Release build: always the `Info.plist` value, never
+  /// A Debug build: `-DaythreadServerURL <url>` (UI tests) when given, else, in the app that hosts the unit tests
+  /// (`XCTestConfigurationFilePath` is set only in a process that hosts a test bundle), `noServer`, else the build's
+  /// `DaythreadServerURL` from `Info.plist`; a URL that does not parse stops it at launch. A Release build: always the `Info.plist` value, never
   /// a launch argument, and the production server when that value does not parse.
   private static func serverURL() -> URL {
     let infoValue = Bundle.main.object(forInfoDictionaryKey: "DaythreadServerURL") as? String
@@ -62,7 +63,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     /// A Debug build's server address: the launch argument when given; else, in a process that hosts unit tests,
     /// `noServer`; else the `Info.plist` value.
     nonisolated static func debugServer(hostingTests: Bool, argument: String?, infoValue: String?) -> String? {
-      argument ?? infoValue
+      argument ?? (hostingTests ? noServer : infoValue)
     }
   #endif
 
