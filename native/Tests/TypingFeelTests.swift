@@ -324,6 +324,107 @@ final class TypingFeelTests: XCTestCase {
     XCTAssertNotNil(facts.events, "the events of today")
   }
 
+  /// The day draft's cost on a large workspace (`native-phase-1d2a.md`, Task 13): 3,000 to-dos on 300 day pages of 10
+  /// rows and a stored draft of 20 decided items on each of the 365 days before today (10 carried to-dos and 10 lines,
+  /// 5 of them with `from`, 2 of recipe 3), today's draft holding 20 open suggestions (10 carried to-dos, 5 new
+  /// to-dos, 5 lines, one of recipe 3 with no `from`). Prints the time to build the index whole (the first state of a
+  /// run), the time of the draft view read from it, and the time of an index that reuses the one before it (every
+  /// later state), per run and their medians; not budgeted.
+  func test_the_draft_view_on_a_large_workspace() throws {
+    let todayRows = (1...10).map { Self.todoRow("line-\($0)", "todo-\($0)", on: Self.today, words: Self.words(of: $0)) }
+    let fixture = DraftFixture(pastDays: Self.yearOfDrafts) { offered in
+      var items = (0..<10).map { Self.carriedItem("c\($0)", offered[$0], anchor: "line-\($0 % 5 + 1)", state: "open") }
+      items += (0..<5).map { Self.lineItem("n\($0)", words: "New to-do \($0)", type: "task", anchor: "line-5", state: "open") }
+      items += (0..<4).map {
+        Self.lineItem("l\($0)", words: "Carried line \($0)", anchor: "line-7", state: "open", from: "line-gone-\($0)", recipe: 5)
+      }
+      items.append(Self.lineItem("l4", words: "Gym", anchor: "line-7", state: "open", recipe: 3))
+      return items
+    }
+    let workspace = try Self.workspace(
+      todayLines: todayRows, todayTasks: (1...10).map { Self.todo("todo-\($0)") }, pastRows: 10, chips: 200,
+      chipsToday: 3, drafts: fixture)
+    XCTAssertEqual(workspace.tasks.count, 3_000)
+    XCTAssertEqual(workspace.pages.filter { $0.type == "daily" }.count, 300)
+    XCTAssertEqual(workspace.pages.filter { $0.type == "draft" }.count, Self.yearOfDrafts + 1)
+    let page = try XCTUnwrap(workspace.dayPage(Self.today))
+
+    let clock = ContinuousClock()
+    var indexRuns: [Double] = []
+    var viewRuns: [Double] = []
+    var reusingRuns: [Double] = []
+    var view: DraftView?
+    for _ in 0..<Self.runs {
+      var index: TodoIndex?
+      let indexTime = clock.measure { index = TodoIndex(workspace) }
+      let built = try XCTUnwrap(index)
+      let viewTime = clock.measure { view = DraftView.of(page: page, in: workspace, index: built) }
+      let reusingTime = clock.measure { _ = TodoIndex(workspace, reusing: built) }
+      indexRuns.append(indexTime / .milliseconds(1))
+      viewRuns.append(viewTime / .milliseconds(1))
+      reusingRuns.append(reusingTime / .milliseconds(1))
+      print(
+        "TypingFeel: draft index \(Self.shown(indexRuns.suffix(1))) ms, view \(Self.shown(viewRuns.suffix(1))) ms,",
+        "index reusing \(Self.shown(reusingRuns.suffix(1))) ms")
+    }
+    print(
+      "TypingFeel: draft index median \(Self.shown([Self.median(indexRuns)])) ms, view median",
+      "\(Self.shown([Self.median(viewRuns)])) ms, index reusing median \(Self.shown([Self.median(reusingRuns)])) ms,",
+      "of 3,000 to-dos on 300 pages and \(Self.yearOfDrafts) stored drafts")
+    XCTAssertEqual(view?.suggestions.count, 20, "the suggestions of today's draft")
+  }
+
+  /// What the draft adds to a state on the typing tests' two pages, with a year of stored drafts: the index built
+  /// whole and reusing the one before it (as every state after the first does, with the typed page changed or not), the
+  /// draft view, and the guests placed on the page (which parses the page's words once). Each beside the same
+  /// workspace with no draft in it. Not budgeted.
+  func test_what_the_draft_adds_to_a_state() throws {
+    for count in [300, 10] {
+      let with = try Self.typingWorkspace(page: count, draft: true)
+      let without = try Self.typingWorkspace(page: count, draft: false)
+      let words = Self.words(of: count / 2)
+      func typedAhead(_ workspace: Workspace) throws -> Workspace {
+        let page = try XCTUnwrap(workspace.dayPage(Self.today))
+        return workspace.drawing(
+          draft: page.document.replacingOccurrences(of: words, with: words + " and"), of: page.id)
+      }
+      let withAhead = try typedAhead(with)
+      let withoutAhead = try typedAhead(without)
+      XCTAssertNotEqual(withAhead, with, "the page's words changed")
+      let previousWith = TodoIndex(with)
+      let previousWithout = TodoIndex(without)
+      let todayWith = try XCTUnwrap(withAhead.dayPage(Self.today))
+      let aheadIndex = TodoIndex(withAhead, reusing: previousWith)
+
+      var guests: [GuestRow] = []
+      let measured: [(String, String)] = [
+        ("index whole", Self.median { _ = TodoIndex(with) } + " (none " + Self.median { _ = TodoIndex(without) } + ")"),
+        (
+          "index reusing, page unchanged",
+          Self.median { _ = TodoIndex(with, reusing: previousWith) } + " (none "
+            + Self.median { _ = TodoIndex(without, reusing: previousWithout) } + ")"
+        ),
+        (
+          "index reusing, page typed ahead",
+          Self.median { _ = TodoIndex(withAhead, reusing: previousWith) } + " (none "
+            + Self.median { _ = TodoIndex(withoutAhead, reusing: previousWithout) } + ")"
+        ),
+        (
+          "draft view", Self.median { _ = DraftView.of(page: todayWith, in: withAhead, index: aheadIndex) }
+        ),
+        (
+          "guests placed (the page's words parsed once)",
+          Self.median {
+            let blocks = Document.blocks(todayWith.document)
+            guests = DraftView.of(page: todayWith, in: withAhead, index: aheadIndex)?.suggestions.compactMap { $0.guest(on: blocks) } ?? []
+          }
+        ),
+      ]
+      XCTAssertEqual(guests.count, Self.typingSuggestions, "the guests placed")
+      for (what, milliseconds) in measured { print("TypingFeel: draft cost, \(count) lines, \(what): \(milliseconds) ms") }
+    }
+  }
+
   /// The fixture holds the strip the typing tests are to type under: 100 set aside, 100 due, and events today.
   private static func expectTheStrip(of workspace: Workspace) {
     let facts = DayFacts.of(day: today, in: workspace, index: TodoIndex(workspace), today: today)
@@ -374,8 +475,17 @@ final class TypingFeelTests: XCTestCase {
     window.rootViewController = UINavigationController(rootViewController: screen)
     window.makeKeyAndVisible()
     defer { window.isHidden = true }
-    screen.updatePropertiesIfNeeded()
-    window.layoutIfNeeded()
+    // The first state of the run: nothing on the screen has read this workspace, so its index is built whole (a year
+    // of drafts parsed with it).
+    let firstDraw = ContinuousClock().measure {
+      screen.updatePropertiesIfNeeded()
+      window.layoutIfNeeded()
+    }
+    let suggestions = screen.draftView?.suggestions.count
+    XCTAssertEqual(suggestions, Self.suggestionsOnThePage ? Self.typingSuggestions : nil, "the draft on the page")
+    print(
+      "TypingFeel: \(count) lines, first state drawn \(Self.shown([firstDraw / .milliseconds(1)])) ms,",
+      "suggestions on the page: \(suggestions ?? 0), stored drafts: \(Self.suggestionsOnThePage ? Self.yearOfDrafts : 0)")
 
     let list = try XCTUnwrap(screen.list)
     let editor = try XCTUnwrap(screen.children.compactMap { $0 as? DocumentViewController }.first)
@@ -447,7 +557,8 @@ final class TypingFeelTests: XCTestCase {
 
     let median = Self.median(runs)
     print(
-      "TypingFeel: \(count) lines, line \(target), ms per keystroke to the list laid out: runs \(Self.shown(runs)),",
+      "TypingFeel: \(count) lines, line \(target), \(suggestions ?? 0) suggestions on the page, ms per keystroke to the",
+      "list laid out: runs \(Self.shown(runs)),",
       "median \(Self.shown([median])); to the engine's state drawn (not budgeted): runs \(Self.shown(drawnRuns)),",
       "median \(Self.shown([Self.median(drawnRuns)]))")
     window.endEditing(true)
@@ -455,6 +566,12 @@ final class TypingFeelTests: XCTestCase {
   }
 
   private static func median(_ values: [Double]) -> Double { values.sorted()[values.count / 2] }
+
+  /// Five runs of `work`; the median in milliseconds, shown.
+  private static func median(_ work: () -> Void) -> String {
+    let clock = ContinuousClock()
+    return shown([median((0..<runs).map { _ in clock.measure(work) / .milliseconds(1) })])
+  }
 
   private static func shown(_ values: [Double]) -> String {
     values.map { String(format: "%.3f", $0) }.joined(separator: " ")
@@ -814,7 +931,8 @@ final class TypingFeelTests: XCTestCase {
   /// set aside and the next 100 are due the day before today, so none has a row today; and `chips` lines each holding
   /// a date chip, spread over the past pages, the first `chipsToday` dated today.
   private static func workspace(
-    todayLines: [String], todayTasks: [JSONValue], pastRows: Int, chips: Int, chipsToday: Int
+    todayLines: [String], todayTasks: [JSONValue], pastRows: Int, chips: Int, chipsToday: Int,
+    drafts: DraftFixture? = nil
   ) throws -> Workspace {
     var tasks = todayTasks
     var past: [(day: LocalDate, lines: [String])] = []
@@ -840,7 +958,12 @@ final class TypingFeelTests: XCTestCase {
       let page = chip * past.count / chips
       past[page].lines.append(chipLine(chip, on: chip < chipsToday ? today : past[page].day))
     }
-    let pages = [dayPage(today, todayLines)] + past.map { dayPage($0.day, $0.lines) }
+    var pages = [dayPage(today, todayLines)] + past.map { dayPage($0.day, $0.lines) }
+    if let drafts {
+      // The to-dos a draft may offer: open, not set aside, and not due, so the ones past the first 200 of the past.
+      let offered = tasks.dropFirst(todayTasks.count + 200).compactMap { $0.objectValue?["id"]?.stringValue }
+      pages += draftPages(drafts, offered: Array(offered))
+    }
     return try XCTUnwrap(
       Workspace(
         .object([
@@ -848,14 +971,95 @@ final class TypingFeelTests: XCTestCase {
         ])))
   }
 
-  /// A model signed in as `one`, on a store on disk holding today's page of `count` lines, its engine past its first
-  /// pass; from then on the server holds every call, saves included, and answers none.
-  /// Every third line of the page (the first, the fourth, …) is a to-do due tomorrow, so its row draws a marks line;
-  /// the lines typed into (the 150th, the 5th) are not. The workspace holds 3,000 to-dos in all: the rest are
-  /// planned on the days before, 100 a day, so the rows' facts read an index of a workspace that size. The strip
-  /// above the page is on screen too: 100 of those to-dos are set aside, 100 are due and have no row today, and the
-  /// past pages hold 200 chips, 2 of them dated today.
-  private func model(page count: Int) async throws -> (AppModel, SyncEngine) {
+  // MARK: The day draft
+
+  /// What the workspace holds of the day draft: today's page's draft, with the items `todayItems` gives (as JSON
+  /// text) from the ids of to-dos it may offer, and a stored draft of 20 decided items on each of `pastDays` days
+  /// before today.
+  private struct DraftFixture {
+    let pastDays: Int
+    let todayItems: ([String]) -> [String]
+
+    init(pastDays: Int, todayItems: @escaping ([String]) -> [String]) {
+      self.pastDays = pastDays
+      self.todayItems = todayItems
+    }
+  }
+
+  private static func draftPage(of day: LocalDate, items: [String]) -> JSONValue {
+    .object([
+      "id": .string("draft:day:\(day.value)"), "type": .string("draft"), "parentId": .string("day:\(day.value)"),
+      "title": .string(""),
+      "document": .string(
+        #"{"status":"ready","recipe":\#(DayDraft.currentRecipe),"moreOpen":[],"items":[\#(items.joined(separator: ","))]}"#),
+    ])
+  }
+
+  /// Today's draft, and one stored draft for each of the days before it: 10 carried to-dos and 10 lines, applied and
+  /// skipped alternately, 5 of the lines with `from`, 2 of them of recipe 3.
+  private static func draftPages(_ fixture: DraftFixture, offered: [String]) -> [JSONValue] {
+    var pages = [draftPage(of: today, items: fixture.todayItems(offered))]
+    var day = today
+    for number in 0..<fixture.pastDays {
+      guard let before = day.adding(days: -1) else { break }
+      day = before
+      var items = (0..<10).map { k in
+        carriedItem(
+          "t\(k)", offered[(number * 10 + k) % offered.count], anchor: "", state: k % 2 == 0 ? "skipped" : "applied")
+      }
+      for k in 0..<10 {
+        items.append(
+          lineItem(
+            "l\(k)", words: k == 0 ? "Gym" : "Line \(k) of \(day.value)", anchor: "",
+            state: k % 2 == 0 ? "skipped" : "applied", from: k % 2 == 0 ? "line-\(day.value)-\(k)" : nil,
+            recipe: k % 6 == 0 ? 3 : nil))
+      }
+      pages.append(draftPage(of: day, items: items))
+    }
+    return pages
+  }
+
+  private static func carriedItem(_ id: String, _ taskId: String, anchor: String, state: String) -> String {
+    #"{"id":"\#(id)","anchor":"\#(anchor)","place":"after","taskId":"\#(taskId)","state":"\#(state)"}"#
+  }
+
+  private static func lineItem(
+    _ id: String, words: String, type: String = "bulletListItem", anchor: String, state: String, from: String? = nil,
+    recipe: Int? = nil
+  ) -> String {
+    let block =
+      #"{"id":"b-\#(id)","type":"\#(type)","props":{},"content":[{"type":"text","text":"\#(words)","styles":{}}],"children":[]}"#
+    return #"{"id":"\#(id)","anchor":"\#(anchor)","place":"after","state":"\#(state)","block":\#(block)"#
+      + (from.map { #","from":"\#($0)""# } ?? "") + (recipe.map { #","recipe":\#($0)"# } ?? "") + "}"
+  }
+
+  /// The fixture's draft reads as it is meant to: `suggestions` open ones, each placed on the page as a guest row.
+  private static func expectTheDraft(of workspace: Workspace, suggestions: Int) {
+    guard let page = workspace.dayPage(today),
+      let view = DraftView.of(page: page, in: workspace, index: TodoIndex(workspace))
+    else { return XCTFail("today's draft") }
+    XCTAssertEqual(view.suggestions.count, suggestions, "the suggestions of today's draft")
+    let blocks = Document.blocks(page.document)
+    XCTAssertEqual(view.suggestions.compactMap { $0.guest(on: blocks) }.count, suggestions, "each placed on the page")
+  }
+
+  /// Whether the typing tests type with suggestions on the page and a year of drafts stored: yes unless
+  /// `DAYTHREAD_FEEL_DRAFT=off` is given to the test runner, which gives the same run with no draft in the workspace,
+  /// to read the draft's cost from the difference.
+  private static var suggestionsOnThePage: Bool { ProcessInfo.processInfo.environment["DAYTHREAD_FEEL_DRAFT"] != "off" }
+  /// The suggestions the typed page's draft holds, placed above the line typed into.
+  private static let typingSuggestions = 4
+  /// Days before today that hold a stored draft: a year of use.
+  private static let yearOfDrafts = 365
+
+  /// The typing tests' workspace: today's page of `count` lines and 3,000 to-dos in all. Every third line of the page
+  /// (the first, the fourth, …) is a to-do due tomorrow, so its row draws a marks line; the lines typed into (the
+  /// 150th, the 5th) are not. The rest are planned on the days before, 100 a day, so the rows' facts read an index of
+  /// a workspace that size. The strip above the page is on screen too: 100 of those to-dos are set aside, 100 are due
+  /// and have no row today, and the past pages hold 200 chips, 2 of them dated today. With `draft`, today's page has
+  /// a ready draft of `typingSuggestions` suggestions placed above the line typed into, and each of the
+  /// `yearOfDrafts` days before it a stored draft of 20 decided items.
+  private static func typingWorkspace(page count: Int, draft: Bool) throws -> Workspace {
     var tasks: [JSONValue] = []
     let lines = (1...count).map { index in
       guard index % 3 == 1 else {
@@ -864,8 +1068,30 @@ final class TypingFeelTests: XCTestCase {
       tasks.append(Self.todo("todo-\(index)"))
       return Self.todoRow("line-\(index)", "todo-\(index)", on: Self.today, words: Self.words(of: index))
     }
-    let copy = try Self.workspace(todayLines: lines, todayTasks: tasks, pastRows: 100, chips: 200, chipsToday: 2)
+    let target = count / 2
+    let fixture =
+      draft
+      ? DraftFixture(pastDays: yearOfDrafts) { offered in
+        let above = "line-\(target - 1)"
+        let farther = "line-\(target - 4)"
+        return [
+          carriedItem("s1", offered[0], anchor: above, state: "open"),
+          carriedItem("s2", offered[1], anchor: above, state: "open"),
+          lineItem("s3", words: "Call the dentist", anchor: farther, state: "open", from: "line-yesterday"),
+          lineItem("s4", words: "Water the plants", anchor: farther, state: "open"),
+        ]
+      } : nil
+    let copy = try Self.workspace(
+      todayLines: lines, todayTasks: tasks, pastRows: 100, chips: 200, chipsToday: 2, drafts: fixture)
     Self.expectTheStrip(of: copy)
+    if draft { Self.expectTheDraft(of: copy, suggestions: Self.typingSuggestions) }
+    return copy
+  }
+
+  /// A model signed in as `one`, on a store on disk holding `typingWorkspace`, its engine past its first pass; from
+  /// then on the server holds every call, saves included, and answers none.
+  private func model(page count: Int) async throws -> (AppModel, SyncEngine) {
+    let copy = try Self.typingWorkspace(page: count, draft: Self.suggestionsOnThePage)
 
     let url = FileManager.default.temporaryDirectory.appendingPathComponent("typing-feel-\(UUID().uuidString).store")
     storeURL = url
