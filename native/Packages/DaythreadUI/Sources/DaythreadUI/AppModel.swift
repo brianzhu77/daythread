@@ -216,7 +216,10 @@ public final class AppModel {
   public func signIn(email: String, password: String) async -> SignInFailure? {
     do {
       try await engine.signIn(email: email, password: password, timezone: TimeZone.current.identifier)
-      forgetTicks()
+      // Forgotten once per account change. The engine publishes the signed-in state before this returns, and it can
+      // reach `receive` first, which then forgot whatever the change needed; the screen may since have asked for
+      // today's draft or he may have ticked, and forgetting again would ask a second time and drop the tick.
+      if !receivedSignedIn { forgetTicks() }
       return nil
     } catch {
       return SignInFailure(error)
@@ -235,7 +238,8 @@ public final class AppModel {
     _ = await Self.answer(enqueue(.flush, owner: nil))
     let unsent = await engine.signOut(discardingUnsent: discardingUnsent)
     guard unsent == 0 else { return .unsent(unsent) }
-    forgetTicks()
+    // `receive` forgets when the signed-out state reaches it; only one that has not arrived yet is forgotten for here.
+    if state.phase != .signedOut { forgetTicks() }
     return .signedOut
   }
 
@@ -321,6 +325,10 @@ public final class AppModel {
   }
 
   /// The account changed or nobody is signed in: nothing of one account is drawn, sent or merged under another.
+  /// A signed-in state has reached `receive`: an account's copy is drawn, and `receive` forgot what an account change
+  /// before it needed forgetting.
+  private var receivedSignedIn: Bool { state.phase == .ready && state.owner != nil }
+
   private func forgetTicks() {
     if !records.isEmpty { records = [] }
     lastTicks = [:]
