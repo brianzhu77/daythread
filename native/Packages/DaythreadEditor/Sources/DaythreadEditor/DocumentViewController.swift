@@ -38,21 +38,105 @@
     public var onRowAction: ((RowRequest) -> Void)?
 
     /// The row an action is out for: drawn dimmed (its words and marks in `.tertiaryLabel`), and every row's actions
-    /// report nothing until it is nil again. Typing and ticking go on.
+    /// report nothing until it is nil again. Typing and ticking go on. A guest's id dims that guest (its words, small
+    /// text, mark and buttons), and while it is set every guest's actions report nothing too; a guest dimmed is still
+    /// no line of the page.
     public var actingRow: String? {
       didSet {
         guard actingRow != oldValue else { return }
-        let ids = [oldValue, actingRow].compactMap { $0 }.filter { rowsByID[$0] != nil }
+        let changed = [oldValue, actingRow].compactMap { $0 }
+        let ids = changed.filter { rowsByID[$0] != nil }
         // A row being composed in is never reconfigured from outside: its cell takes the look in place, and its words
         // are drawn in it once the composition ends (`applyWords` leaves marked text alone).
         for id in ids where id == composingRow { (cell(for: id) as? TodoBlockCell)?.setDimmed(id == actingRow) }
         // The others are reconfigured, which keeps each cell (and its caret and keyboard), and reaches a cell the list
         // made ahead of time off screen, which `cellForItem` does not return.
-        let reconfigured = ids.filter { $0 != composingRow }
-        guard !reconfigured.isEmpty else { return }
+        let reconfigured =
+          ids.filter { $0 != composingRow }.map(ListItem.line)
+          + changed.filter { guestsByID[$0] != nil }.map(ListItem.guest)
         var snapshot = dataSource.snapshot()
-        snapshot.reconfigureItems(reconfigured.filter { snapshot.indexOfItem($0) != nil })
+        let listed = reconfigured.filter { snapshot.indexOfItem($0) != nil }
+        guard !listed.isEmpty else { return }
+        snapshot.reconfigureItems(listed)
         dataSource.apply(snapshot, animatingDifferences: false)
+      }
+    }
+
+    // MARK: guest rows
+
+    /// Which action of which guest he used, by its button or its custom action.
+    public var onGuestAction: ((_ guestID: String, _ actionID: String) -> Void)?
+
+    /// The guests the host gave last, in its order, each id once; one whose line is not in the list is not drawn.
+    private var guests: [GuestRow] = []
+    private var guestsByID: [String: GuestRow] = [:]
+    /// Each guest as the list last drew it, to tell which changed.
+    private var drawnGuests: [String: GuestRow] = [:]
+    /// The list's items in order (tests read it): the page's lines (`orderedIDs`), each guest after its line.
+    private(set) var orderedItems: [ListItem] = []
+    /// The guests the last snapshot reconfigured.
+    private(set) var redrawnGuests: [String] = []
+
+    /// Only the guests changed; the page's lines are not touched.
+    public func setGuestRows(_ guests: [GuestRow]) {
+      take(guests)
+      guard let workspace, let pageID = shownPageID else { return }
+      if editedPage != nil {
+        // A line's resign is under way: its draw, once the line has let the keyboard go, draws them.
+        guard redrawAfterResign == nil else { return }
+        redraw(pageID: pageID, pageDate: pageDate, in: workspace)
+      } else if let shownPage {
+        show(page: shownPage, in: workspace)
+      }
+    }
+
+    /// The host's guests from now on; a repeated id is drawn once, as the first that has it (the list holds each item
+    /// once).
+    private func take(_ guests: [GuestRow]) {
+      var byID: [String: GuestRow] = [:]
+      self.guests = guests.filter { guest in
+        guard byID[guest.id] == nil else { return false }
+        byID[guest.id] = guest
+        return true
+      }
+      guestsByID = byID
+    }
+
+    /// Hands a guest's action to the host, unless an action is out or the guest is no longer drawn with it. True when
+    /// it was handed on.
+    private func reportGuestAction(_ actionID: String, of guestID: String) -> Bool {
+      guard !actionsHeld, let onGuestAction, let guest = guestsByID[guestID],
+        guest.actions.contains(where: { $0.id == actionID }), dataSource.indexPath(for: .guest(guestID)) != nil
+      else { return false }
+      onGuestAction(guestID, actionID)
+      return true
+    }
+
+    /// Where line `id`'s row is in the list now.
+    private func indexPath(ofLine id: String) -> IndexPath? {
+      dataSource.indexPath(for: .line(id))
+    }
+
+    /// How far below the top of what the list shows line `id`'s row lies, as the layout has it now.
+    private func onScreen(ofLine id: String) -> CGFloat? {
+      let list = collectionView
+      guard let indexPath = indexPath(ofLine: id), let row = list.layoutAttributesForItem(at: indexPath) else {
+        return nil
+      }
+      return row.frame.minY - list.contentOffset.y
+    }
+
+    /// After a snapshot applied without animation: the list's offset moves by as much as line `id` moved, so it stays
+    /// `before` points under the top of what the list shows (within the list's top and bottom), as for the header
+    /// (`headerDidChange`). Rows measured only once laid out can move it again, so it is read again, a few times.
+    private func keep(line id: String, at before: CGFloat) {
+      let list = collectionView
+      for _ in 0..<3 {
+        list.layoutIfNeeded()
+        guard let now = onScreen(ofLine: id), abs(now - before) > 0.5 else { return }
+        let offset = list.contentOffset.y
+        setContentOffset(clamped: offset + now - before, animated: false)
+        guard abs(list.contentOffset.y - offset) > 0.5 else { return }
       }
     }
 
@@ -76,9 +160,8 @@
     /// about it. The animated form moves once, on the row heights known then, so a far row can land a little off;
     /// `animated: false` is exact.
     @discardableResult public func scroll(toRow rowID: String, animated: Bool) -> Bool {
-      guard let item = orderedIDs.firstIndex(of: rowID) else { return false }
+      guard let indexPath = indexPath(ofLine: rowID) else { return false }
       let list = collectionView
-      let indexPath = IndexPath(item: item, section: 0)
       list.layoutIfNeeded()
       guard var row = list.layoutAttributesForItem(at: indexPath)?.frame else { return false }
       // The rows between are measured only once they are laid out, so a row far off reads where their estimates put
@@ -119,6 +202,9 @@
     /// The index the rows' facts were last read with, and the workspace it is of: a draw in the same workspace (a key
     /// that restructures the page, a composition that ends) reads no page again.
     private var factsIndex: (workspace: Workspace, index: TodoIndex)?
+    /// How many indexes this list has built itself: none while its host hands it the index of every workspace (tests
+    /// read it).
+    public private(set) var indexesBuilt = 0
 
     /// The app's today, for the rows' facts; a change redraws the rows whose facts change. Nil: no facts.
     public var today: LocalDate? {
@@ -235,9 +321,8 @@
       func onScreen(_ item: IndexPath) -> CGFloat? {
         list.layoutAttributesForItem(at: item).map { $0.frame.minY - list.contentOffset.y }
       }
-      let typed = focusedLine?.rowID.flatMap { orderedIDs.firstIndex(of: $0) }.flatMap { item in
-        let indexPath = IndexPath(item: item, section: 0)
-        return onScreen(indexPath).map { (indexPath: indexPath, onScreen: $0) }
+      let typed = focusedLine?.rowID.flatMap { indexPath(ofLine: $0) }.flatMap { indexPath in
+        onScreen(indexPath).map { (indexPath: indexPath, onScreen: $0) }
       }
       list.collectionViewLayout.invalidateLayout()
       guard let typed else { return }
@@ -297,8 +382,19 @@
     /// Draws a page that is not edited. A row that is the same as before is left alone, one whose content or status
     /// changed is reconfigured in place, and the scroll position is kept. The first call, and the first for another
     /// page, do not animate.
-    public func show(page: Page, in workspace: Workspace) {
+    ///
+    /// `index` is of `workspace` (the caller's to keep true) and is what every row's facts are read with, here and in
+    /// each later draw of that workspace (a new today, a key that restructures the page): the list builds none of its
+    /// own. Nil builds one, for a host that has none.
+    ///
+    /// `guests`: the rows drawn among the page's that are not its lines (`GuestRow`); [] removes them, and nil keeps
+    /// those shown while the page is the same one (a host draws every state it has) but gives another page none, so
+    /// no guest of one page is drawn on the next. The page and its guests in one call, so a guest can leave in the
+    /// update that brings the row it became. The same in `edit` and `replace`.
+    public func show(page: Page, in workspace: Workspace, index: TodoIndex? = nil, guests: [GuestRow]? = nil) {
       finishEditing()
+      adopt(index, of: workspace)
+      take(guests, for: page.id, afresh: false)
       editedPage = nil
       heldReplace = nil
       shownPage = page
@@ -307,18 +403,31 @@
       draw(rows, pageID: page.id, pageDate: page.date, in: workspace, editable: [])
     }
 
-    /// What the rows' facts are read with now: nil without a today. The index is built again only for another
-    /// workspace; a workspace value handed on unchanged compares by its storage, at no cost.
-    private func factsSource(in workspace: Workspace, pageDate: LocalDate?) -> BlockRows.FactsSource? {
-      guard let today else {
-        factsIndex = nil
-        return nil
+    /// The guests for page `pageID` about to be drawn: those given, else the ones shown while it is the page shown now
+    /// (`afresh`: another page with the same id), else none.
+    private func take(_ guests: [GuestRow]?, for pageID: String, afresh: Bool) {
+      if let guests {
+        take(guests)
+      } else if afresh || pageID != shownPageID {
+        take([])
       }
+    }
+
+    /// Keeps the index its host handed with `workspace`, for the draws that follow.
+    private func adopt(_ index: TodoIndex?, of workspace: Workspace) {
+      if let index { factsIndex = (workspace, index) }
+    }
+
+    /// What the rows' facts are read with now: nil without a today. An index is built only for a workspace the host
+    /// handed none of; a workspace value handed on unchanged compares by its storage, at no cost.
+    private func factsSource(in workspace: Workspace, pageDate: LocalDate?) -> BlockRows.FactsSource? {
+      guard let today else { return nil }
       let index: TodoIndex
       if let cached = factsIndex, cached.workspace == workspace {
         index = cached.index
       } else {
         index = TodoIndex(workspace)
+        indexesBuilt += 1
         factsIndex = (workspace, index)
       }
       return BlockRows.FactsSource(today: today, pageDate: pageDate, index: index)
@@ -342,12 +451,17 @@
     /// Shows a page for editing. `page` is the workspace's (the draft's document when it has one). The page that is
     /// being edited, given again, is a change from outside, as `replace`; unless `afresh`: then it is another page with
     /// the same id (another account's), and what he composed is committed into the one before first.
-    public func edit(page: Page, in workspace: Workspace, afresh: Bool = false) {
+    /// `index` and `guests` as in `show`.
+    public func edit(
+      page: Page, in workspace: Workspace, index: TodoIndex? = nil, afresh: Bool = false, guests: [GuestRow]? = nil
+    ) {
       if !afresh, editedPage != nil, page.id == shownPageID {
-        replace(document: page.document, in: workspace)
+        replace(document: page.document, in: workspace, index: index, guests: guests)
         return
       }
       finishEditing()
+      adopt(index, of: workspace)
+      take(guests, for: page.id, afresh: afresh)
       editedPage = EditablePage(document: page.document, pageDate: page.date)
       shownPage = nil
       heldReplace = nil
@@ -406,8 +520,12 @@
     /// not in the new page, the caret goes to the end of the nearest line above that is (or to the start of the first
     /// line), and the keyboard stays up (`draw`). While he composes, every row but the composing one is drawn from it at once; that row's part waits until the
     /// composition ends, when his composed words and this page are merged (`commitHeld`).
-    public func replace(document: String, in workspace: Workspace) {
+    ///
+    /// `index` and `guests` as in `show`.
+    public func replace(document: String, in workspace: Workspace, index: TodoIndex? = nil, guests: [GuestRow]? = nil) {
       guard let editedPage, let pageID = shownPageID else { return }
+      adopt(index, of: workspace)
+      if let guests { take(guests) }
       // A line's resign is under way and its merge is drawn once the line has let the keyboard go: drawn now, this
       // page would be drawn over by that draw's older workspace. It is that draw's page and workspace instead.
       if redrawAfterResign != nil {
@@ -481,10 +599,21 @@
           && (rowsByID[$0] != newRows[$0] || drawn[$0] != newDrawn[$0]
             || editableIDs.contains($0) != editable.contains($0))
       }
+      let items = ListItem.items(lines: ids, guests: guests)
+      let listedBefore = Set(orderedItems)
+      let listedNow = Set(items)
+      // A guest drawn before and now whose look changed; one that comes or goes is an item inserted or deleted.
+      let changedGuests = guests.map(\.id).filter { id in
+        drawnGuests[id] != guestsByID[id] && listedBefore.contains(.guest(id)) && listedNow.contains(.guest(id))
+      }
       self.pageDate = pageDate
       self.workspace = workspace
       editableIDs = editable
-      if pageID == shownPageID, changed.isEmpty, ids == orderedIDs { return }
+      if pageID == shownPageID, changed.isEmpty, ids == orderedIDs, changedGuests.isEmpty, items == orderedItems {
+        return
+      }
+      // Guests came, went, changed or follow another line.
+      let guestsMoved = !changedGuests.isEmpty || Self.guestPlaces(items) != Self.guestPlaces(orderedItems)
 
       let focus = focusedLine.flatMap { line in line.rowID.map { (id: $0, selection: line.selectedRange) } }
       // The row holding the caret is not in the new page (the server moved its to-do to another day): where the
@@ -496,22 +625,24 @@
       rowsByID = newRows
       drawn = newDrawn
       orderedIDs = ids
-      var snapshot = NSDiffableDataSourceSnapshot<Section, String>()
+      orderedItems = items
+      drawnGuests = guestsByID
+      var snapshot = NSDiffableDataSourceSnapshot<Section, ListItem>()
       snapshot.appendSections([.main])
-      snapshot.appendItems(ids)
+      snapshot.appendItems(items)
       // A reconfigure must get the same kind of cell back; a row that now needs another gets a fresh one.
       let (reloaded, reconfigured) = changed.reduce(into: ([String](), [String]())) { split, id in
         let sameCell = oldRows[id].map { CellKind($0.kind) } == newRows[id].map { CellKind($0.kind) }
         if sameCell { split.1.append(id) } else { split.0.append(id) }
       }
-      snapshot.reconfigureItems(reconfigured)
-      snapshot.reloadItems(reloaded)
+      snapshot.reconfigureItems(reconfigured.map(ListItem.line) + changedGuests.map(ListItem.guest))
+      snapshot.reloadItems(reloaded.map(ListItem.line))
       // Another page (another day) is not a diff of the one before: animated, its rows would slide in as the old
       // ones slide out. Redraws of the same page animate, so a tick's symbol transition plays.
       let animated = pageID == shownPageID
       shownPageID = pageID
-      appliedAnimated.append(animated)
       redrawnRows = changed
+      redrawnGuests = changedGuests
       // A reconfigured row keeps its cell, and its text view the caret; a reloaded one has a new cell to give it to,
       // and the keyboard is held meanwhile.
       let rebuilt = focus.map { reloaded.contains($0.id) } == true
@@ -528,7 +659,20 @@
           line.resignFirstResponder()
         }
       }
-      dataSource.apply(snapshot, animatingDifferences: animated)
+      // Guests that come, go or change while a line holds the keyboard do not move it: the change is drawn at once and
+      // the list moved by as much as the line was (§13.6); animated, the line would slide away and back. Not when the
+      // line itself leaves or is rebuilt: then the caret's landing on a line is what is kept, not its place.
+      let kept = focus.flatMap { focus in
+        guestsMoved && animated && leaving == nil && !rebuilt
+          ? onScreen(ofLine: focus.id).map { (id: focus.id, onScreen: $0) } : nil
+      }
+      appliedAnimated.append(animated && kept == nil)
+      if let kept {
+        dataSource.apply(snapshot, animatingDifferences: false)
+        keep(line: kept.id, at: kept.onScreen)
+      } else {
+        dataSource.apply(snapshot, animatingDifferences: animated)
+      }
       if let focus, rebuilt {
         place(caretIn: focus.id, selection: focus.selection)
         releaseKeyboardHold()
@@ -537,6 +681,24 @@
         place(caretIn: successor.row, selection: successor.selection)
         releaseKeyboardHold()
       }
+    }
+
+    /// Each drawn guest with the line it follows (nil: before the first), in order.
+    private static func guestPlaces(_ items: [ListItem]) -> [GuestPlace] {
+      var places: [GuestPlace] = []
+      var line: String?
+      for item in items {
+        switch item {
+        case .line(let id): line = id
+        case .guest(let id): places.append(GuestPlace(guest: id, line: line))
+        }
+      }
+      return places
+    }
+
+    private struct GuestPlace: Equatable {
+      let guest: String
+      let line: String?
     }
 
     /// Where the caret goes when its row `id` leaves the page: the end of the nearest line above it in the order on
@@ -602,10 +764,10 @@
       if keyboardHolder.isFirstResponder { keyboardHolder.resignFirstResponder() }
     }
 
-    /// The number of rows the list holds (tests and accessibility use it; nothing else does).
+    /// The number of rows the list holds, guests among them (tests and accessibility use it; nothing else does).
     var itemCount: Int { collectionView.numberOfItems(inSection: 0) }
 
-    private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, String> {
+    private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, ListItem> {
       let text = UICollectionView.CellRegistration<TextBlockCell, String> { [weak self] cell, _, id in
         guard let self, let row = self.rowsByID[id], case .text(let style) = row.kind else { return }
         cell.configure(
@@ -630,9 +792,21 @@
         guard let self, let row = self.rowsByID[id], case .placeholder(let name) = row.kind else { return }
         cell.configure(name: name, depth: row.depth)
       }
-      let dataSource = UICollectionViewDiffableDataSource<Section, String>(collectionView: collectionView) {
-        [weak self] collectionView, indexPath, id in
-        switch self?.rowsByID[id].map({ CellKind($0.kind) }) {
+      let guest = UICollectionView.CellRegistration<GuestRowCell, String> { [weak self] cell, _, id in
+        guard let self, let guest = self.guestsByID[id] else { return }
+        cell.configure(guest, dimmed: id == self.actingRow) { [weak self] action in
+          self?.reportGuestAction(action, of: id) ?? false
+        }
+      }
+      let dataSource = UICollectionViewDiffableDataSource<Section, ListItem>(collectionView: collectionView) {
+        [weak self] collectionView, indexPath, item in
+        let id: String
+        switch item {
+        case .guest(let guestID):
+          return collectionView.dequeueConfiguredReusableCell(using: guest, for: indexPath, item: guestID)
+        case .line(let lineID): id = lineID
+        }
+        return switch self?.rowsByID[id].map({ CellKind($0.kind) }) {
         case .text: collectionView.dequeueConfiguredReusableCell(using: text, for: indexPath, item: id)
         case .todo: collectionView.dequeueConfiguredReusableCell(using: todo, for: indexPath, item: id)
         case .placeholder: collectionView.dequeueConfiguredReusableCell(using: placeholder, for: indexPath, item: id)
@@ -1096,8 +1270,7 @@
 
     /// Gives the keyboard to a row's line, with `selection` clamped to its words.
     private func place(caretIn id: String, selection: NSRange) {
-      guard let item = orderedIDs.firstIndex(of: id) else { return }
-      let indexPath = IndexPath(item: item, section: 0)
+      guard let indexPath = indexPath(ofLine: id) else { return }
       collectionView.layoutIfNeeded()
       if collectionView.cellForItem(at: indexPath) == nil {
         collectionView.scrollToItem(at: indexPath, at: [], animated: false)
@@ -1118,8 +1291,7 @@
 
     /// A row's cell, if the list has made one.
     private func cell(for id: String) -> UICollectionViewCell? {
-      guard let item = orderedIDs.firstIndex(of: id) else { return nil }
-      return collectionView.cellForItem(at: IndexPath(item: item, section: 0))
+      indexPath(ofLine: id).flatMap { collectionView.cellForItem(at: $0) }
     }
 
     // MARK: the row's actions
@@ -1147,10 +1319,9 @@
     /// A to-do row's trailing swipe: the actions the web's phone bar puts first, then `More` when the menu holds more,
     /// none on a full swipe. None on the row being typed in (the system would take the keyboard away to open it),
     /// none anywhere while words are selected (a handle dragged sideways would open one), and none while an action is
-    /// out.
+    /// out. None on a guest: its actions are its buttons.
     fileprivate func trailingSwipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-      guard !actionsHeld, orderedIDs.indices.contains(indexPath.item) else { return nil }
-      let id = orderedIDs[indexPath.item]
+      guard !actionsHeld, case .line(let id) = dataSource.itemIdentifier(for: indexPath) else { return nil }
       guard let row = rowsByID[id], case .todo(let taskId, _, _, let facts) = row.kind, let menu = facts?.menu else {
         return nil
       }
@@ -1205,13 +1376,13 @@
 
     // MARK: the space under the last line
 
-    /// Whether a point in the list is in the empty space under its last row (and under its header, so a tap on the
-    /// day's header is never this).
+    /// Whether a point in the list is in the empty space under its last row, a guest or a line (and under its header,
+    /// so a tap on the day's header is never this).
     func takesTapUnderTheLastLine(at point: CGPoint) -> Bool {
       guard editedPage?.isReadable == true else { return false }
       let layout = collectionView.collectionViewLayout
       var end: CGFloat = 0
-      if let last = orderedIDs.indices.last, let row = layout.layoutAttributesForItem(at: IndexPath(item: last, section: 0)) {
+      if let last = orderedItems.indices.last, let row = layout.layoutAttributesForItem(at: IndexPath(item: last, section: 0)) {
         end = row.frame.maxY
       }
       if headerView != nil,

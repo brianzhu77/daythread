@@ -52,6 +52,24 @@ public enum BlockRows {
     return rows
   }
 
+  /// The row id (as the list names rows, `#2` for a repeated id) of the last row of the top-level block `blockID` and
+  /// everything nested under it; nil when `blocks` has no such top-level block. What a host passes as `after(lineID:)`
+  /// for "after the block".
+  public static func lastRowID(ofBlock blockID: String, in blocks: [Block]) -> String? {
+    var ids = RowIDs(blocks)
+    for top in blocks {
+      // The rows' own order (`rows(for:in:facts:)`): depth first, every id handed out as it is there.
+      var last = ""
+      var stack = [top]
+      while let block = stack.popLast() {
+        last = ids.unique(block.id)
+        if hasChildren(block) { stack.append(contentsOf: block.children.reversed()) }
+      }
+      if top.id == blockID { return last }
+    }
+    return nil
+  }
+
   /// Each sibling with its place in the run of numbered items it belongs to (0 when it is not one).
   private static func numbered(_ siblings: [Block]) -> [(block: Block, number: Int)] {
     var count = 0

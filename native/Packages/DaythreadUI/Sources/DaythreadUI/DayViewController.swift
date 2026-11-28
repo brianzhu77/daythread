@@ -14,6 +14,10 @@
     /// The row's id.
     case row(String)
     case strip(taskId: String)
+    /// A suggestion's button: its item's id.
+    case suggestion(String)
+    /// `Apply all` or `Dismiss`.
+    case draftLine
   }
 
   @MainActor
@@ -121,6 +125,20 @@
     var factsView: UIView { factsHost.view }
     /// How many times the facts were worked out (tests read it).
     private(set) var factsReads = 0
+    /// How many indexes the screen built (tests read it).
+    private(set) var indexesBuilt = 0
+    /// What today's page shows of its draft, worked out in `showDay`; nil on another day, with no live page of today,
+    /// or with no copy shown.
+    private(set) var draftView: DraftView?
+    /// How many times `DraftView.of` ran (tests read it).
+    private(set) var draftReads = 0
+    /// The workspace and page `draftView` was worked out from: an ask's change alone redraws the line without it.
+    private var draftViewOf: (workspace: Workspace, pageId: String)?
+    /// `draftView`'s suggestions as guest rows, and the words they were placed on: worked out when `draftView` is, and
+    /// again only for other words.
+    private var draftGuests: (document: String, guests: [GuestRow])?
+    /// The guests the list was last handed, with the page or alone.
+    private var handedGuests: [GuestRow] = []
     private let heldButton = UIBarButtonItem(image: UIImage(systemName: "exclamationmark.triangle"))
     private let moreButton = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
     private lazy var previousButton = symbolButton("chevron.left", label: "Previous day") { $0.step(by: -1) }
@@ -132,43 +150,85 @@
     /// The day shown.
     var date: LocalDate { shownDate ?? model.today }
 
-    /// What an action's notice is of: where it was made (a row, or the strip), the page it did not overtake (nil: it
-    /// had none to wait for), the day and account it was made under, and the operation an Undo would undo.
+    /// What an action's notice is of: where it was made (a row, the strip, the draft), the page it did not overtake
+    /// (nil: it had none to wait for), the day and account it was made under, and what its Undo sends.
     private struct Acted {
       let origin: ActionOrigin
       let pageId: String?
       let date: LocalDate
       let owner: String
-      let operationId: String
+      let undo: UndoOf
+
+      /// The operation the notice's `Undo` names: the one undone, or the skip reopened.
+      var operationId: String {
+        switch undo {
+        case .server(let operationId): operationId
+        case .reopen(let ticket): ticket.skippedBy
+        }
+      }
+    }
+
+    /// What an Undo sends: the server's `undo` of the operation, offered while the server's one slot holds it; or a
+    /// skip's `reopen-draft` (§13.8), which does not use the slot, so it is not withdrawn when the slot moves and does
+    /// not hold an answer's `set-draft` back.
+    private enum UndoOf {
+      case server(String)
+      case reopen(DraftTicket)
+
+      var holdsUndoSlot: Bool {
+        if case .server = self { true } else { false }
+      }
     }
 
     /// The notice, over the page (on a phone under the status bar, at regular width under the navigation bar); it says
     /// what the last row action did.
     let notice: NoticeView
     /// The notice showing is of this action; nil when it offers no Undo.
-    private var noticeOf: Acted?
+    private var noticeOf: Acted? {
+      didSet { noteUndoSlot() }
+    }
+    /// What this screen last told the model of the server's Undo slot (`AppModel.holdsUndoSlot`).
+    private var holdsUndoSlot = false
     /// The action or Undo out on the screen, and where it came from: no other runs until it is answered (§12.4, one
     /// at a time for the whole screen). Setting it dims its row (of the page, or of the strip), disables the strip and
-    /// holds every row's actions on whatever day is shown; leaving the day takes the dimming away while it stays out.
+    /// the draft's line, and holds every row's actions and every suggestion's buttons on whatever day is shown;
+    /// leaving the day takes the dimming away while it stays out.
     private var actionOut: ActionOrigin? {
       didSet {
         guard actionOut != oldValue else { return }
-        if case .row(let rowID) = actionOut { document.actingRow = rowID } else { document.actingRow = nil }
+        // A suggestion's id dims its guest row; Apply all and Dismiss dim no single row.
+        switch actionOut {
+        case .row(let id), .suggestion(let id): document.actingRow = id
+        case .strip, .draftLine, nil: document.actingRow = nil
+        }
         document.pausesRowActions = actionOut != nil
         if case .strip(let taskId) = actionOut { factsModel.acting = taskId } else { factsModel.acting = nil }
         updateStripEnabled()
+        noteUndoSlot()
       }
+    }
+    /// The suggestion whose decision (or its Undo) is out, by item id: its row is the one drawn dimmed.
+    var actingSuggestion: String? {
+      if case .suggestion(let itemId) = actionOut { itemId } else { nil }
     }
     /// The indexes the last `ListReading`s were read with, newest first, and the workspaces they are of: the list's
     /// workspace and a state's are read again at the next state, at no cost.
     private var readingIndexes: [(workspace: Workspace, index: TodoIndex)] = []
     /// The workspaces `readingIndexes` holds, newest first (tests read it).
     var indexedWorkspaces: [Workspace] { readingIndexes.map(\.workspace) }
+    /// The newest index `readingIndexes` holds (tests read what it parsed).
+    var newestIndex: TodoIndex? { readingIndexes.first?.index }
+    /// The account the indexes in `readingIndexes` were built under: another's lends its drafts to no index.
+    private var indexesOwner: String?
 
-    /// `noticeSleep`: how the notice waits out its time (tests hold it).
-    init(model: AppModel, noticeSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep) {
+    /// `noticeSleep`: how the notice waits out its time; `voiceOverRunning`: whether it takes VoiceOver as running
+    /// (tests hold both).
+    init(
+      model: AppModel, noticeSleep: @escaping @Sendable (Duration) async throws -> Void = SyncEngine.sleep,
+      voiceOverRunning: @escaping @MainActor () -> Bool = { UIAccessibility.isVoiceOverRunning }
+    ) {
       self.model = model
-      notice = NoticeView(sleep: noticeSleep)
+      notice = NoticeView(sleep: noticeSleep, voiceOverRunning: voiceOverRunning)
       super.init(nibName: nil, bundle: nil)
     }
 
@@ -178,6 +238,8 @@
     isolated deinit {
       dayTimer?.invalidate()
       if let openPage { model.closed(openPage.id) }
+      // A screen gone holds no Undo slot: a `set-draft` waiting on it goes.
+      if holdsUndoSlot { model.holdsUndoSlot = false }
     }
 
     override func viewDidLoad() {
@@ -203,7 +265,11 @@
       heldButton.tintColor = .systemRed
       document.onTick = { [weak self] taskId in self?.tick(taskId) }
       document.onRowAction = { [weak self] request in self?.rowRequested(request) }
+      document.onGuestAction = { [weak self] itemId, actionID in
+        self?.suggestionTapped(itemId, actionID == "apply" ? .apply : .skip)
+      }
       notice.onUndo = { [weak self] operationId in self?.undo(operationId) }
+      notice.onChange = { [weak self] _ in self?.noteUndoSlot() }
       document.onChange = { [weak self] document, singleDeleteIds in self?.wrote(document, singleDeleteIds) }
       document.onComposingChange = { [weak self] composing in
         if !composing { self?.compositionEnded() }
@@ -221,6 +287,12 @@
       factsModel.onBringBack = { [weak self] taskId in self?.stripRequested(taskId, on: nil) }
       factsModel.onAnotherDay = { [weak self] taskId, date in self?.stripRequested(taskId, on: date) }
       factsModel.onPickDate = { [weak self] taskId in self?.presentStripDatePicker(for: taskId) }
+      factsModel.onApplyAll = { [weak self] in self?.decideAll(.apply) }
+      factsModel.onDismiss = { [weak self] in self?.decideAll(.skip) }
+      factsModel.onRetry = { [weak self] in
+        guard let self, date == model.today, case .page(let page) = content else { return }
+        model.retryDraft(page)
+      }
       factsModel.onEvents = { [weak self] in
         guard let self, let heading = factsModel.facts.eventsHeadingId else { return }
         // The caret stays where it is: with the keyboard up he sees the heading, and his line where the scroll put it.
@@ -249,7 +321,7 @@
       // A timer counts no time while the device sleeps, so after a sleep it would fire late. The root view controller
       // checks the day and refreshes on activation; here only the timer is set again.
       NotificationCenter.default.addObserver(
-        self, selector: #selector(rearmDayTimer), name: UIScene.didActivateNotification, object: nil)
+        self, selector: #selector(becameActive), name: UIScene.didActivateNotification, object: nil)
     }
 
     /// On a phone the notice sits under the status bar, over the navigation bar's band (`NoticeView`), so it is held
@@ -334,12 +406,16 @@
       guard let workspace = model.workspace else {
         // No copy is shown (signed out, or another account's): nothing of the last account's is said above the page.
         showFacts(.none)
+        showDraft(of: nil, in: nil)
+        handGuests([])
         updateStripEnabled()
         return
       }
       let date = date
       let content = DayContent.content(for: date, today: model.today, in: workspace)
       self.content = content
+      // Another day was drawn last: today, if it is today, is shown again (§13.3).
+      let cameBack = drawnDate != nil && drawnDate != date
       if case .page = content, failed?.date == date { failed = nil }
       let drawnWith: Workspace
       if case .page(let page) = content {
@@ -347,7 +423,12 @@
       } else {
         // Until the engine has made today's page, an empty one stands in for it. Shown first: what he was composing
         // on the page before is reported for that page.
-        if let page = Self.emptyPage(on: date) { document.show(page: page, in: workspace) }
+        if let page = Self.emptyPage(on: date) {
+          document.show(page: page, in: workspace, index: todoIndex(of: workspace), guests: [])
+          handedGuests = []
+        } else {
+          handGuests([])
+        }
         closePage()
         drawnWith = workspace
       }
@@ -371,6 +452,14 @@
         }
         drawnDate = date
       }
+      if date == model.today, case .page(let page) = content {
+        model.todayDrawn(page)
+        if cameBack { model.cameBackToToday(page) }
+        // After the ask it may have made, so the first draw of the ask already says `Preparing…`.
+        showDraft(of: drawnWith.page(page.id) ?? page, in: drawnWith)
+      } else {
+        showDraft(of: nil, in: nil)
+      }
     }
 
     // MARK: Writing
@@ -392,8 +481,11 @@
         let mine = document.document
       else {
         let previous = openPage?.id
+        let guests = suggestionGuests(on: page.document, of: page.id, in: workspace)
         // Another page: what he was composing on the one before is reported for that one, so `openPage` moves after.
-        document.edit(page: page, in: workspace, afresh: openPage != nil)
+        document.edit(
+          page: page, in: workspace, index: todoIndex(of: workspace), afresh: openPage != nil, guests: guests)
+        handedGuests = guests
         if let previous { model.closed(previous) }
         model.opened(page.id)
         openPage = OpenPage(id: page.id, owner: owner, startedFrom: page.document)
@@ -410,16 +502,25 @@
       // A draft behind the server's page is the stored one, older than the screen: it is merged, never taken.
       let drawnWith: Workspace
       if !ahead, draft?.state != .behind, !page.document.utf8.elementsEqual(mine.utf8) {
-        replaceList(with: page.document, in: workspace)
+        replaceList(
+          with: page.document, in: workspace,
+          guests: suggestionGuests(on: page.document, of: page.id, in: workspace))
         if draft != nil { openPage?.startedFrom = page.document }
         listWorkspace = workspace
         drawnWith = workspace
       } else {
-        // His words stay; the list is handed the new workspace only when it would draw a row of them differently.
+        // His words stay; the list is handed the new workspace only when it would draw a row of them differently, and
+        // the guests alone when only they changed.
         let drawn = workspace.drawing(draft: mine, of: page.id)
+        // Behind, his words are merged next, and the merge hands the guests with the rows they became: placed now on
+        // his words, which do not hold those rows yet, an applied suggestion would leave before its row came.
+        let guests =
+          draft?.state == .behind ? handedGuests : suggestionGuests(on: mine, of: page.id, in: drawn)
         if reading(mine, on: page.date, in: drawn) != listWorkspace.map({ reading(mine, on: page.date, in: $0) }) {
-          replaceList(with: mine, in: drawn)
+          replaceList(with: mine, in: drawn, guests: guests)
           listWorkspace = drawn
+        } else {
+          handGuests(guests)
         }
         drawnWith = drawn
       }
@@ -445,10 +546,70 @@
       if factsModel.enabled != enabled { factsModel.enabled = enabled }
     }
 
-    /// Hands `facts` to the strip when they differ from those it shows; the strip takes no room when they are empty.
+    /// Hands `facts` to the strip when they differ from those it shows; `showDraft`, which every draw ends with, then
+    /// shows or hides the strip once for both.
     private func showFacts(_ facts: DayFacts) {
       factsModel.show(facts)
-      let hidden = facts.isEmpty
+    }
+
+    /// Works out what today's live `page`, as `workspace` draws it, shows of its draft, and the line that says where the
+    /// draft stands (§13.4); nil for no line. `DraftView.of` runs once for each workspace drawn, with the index the
+    /// screen already holds of it: a redraw for the ask's change alone (`model.draftAsk(of:)`, read here, so that
+    /// `updateProperties` runs again when it changes) reads the line again, not the draft. Only `showDay` calls this:
+    /// a keystroke draws nothing.
+    private func showDraft(of page: Page?, in workspace: Workspace?) {
+      guard let page, let workspace else {
+        draftView = nil
+        draftViewOf = nil
+        draftGuests = nil
+        factsModel.show(line: nil)
+        updateStripHidden()
+        return
+      }
+      readDraft(of: page, in: workspace)
+      let state = DraftLine.state(
+        view: draftView, ask: model.draftAsk(of: page.id), offline: model.state.offline, at: model.now())
+      // 1d.2a never holds suggestions back while he types (§13.6 is 1d.2b's).
+      factsModel.show(line: DraftLine.of(state, shown: draftView?.suggestions.count ?? 0, held: false))
+      updateStripHidden()
+    }
+
+    /// Works `draftView` out for `page` as `workspace` draws it, unless it already is for that page and workspace.
+    private func readDraft(of page: Page, in workspace: Workspace) {
+      guard draftViewOf.map({ $0.pageId.utf8.elementsEqual(page.id.utf8) && $0.workspace == workspace }) != true
+      else { return }
+      draftReads += 1
+      draftView = DraftView.of(page: page, in: workspace, index: todoIndex(of: workspace))
+      draftViewOf = (workspace, page.id)
+      draftGuests = nil
+    }
+
+    /// The suggestions of today's page `pageId`, as `workspace` draws it, as guest rows placed on `document`: the words
+    /// handed to the list in the same call, so the list's rows and their places are numbered alike. `draftView` is
+    /// worked out here when the list is handed today's page (before the line reads it), so the guests come from the
+    /// same reading of the same workspace; none on another day. Called only when a state is drawn or a page merged.
+    private func suggestionGuests(on document: String, of pageId: String, in workspace: Workspace) -> [GuestRow] {
+      let today = model.today
+      guard date == today, let page = workspace.page(pageId), page.date == today else { return [] }
+      readDraft(of: page, in: workspace)
+      guard let suggestions = draftView?.suggestions, !suggestions.isEmpty else { return [] }
+      if let drawn = draftGuests, drawn.document.utf8.elementsEqual(document.utf8) { return drawn.guests }
+      let blocks = Document.blocks(document)
+      let guests = suggestions.compactMap { $0.guest(on: blocks) }
+      draftGuests = (document, guests)
+      return guests
+    }
+
+    /// The guests alone, when the page's words stay: handed only when they changed.
+    private func handGuests(_ guests: [GuestRow]) {
+      guard guests != handedGuests else { return }
+      handedGuests = guests
+      document.setGuestRows(guests)
+    }
+
+    /// The strip takes no room when it has nothing at all to show; showing or hiding it changes its height.
+    private func updateStripHidden() {
+      let hidden = factsModel.isEmpty
       guard factsView.isHidden != hidden else { return }
       factsView.isHidden = hidden
       stripHeightChanged()
@@ -478,18 +639,31 @@
     }
 
     /// The index of `workspace`, built again only for another workspace than the last two read.
+    ///
+    /// The only builder of a state's index, for the screen and its list: the list is handed it with the workspace it is
+    /// of. A tap's own check may build one more and let it go (`indexForATap(of:)`).
     private func todoIndex(of workspace: Workspace) -> TodoIndex {
       if let cached = readingIndexes.first(where: { $0.workspace == workspace }) { return cached.index }
-      let index = TodoIndex(workspace)
-      // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time.
-      readingIndexes = Array(([(workspace, index)] + readingIndexes).prefix(2))
+      // The newest index lends the drafts whose pages did not change (a year of drafts would cost a state about
+      // 100 ms to parse again); one built under another account lends nothing.
+      let owner = model.state.owner
+      let index = TodoIndex(workspace, reusing: owner == indexesOwner ? readingIndexes.first?.index : nil)
+      indexesOwner = owner
+      indexesBuilt += 1
+      // Two: a state's drawn workspace is compared with the one the list holds, and each is read again next time. The
+      // list's is the one kept beside the new one, not merely the newer of the two before: a state drawn with his words
+      // ahead of it builds an index the list never takes, and the next state would otherwise build the list's again.
+      let kept = readingIndexes.first { $0.workspace == listWorkspace } ?? readingIndexes.first
+      readingIndexes = [(workspace, index)] + (kept.map { [$0] } ?? [])
       return index
     }
 
-    /// Every page replace hands the list, so tests can tell a replace that happened from one that did not.
-    private func replaceList(with page: String, in workspace: Workspace) {
+    /// Every page replace hands the list, so tests can tell a replace that happened from one that did not. `guests` go
+    /// in the same call, placed on `page`: a suggestion leaves in the update that brings its row.
+    private func replaceList(with page: String, in workspace: Workspace, guests: [GuestRow]) {
       replacedDocuments.append(page)
-      document.replace(document: page, in: workspace)
+      document.replace(document: page, in: workspace, index: todoIndex(of: workspace), guests: guests)
+      handedGuests = guests
       if let ids = openPage?.singleDeleteIds, !ids.isEmpty {
         openPage?.singleDeleteIds = DraftMerging.rowsStillRemoved(ids, from: page)
       }
@@ -555,7 +729,14 @@
         }
         let merged = DraftMerging.merged(base: pair.baseDocument, mine: mine, theirs: pair.theirs)
         let drawn = workspace.drawing(draft: merged.document, of: pageId)
-        self.replaceList(with: merged.document, in: drawn)
+        // The suggestions are placed again on the merged page, and handed with it.
+        self.replaceList(
+          with: merged.document, in: drawn,
+          guests: self.suggestionGuests(on: merged.document, of: pageId, in: drawn))
+        // The line follows the merged workspace on today's page, also when a draft came or went with it.
+        if self.date == self.model.today, let page = drawn.page(pageId), page.date == self.model.today {
+          self.showDraft(of: page, in: drawn)
+        }
         self.listWorkspace = drawn
         self.openPage?.startedFrom = merged.document
         if merged.bothChanged {
@@ -635,7 +816,7 @@
         self.dismiss(animated: true)
         // The calendar can stay open for as long as he likes: the row, its to-do and today are read again.
         guard self.rowStillOffers(.pickDate, for: request), !(day < self.model.today) else { return }
-        self.run(.move(day), on: request)
+        self.run(.move(day), on: request, offeredAs: .pickDate)
       }
       picker.modalPresentationStyle = .popover
       if let popover = picker.popoverPresentationController {
@@ -649,17 +830,46 @@
     }
 
     /// Whether the row of `request` is still on the page with the same to-do, and its menu, read now from the
-    /// workspace as the list draws it, still offers `action`: as the list checks a request from a menu left open.
-    private func rowStillOffers(_ action: RowAction, for request: RowRequest) -> Bool {
+    /// workspace as the list draws it, still offers `action`: as the list checks a request from a menu left open. The
+    /// row is the block of the same id holding the same to-do, whatever its words now: his typing in it changes
+    /// neither, and a merge keeps the ids of the rows it keeps.
+    ///
+    /// `afterHandOver`: asked once his words are handed over, when the workspace checked is the one the state that just
+    /// arrived is drawn with next; its index is kept for that draw rather than built twice.
+    private func rowStillOffers(_ action: RowAction, for request: RowRequest, afterHandOver: Bool = false) -> Bool {
       guard let mine = document.document, let open = openPage, case .page(let page)? = content,
         let block = Self.block(request.rowID, in: mine),
         block.props["taskId"]?.stringValue?.utf8.elementsEqual(request.taskId.utf8) == true,
         let workspace = model.workspace
       else { return false }
       let drawn = workspace.drawing(draft: mine, of: open.id)
-      let facts = RowFacts.of(
-        row: block, pageDate: page.date, in: drawn, index: todoIndex(of: drawn), today: model.today)
-      return facts?.menu?.groups.contains { $0.items.contains { $0.action == action } } ?? false
+      guard
+        let facts = RowFacts.of(
+          row: block, pageDate: page.date, in: drawn, index: checkIndex(of: drawn, afterHandOver: afterHandOver),
+          today: model.today),
+        // `planForToday` can be true with no menu only on a page that is not a day's (an open reference row there),
+        // where no action is run (`run` needs the page's day) and the list reports none (it checks the menu first).
+        let menu = facts.menu
+      else { return false }
+      // As the list checks a request: the reference row's button while the row shows it, any other action while the
+      // menu or the swipe holds it.
+      if action == .planForTodayButton { return facts.planForToday }
+      return menu.groups.contains { $0.items.contains { $0.action == action } }
+        || menu.swipe.contains { $0.action == action }
+    }
+
+    /// Once his words are handed over, the index of the state drawn next (kept for that draw); before, a tap's.
+    private func checkIndex(of workspace: Workspace, afterHandOver: Bool) -> TodoIndex {
+      afterHandOver ? todoIndex(of: workspace) : indexForATap(of: workspace)
+    }
+
+    /// The index a tap's check reads `workspace` with: the one kept, when it is of that workspace; otherwise one built
+    /// here and let go. A workspace with words typed since the last state is in no cache, and keeping its index would
+    /// evict the list's, so that the next state built two. One built here is counted in `indexesBuilt` too.
+    private func indexForATap(of workspace: Workspace) -> TodoIndex {
+      if let kept = readingIndexes.first(where: { $0.workspace == workspace }) { return kept.index }
+      indexesBuilt += 1
+      return TodoIndex(workspace)
     }
 
     private func anchor(_ popover: UIPopoverPresentationController?, to rowID: String) {
@@ -669,8 +879,9 @@
     }
 
     /// §11.4: what he composes is committed, the row is dimmed while the command is out, and the notice says what
-    /// happened; `Undo` only while the server would take it.
-    private func run(_ action: RowAction, on request: RowRequest) {
+    /// happened; `Undo` only while the server would take it. `offered` is the item of the row's menu he chose when it
+    /// is not `action` itself (`Pick date…`, for a day picked).
+    private func run(_ action: RowAction, on request: RowRequest, offeredAs offered: RowAction? = nil) {
       guard actionOut == nil, let open = openPage, let owner = open.owner,
         case .page(let page)? = content, let pageDate = page.date
       else { return }
@@ -680,9 +891,19 @@
       // The command about to go takes the server's slot: an Undo of the action before would be refused.
       notice.withdrawUndo()
       noticeOf = nil
+      // What he chose was offered in this today's terms (`Bring to today`, a day of the menu), and the command is
+      // built on it.
+      let today = model.today
       Task { [weak self, model] in
         let acted = await model.act(
-          action, taskId: request.taskId, pageId: open.id, pageDate: pageDate, owner: owner)
+          action, taskId: request.taskId, pageId: open.id, pageDate: pageDate, owner: owner
+        ) { [weak self] in
+          // Read once his words are handed over: today has not moved on, the page he tapped on is still shown under
+          // that account, and its row, as drawn now, still offers what he chose.
+          guard let self else { return false }
+          return self.model.today == today && self.openPage?.id == open.id && self.openPage?.owner == owner
+            && self.rowStillOffers(offered ?? action, for: request, afterHandOver: true)
+        }
         guard let self else { return }
         self.actionOut = nil
         // Said only on the page it was made on, under the account it was made under: he may have gone to another
@@ -699,11 +920,27 @@
         let offers = model.offersUndo(operationId)
         notice.show(Notice(text: text, kind: .done, undoing: offers ? operationId : nil))
         if offers {
-          noticeOf = Acted(origin: origin, pageId: pageId, date: date, owner: owner, operationId: operationId)
+          noticeOf = Acted(origin: origin, pageId: pageId, date: date, owner: owner, undo: .server(operationId))
           followUndo(operationId)
         }
       case .notDone:
         notice.show(Notice(text: RowNotice.notDone, kind: .failed, undoing: nil))
+      }
+    }
+
+    /// The notice of a draft's decision (§13.8): an apply's `Undo` while the server would take it, as a row action's;
+    /// a skip's always, for its 10 seconds.
+    private func say(_ acted: DraftActed, of origin: ActionOrigin, pageId: String, date: LocalDate, owner: String) {
+      switch acted {
+      case .applied(let text, let operationId):
+        say(.done(text: text, operationId: operationId), of: origin, pageId: pageId, date: date, owner: owner)
+      case .skipped(let text, let ticket):
+        notice.show(Notice(text: text, kind: .skipped, undoing: ticket.skippedBy))
+        noticeOf = Acted(origin: origin, pageId: pageId, date: date, owner: owner, undo: .reopen(ticket))
+      case .refused(let text):
+        notice.show(Notice(text: text, kind: .failed, undoing: nil))
+      case .notDone:
+        say(RowActed.notDone, of: origin, pageId: pageId, date: date, owner: owner)
       }
     }
 
@@ -723,28 +960,62 @@
       }
     }
 
+    /// Tells the model whether the server's Undo slot is held here (§13.3): while an action is out, or while the notice
+    /// shown offers the `Undo` of the action it is of. A notice whose `Undo` does not use the slot (a skip's) holds
+    /// nothing by itself; but once that Undo is tapped, its `reopen-draft` is an action out, and like any action out it
+    /// holds `set-draft` for its round trip.
+    private func noteUndoSlot() {
+      let holds =
+        actionOut != nil || noticeOf.map { $0.undo.holdsUndoSlot && notice.shown?.undoing == $0.operationId } ?? false
+      guard holds != holdsUndoSlot else { return }
+      holdsUndoSlot = holds
+      model.holdsUndoSlot = holds
+    }
+
     /// `Undo` runs like an action: its row is dimmed while it is out, when it is still on the page.
     private func undo(_ operationId: String) {
       guard actionOut == nil, let acted = noticeOf, acted.operationId == operationId else { return }
       noticeOf = nil
       // What he composes is committed first: his words would take the server's slot before the Undo reached it, so
-      // once they are reported the Undo is not offered and nothing is sent.
+      // once they are reported the Undo is not offered and nothing is sent. A skip's reopen does not use the slot.
       document.commitComposition()
       // The button can be tapped in the turn after it stopped being offered, before the observation withdraws it.
-      guard model.offersUndo(operationId) else {
+      if case .server(let undone) = acted.undo, !model.offersUndo(undone) {
         notice.withdrawUndo()
         return
       }
+      // A draft's refused undo or reopen says the web's words for it; a row's and the strip's keep slice 1c's.
+      let refused: String =
+        switch acted.origin {
+        case .row, .strip: RowNotice.cantUndo
+        case .suggestion, .draftLine: DraftNotice.cantUndo
+        }
+      let send: () async -> Notice
+      switch acted.undo {
+      case .server(let undone):
+        send = { [model] in await model.undo(undone, pageId: acted.pageId, owner: acted.owner, refused: refused) }
+      case .reopen(let ticket):
+        // A decision always names its page.
+        guard let pageId = acted.pageId else { return }
+        send = { [model] in await model.reopen(ticket, pageId: pageId, owner: acted.owner) }
+      }
       actionOut = acted.origin
-      // It dims again only what is there to dim: the row on the page, the to-do in the strip's list.
+      // It dims again only what is there to dim: the row on the page, the to-do in the strip's list. A decision's
+      // suggestion left with its answer.
       switch acted.origin {
       case .row(let rowID):
         if document.document.flatMap({ Self.block(rowID, in: $0) }) == nil { document.actingRow = nil }
       case .strip(let taskId):
         if !factsModel.facts.lists(taskId) { factsModel.acting = nil }
+      case .suggestion(let itemId):
+        if draftView?.suggestions.contains(where: { $0.id.utf8.elementsEqual(itemId.utf8) }) != true {
+          document.actingRow = nil
+        }
+      case .draftLine:
+        break
       }
       Task { [weak self, model] in
-        let said = await model.undo(operationId, pageId: acted.pageId, owner: acted.owner)
+        let said = await send()
         guard let self else { return }
         self.actionOut = nil
         guard self.stillShows(acted), model.state.owner == acted.owner else { return }
@@ -752,11 +1023,11 @@
       }
     }
 
-    /// Whether the screen still shows where `acted` was made: the row's page, or the strip's today.
+    /// Whether the screen still shows where `acted` was made: the row's page, or the today of the strip or the draft.
     private func stillShows(_ acted: Acted) -> Bool {
       switch acted.origin {
       case .row: openPage?.id == acted.pageId
-      case .strip: date == acted.date && date == model.today
+      case .strip, .suggestion, .draftLine: date == acted.date && date == model.today
       }
     }
 
@@ -801,7 +1072,8 @@
     /// Whether `taskId` is a row of `Not today` as the facts are worked out now, from what the screen draws (as
     /// `showDay` works them out): a menu or a calendar opened earlier may hold a to-do brought back, ticked or deleted
     /// since.
-    private func isListedAside(_ taskId: String) -> Bool {
+    /// `afterHandOver` as `rowStillOffers`'.
+    private func isListedAside(_ taskId: String, afterHandOver: Bool = false) -> Bool {
       guard let workspace = model.workspace else { return false }
       let today = model.today
       var drawn = workspace
@@ -810,9 +1082,7 @@
       {
         drawn = workspace.drawing(draft: mine, of: page.id)
       }
-      // A workspace with words typed since the last state is in no cache: its index is built here and let go, so a tap
-      // does not evict the list's.
-      let index = readingIndexes.first { $0.workspace == drawn }?.index ?? TodoIndex(drawn)
+      let index = checkIndex(of: drawn, afterHandOver: afterHandOver)
       return DayFacts.of(day: today, in: drawn, index: index, today: today).lists(taskId)
     }
 
@@ -838,13 +1108,84 @@
       noticeOf = nil
       Task { [weak self, model] in
         let acted = await model.plan(
-          taskId, on: day, notOvertaking: pageId, owner: owner, notice: DayFacts.planNotice(date: day, today: today))
+          taskId, on: day, notOvertaking: pageId, owner: owner, notice: DayFacts.planNotice(date: day, today: today)
+        ) { [weak self] in
+          // Read once his words are handed over: the screen still shows the today he tapped on, and the to-do is
+          // still a row of `Not today` as the facts are worked out from what it draws now.
+          guard let self else { return false }
+          return self.date == today && self.model.today == today
+            && self.isListedAside(taskId, afterHandOver: true)
+        }
         guard let self else { return }
         self.actionOut = nil
         // Said only while the screen shows the today it was made on, under the account it was made under.
         guard self.date == today, model.today == today, model.state.owner == owner else { return }
         self.say(acted, of: origin, pageId: pageId, date: today, owner: owner)
       }
+    }
+
+    // MARK: The draft's decisions
+
+    /// A suggestion's two buttons (§13.8).
+    enum SuggestionAction: Equatable { case apply, skip }
+
+    /// A suggestion's `checkmark` (`apply`) or `xmark` (`skip`): `apply-draft` or `skip-draft` with its item, sent and
+    /// waited for as a row's action is. Nothing unless `draftView` shows it, or while an action is out.
+    func suggestionTapped(_ itemId: String, _ action: SuggestionAction) {
+      guard draftView?.suggestions.contains(where: { $0.id.utf8.elementsEqual(itemId.utf8) }) == true else { return }
+      decide(action == .apply ? .apply : .skip, [itemId], from: .suggestion(itemId))
+    }
+
+    /// `Apply all` or `Dismiss`: every suggestion shown.
+    private func decideAll(_ decision: DraftDecision) {
+      guard let shown = draftView?.suggestions.map(\.id), !shown.isEmpty else { return }
+      decide(decision, shown, from: .draftLine)
+    }
+
+    /// §13.8, on today's screen only: what he composes is committed, the screen holds the action (the line's and the
+    /// strip's controls disabled, the rows' swipes and every suggestion's buttons held), and the notice says what
+    /// came of it while the screen still shows that today under that account. Nothing is drawn ahead: a suggestion
+    /// stays as it was until the state holding the answer arrives.
+    private func decide(_ decision: DraftDecision, _ itemIds: [String], from origin: ActionOrigin) {
+      let today = model.today
+      guard actionOut == nil, presentedViewController == nil, date == today, case .page(let page)? = content,
+        let pageDate = page.date, let owner = model.state.owner
+      else { return }
+      document.commitComposition()
+      actionOut = origin
+      // The command about to go takes the server's slot: an Undo of the action before would be refused, and a skip's
+      // would be of a notice no longer shown.
+      notice.withdrawUndo()
+      noticeOf = nil
+      Task { [weak self, model] in
+        let acted = await model.decide(decision, itemIds: itemIds, page: (page.id, pageDate), owner: owner) {
+          [weak self] in
+          self?.stillShown(itemIds, today: today) ?? []
+        }
+        guard let self else { return }
+        self.actionOut = nil
+        guard self.date == today, model.today == today, model.state.owner == owner else { return }
+        self.say(acted, of: origin, pageId: page.id, date: today, owner: owner)
+      }
+    }
+
+    /// Of `itemIds`, those today's page still shows as suggestions, worked out again from the workspace with his words
+    /// drawn in (as `isListedAside` draws them): asked once his words are handed over, when a state may have arrived
+    /// since `draftView` was worked out. The index is the one the state drawn next reads, kept for that draw.
+    private func stillShown(_ itemIds: [String], today: LocalDate) -> [String] {
+      guard date == today, model.today == today, let workspace = model.workspace,
+        case .page(let page) = DayContent.content(for: today, today: today, in: workspace)
+      else { return [] }
+      var drawn = workspace
+      if let open = openPage, open.id.utf8.elementsEqual(page.id.utf8), open.owner == model.state.owner,
+        let mine = document.document
+      {
+        drawn = workspace.drawing(draft: mine, of: page.id)
+      }
+      draftReads += 1
+      let index = checkIndex(of: drawn, afterHandOver: true)
+      guard let view = DraftView.of(page: drawn.page(page.id) ?? page, in: drawn, index: index) else { return [] }
+      return itemIds.filter { id in view.suggestions.contains { $0.id.utf8.elementsEqual(id.utf8) } }
     }
 
     /// The block `id` of `document`, at any depth.
@@ -1081,9 +1422,16 @@
       dayTimer = timer
     }
 
-    @objc private func rearmDayTimer() {
+    /// The app came to the foreground: the timer is set again, and with today shown he came back to it (§13.3). The
+    /// root view controller checks the day too, in an order not promised, so it is checked here first.
+    @objc func becameActive() {
       scheduledChange = nil
       setNeedsUpdateProperties()
+      model.checkToday()
+      guard viewIfLoaded?.window != nil, date == model.today, let workspace = model.workspace,
+        case .page(let page) = DayContent.content(for: model.today, today: model.today, in: workspace)
+      else { return }
+      model.cameBackToToday(page)
     }
 
     @objc private func dayMayHaveChanged() {
@@ -1125,6 +1473,34 @@
       let top = min(max(insets.top, 0), bounds.height)
       let height = max(bounds.height - top - max(insets.bottom, 0), 0)
       content.frame = CGRect(x: 0, y: top, width: bounds.width, height: height)
+    }
+  }
+
+  extension DraftView.Suggestion {
+    /// The guest row it is drawn as on a page of `blocks` (the top-level blocks the list draws): after the last row of
+    /// its anchor's whole block, a fill too in 1d.2a (no anchor: before the first line); nil, not drawn, when `blocks`
+    /// do not hold its anchor (his typing took it away since the state it was placed on: drawn again at the next).
+    func guest(on blocks: [Block]) -> GuestRow? {
+      let place: GuestRow.Place
+      if let anchorId {
+        guard let last = BlockRows.lastRowID(ofBlock: anchorId, in: blocks) else { return nil }
+        place = .after(lineID: last)
+      } else {
+        place = .after(lineID: nil)
+      }
+      let kind: GuestRow.Kind =
+        switch mark {
+        case .todo: .todo
+        case .bullet: .bullet
+        case .line: .line
+        }
+      return GuestRow(
+        id: id, place: place, kind: kind, depth: 0, words: words, detail: detail ?? "", spokenDetail: spokenDetail,
+        spokenKind: "Suggestion",
+        actions: [
+          GuestRow.Action(id: "apply", symbol: "checkmark", label: applyLabel, spokenName: "Apply"),
+          GuestRow.Action(id: "skip", symbol: "xmark", label: skipLabel, spokenName: "Skip"),
+        ])
     }
   }
 #endif

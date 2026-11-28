@@ -11,11 +11,13 @@ enum TestWorkspace {
   }
 
   static func page(
-    _ id: String, type: String = "document", date: String? = nil, trashedAt: String? = nil, document: String
+    _ id: String, type: String = "document", date: String? = nil, parentId: String? = nil,
+    trashedAt: String? = nil, document: String
   ) -> JSONValue {
     .object([
       "id": .string(id), "type": .string(type), "date": date.map { .string($0) } ?? .null,
-      "title": .string(id), "document": .string(document), "parentId": .null,
+      "title": .string(id), "document": .string(document),
+      "parentId": parentId.map { .string($0) } ?? .null,
       "trashedAt": trashedAt.map { .string($0) } ?? .null,
     ])
   }

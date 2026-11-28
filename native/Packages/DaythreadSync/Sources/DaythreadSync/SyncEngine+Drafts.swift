@@ -247,7 +247,7 @@ extension SyncEngine {
 
   /// Whether the copy shown is `owner`'s: a call made under another account's state, or under none, is not made on it.
   /// Read inside the store section the call acts in, so the copy cannot change owner between the check and the act.
-  private func isShown(_ owner: String) -> Bool {
+  func isShown(_ owner: String) -> Bool {
     shownOwner.map { $0.utf8.elementsEqual(owner.utf8) } ?? false
   }
 

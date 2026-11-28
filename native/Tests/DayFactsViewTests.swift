@@ -271,6 +271,140 @@ private func settled(_ day: RowScreen) async throws {
     day.close()
   }
 
+  // MARK: One index for the screen and its list
+
+  @Test func a_state_the_list_takes_builds_one_index() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let screenBuilt = day.screen.indexesBuilt
+    let listBuilt = day.editor.indexesBuilt
+
+    var lines = AllThree.todayLines
+    lines[5] = line("notes", "Notes for the day")
+    try await load(
+      h, day,
+      try copy(
+        revision: 2, pages: AllThree.pages(todayLines: lines),
+        tasks: AllThree.tasks() + [task("milk", "Buy milk", due: today)]))
+    #expect(words(of: day.editor.document).contains("Notes for the day"), "the list took the page")
+    #expect(day.screen.indexesBuilt == screenBuilt + 1, "the screen built the state's index")
+    #expect(day.editor.indexesBuilt == listBuilt, "the list built none of its own")
+    day.close()
+  }
+
+  @Test(arguments: ["in Trash", "being made"])
+  func a_day_with_no_page_builds_one_index(_ kind: String) async throws {
+    var pages = AllThree.pages()
+    if kind == "in Trash" { pages[0] = trashed(pages[0]) } else { pages.removeFirst() }
+    let h = try await harness(pages: pages)
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let screenBuilt = day.screen.indexesBuilt
+    let listBuilt = day.editor.indexesBuilt
+
+    try await load(
+      h, day,
+      try copy(revision: 2, pages: pages, tasks: AllThree.tasks() + [task("milk", "Buy milk", due: today)]))
+    #expect(day.screen.indexesBuilt == screenBuilt + 1)
+    #expect(day.editor.indexesBuilt == listBuilt)
+    day.close()
+  }
+
+  @Test func the_first_draw_of_a_day_builds_one_index_in_all() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    #expect(day.screen.indexesBuilt + day.editor.indexesBuilt == 1, "one index of the workspace, the screen's")
+    #expect(day.editor.indexesBuilt == 0)
+    day.close()
+  }
+
+  @Test func typing_builds_no_index() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    let screenBuilt = day.screen.indexesBuilt
+    let listBuilt = day.editor.indexesBuilt
+    let published = h.model.state.published
+
+    try day.type("!", atEndOf: "Notes")
+    day.drawn()
+    #expect(h.model.state.published == published, "no state has arrived")
+    #expect(day.screen.indexesBuilt == screenBuilt)
+    #expect(day.editor.indexesBuilt == listBuilt)
+    day.close()
+  }
+
+  /// A state that arrives while his words are ahead of it (the engine is still storing them): his words stay on the
+  /// page, drawn against the state's workspace, and that workspace's index is the screen's one build.
+  @Test func a_state_his_words_are_ahead_of_builds_one_index() async throws {
+    let relay = StateRelay()
+    let h = try await harness(relay: relay)
+    let day = try RowScreen(h.model)
+    try await settled(day)
+
+    // A state from before his change, held back until the engine is busy storing it.
+    relay.hold()
+    await h.server.add([
+      .workspace(
+        .full(
+          try copy(
+            revision: 2, pages: AllThree.pages(), tasks: AllThree.tasks() + [task("milk", "Buy milk", due: today)]),
+          owner: "one"))
+    ])
+    await h.model.refresh()
+    try await soon { !relay.kept.isEmpty }
+    await h.store.holdPut()
+    try day.type("!", atEndOf: "Notes")
+    await h.store.putHeld()
+    let screenBuilt = day.screen.indexesBuilt
+    let listBuilt = day.editor.indexesBuilt
+    let published = try #require(relay.kept.last?.published)
+    relay.release()
+    try await soon { h.model.state.published == published }
+    try await settled(day)
+
+    #expect(day.words.contains("Notes!"), "his words stay on the page")
+    #expect(tags(day.facts.dueSoon).contains(["Buy milk", "Due today"]), "the state is drawn")
+    #expect(day.screen.indexesBuilt == screenBuilt + 1, "the screen built the state's index")
+    #expect(day.editor.indexesBuilt == listBuilt, "the list built none of its own")
+    await h.store.releasePut()
+    day.close()
+  }
+
+  /// A state that leaves his draft behind the server's page: the page is merged with his words. The screen builds the
+  /// state's index (its facts are read when it is drawn) and the merged page's (the list is handed it, and the state
+  /// after the merge reads it again); the list builds none, and the index of the workspace the list held is not built
+  /// again.
+  @Test func a_merge_builds_the_states_index_and_the_merged_pages() async throws {
+    let h = try await harness()
+    let day = try RowScreen(h.model)
+    try await settled(day)
+    try day.type("!", atEndOf: "Notes")
+    try await soon { !h.model.state.drafts.isEmpty }
+    try await settled(day)
+    let screenBuilt = day.screen.indexesBuilt
+    let listBuilt = day.editor.indexesBuilt
+
+    // Another device added a line before his words were saved; the merged page's save is held.
+    await h.server.holdSaves()
+    let theirs = AllThree.todayLines + [line("more", "More notes")]
+    await h.server.add([
+      .workspace(
+        .full(try copy(revision: 2, pages: AllThree.pages(todayLines: theirs), tasks: AllThree.tasks()), owner: "one"))
+    ])
+    await h.model.refresh()
+    try await eventually { await h.server.waitingCalls == 1 }
+    try await settled(day)
+
+    #expect(day.words.contains("Notes!") && day.words.contains("More notes"), "\(day.words)")
+    #expect(day.screen.indexesBuilt == screenBuilt + 2, "the state's index and the merged page's")
+    #expect(day.editor.indexesBuilt == listBuilt, "the list built none of its own")
+    day.close()
+    await h.server.release()
+  }
+
   /// The facts are read from the workspace the screen draws, his unsaved words drawn in, with that workspace's own
   /// index. A state that does not have his newest words yet (the engine is still storing them) shows it: the engine's
   /// copy, and an index of it, still have the row he removed.

@@ -116,18 +116,28 @@ TEST_RUNNER_DAYTHREAD_FEEL_BUDGET=1 xcodebuild test -project native/Daythread.xc
 ```
 
 The two typing tests type with the strip above the page on screen (100 to-dos set aside, 100 due, 200 date chips on the
-past pages), and print beside each median the time to the engine's state drawn, which is not budgeted: that is where
-the strip's facts show, since the day screen reads them for each state it draws. A third test,
+past pages) and with today's draft on it (four suggestions drawn as guest rows above the typed line, and a stored draft
+of 20 decided items on each of the 365 days before today); `TEST_RUNNER_DAYTHREAD_FEEL_DRAFT=off` runs the same with no
+draft in the workspace, to read the draft's cost from the difference. They print beside each median the time to the engine's state drawn, which is not budgeted: that is where
+the strip's facts show, since the day screen reads them for each state it draws. `test_the_draft_view_on_a_large_workspace` and
+`test_what_the_draft_adds_to_a_state` print the draft's index and view and what it adds to a state. A fourth test,
 `test_the_strips_facts_on_a_large_workspace`, prints the time to build the index of 3,000 to-dos and the time of
 today's facts read from it. A median is the middle of five runs; read the runs beside it, since a run that overlaps
 other work on the machine (another build, a simulator in use) reads high. The measurement must be run alone: check
 `pgrep -fl xcodebuild` first, and discard and repeat a run that overlapped another. The medians measured are written at
-the end of `docs/plan/native-phase-1d.md` ("Cost, measured"); in short, on an M4 Mac: the index of 3,000 to-dos on 300
+the end of `docs/plan/native-phase-1d.md` and `docs/plan/native-phase-1d2a.md` ("Cost, measured"); in short, on an M4 Mac: the index of 3,000 to-dos on 300
 pages about 55 ms a state (on the typing path the rows already read it; where the list takes the page, another page is
 opened or the day has no page, the strip's facts build one of their own), today's facts from it about 3.4 ms, the strip
 about 14 ms a state on the 300-line page in all, and a keystroke 9.3 ms (300 lines) and 3.3 ms (10 lines) against
-limits of 10.56 and 4.01, unchanged by the strip. A wait for the engine's state that fails says what the
-model held when it gave up and, after a further two minutes, whether the state came late or not at all.
+limits of 10.56 and 4.01, unchanged by the strip. The day draft (suggestions on the page, a year of stored drafts) costs
+no keystroke (9.6 and 3.4 ms, the same as without it), about 20 to 30 ms a state drawn (the draft view about 14 to 17 ms,
+the index reusing the one before it about 6 ms more), and about 120 ms more on the first state of a run, when the index
+reads the year of drafts whole (about 170 ms against 50). A wait for the engine's state that fails says what the
+model held when it gave up and, after a further two minutes, whether the state came late or not at all. A main thread
+held alone for 10 s or more is named by where it was, whether the wait saw it (while waiting for the state) or a
+keystroke's own call took that long (inside `insertText`, or the list's layout): it fails the test only with the
+budget enforced, and otherwise prints a line beginning `TypingFeel: main thread held`. A main thread that does not
+answer for 5 s has its stack printed once per test, under `TypingFeel: main thread stack while held`.
 
 Leave it off in CI and on other machines: their times differ, and a budget from this Mac would only be noise there.
 

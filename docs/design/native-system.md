@@ -80,7 +80,12 @@
 | Undone | The notice after `Undo` went through. 4 seconds, no button |
 | Can't undo · changed since | The notice when the server refused the Undo because something changed since ("Cannot undo after later changes"). 6 seconds, no button; a straight apostrophe, as the web |
 | Couldn't undo · your text is kept | The notice when the Undo failed for any other reason (no connection, his words not saved first). 6 seconds, no button |
-| Not done · your text is kept | The notice when a row action or a strip action (`Bring back`, a day of `Another day`) was not sent (the page's words could not be saved first, or no connection), failed or was refused: nothing changed. 6 seconds, no button. The web's words |
+| Not done · your text is kept | The notice when a row action, a strip action (`Bring back`, a day of `Another day`) or a draft's decision (a suggestion's `checkmark` or `xmark`, `Apply all`, `Dismiss`) was not sent (the page's words could not be saved first, or no connection), failed or was refused for another reason than the two below: nothing changed. 6 seconds, no button. The web's words |
+| Applied, Applied 2 (Applied N) | The notice after a suggestion's `checkmark` or the draft's line's `Apply all` (`native-phase-1.md` §13.8): the server's count, which is fewer than asked when some were decided elsewhere meanwhile (what was left stays a suggestion while the page still shows it). 8 seconds, with `Undo` while the server's slot holds it, as a row action's; its Undo is the server's `undo` |
+| Skipped, Skipped 3 (Skipped N) | The notice after a suggestion's `xmark` or the line's `Dismiss`: the server's count (the web shows the asked count, as it draws the skip ahead; the app waits for the answer). 10 seconds, the web's time for it, with `Undo` throughout: its Undo is `reopen-draft`, which does not use the server's slot, so it is not withdrawn when he types or the slot moves, and it does not hold back the draft's `set-draft`. No `Move to` yet (1d.3) |
+| Not applied · changed elsewhere | The notice when the server answered an apply `Nothing to apply` or `No draft for this day` (the draft went between the hand-over of his words and the server; every other refusal says `Not done · your text is kept`), or when none of the suggestions he chose is still shown once his words are handed over (nothing is sent then; with some left, only those are sent). 6 seconds, no button; the suggestions stay as the page shows them |
+| Not skipped · changed elsewhere | The same for a skip (`Nothing to skip`, or `No draft for this day`) |
+| Can't undo · edited since | The notice when the server refused the Undo of a draft's apply, or the reopen of a skip, because something changed since: the web's words for the draft (a straight apostrophe). A row's or the strip's refused Undo keeps `Can't undo · changed since`. 6 seconds, no button |
 | (the rest of the row's actions), Cancel | `More` in a row's swipe opens the system's action sheet (`UIAlertController`, `.actionSheet`, default look): the Another day options, `Pick date…` and `Cancel task` (destructive) in the web's order, then the system's `Cancel`. A popover from the row, on a wide screen and, on iOS 26, on the phone too, where the system shows no `Cancel` item: a tap outside the popover puts it away |
 | (the system's calendar) | `Pick date…` opens the system's calendar (`UICalendarView`, as the day's title opens it): no day selected, today the first that can be picked, the days before it greyed by the system. A popover from the row on a wide screen, a sheet on the phone; picking a day closes it and moves the to-do there |
 | Complete <the to-do's words> | A to-do circle's VoiceOver label, the web's; its value is "done", "cancelled" or "not done" |
@@ -96,6 +101,19 @@
 | Tomorrow, Not today, Not on Fri, Remove from Fri, Plan for today, Bring to today, Restore, More | A to-do row's trailing swipe (the system's swipe actions, default look), the web's phone bar's first actions then `More`: today's plan row `Tomorrow` (unless planned tomorrow), the off item, `More`; a later day's plan row the off item (`Not on Fri`, or `Remove from Fri` when the to-do is planned on another day), `More`; a reference row `Plan for today` (unless planned today), `More`; a past day `Bring to today`; a cancelled row `Restore`. `More` is there when the menu holds more and is reported, the host shows what it holds. No action runs on a full swipe. None on a done row, a text row, the row being typed in, or anywhere while words are selected |
 | Tomorrow · Fri, Nov 27, Another day, Tomorrow · Fri 11/27, This weekend · Sat 11/28, Next week · Mon 11/30, Pick date…, Cancel task | The row's menu: every action in the web's `⋯` order, as the system menu of the row's circle (a touch and hold, a click and hold or a secondary click; a tap still ticks). `Tomorrow · Fri, Nov 27` and the off item first on a plan row (`Plan for today` first on a reference row, `Restore` alone on a cancelled one, `Bring to today` alone on a past day), then `Another day` as a titled inline group of the web's options (`Tomorrow · Fri 11/27` only where Tomorrow is not already first) and `Pick date…`, then `Cancel task`, the one destructive item. The same menu opens with ⌘/ at the caret of the row being typed in (the system's edit menu), and its items, flattened, are the words' VoiceOver custom actions |
 | Plan for today | The reference row's own button, on every open reference row (also one already planned today, as the web): a plain system button, caption text in the secondary colour, at the row's trailing end, level with the words' first line, the words and marks ending before it; from the accessibility text sizes it goes under the words and marks, where they start, and the words keep the row's width (as the web wraps it under a title that would get too narrow, and as the notice puts its button) |
+| Preparing… | The draft's line (`native-phase-1.md` §13.4), the strip's first row, directly under the day's title and status line and above the events line, on today only: while the app's ask for today's draft is out and no suggestion is shown, the system's small progress view (`ProgressView`, small control size) then these words (U+2026), secondary colour, subheadline text. Again while a second ask runs after `Retry` |
+| 1 suggestion, 3 suggestions (N suggestions) | The draft's line when the page shows suggestions of today's draft: the count of the suggestions shown (not the stored items), secondary colour, then the buttons `Apply all` and `Dismiss`. Also while today's stale draft is asked for again: its suggestions stay, and the line keeps their count rather than `Preparing…` |
+| Apply all | A plain system button (borderless) after the count, in the accent colour: the line's one primary action, the only accent in the strip |
+| Dismiss | A plain system button (borderless) after `Apply all`, quiet: the secondary colour |
+| Couldn’t draft | The draft's line when an ask of this run failed or got no answer in 60 seconds and nothing is stored, or the stored draft is marked failed and none of its items is decided (then after the count and its buttons, on the same line when it fits): a typographic apostrophe, secondary text like the rest. The web colours it as a warning; here nothing in the strip is red (recorded difference). Followed by `Retry` |
+| Retry | A plain system button (borderless) after `Couldn’t draft`, quiet (secondary colour): asks for today's draft again, whatever the asks before; the line says `Preparing…` while it runs |
+| Offline | The draft's line when the app is offline and no draft is stored: the words alone, secondary colour |
+| 3 suggestions, Couldn’t draft | The draft's line for VoiceOver: each segment's words are an element of their own (`3 suggestions`; `Couldn’t draft`; `Offline`; or `Preparing…` alone), each followed by that segment's buttons, each its own element with its title, so `Retry` is heard right after `Couldn’t draft`. `Apply all` and `Dismiss` are disabled while any action of the screen is out. Every button of the line is at least 44 by 44 points; the segments sit on one line when they fit, else one under another, and from the accessibility text sizes each segment's buttons go under its words. No line: no draft stored and no ask out, a ready draft with nothing open, another day, or today's page in Trash; the strip is hidden only when it has neither facts nor a line |
+| Book the flights, Thu 11/19 | A suggestion of today's draft (`native-phase-1.md` §13.5), a row of the page's list that is not a line of the page, where applying it would put its row: after the last row of its anchor's whole block (a suggestion that would fill an empty row is drawn after that row in 1d.2a; one with no anchor before the first line; one whose anchor his typing removed is not drawn until the next state). Its words, a carried to-do's current title or the line's own, in the secondary colour; under them, as a row's marks line (footnote, secondary colour), the short date of the day the to-do was made or the line written, or nothing. The mark his row of that kind has, dashed: a dashed circle for a to-do, a dashed dot for a bullet, none for a line. No box, no background. On today only |
+| skipped Sat, Sun, skipped 5 times | A carried to-do's small text under its words in place of its age when he skipped it from earlier days' drafts: the web's words, up to three days, then the count |
+| `checkmark`, `xmark` | A suggestion's two quiet buttons at the row's trailing end, plain system buttons with these symbols in the secondary colour, each 44 by 44 points, always shown, also with a pointer (the web shows them on hover only: recorded); from the accessibility text sizes they go under the words. `checkmark` applies it (`apply-draft`), `xmark` skips it (`skip-draft`). While a suggestion's decision is out its words, small text, mark and buttons are in the tertiary colour; while any action of the screen is out, no suggestion's button does anything. No swipe and no menu on a suggestion |
+| Apply Book the flights, Skip Book the flights | The buttons' labels (`Apply <words>`, `Skip <words>`), for Voice Control and Full Keyboard Access |
+| Suggestion, Book the flights, Thu 11/19 | A suggestion's VoiceOver label: `Suggestion, <words>, <age>`, the age left out when there is none; a skipped one `Suggestion, Call the dentist, skipped Sat 11/21, Sun 11/22` (the days in full). Its custom actions are `Apply` and `Skip` |
 | Lunch with Kathy · 10:30 AM Standup with Lu | The events line, the strip's first part, on today when today has an event: the `calendar` symbol and the first two events, each `10:30 AM Standup with Lu` (`3 PM` on the hour; the title alone when it has no time), joined by ` · `, on one line cut at its end; at the accessibility text sizes the words take the whole width after the symbol, on up to three lines, then cut (a word that fits on a line is never broken), with `+N more` and the chevron on a line of their own under them. A plain system `Label`, subheadline text, the words and the symbol in the secondary colour: quieter and a little smaller than the page's text, as on the web |
 | Untitled event | An event in that line whose line has no words |
 | · All day | Added to that line when today has exactly one event and it has no time: `Lunch with Kathy · All day` |
@@ -148,6 +166,12 @@ The page's cells, in `native/Packages/DaythreadEditor`, all list cells:
     drawn in the tertiary label colour, in place.
 - **Separator:** one hairline in the system's separator colour.
 - **Placeholder:** a `rectangle.dashed` symbol and the block's name in secondary colour.
+- **Guest row** (slice 1d.2a; today's draft's suggestions): a list cell that is no line of the page. The system's
+  list content configuration lays it out as his row of that kind (the words where his words start, the small text
+  as its secondary text); over it the words in the secondary colour, the kind's mark drawn dashed (circle, dot, or
+  none), and its buttons on the cell, with the content's trailing margin widened by their size. The caret never
+  enters it; it is not saved, selected, copied or dragged. Guests that come, go or change while a line holds the
+  keyboard do not move that line on the screen, and a line being composed in is not touched.
 
 The strip above a day's page (`DayFactsView`, in `native/Packages/DaythreadUI`, slice 1d.1), the one SwiftUI view on
 the day screen, under the title's stack in the page's header, so it scrolls away with the title:
@@ -155,8 +179,10 @@ the day screen, under the title's stack in the page's header, so it scrolls away
 - **Parts:** SwiftUI's stock parts, configured, never restyled: a `Label` (the `calendar` symbol) in a plain `Button`
   for the events line, a `GroupBox` titled `Due soon`, a `DisclosureGroup` titled `Not today · N` with a bordered
   `Button` and a `Menu` under the `ellipsis` symbol on each row. Each part is absent when it has nothing; with
-  nothing at all the strip is hidden and takes no room. Quiet, as the web's: nothing in it is drawn in the accent
-  colour (the tint is set to the label or secondary label colour, a configuration of the system's parts). Spacing
+  nothing at all (no facts and no draft's line) the strip is hidden and takes no room. Quiet, as the web's: nothing
+  in it is drawn in the accent colour but the draft's line's `Apply all`, its one primary action (the tint is set to
+  the label or secondary label colour, a configuration of the system's parts). The draft's line (slice 1d.2a) is its
+  first row, above the events line: secondary words, plain system buttons, the system's small progress view. Spacing
   between the parts is SwiftUI's default; a row of `Due soon` or `Not today` is at least 44 points tall (8 points of
   air above and below its words); the header's own system spacing lies between the title's stack and the strip.
 - **Width and height:** the header's full width inside its margins (the page's lines start where it starts), at
@@ -184,8 +210,8 @@ says what a row action did:
   regular width (iPad, Mac) one system spacing under the navigation bar, never over its items. Only its surface takes
   touches; the rest of the screen is the page's. It never becomes first
   responder, so the keyboard and the caret stay as they were.
-- **Time:** one at a time, a new one replaces the one showing. It leaves after 8 seconds, `Undone` after 4, a failure
-  after 6, or when swiped up (also VoiceOver's escape gesture). A tap on the words does nothing.
+- **Time:** one at a time, a new one replaces the one showing. It leaves after 8 seconds, `Skipped` after 10, `Undone`
+  after 4, a failure after 6, or when swiped up (also VoiceOver's escape gesture). A tap on the words does nothing.
 - **VoiceOver:** the words are announced when shown; while the notice has `Undo` it does not leave on a timer, and
   once `Undo` is spent or withdrawn its time runs from then. The words are an accessibility element that carries
   `Undo` as its custom action, and the button is an element of its own, so Voice Control and Full Keyboard Access
@@ -196,7 +222,9 @@ says what a row action did:
   words on their way to the engine) and the copy says the server's one Undo slot is that action's at the copy's own
   revision. It is withdrawn the moment that stops (he types, he ticks, another device's change or the day's new page
   takes the slot, another row action starts), and the notice's words stay until their time. While an action or an
-  Undo is out, its row is dimmed and no other row action runs.
+  Undo is out, its row is dimmed and no other row action runs. A draft's skip (slice 1d.2a) is the exception: its
+  `Undo` is `reopen-draft`, which the server checks against what changed since rather than the slot, so it stays
+  until the notice goes or another action starts.
 
 ## Not decided yet
 

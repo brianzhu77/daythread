@@ -1,6 +1,6 @@
 import DaythreadCore
 import DaythreadSync
-import DaythreadUI
+@testable import DaythreadUI
 import Foundation
 import Testing
 
@@ -27,6 +27,9 @@ private actor RefusingServer: ServerTransport {
   func save(
     token: String?, operationId: String, expectedRevision: Int, expectedOwner: String, action: JSONValue
   ) async throws -> SaveOutcome { throw TransportError.offline }
+  func dayDraft(token: String?, date: LocalDate, operationId: String) async throws -> DayDraftReply {
+    throw TransportError.offline
+  }
 }
 
 @MainActor
@@ -35,7 +38,7 @@ private func model(_ server: RefusingServer) throws -> AppModel {
   let engine = SyncEngine(
     transport: server, tokens: KeychainTokenStore(service: "app.daythread.tests.unused.\(UUID().uuidString)"),
     store: try SwiftDataWorkspaceStore.open(at: nil))
-  return AppModel(engine: engine)
+  return AppModel(engine: engine, keepsChanges: true, now: Date.init, states: nil, asksForDayDrafts: false)
 }
 
 @MainActor
