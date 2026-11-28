@@ -237,6 +237,33 @@
         #expect(listed(screen) == ["p1", "p2", "p3", "guest:g2"])
       }
 
+      /// `nil` keeps the guests only while the page is the same: another page opened with none given has none, so a
+      /// guest of yesterday's page (one before its first line, say) is never drawn on today's.
+      @Test func another_page_given_no_guests_has_none() throws {
+        let screen = try Screen.editing(paragraphs(3))
+        screen.controller.setGuestRows([guest("g0", after: nil), guest("g1", after: "p1")])
+        #expect(listed(screen) == ["guest:g0", "p1", "guest:g1", "p2", "p3"])
+        let other = try makePage(paragraphs(3), id: "other")
+
+        screen.controller.edit(page: other, in: try makeWorkspace())
+        #expect(listed(screen) == ["p1", "p2", "p3"], "the page before's guests came with it")
+
+        // Back on the first page with its guests, then shown as another page with none given.
+        screen.controller.edit(page: try makePage(paragraphs(3)), in: try makeWorkspace(), guests: [guest("g0", after: nil)])
+        #expect(listed(screen) == ["guest:g0", "p1", "p2", "p3"])
+        screen.controller.show(page: other, in: try makeWorkspace())
+        #expect(listed(screen) == ["p1", "p2", "p3"], "the page before's guests came with it")
+      }
+
+      @Test func edit_with_guests_onto_another_page_draws_them_on_that_page() throws {
+        let screen = try Screen.editing(paragraphs(3))
+        screen.controller.setGuestRows([guest("g1", after: "p1")])
+        let other = try makePage(paragraphs(2), id: "other")
+        screen.controller.edit(page: other, in: try makeWorkspace(), guests: [guest("g2", after: "p2")])
+        #expect(listed(screen) == ["p1", "p2", "guest:g2"])
+        #expect(try guestCell("g2", in: screen).wordsLabel.text == "Book the flights")
+      }
+
       // MARK: typing
 
       /// Fifty keystrokes in `p20` of a 300-line page take the path that redraws nothing, with three guests as
@@ -497,6 +524,32 @@
         #expect(watch.droppedWhileTyping == 0)
       }
 
+      /// On a page shorter than what the list shows the list cannot move down to keep the line (its offset is clamped at
+      /// the top, as `headerDidChange` clamps it): the line moves down by the guests that came above it, and keeps the
+      /// keyboard.
+      @Test func guests_arriving_above_a_typed_line_on_a_short_page_push_it_down_as_far_as_the_clamp_leaves_it() throws {
+        let (screen, line, watch) = try typing(in: 4, of: 5)
+        let list = screen.list
+        let cell = try #require(line.superview)
+        let top = -list.adjustedContentInset.top
+        #expect(abs(list.contentOffset.y - top) < 0.5, "the short page is at its top")
+        let before = cell.convert(cell.bounds, to: nil).minY
+        let selection = line.selectedRange
+
+        screen.controller.setGuestRows([
+          guest("g0", after: nil), guest("g1", after: "p1", kind: .bullet), guest("g2", after: "p2", kind: .line),
+        ])
+        _ = screen.wait(0.6) { false }
+
+        let guests = try ["g0", "g1", "g2"].map { try guestCell($0, in: screen).frame.height }.reduce(0, +)
+        #expect(abs(list.contentOffset.y - top) < 0.5, "the list stays at its top")
+        #expect(abs(cell.convert(cell.bounds, to: nil).minY - before - guests) < 0.5, "moved down by the guests above")
+        #expect(line.isFirstResponder)
+        #expect(line.superview === cell)
+        #expect(line.selectedRange == selection)
+        #expect(watch.droppedWhileTyping == 0, "the keyboard went down")
+      }
+
       @Test func without_a_line_typed_in_a_guest_change_animates() throws {
         let screen = try Screen.editing(paragraphs(10))
         screen.controller.setGuestRows([guest("g1", after: "p3")])
@@ -602,6 +655,25 @@
         #expect(acting.wordsLabel.textColor == .secondaryLabel)
         try #require(acting.button(symbol: "checkmark")).sendActions(for: .primaryActionTriggered)
         #expect(used == ["g1:apply"])
+      }
+
+      @Test func while_row_actions_are_paused_a_guests_actions_report_nothing() throws {
+        let screen = try Screen.editing(paragraphs(3))
+        var used: [String] = []
+        screen.controller.onGuestAction = { used.append("\($0):\($1)") }
+        screen.controller.setGuestRows([guest("g1", after: "p1")])
+        let cell = try guestCell("g1", in: screen)
+        let skip = try #require(cell.accessibilityCustomActions?.first { $0.name == "Skip" })
+
+        screen.controller.pausesRowActions = true
+        try #require(cell.button(symbol: "checkmark")).sendActions(for: .primaryActionTriggered)
+        #expect(skip.actionHandler?(skip) == false)
+        #expect(used.isEmpty)
+
+        screen.controller.pausesRowActions = false
+        try #require(cell.button(symbol: "checkmark")).sendActions(for: .primaryActionTriggered)
+        #expect(skip.actionHandler?(skip) == true)
+        #expect(used == ["g1:apply", "g1:skip"])
       }
 
       @Test func a_guest_has_no_swipe_and_no_menu() throws {
