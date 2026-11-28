@@ -79,17 +79,35 @@ public enum DraftLine: Hashable, Sendable {
 
   /// The line's words for VoiceOver: `3 suggestions`, `Couldn’t draft`, `3 suggestions, Couldn’t draft`,
   /// `Preparing…`.
-  public var spoken: String { spokenSegments.joined(separator: ", ") }
+  public var spoken: String { shownSegments.map(\.words).joined(separator: ", ") }
 
-  /// Each segment's words as VoiceOver hears them, in the line's order: the count, `Couldn’t draft`, `Offline`;
-  /// `Preparing…`; `Suggestions ready`. Each is an element of its own, followed by that segment's buttons, so
-  /// `Retry` is heard after `Couldn’t draft`.
-  public var spokenSegments: [String] {
+  /// A button of the line.
+  public enum Button: Hashable, Sendable { case applyAll, dismiss, retry, show }
+
+  /// A segment of the line: its words, then the buttons that follow them.
+  public struct Segment: Hashable, Sendable {
+    public let words: String
+    public let buttons: [Button]
+
+    public init(words: String, buttons: [Button]) {
+      self.words = words
+      self.buttons = buttons
+    }
+  }
+
+  /// The line's segments in order: the count with `Apply all` and `Dismiss`, `Couldn’t draft` with `Retry`,
+  /// `Offline` alone; `Preparing…` alone; `Suggestions ready` with `Show`. VoiceOver hears each segment's words, then
+  /// its buttons, so `Retry` is heard after `Couldn’t draft`.
+  public var shownSegments: [Segment] {
     switch self {
-    case .preparing: [Self.preparingText]
-    case .held: [Self.readyText]
+    case .preparing: [Segment(words: Self.preparingText, buttons: [])]
+    case .held: [Segment(words: Self.readyText, buttons: [.show])]
     case .segments(let count, let failed, let offline):
-      [count, failed ? Self.failedText : nil, offline ? Self.offlineText : nil].compactMap { $0 }
+      [
+        count.map { Segment(words: $0, buttons: [.applyAll, .dismiss]) },
+        failed ? Segment(words: Self.failedText, buttons: [.retry]) : nil,
+        offline ? Segment(words: Self.offlineText, buttons: []) : nil,
+      ].compactMap { $0 }
     }
   }
 }

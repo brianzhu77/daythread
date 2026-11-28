@@ -895,7 +895,8 @@
 
     /// Tells the model whether the server's Undo slot is held here (§13.3): while an action is out, or while the notice
     /// shown offers the `Undo` of the action it is of. A notice whose `Undo` does not use the slot (a skip's) holds
-    /// nothing.
+    /// nothing by itself; but once that Undo is tapped, its `reopen-draft` is an action out, and like any action out it
+    /// holds `set-draft` for its round trip.
     private func noteUndoSlot() {
       let holds =
         actionOut != nil || noticeOf.map { $0.undo.holdsUndoSlot && notice.shown?.undoing == $0.operationId } ?? false
