@@ -297,12 +297,13 @@ final class TypingFeelTests: XCTestCase {
   /// The main thread's time, not the clock's: the model receives a state on the main actor, and a main thread held
   /// by something else (on CI the app once logged nothing for 36 s while the keyboard's predictions answered over a
   /// minute late) gives no state a chance to arrive. Each turn of the loop counts at most `turn` towards the deadline,
-  /// so such a stall costs the wait one turn; the drawn time still counts all of it.
+  /// so such a stall costs the wait one turn; the drawn time still counts all of it. Two limits keep that forgiveness
+  /// honest (see `wait`): a hard stop by the clock, and a failure when the main thread alone was held for long.
   ///
   /// A failure says what the model held when it gave up (`held`) and the longest stalls of the main thread and of a
-  /// thread beside it, then waits a further two minutes and reads again, so the log tells a state that came late from
-  /// one that did not come. A failed wait records the failure and throws, which ends the test: the keystrokes after
-  /// it are not measured.
+  /// thread beside it, then, unless the hard stop ended the wait, waits a further two minutes and reads again, so the
+  /// log tells a state that came late from one that did not come. A failed wait records the failure and throws, which
+  /// ends the test: the keystrokes after it are not measured.
   private func until(
     _ what: String, deadline patience: Duration = .seconds(30), held: () -> String = { "" }, _ condition: () -> Bool
   ) async throws {
@@ -313,6 +314,11 @@ final class TypingFeelTests: XCTestCase {
   }
 
   /// The wait `until` makes, with what it found: nil when `condition` held in time, else the failure's words.
+  ///
+  /// `hardStop`, by the clock: a main thread that runs in chunks longer than a turn counts towards the deadline
+  /// slowly, and without it one wait for a state that never comes could outlast CI's job. `mainHeldLimit` and
+  /// `besideLimit`: a wait whose condition held still fails when the main thread alone was held that long while the
+  /// heartbeat beside it ran (`mainThreadAloneWasHeld`); only a stop of the whole process is forgiven silently.
   private func wait(
     _ what: String, deadline patience: Duration = .seconds(30), hardStop: Duration = .seconds(300),
     mainHeldLimit: Duration = .seconds(10), besideLimit: Duration = .seconds(1), held: () -> String = { "" },
@@ -320,33 +326,50 @@ final class TypingFeelTests: XCTestCase {
   ) async throws -> String? {
     let clock = ContinuousClock()
     let started = clock.now
-    let beside = Heartbeat()
-    defer { beside.stop() }
+    let stopAt = started.advanced(by: hardStop)
     let turn = Duration.milliseconds(100)
     var waited = Duration.zero
     var longestStall = Duration.zero
     var lastTurn = started
-    while !condition(), waited < patience {
+    while !condition(), waited < patience, clock.now < stopAt {
       try await Task.sleep(nanoseconds: 1_000_000)
       let now = clock.now
       longestStall = max(longestStall, now - lastTurn)
       waited += min(now - lastTurn, turn)
       lastTurn = now
     }
-    guard !condition() else { return nil }
-    let gaveUp = clock.now
-    let heldThen =
-      "\(held()); the main thread stalled for up to \(Self.seconds(longestStall)) s and a thread beside it for up to "
-      + "\(Self.seconds(beside.longestStall)) s, in \(Self.seconds(gaveUp - started)) s by the clock"
-    let furtherDeadline = gaveUp.advanced(by: .seconds(120))
-    while !condition(), clock.now < furtherDeadline {
-      try await Task.sleep(nanoseconds: 10_000_000)
+    let besideStall = heartbeat?.longestStall(since: started)
+    let stalls =
+      "the main thread stalled for up to \(Self.seconds(longestStall)) s and a thread beside it for up to "
+      + "\(besideStall.map(Self.seconds) ?? "an unknown") s"
+    if condition() {
+      guard let besideStall,
+        Self.mainThreadAloneWasHeld(
+          main: longestStall, beside: besideStall, limits: (main: mainHeldLimit, beside: besideLimit))
+      else { return nil }
+      return "\(what): there, but the main thread alone was held for \(Self.seconds(longestStall)) s while a thread "
+        + "beside it stalled for no more than \(Self.seconds(besideStall)) s: the app's or the test's own doing, not a "
+        + "stopped process"
     }
-    let outcome =
-      condition()
-      ? "it arrived late, \(Self.seconds(clock.now - gaveUp)) s after the first wait ended"
-      : "it had still not arrived after a further \(Self.seconds(clock.now - gaveUp)) s; the model then held \(held())"
-    return "\(what): not there after \(Self.seconds(waited)) s; the model held \(heldThen); \(outcome)"
+    let gaveUp = clock.now
+    let endedBy =
+      waited < patience ? "the hard stop of \(Self.seconds(hardStop)) s by the clock" : "the deadline"
+    let heldThen = "\(held()); \(stalls)"
+    let outcome: String
+    if waited < patience {
+      outcome = "not waited for further after the hard stop"
+    } else {
+      let furtherDeadline = gaveUp.advanced(by: .seconds(120))
+      while !condition(), clock.now < furtherDeadline {
+        try await Task.sleep(nanoseconds: 10_000_000)
+      }
+      outcome =
+        condition()
+        ? "it arrived late, \(Self.seconds(clock.now - gaveUp)) s after the first wait ended"
+        : "it had still not arrived after a further \(Self.seconds(clock.now - gaveUp)) s; the model then held \(held())"
+    }
+    return "\(what): not there after \(Self.seconds(waited)) s of the main thread's time "
+      + "(\(Self.seconds(gaveUp - started)) s by the clock), ended by \(endedBy); the model held \(heldThen); \(outcome)"
   }
 
   /// Whether the main thread was held while the process ran: it stalled for `limits.main` or more while a thread
@@ -357,29 +380,44 @@ final class TypingFeelTests: XCTestCase {
     main >= limits.main && beside <= limits.beside
   }
 
-  /// Beats every 10 ms on a thread off the main one and keeps the longest gap between beats: next to the main
-  /// thread's own stalls, it tells a whole app (or simulator) that stopped from a main thread held by something.
+  /// Beats every 10 ms on a thread off the main one for the whole test and keeps its long gaps between beats: next to
+  /// the main thread's own stalls, it tells a whole app (or simulator) that stopped from a main thread held by
+  /// something.
   private final class Heartbeat: Sendable {
-    private let longest = Mutex(Duration.zero)
+    private struct Beats {
+      var last: ContinuousClock.Instant
+      var gaps: [(end: ContinuousClock.Instant, length: Duration)] = []
+    }
+
+    private let beats = Mutex(Beats(last: ContinuousClock.now))
     private let beating = Mutex<Task<Void, Never>?>(nil)
 
     init() {
       // The task ends at `stop`, which lets go of the beat.
       let task = Task.detached { [self] in
-        let clock = ContinuousClock()
-        var last = clock.now
         while !Task.isCancelled {
           // Cancelled the moment it starts on CI's Xcode, `Task.sleep(for:)` aborts the process.
           try? await Task.sleep(nanoseconds: 10_000_000)
-          let now = clock.now
-          self.longest.withLock { $0 = max($0, now - last) }
-          last = now
+          let now = ContinuousClock.now
+          self.beats.withLock { beats in
+            // Only gaps well past a beat are kept, so the list stays short over a test of minutes.
+            if now - beats.last > .milliseconds(50) { beats.gaps.append((now, now - beats.last)) }
+            beats.last = now
+          }
         }
       }
       beating.withLock { $0 = task }
     }
 
-    var longestStall: Duration { longest.withLock { $0 } }
+    /// The longest the thread went without a beat since `start`: a gap that began before `start` counts from it, and
+    /// a gap still going counts too.
+    func longestStall(since start: ContinuousClock.Instant) -> Duration {
+      let now = ContinuousClock.now
+      return beats.withLock { beats in
+        (beats.gaps + [(end: now, length: now - beats.last)]).filter { $0.end > start }
+          .map { min($0.length, $0.end - start) }.max() ?? .zero
+      }
+    }
 
     func stop() {
       beating.withLock { $0?.cancel() }
