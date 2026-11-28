@@ -29,7 +29,9 @@ session yet; that waits for a team.
 
 The server is the build setting `DAYTHREAD_SERVER_URL`, written into `Info.plist` as `DaythreadServerURL`: Debug
 `http://127.0.0.1:3000` (`npm run dev`, sign-in off), Release `https://daythread.dogrod.com`. In a Debug build only, a
-launch argument overrides it and another picks the store file; a Release build always uses the `Info.plist` value:
+launch argument overrides it and another picks the store file; a Release build always uses the `Info.plist` value.
+The app that hosts the unit tests uses `http://127.0.0.1:9` unless given the argument, so a test run never reaches a
+server on 3000:
 
 ```sh
 xcrun simctl launch <simulator> app.daythread.Daythread \

@@ -1,6 +1,7 @@
 import DaythreadCore
 import DaythreadSync
 import Foundation
+import Synchronization
 import UIKit
 import XCTest
 
@@ -31,10 +32,17 @@ final class TypingFeelTests: XCTestCase {
 
   private var storeURL: URL?
   private var server: TestServer?
+  /// Beats for the whole test, so a wait sees a stall that began in the one before it.
+  private var heartbeat: Heartbeat?
+
+  override func setUp() async throws {
+    heartbeat = Heartbeat()
+  }
 
   /// The server is never released: once the engine's save of what was typed is waiting on it, the engine touches the
   /// store no more, and the store goes.
   override func tearDown() async throws {
+    heartbeat?.stop()
     await server?.callHeld()
     if let storeURL {
       for suffix in ["", "-shm", "-wal"] {
@@ -51,6 +59,116 @@ final class TypingFeelTests: XCTestCase {
   func test_typing_into_the_5th_line_of_10() async throws {
     let median = try await measureTyping(lines: 10, into: 5)
     try checkBudget(median, against: Self.measuredMedian.shortPage)
+  }
+
+  /// The wait between keystrokes gives the state its time on the main actor, where the model receives it: a main
+  /// thread stalled by something else (on CI, the keyboard's predictions answered more than a minute late while the
+  /// whole app logged nothing for 36 s) is no state arriving late. Here the main thread is stalled past the wait's
+  /// deadline while the state is on its way, as the model's would be.
+  ///
+  /// It fails a wait that counts the clock only because the main actor runs its jobs in the order they were queued:
+  /// the wait's wake-up, queued 1 ms into the stall, runs before the state's delivery, queued at 200 ms, and finds
+  /// the deadline gone. With the jobs taken in another order the state would be seen first and the old wait pass too.
+  func test_a_main_thread_stalled_past_the_deadline_is_not_a_state_that_came_late() async throws {
+    let state = Arrival()
+    // Runs once the wait first sleeps, so the wait's own wake-up is queued behind it, before the state's.
+    Task { Self.stallTheMainThread(for: .milliseconds(1_500)) }
+    state.arrive(after: .milliseconds(200))
+    try await until("the state reached the screen", deadline: .seconds(1)) { state.arrived }
+  }
+
+  /// The wait forgives a stall, not a late state: with the main thread free, a state that comes after the deadline
+  /// fails the wait, and the message says it came late.
+  func test_a_state_that_comes_after_the_deadline_fails_the_wait() async throws {
+    let state = Arrival()
+    state.arrive(after: .seconds(2))
+    let failure = try await wait("the state reached the screen", deadline: .seconds(1)) { state.arrived }
+    let message = try XCTUnwrap(failure, "a state 2 s late against a deadline of 1 s fails the wait")
+    XCTAssertTrue(message.contains("ended by the deadline"), message)
+    XCTAssertTrue(message.contains("it arrived late"), message)
+    XCTAssertTrue(message.contains("s by the clock)"), "the clock's time beside the main thread's: \(message)")
+  }
+
+  /// A main thread that runs in chunks longer than a turn counts towards the deadline slowly; the wait still ends by
+  /// the clock, says so, and does not wait a further two minutes for the state.
+  func test_a_main_thread_busy_in_long_chunks_ends_the_wait_by_the_hard_stop() async throws {
+    let busy = Task {
+      while !Task.isCancelled {
+        Self.stallTheMainThread(for: .milliseconds(300))
+        try? await Task.sleep(nanoseconds: 1_000_000)
+      }
+    }
+    defer { busy.cancel() }
+    let clock = ContinuousClock()
+    let started = clock.now
+    let failure = try await wait("the state reached the screen", deadline: .seconds(30), hardStop: .seconds(2)) {
+      false
+    }
+    let message = try XCTUnwrap(failure, "a state that never comes fails the wait")
+    XCTAssertTrue(message.contains("ended by the hard stop of 2.0 s by the clock"), message)
+    XCTAssertLessThan(clock.now - started, .seconds(10), "no further wait after the hard stop: \(message)")
+  }
+
+  /// A main thread held for long while a thread beside it ran is the app's or the test's own doing: the state that
+  /// came after it is not forgiven silently. A whole process that stopped holds both, which a test cannot bring
+  /// about from inside the process; that case is covered only by `mainThreadAloneWasHeld`, tested below.
+  func test_a_main_thread_held_alone_fails_a_wait_whose_state_arrived() async throws {
+    let state = Arrival()
+    let besideLimit = Duration.milliseconds(500)
+    let started = ContinuousClock.now
+    Task { Self.stallTheMainThread(for: .milliseconds(1_500)) }
+    state.arrive(after: .milliseconds(200))
+    let failure = try await wait(
+      "the state reached the screen", deadline: .seconds(1), mainHeldLimit: .seconds(1), besideLimit: besideLimit
+    ) { state.arrived }
+    // On a loaded machine the heartbeat itself can miss its beats; the two cases cannot then be told apart here.
+    let besideStall = try XCTUnwrap(heartbeat).longestStall(since: started)
+    if besideStall > besideLimit {
+      throw XCTSkip(
+        "the machine was too loaded to tell a held main thread from a stopped process: the thread beside it stalled "
+          + "for \(Self.seconds(besideStall)) s, past the \(Self.seconds(besideLimit)) s limit")
+    }
+    let message = try XCTUnwrap(failure, "the main thread held alone for 1.5 s, past a limit of 1 s")
+    XCTAssertTrue(message.contains("the main thread alone was held for"), message)
+  }
+
+  func test_a_wait_with_no_stall_records_nothing() async throws {
+    let state = Arrival()
+    state.arrive(after: .milliseconds(100))
+    let failure = try await wait(
+      "the state reached the screen", deadline: .seconds(5), mainHeldLimit: .seconds(1), besideLimit: .milliseconds(500)
+    ) { state.arrived }
+    XCTAssertNil(failure)
+  }
+
+  func test_the_main_thread_held_alone_is_told_from_a_stopped_process() {
+    let limits = (main: Duration.seconds(10), beside: Duration.seconds(1))
+    XCTAssertTrue(
+      Self.mainThreadAloneWasHeld(main: .seconds(12), beside: .milliseconds(50), limits: limits), "main alone")
+    XCTAssertFalse(
+      Self.mainThreadAloneWasHeld(main: .seconds(36), beside: .seconds(36), limits: limits), "the process stopped")
+    XCTAssertFalse(Self.mainThreadAloneWasHeld(main: .seconds(5), beside: .zero, limits: limits), "a short stall")
+    XCTAssertFalse(
+      Self.mainThreadAloneWasHeld(main: .seconds(12), beside: .seconds(2), limits: limits), "the thread beside stalled")
+  }
+
+  @MainActor private final class Arrival {
+    var arrived = false
+
+    /// Arrives on the main actor after `delay`, queued from a thread off it.
+    func arrive(after delay: Duration) {
+      let nanoseconds = UInt64(delay / .nanoseconds(1))
+      Task.detached { [self] in
+        try? await Task.sleep(nanoseconds: nanoseconds)
+        await MainActor.run { self.arrived = true }
+      }
+    }
+  }
+
+  private static func stallTheMainThread(for duration: Duration) {
+    let clock = ContinuousClock()
+    let end = clock.now.advanced(by: duration)
+    while clock.now < end {}
   }
 
   /// The strip's cost on a large workspace (`native-phase-1.md` §12.6): 3,000 to-dos on 300 day pages of 10 rows, 200
@@ -104,7 +222,9 @@ final class TypingFeelTests: XCTestCase {
   /// Types `keystrokes` characters at the end of line `target` (1-based) of a page of `count` lines, `runs` times, and
   /// returns the median of the runs' milliseconds per keystroke to the list laid out.
   private func measureTyping(lines count: Int, into target: Int) async throws -> Double {
-    let model = try await model(page: count)
+    let (model, engine) = try await model(page: count)
+    let published = Published(following: engine.states, page: Self.today)
+    defer { published.stop() }
     let screen = DayViewController(model: model)
     let window = try feelWindow()
     window.rootViewController = UINavigationController(rootViewController: screen)
@@ -152,7 +272,7 @@ final class TypingFeelTests: XCTestCase {
             let state = model.state
             return "the page's document \(length.map(String.init) ?? "absent") bytes long, \(expected) expected; "
               + "state number \(state.published), \(state.drafts.count) drafts \(state.drafts.map { "\($0.state)" }); "
-              + "keystroke \(index + 1) of run \(runIndex + 1)"
+              + "keystroke \(index + 1) of run \(runIndex + 1); the engine had published \(published.last)"
           }
         ) { model.workspace?.dayPage(Self.today)?.document.utf8.count == expected }
         window.layoutIfNeeded()
@@ -179,34 +299,163 @@ final class TypingFeelTests: XCTestCase {
   }
 
   /// Waits, a millisecond at a time, for `condition`, the main actor's other work running meanwhile; fails after
-  /// thirty seconds. The wait is long because it is not what is measured: on CI's machines one keystroke's state
-  /// has taken more than two seconds to be drawn on the 300-line page, which failed the run without any defect.
+  /// thirty seconds of the main thread's time. The wait is long because it is not what is measured: on CI's machines
+  /// one keystroke's state has taken more than two seconds to be drawn on the 300-line page, which failed the run
+  /// without any defect.
   ///
-  /// A failure says what the model held when it gave up (`held`), then waits a further two minutes and reads again, so
-  /// the log tells a state that came late from one that did not come. A failed wait records the failure and throws,
-  /// which ends the test: the keystrokes after it are not measured.
-  private func until(_ what: String, held: () -> String = { "" }, _ condition: () -> Bool) async throws {
-    let clock = ContinuousClock()
-    let started = clock.now
-    let deadline = started.advanced(by: .seconds(30))
-    while !condition(), clock.now < deadline {
-      try await Task.sleep(nanoseconds: 1_000_000)
-    }
-    guard !condition() else { return }
-    let gaveUp = clock.now
-    let heldThen = held()
-    let furtherDeadline = gaveUp.advanced(by: .seconds(120))
-    while !condition(), clock.now < furtherDeadline {
-      try await Task.sleep(nanoseconds: 10_000_000)
-    }
-    let outcome =
-      condition()
-      ? "it arrived late, \(Self.seconds(clock.now - gaveUp)) s after the first wait ended"
-      : "it had still not arrived after a further \(Self.seconds(clock.now - gaveUp)) s; the model then held \(held())"
-    let message = "\(what): not there after \(Self.seconds(gaveUp - started)) s; the model held \(heldThen); \(outcome)"
+  /// The main thread's time, not the clock's: the model receives a state on the main actor, and a main thread held
+  /// by something else (on CI the app once logged nothing for 36 s while the keyboard's predictions answered over a
+  /// minute late) gives no state a chance to arrive. Each turn of the loop counts at most `turn` towards the deadline,
+  /// so such a stall costs the wait one turn; the drawn time still counts all of it. Two limits keep that forgiveness
+  /// honest (see `wait`): a hard stop by the clock, and a failure when the main thread alone was held for long.
+  ///
+  /// A failure says what the model held when it gave up (`held`) and the longest stalls of the main thread and of a
+  /// thread beside it, then, unless the hard stop ended the wait, waits a further two minutes and reads again, so the
+  /// log tells a state that came late from one that did not come. A failed wait records the failure and throws, which
+  /// ends the test: the keystrokes after it are not measured.
+  private func until(
+    _ what: String, deadline patience: Duration = .seconds(30), held: () -> String = { "" }, _ condition: () -> Bool
+  ) async throws {
+    guard let message = try await wait(what, deadline: patience, held: held, condition) else { return }
     XCTFail(message)
     // The test ends here: another wait after a failed one would cost the same again for every keystroke left.
     throw WaitFailed(message: message)
+  }
+
+  /// The wait `until` makes, with what it found: nil when `condition` held in time, else the failure's words.
+  ///
+  /// `hardStop`, by the clock: a main thread that runs in chunks longer than a turn counts towards the deadline
+  /// slowly, and without it one wait for a state that never comes could outlast CI's job. `mainHeldLimit` and
+  /// `besideLimit`: a wait whose condition held still fails when the main thread alone was held that long while the
+  /// heartbeat beside it ran (`mainThreadAloneWasHeld`); only a stop of the whole process is forgiven silently.
+  private func wait(
+    _ what: String, deadline patience: Duration = .seconds(30), hardStop: Duration = .seconds(300),
+    mainHeldLimit: Duration = .seconds(10), besideLimit: Duration = .seconds(1), held: () -> String = { "" },
+    _ condition: () -> Bool
+  ) async throws -> String? {
+    let clock = ContinuousClock()
+    let started = clock.now
+    let stopAt = started.advanced(by: hardStop)
+    let turn = Duration.milliseconds(100)
+    var waited = Duration.zero
+    var longestStall = Duration.zero
+    var lastTurn = started
+    while !condition(), waited < patience, clock.now < stopAt {
+      try await Task.sleep(nanoseconds: 1_000_000)
+      let now = clock.now
+      longestStall = max(longestStall, now - lastTurn)
+      waited += min(now - lastTurn, turn)
+      lastTurn = now
+    }
+    let besideStall = heartbeat?.longestStall(since: started)
+    let stalls =
+      "the main thread stalled for up to \(Self.seconds(longestStall)) s and a thread beside it for up to "
+      + "\(besideStall.map(Self.seconds) ?? "an unknown") s"
+    if condition() {
+      guard let besideStall,
+        Self.mainThreadAloneWasHeld(
+          main: longestStall, beside: besideStall, limits: (main: mainHeldLimit, beside: besideLimit))
+      else { return nil }
+      return "\(what): there, but the main thread alone was held for \(Self.seconds(longestStall)) s while a thread "
+        + "beside it stalled for no more than \(Self.seconds(besideStall)) s: the app's or the test's own doing, not a "
+        + "stopped process"
+    }
+    let gaveUp = clock.now
+    let endedBy =
+      waited < patience ? "the hard stop of \(Self.seconds(hardStop)) s by the clock" : "the deadline"
+    let heldThen = "\(held()); \(stalls)"
+    let outcome: String
+    if waited < patience {
+      outcome = "not waited for further after the hard stop"
+    } else {
+      let furtherDeadline = gaveUp.advanced(by: .seconds(120))
+      while !condition(), clock.now < furtherDeadline {
+        try await Task.sleep(nanoseconds: 10_000_000)
+      }
+      outcome =
+        condition()
+        ? "it arrived late, \(Self.seconds(clock.now - gaveUp)) s after the first wait ended"
+        : "it had still not arrived after a further \(Self.seconds(clock.now - gaveUp)) s; the model then held \(held())"
+    }
+    return "\(what): not there after \(Self.seconds(waited)) s of the main thread's time "
+      + "(\(Self.seconds(gaveUp - started)) s by the clock), ended by \(endedBy); the model held \(heldThen); \(outcome)"
+  }
+
+  /// Whether the main thread was held while the process ran: it stalled for `limits.main` or more while a thread
+  /// beside it never stalled more than `limits.beside`. When both stalled, the whole process stopped.
+  private static func mainThreadAloneWasHeld(
+    main: Duration, beside: Duration, limits: (main: Duration, beside: Duration)
+  ) -> Bool {
+    main >= limits.main && beside <= limits.beside
+  }
+
+  /// Beats every 10 ms on a thread off the main one for the whole test and keeps its long gaps between beats: next to
+  /// the main thread's own stalls, it tells a whole app (or simulator) that stopped from a main thread held by
+  /// something.
+  private final class Heartbeat: Sendable {
+    private struct Beats {
+      var last: ContinuousClock.Instant
+      var gaps: [(end: ContinuousClock.Instant, length: Duration)] = []
+    }
+
+    private let beats = Mutex(Beats(last: ContinuousClock.now))
+    private let beating = Mutex<Task<Void, Never>?>(nil)
+
+    init() {
+      // The task ends at `stop`, which lets go of the beat.
+      let task = Task.detached { [self] in
+        while !Task.isCancelled {
+          // Cancelled the moment it starts on CI's Xcode, `Task.sleep(for:)` aborts the process.
+          try? await Task.sleep(nanoseconds: 10_000_000)
+          let now = ContinuousClock.now
+          self.beats.withLock { beats in
+            // Only gaps well past a beat are kept, so the list stays short over a test of minutes.
+            if now - beats.last > .milliseconds(50) { beats.gaps.append((now, now - beats.last)) }
+            beats.last = now
+          }
+        }
+      }
+      beating.withLock { $0 = task }
+    }
+
+    /// The longest the thread went without a beat since `start`: a gap that began before `start` counts from it, and
+    /// a gap still going counts too.
+    func longestStall(since start: ContinuousClock.Instant) -> Duration {
+      let now = ContinuousClock.now
+      return beats.withLock { beats in
+        (beats.gaps + [(end: now, length: now - beats.last)]).filter { $0.end > start }
+          .map { min($0.length, $0.end - start) }.max() ?? .zero
+      }
+    }
+
+    func stop() {
+      beating.withLock { $0?.cancel() }
+    }
+  }
+
+  /// The engine's last state, read as it is published, off the main thread: a failed wait says whether the engine had
+  /// published the keystroke when the model had not drawn it.
+  private final class Published: Sendable {
+    private let latest = Mutex("no state")
+    private let following = Mutex<Task<Void, Never>?>(nil)
+
+    init(following states: AsyncStream<SyncState>, page day: LocalDate) {
+      let task = Task.detached { [self] in
+        for await state in states {
+          let length = state.workspace?.dayPage(day)?.document.utf8.count
+          self.latest.withLock {
+            $0 = "state number \(state.published), the page's document \(length.map(String.init) ?? "absent") bytes long"
+          }
+        }
+      }
+      following.withLock { $0 = task }
+    }
+
+    var last: String { latest.withLock { $0 } }
+
+    func stop() {
+      following.withLock { $0?.cancel() }
+    }
   }
 
   private struct WaitFailed: Error, CustomStringConvertible {
@@ -296,7 +545,7 @@ final class TypingFeelTests: XCTestCase {
   /// planned on the days before, 100 a day, so the rows' facts read an index of a workspace that size. The strip
   /// above the page is on screen too: 100 of those to-dos are set aside, 100 are due and have no row today, and the
   /// past pages hold 200 chips, 2 of them dated today.
-  private func model(page count: Int) async throws -> AppModel {
+  private func model(page count: Int) async throws -> (AppModel, SyncEngine) {
     var tasks: [JSONValue] = []
     let lines = (1...count).map { index in
       guard index % 3 == 1 else {
@@ -328,7 +577,7 @@ final class TypingFeelTests: XCTestCase {
     ) { model.state.phase == .ready && model.workspace != nil }
     await engine.settled()
     await server.hold()
-    return model
+    return (model, engine)
   }
 
   private func feelWindow() throws -> UIWindow {
